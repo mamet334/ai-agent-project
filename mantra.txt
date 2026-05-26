@@ -1,0 +1,35 @@
+# MANTRA ANTIGRAVITY - DOKUMENTASI RESUME PROYEK 🔮
+==================================================
+Halo Antigravity! Baca file ini untuk melanjutkan pengembangan proyek AI Agent ini secara cepat dan tepat.
+
+## 📌 RINGKASAN PROYEK
+Proyek ini adalah platform AI Agent bertenaga Google Gemini API (model `gemini-2.5-flash`) yang dideploy sepenuhnya di Vercel secara gratis tanpa kartu kredit.
+
+## 🌐 DATA DEPLOYMENT
+- **GitHub Repository**: `https://github.com/mamet334/ai-agent-project.git`
+- **Frontend Vercel**: `https://ai-agent-project-2a9h.vercel.app`
+  - *Pengaturan Vercel*: Preset Vite, Root Directory: `frontend`
+  - *Environment Variable*: `VITE_API_URL = https://ai-agent-project-eight.vercel.app`
+- **Backend Vercel**: `https://ai-agent-project-eight.vercel.app`
+  - *Pengaturan Vercel*: Preset Other, Root Directory: `backend`
+  - *Environment Variable*: `GEMINI_API_KEY` (Gemini API Key mamet334)
+
+## 📂 STRUKTUR KODE & FILE KUNCI
+1. **`frontend/src/components/AIAgent.jsx`**:
+   - Tampilan UI chat utama menggunakan Tailwind CSS.
+   - Fitur Responsif Mobile: Sidebar otomatis disembunyikan pada layar HP, ditukar dengan Mobile Header + tombol menu hamburger (☰) & tombol close (X).
+   - Fitur Multi-thread & Storage: Menyimpan riwayat percakapan di `localStorage`, tombol "+ Percakapan Baru", dan tombol hapus chat thread.
+   - Fitur Terminal Log: Animasi log mengalir bergaya terminal Linux saat sedang memproses chat (`loading === true`).
+2. **`backend/server.js`**:
+   - Express server yang bertindak sebagai proxy aman untuk memanggil REST API Gemini.
+   - CORS diatur terbuka (`app.use(cors())`) agar bisa diakses oleh Vercel Frontend.
+3. **`backend/vercel.json`**:
+   - Konfigurasi router serverless agar backend Express bisa berjalan di serverless Vercel.
+
+## 🚀 IDE PENGEMBANGAN SELANJUTNYA (BACKLOG)
+1. **Real Gemini Function Calling**: Integrasikan API Pencarian Web atau API Slack sungguhan ke model Gemini menggunakan deklarasi fungsi di request payload, agar tool yang dipilih di sidebar benar-benar dieksekusi secara nyata oleh AI.
+2. **Database Integration**: Pindahkan penyimpanan chat dari `localStorage` browser ke database cloud (seperti Supabase atau MongoDB) agar chat bisa diakses lintas perangkat.
+3. **User Authentication**: Tambahkan login/register pengguna.
+
+Bacalah file ini, dan tanyakan kepada user fitur mana di atas yang ingin mereka kembangkan selanjutnya!
+==================================================
