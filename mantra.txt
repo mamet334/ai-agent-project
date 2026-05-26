@@ -12,7 +12,7 @@ Proyek ini adalah platform AI Agent bertenaga Google Gemini API, Groq Cloud API,
   - *Environment Variable*: `VITE_API_URL = https://ai-agent-project-eight.vercel.app`
 - **Backend Vercel**: `https://ai-agent-project-eight.vercel.app`
   - *Pengaturan Vercel*: Preset Other, Root Directory: `backend`
-  - *Environment Variable*: `GEMINI_API_KEY`, `GROQ_API_KEY` (Optional), `OPENROUTER_API_KEY` (Optional), `SLACK_WEBHOOK_URL` (Optional).
+  - *Environment Variable*: `GEMINI_API_KEY`, `GROQ_API_KEY` (Telah Dikonfigurasi), `OPENROUTER_API_KEY` (Optional), `SLACK_WEBHOOK_URL` (Optional).
 
 ## 📂 FITUR UTAMA & FILE KUNCI
 1. **`frontend/src/components/AIAgent.jsx`**:
@@ -28,7 +28,7 @@ Proyek ini adalah platform AI Agent bertenaga Google Gemini API, Groq Cloud API,
      - `post_to_slack`: Mengirim webhook Slack jika URL diset.
      - `google_search`: Menggunakan pencarian Google grounding bawaan Gemini.
    - **OpenRouter Proxy**: Mengirim chat ke OpenRouter API jika model OpenRouter dipilih.
-   - **Groq Cloud API**: Mengirim chat ke Groq API jika model Groq Llama dipilih.
+   - **Groq Cloud API**: Mengirim chat ke Groq API menggunakan `GROQ_API_KEY` jika model Groq Llama dipilih.
 
 ## 🚀 IDE PENGEMBANGAN SELANJUTNYA (BACKLOG)
 1. **Database Integration**: Pindahkan penyimpanan chat dari `localStorage` browser ke database cloud (seperti Supabase atau MongoDB) agar chat bisa diakses lintas perangkat.
