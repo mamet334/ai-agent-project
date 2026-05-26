@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus } from 'lucide-react';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
 const renderMessageContent = (text) => {
   if (!text) return null;
 
@@ -109,7 +111,7 @@ export default function AIAgent() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3000/api/agent/process', {
+      const response = await fetch(`${API_URL}/api/agent/process`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -142,7 +144,7 @@ export default function AIAgent() {
       const errorMessage = {
         id: Date.now() + 1,
         type: 'agent',
-        content: `Error: Gagal memproses permintaan. ${error.message}. Pastikan server backend Anda berjalan di port 3000.`,
+        content: `Error: Gagal memproses permintaan. ${error.message}. Pastikan server backend Anda berjalan.`,
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, errorMessage]);
