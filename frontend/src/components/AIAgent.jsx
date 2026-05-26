@@ -66,13 +66,50 @@ const renderMessageContent = (text) => {
 };
 
 export default function AIAgent() {
-  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [tools, setTools] = useState(['web_search', 'code_executor', 'api_caller']);
   const [selectedTools, setSelectedTools] = useState(['web_search']);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [logs, setLogs] = useState([]);
   const messagesEndRef = useRef(null);
+
+  // Load conversations from localStorage on mount
+  const [conversations, setConversations] = useState(() => {
+    const saved = localStorage.getItem('ai_agent_conversations');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.length > 0) {
+          // Re-convert timestamp strings back to Date objects
+          return parsed.map(c => ({
+            ...c,
+            messages: c.messages.map(m => ({
+              ...m,
+              timestamp: new Date(m.timestamp)
+            }))
+          }));
+        }
+      } catch (e) {
+        console.error('Failed to parse saved conversations:', e);
+      }
+    }
+    return [{ id: 'default', title: 'Percakapan Baru', messages: [] }];
+  });
+
+  const [currentConversationId, setCurrentConversationId] = useState(() => {
+    const saved = localStorage.getItem('ai_agent_current_id');
+    return saved || 'default';
+  });
+
+  // Save conversations to localStorage when they change
+  useEffect(() => {
+    localStorage.setItem('ai_agent_conversations', JSON.stringify(conversations));
+    localStorage.setItem('ai_agent_current_id', currentConversationId);
+  }, [conversations, currentConversationId]);
+
+  const activeConversation = conversations.find(c => c.id === currentConversationId) || conversations[0];
+  const messages = activeConversation.messages;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -81,6 +118,31 @@ export default function AIAgent() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const handleNewChat = () => {
+    const newId = Date.now().toString();
+    const newConv = {
+      id: newId,
+      title: 'Percakapan Baru',
+      messages: []
+    };
+    setConversations(prev => [newConv, ...prev]);
+    setCurrentConversationId(newId);
+    setSidebarOpen(false);
+  };
+
+  const handleDeleteConversation = (id) => {
+    setConversations(prev => {
+      const filtered = prev.filter(c => c.id !== id);
+      if (filtered.length === 0) {
+        return [{ id: 'default', title: 'Percakapan Baru', messages: [] }];
+      }
+      return filtered;
+    });
+    if (currentConversationId === id) {
+      setCurrentConversationId('default');
+    }
+  };
 
   const toolIcons = {
     web_search: <Zap className="w-4 h-4" />,
@@ -99,17 +161,39 @@ export default function AIAgent() {
   const handleSendMessage = async () => {
     if (!input.trim() || loading) return;
 
+    const currentInput = input;
     const userMessage = {
       id: Date.now(),
       type: 'user',
-      content: input,
+      content: currentInput,
       timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
-    const currentInput = input;
+    // Update active conversation's messages
+    setConversations(prev => prev.map(c => {
+      if (c.id === currentConversationId) {
+        const updatedMessages = [...c.messages, userMessage];
+        // If it was empty, update title based on first query
+        const title = c.title === 'Percakapan Baru' && c.messages.length === 0
+          ? (currentInput.length > 25 ? currentInput.substring(0, 25) + '...' : currentInput)
+          : c.title;
+        return { ...c, title, messages: updatedMessages };
+      }
+      return c;
+    }));
+
     setInput('');
     setLoading(true);
+    setLogs([
+      '🔍 Menganalisis permintaan...',
+      '🛠️ Mempersiapkan tools: ' + (selectedTools.length > 0 ? selectedTools.join(', ') : 'none')
+    ]);
+
+    // Simulate logs stream
+    const logIntervals = [
+      setTimeout(() => setLogs(prev => [...prev, '⚡ Memanggil API Google Gemini 2.5 Flash...']), 600),
+      setTimeout(() => setLogs(prev => [...prev, '🧠 AI sedang merumuskan jawaban terbaik...']), 1300),
+    ];
 
     try {
       const response = await fetch(`${API_URL}/api/agent/process`, {
@@ -123,6 +207,9 @@ export default function AIAgent() {
           userId: 'user-123'
         })
       });
+
+      // Clear pending mock logs timeouts
+      logIntervals.forEach(clearTimeout);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -139,18 +226,32 @@ export default function AIAgent() {
         timestamp: new Date(data.timestamp || Date.now()),
       };
 
-      setMessages(prev => [...prev, agentMessage]);
+      setConversations(prev => prev.map(c => {
+        if (c.id === currentConversationId) {
+          return { ...c, messages: [...c.messages, agentMessage] };
+        }
+        return c;
+      }));
     } catch (error) {
       console.error('Error contacting backend:', error);
+      // Clear pending mock logs timeouts
+      logIntervals.forEach(clearTimeout);
+
       const errorMessage = {
         id: Date.now() + 1,
         type: 'agent',
         content: `Error: Gagal memproses permintaan. ${error.message}. Pastikan server backend Anda berjalan.`,
         timestamp: new Date(),
       };
-      setMessages(prev => [...prev, errorMessage]);
+      setConversations(prev => prev.map(c => {
+        if (c.id === currentConversationId) {
+          return { ...c, messages: [...c.messages, errorMessage] };
+        }
+        return c;
+      }));
     } finally {
       setLoading(false);
+      setLogs([]);
     }
   };
 
@@ -227,9 +328,60 @@ export default function AIAgent() {
             </button>
           </div>
 
-          {/* Tools Selection */}
-          <div className="flex-1 overflow-y-auto p-4">
-            <div className="mb-4">
+          {/* New Chat Button */}
+          <div className="p-4 border-b border-purple-500/20">
+            <button 
+              onClick={handleNewChat}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-semibold transition-all shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 text-sm"
+            >
+              <Plus className="w-4 h-4" />
+              Percakapan Baru
+            </button>
+          </div>
+
+          {/* Conversations list & Tools Selection */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-6">
+            {/* Conversations Section */}
+            <div>
+              <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">
+                Riwayat Chat
+              </h3>
+              <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                {conversations.map(conv => (
+                  <div key={conv.id} className="relative group flex items-center">
+                    <button
+                      onClick={() => {
+                        setCurrentConversationId(conv.id);
+                        setSidebarOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-sm transition-all truncate pr-8 ${
+                        conv.id === currentConversationId
+                          ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30 font-medium'
+                          : 'text-slate-400 hover:bg-slate-800/40 hover:text-slate-200'
+                      }`}
+                    >
+                      <MessageCircle className="w-4 h-4 shrink-0 text-purple-400" />
+                      <span className="truncate">{conv.title}</span>
+                    </button>
+                    {conversations.length > 1 && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteConversation(conv.id);
+                        }}
+                        className="absolute right-2 text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded"
+                        title="Hapus percakapan"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Tools Selection Section */}
+            <div className="border-t border-purple-500/20 pt-4">
               <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">
                 Active Tools
               </h3>
@@ -370,13 +522,21 @@ export default function AIAgent() {
                 ))}
                 {loading && (
                   <div className="flex justify-start animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="bg-slate-800/50 backdrop-blur rounded-3xl rounded-tl-lg border border-purple-500/30 px-6 py-4">
-                      <div className="flex items-center gap-2">
+                    <div className="bg-slate-800/50 backdrop-blur rounded-3xl rounded-tl-lg border border-purple-500/30 px-5 py-4 max-w-sm w-full">
+                      <div className="flex items-center gap-2 mb-3">
                         <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"></div>
                         <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce delay-100"></div>
                         <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce delay-200"></div>
+                        <span className="text-xs text-slate-400 ml-1">Agent is processing...</span>
                       </div>
-                      <p className="text-xs text-slate-400 mt-2">Processing...</p>
+                      <div className="font-mono text-[10px] text-purple-300 space-y-1 bg-slate-950/70 p-3 rounded-lg border border-purple-500/10 max-h-32 overflow-y-auto">
+                        {logs.map((log, index) => (
+                          <div key={index} className="flex items-center gap-1.5">
+                            <span className="text-green-500 select-none">&gt;</span>
+                            <span className="animate-in fade-in slide-in-from-left-2 duration-300">{log}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}
