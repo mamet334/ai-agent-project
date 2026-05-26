@@ -3,7 +3,7 @@
 Halo Antigravity! Baca file ini untuk melanjutkan pengembangan proyek AI Agent ini secara cepat dan tepat.
 
 ## 📌 RINGKASAN PROYEK
-Proyek ini adalah platform AI Agent bertenaga Google Gemini API dan OpenRouter yang dideploy sepenuhnya di Vercel secara gratis tanpa kartu kredit.
+Proyek ini adalah platform AI Agent bertenaga Google Gemini API, Groq Cloud API, dan OpenRouter yang dideploy sepenuhnya di Vercel secara gratis tanpa kartu kredit.
 
 ## 🌐 DATA DEPLOYMENT
 - **GitHub Repository**: `https://github.com/mamet334/ai-agent-project.git`
@@ -12,12 +12,12 @@ Proyek ini adalah platform AI Agent bertenaga Google Gemini API dan OpenRouter y
   - *Environment Variable*: `VITE_API_URL = https://ai-agent-project-eight.vercel.app`
 - **Backend Vercel**: `https://ai-agent-project-eight.vercel.app`
   - *Pengaturan Vercel*: Preset Other, Root Directory: `backend`
-  - *Environment Variable*: `GEMINI_API_KEY`, `OPENROUTER_API_KEY` (Optional), `SLACK_WEBHOOK_URL` (Optional).
+  - *Environment Variable*: `GEMINI_API_KEY`, `GROQ_API_KEY` (Optional), `OPENROUTER_API_KEY` (Optional), `SLACK_WEBHOOK_URL` (Optional).
 
 ## 📂 FITUR UTAMA & FILE KUNCI
 1. **`frontend/src/components/AIAgent.jsx`**:
    - UI chat utama menggunakan Tailwind CSS.
-   - **Model Selector**: Dropdown pemilihan model AI (Gemini 2.5 Flash, Gemini 2.5 Pro, Llama 3 8B, DeepSeek R1) dengan penyimpanan otomatis di `localStorage`.
+   - **Model Selector**: Dropdown pemilihan model AI (Gemini 2.5 Flash, Gemini 2.5 Pro, Llama 3.3 70B, Llama 3.1 8B, Llama 3 8B OpenRouter, DeepSeek R1 OpenRouter) dengan penyimpanan otomatis di `localStorage`.
    - **Citations & Tool Logs**: Menampilkan tautan sumber referensi dari pencarian Google dan kotak log eksekusi kode/API secara visual di bawah balon pesan.
    - **Multi-thread Chat Drawer**: Drawer sidebar responsif untuk membuat dan mengelola riwayat chat.
 2. **`backend/server.js`**:
@@ -27,7 +27,8 @@ Proyek ini adalah platform AI Agent bertenaga Google Gemini API dan OpenRouter y
      - `make_api_call`: Mengirim HTTP request nyata ke API luar menggunakan Axios.
      - `post_to_slack`: Mengirim webhook Slack jika URL diset.
      - `google_search`: Menggunakan pencarian Google grounding bawaan Gemini.
-   - **OpenRouter Proxy**: Mengirim chat ke OpenRouter API jika model Llama 3 atau DeepSeek R1 dipilih.
+   - **OpenRouter Proxy**: Mengirim chat ke OpenRouter API jika model OpenRouter dipilih.
+   - **Groq Cloud API**: Mengirim chat ke Groq API jika model Groq Llama dipilih.
 
 ## 🚀 IDE PENGEMBANGAN SELANJUTNYA (BACKLOG)
 1. **Database Integration**: Pindahkan penyimpanan chat dari `localStorage` browser ke database cloud (seperti Supabase atau MongoDB) agar chat bisa diakses lintas perangkat.
