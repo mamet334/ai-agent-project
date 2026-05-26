@@ -18,7 +18,7 @@ app.get('/api/health', (req, res) => {
 // Main agent endpoint
 app.post('/api/agent/process', async (req, res) => {
   try {
-    const { message, tools, userId } = req.body;
+    const { message, tools, model, userId } = req.body;
 
     // Validate input
     if (!message || !Array.isArray(tools)) {
@@ -358,7 +358,7 @@ Buatlah ringkasan laporan hasil kerja sub-agent tersebut untuk user secara ramah
           ]
         };
 
-        const synthRes = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${process.env.GEMINI_API_KEY}`, synthesisPrompt, {
+        const synthRes = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, synthesisPrompt, {
           headers: { 'content-type': 'application/json' }
         });
 
@@ -367,7 +367,7 @@ Buatlah ringkasan laporan hasil kerja sub-agent tersebut untuk user secara ramah
         const normalPrompt = {
           contents: [{ role: 'user', parts: [{ text: message }] }]
         };
-        const normalRes = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${process.env.GEMINI_API_KEY}`, normalPrompt, {
+        const normalRes = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, normalPrompt, {
           headers: { 'content-type': 'application/json' }
         });
         replyMessage = normalRes.data.candidates?.[0]?.content?.parts?.[0]?.text || 'Gagal merespon.';
