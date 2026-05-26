@@ -140,15 +140,56 @@ app.post('/api/agent/process', async (req, res) => {
     if (model === 'coordinator-agent') {
       console.log('Running Coordinator Agent Orchestrator...');
       
-      const coordinatorPrompt = {
-        contents: [
-          {
-            role: 'user',
-            parts: [{
-              text: `Anda adalah Kepala Agent (Coordinator). Tugas Anda adalah menganalisis permintaan user berikut dan memecahnya menjadi langkah-langkah tugas untuk sub-agent khusus jika diperlukan.
-              
-Permintaan User: "${message}"
+      // Helper function to call Groq Llama 3.3
+      const callGroq = async (promptText, systemPromptText = '') => {
+        const messages = [];
+        if (systemPromptText) {
+          messages.push({ role: 'system', content: systemPromptText });
+        }
+        messages.push({ role: 'user', content: promptText });
+        
+        const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+          model: 'llama-3.3-70b-versatile',
+          messages: messages,
+          temperature: 0.1
+        }, {
+          headers: {
+            'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        return response.data.choices?.[0]?.message?.content || '';
+      };
 
+      // General function executor to choose Groq or Gemini fallback
+      const runLLM = async (promptText, systemPromptText = '') => {
+        if (process.env.GROQ_API_KEY) {
+          try {
+            console.log('Running on Groq (Llama 3.3 70B)...');
+            return await callGroq(promptText, systemPromptText);
+          } catch (e) {
+            console.warn('Groq failed, falling back to Gemini...', e.message);
+          }
+        }
+        
+        // Fallback to Gemini 2.5 Flash
+        console.log('Running on Gemini 2.5 Flash...');
+        const payload = {
+          contents: []
+        };
+        if (systemPromptText) {
+          payload.contents.push({ role: 'user', parts: [{ text: `System Instruction: ${systemPromptText}` }] });
+        }
+        payload.contents.push({ role: 'user', parts: [{ text: promptText }] });
+        
+        const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, payload, {
+          headers: { 'content-type': 'application/json' }
+        });
+        return response.data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      };
+
+      const coordinatorSystemPrompt = `Anda adalah Kepala Agent (Coordinator). Tugas Anda adalah menganalisis permintaan user berikut dan memecahnya menjadi langkah-langkah tugas untuk sub-agent khusus jika diperlukan.
+              
 Sub-agent yang tersedia:
 1. "researcher": Menggunakan penelusuran web (web_search) untuk mencari info aktual, berita terkini, atau referensi online.
 2. "coder": Menggunakan eksekusi kode JS (code_executor) untuk melakukan perhitungan matematika, manipulasi teks/array, atau pemrosesan logika data.
@@ -163,18 +204,15 @@ Jika permintaan membutuhkan eksekusi salah satu atau beberapa sub-agent di atas 
 
 Jika permintaan user hanyalah obrolan biasa, pertanyaan umum, atau tidak memerlukan sub-agent sama sekali (misal hanya menyapa atau tanya hal teoritis sederhana), kembalikan array kosong saja: [].
 
-PENTING: Jangan berikan teks penjelasan lain, jangan gunakan markdown code block (\`\`\`json), berikan HANYA JSON array murni.`
-            }]
-          }
-        ]
-      };
+PENTING: Jangan berikan teks penjelasan lain, jangan gunakan markdown code block (\`\`\`json), berikan HANYA JSON array murni.`;
 
-      const planRes = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, coordinatorPrompt, {
-        headers: { 'content-type': 'application/json' }
-      });
-
-      let planText = planRes.data.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
-      planText = planText.replace(/```json/g, '').replace(/```/g, '').trim();
+      let planText = '[]';
+      try {
+        planText = await runLLM(`Permintaan User: "${message}"`, coordinatorSystemPrompt);
+        planText = planText.replace(/```json/g, '').replace(/```/g, '').trim();
+      } catch (err) {
+        console.error('Planner LLM call failed:', err.message);
+      }
 
       let plan = [];
       try {
@@ -193,140 +231,109 @@ PENTING: Jangan berikan teks penjelasan lain, jangan gunakan markdown code block
           const { subagent, task } = step;
           console.log(`Executing subagent: ${subagent} for task: ${task}`);
 
-          let subagentTools = [];
-          if (subagent === 'researcher') {
-            subagentTools.push({ googleSearch: {} });
-          } else if (subagent === 'coder') {
-            subagentTools.push({
-              functionDeclarations: [{
-                name: 'execute_javascript',
-                description: 'Execute JavaScript/Node.js code safely to perform mathematical calculations, data formatting, string manipulation, or array processing.',
-                parameters: {
-                  type: 'OBJECT',
-                  properties: {
-                    code: {
-                      type: 'STRING',
-                      description: 'The JavaScript code to execute. It must return a value or log output.'
-                    }
-                  },
-                  required: ['code']
-                }
-              }]
-            });
-          } else if (subagent === 'communicator') {
-            subagentTools.push({
-              functionDeclarations: [
-                {
-                  name: 'post_to_slack',
-                  description: 'Post a message to a Slack channel via Webhook.',
-                  parameters: {
-                    type: 'OBJECT',
-                    properties: {
-                      message: { type: 'STRING', description: 'The message text to send to Slack.' }
-                    },
-                    required: ['message']
-                  }
-                },
-                {
-                  name: 'make_api_call',
-                  description: 'Make an HTTP REST API request (GET, POST, etc.) to a given URL with optional headers and request body.',
-                  parameters: {
-                    type: 'OBJECT',
-                    properties: {
-                      url: { type: 'STRING', description: 'The URL of the API to call.' },
-                      method: { type: 'STRING', enum: ['GET', 'POST', 'PUT', 'DELETE'], description: 'The HTTP method to use.' }
-                    },
-                    required: ['url', 'method']
-                  }
-                }
-              ]
-            });
-          }
-
-          const subagentPromptText = `Anda adalah Sub-Agent "${subagent.toUpperCase()}".
-Tugas Anda: ${task}
-
-Konteks dari langkah sebelumnya:
-${accumulatedContext}
-
-Selesaikan tugas Anda sekarang. Jika Anda memerlukan tool, panggil tool tersebut. Kembalikan jawaban yang padat dan jelas tentang hasil kerja Anda.`;
-
-          const subagentPayload = {
-            contents: [{ role: 'user', parts: [{ text: subagentPromptText }] }]
-          };
-          if (subagentTools.length > 0) {
-            subagentPayload.tools = subagentTools;
-          }
-
           let subagentResText = 'Gagal memproses.';
           let subagentSources = [];
           let subagentToolExec = null;
 
-          try {
-            let geminiRes = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, subagentPayload, {
-              headers: { 'content-type': 'application/json' }
-            });
+          if (subagent === 'researcher') {
+            try {
+              const subagentPayload = {
+                contents: [{ role: 'user', parts: [{ text: `Cari informasi web mengenai: ${task}\n\nKonteks:\n${accumulatedContext}` }] }],
+                tools: [{ googleSearch: {} }]
+              };
+              let geminiRes = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, subagentPayload, {
+                headers: { 'content-type': 'application/json' }
+              });
+              let candidate = geminiRes.data.candidates?.[0];
+              subagentResText = candidate?.content?.parts?.[0]?.text || '';
+              if (candidate?.groundingMetadata?.groundingChunks) {
+                subagentSources = candidate.groundingMetadata.groundingChunks
+                  .map(chunk => ({ title: chunk.web?.title || 'Sumber Web', uri: chunk.web?.uri }))
+                  .filter(s => s.uri);
+              }
+            } catch (err) {
+              console.warn('Gemini researcher failed, falling back to Llama knowledge:', err.message);
+              try {
+                subagentResText = await runLLM(
+                  `Berikan penjelasan aktual terbaik berdasarkan pengetahuan Anda tentang tugas berikut:\nTugas: ${task}\n\n(Catatan: Akses pencarian web langsung sedang limit, jadi gunakan pengetahuan internal Anda).`,
+                  'Anda adalah Sub-Agent RESEARCHER. Jawab dengan cerdas dan informatif.'
+                );
+                subagentSources = [{ title: 'Internal Knowledge (Llama)', uri: '#' }];
+              } catch (fallbackErr) {
+                subagentResText = `Riset gagal: ${err.message}`;
+              }
+            }
 
-            let candidate = geminiRes.data.candidates?.[0];
-            let firstPart = candidate?.content?.parts?.[0];
+          } else if (subagent === 'coder') {
+            try {
+              const coderSystemPrompt = `Anda adalah Sub-Agent CODER. Tugas Anda: ${task}
+Tulis kode JavaScript untuk menyelesaikan tugas ini.
+Kembalikan HANYA kode JavaScript yang valid, dibungkus dalam blok \`\`\`javascript ... \`\`\`. Jangan berikan penjelasan teks lainnya.
+Pastikan kode Anda mencetak output menggunakan console.log atau mengembalikan nilai di akhir.`;
 
-            if (firstPart && firstPart.functionCall) {
-              const { name, args } = firstPart.functionCall;
-              subagentToolExec = { name, args };
-              let functionResult = null;
+              let codeOutput = await runLLM(`Konteks sebelumnya:\n${accumulatedContext}\n\nSelesaikan tugas pemrograman ini sekarang.`, coderSystemPrompt);
+              let match = codeOutput.match(/```javascript([\s\S]*?)```/) || codeOutput.match(/```js([\s\S]*?)```/) || [null, codeOutput];
+              let cleanCode = (match[1] || codeOutput).trim();
 
-              if (name === 'execute_javascript') {
-                const runSandbox = (code) => {
-                  const sandboxLogs = [];
-                  const customConsole = { log: (...msgs) => sandboxLogs.push(msgs.join(' ')) };
-                  const fn = new Function('console', `try { ${code.includes('return') ? code : 'return (' + code + ');'} } catch(e) { return 'Error: ' + e.message; }`);
-                  const result = fn(customConsole);
-                  return { result, logs: sandboxLogs };
-                };
-                const execution = runSandbox(args.code);
-                functionResult = { output: execution.result, logs: execution.logs };
-              } else if (name === 'make_api_call') {
-                const apiRes = await axios({ method: args.method, url: args.url });
-                functionResult = { status: apiRes.status, data: apiRes.data };
-              } else if (name === 'post_to_slack') {
+              const runSandbox = (code) => {
+                const sandboxLogs = [];
+                const customConsole = { log: (...msgs) => sandboxLogs.push(msgs.join(' ')) };
+                const fn = new Function('console', `try { ${code.includes('return') ? code : 'return (' + code + ');'} } catch(e) { return 'Error: ' + e.message; }`);
+                const result = fn(customConsole);
+                return { result, logs: sandboxLogs };
+              };
+
+              const execution = runSandbox(cleanCode);
+              subagentResText = `Menjalankan Kode:\n\`\`\`javascript\n${cleanCode}\n\`\`\`\n\nOutput:\n${execution.result}\n${execution.logs.length > 0 ? 'Logs:\n' + execution.logs.join('\n') : ''}`;
+              subagentToolExec = { name: 'execute_javascript', args: { code: cleanCode } };
+            } catch (err) {
+              subagentResText = `Eksekusi Coder gagal: ${err.message}`;
+            }
+
+          } else if (subagent === 'communicator') {
+            try {
+              const communicatorPrompt = `Anda adalah Sub-Agent COMMUNICATOR. Tugas Anda: ${task}
+Konteks:\n${accumulatedContext}
+
+Tentukan apakah Anda harus memanggil Slack webhook ("post_to_slack") atau melakukan panggilan API ("make_api_call").
+Kembalikan respon Anda HANYA dalam JSON format berikut:
+{
+  "tool": "post_to_slack" atau "make_api_call" atau "none",
+  "args": { ... argumen tool ... }
+}`;
+              let toolDecisionText = await runLLM(communicatorPrompt);
+              toolDecisionText = toolDecisionText.replace(/```json/g, '').replace(/```/g, '').trim();
+
+              let decision = { tool: 'none', args: {} };
+              try {
+                decision = JSON.parse(toolDecisionText);
+              } catch (e) {
+                console.error('Failed to parse tool decision:', toolDecisionText);
+              }
+
+              let functionResult = 'Tidak ada aksi.';
+              if (decision.tool === 'post_to_slack') {
+                const messageToSend = decision.args.message || task;
                 if (process.env.SLACK_WEBHOOK_URL) {
-                  await axios.post(process.env.SLACK_WEBHOOK_URL, { text: args.message });
-                  functionResult = { status: 'success' };
+                  await axios.post(process.env.SLACK_WEBHOOK_URL, { text: messageToSend });
+                  functionResult = 'Berhasil mengirim ke Slack Webhook.';
                 } else {
-                  functionResult = { status: 'simulated', logged_message: args.message };
+                  functionResult = `[Simulasi] Mengirim ke Slack: "${messageToSend}"`;
+                }
+                subagentToolExec = { name: 'post_to_slack', args: { message: messageToSend } };
+              } else if (decision.tool === 'make_api_call') {
+                const { url, method } = decision.args;
+                if (url && method) {
+                  const apiRes = await axios({ method, url });
+                  functionResult = `API Call Status: ${apiRes.status}\nData: ${JSON.stringify(apiRes.data).substring(0, 200)}`;
+                  subagentToolExec = { name: 'make_api_call', args: { url, method } };
                 }
               }
 
-              const followUpPayload = {
-                contents: [
-                  { role: 'user', parts: [{ text: subagentPromptText }] },
-                  { role: 'model', parts: [firstPart] },
-                  { role: 'user', parts: [{ functionResponse: { name, response: { result: functionResult } } }] }
-                ]
-              };
-              if (subagentPayload.tools) {
-                followUpPayload.tools = subagentPayload.tools;
-              }
-
-              const followUpRes = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, followUpPayload, {
-                headers: { 'content-type': 'application/json' }
-              });
-
-              candidate = followUpRes.data.candidates?.[0];
+              subagentResText = `Aksi Komunikasi:\n${functionResult}`;
+            } catch (err) {
+              subagentResText = `Aksi Komunikasi gagal: ${err.message}`;
             }
-
-            if (candidate?.content?.parts?.[0]) {
-              subagentResText = candidate.content.parts[0].text;
-            }
-
-            if (candidate?.groundingMetadata?.groundingChunks) {
-              subagentSources = candidate.groundingMetadata.groundingChunks
-                .map(chunk => ({ title: chunk.web?.title || 'Sumber Web', uri: chunk.web?.uri }))
-                .filter(s => s.uri);
-            }
-          } catch (err) {
-            console.error(`Error in subagent ${subagent}:`, err.message);
-            subagentResText = `Error: ${err.message}`;
           }
 
           subagentRuns.push({
@@ -340,37 +347,18 @@ Selesaikan tugas Anda sekarang. Jika Anda memerlukan tool, panggil tool tersebut
           accumulatedContext += `--- Hasil Sub-Agent [${subagent.toUpperCase()}]: ---\nTugas: ${task}\nOutput: ${subagentResText}\n\n`;
         }
 
-        const synthesisPrompt = {
-          contents: [
-            {
-              role: 'user',
-              parts: [{
-                text: `Anda adalah Kepala Agent (Coordinator). Anda telah menugaskan beberapa sub-agent untuk menyelesaikan tugas dari user.
+        const synthesisPromptText = `Anda adalah Kepala Agent (Coordinator). Anda telah menugaskan beberapa sub-agent untuk menyelesaikan tugas dari user.
                 
 Permintaan Awal User: "${message}"
 
 Berikut adalah riwayat pekerjaan dari sub-agent yang telah selesai berjalan:
 ${accumulatedContext}
 
-Buatlah ringkasan laporan hasil kerja sub-agent tersebut untuk user secara ramah, lengkap, terstruktur, dan profesional. Sebutkan secara singkat sub-agent apa saja yang telah bekerja membantu Anda.`
-              }]
-            }
-          ]
-        };
+Buatlah ringkasan laporan hasil kerja sub-agent tersebut untuk user secara ramah, lengkap, terstruktur, dan profesional. Sebutkan secara singkat sub-agent apa saja yang telah bekerja membantu Anda.`;
 
-        const synthRes = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, synthesisPrompt, {
-          headers: { 'content-type': 'application/json' }
-        });
-
-        replyMessage = synthRes.data.candidates?.[0]?.content?.parts?.[0]?.text || 'Gagal merangkum jawaban akhir.';
+        replyMessage = await runLLM(synthesisPromptText);
       } else {
-        const normalPrompt = {
-          contents: [{ role: 'user', parts: [{ text: message }] }]
-        };
-        const normalRes = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, normalPrompt, {
-          headers: { 'content-type': 'application/json' }
-        });
-        replyMessage = normalRes.data.candidates?.[0]?.content?.parts?.[0]?.text || 'Gagal merespon.';
+        replyMessage = await runLLM(message);
       }
 
       return res.json({
@@ -385,6 +373,40 @@ Buatlah ringkasan laporan hasil kerja sub-agent tersebut untuk user secara ramah
     } else if (model && model.startsWith('openrouter-')) {
       // Check if OpenRouter API Key exists
       if (!process.env.OPENROUTER_API_KEY) {
+        if (process.env.GROQ_API_KEY) {
+          console.log('OpenRouter key missing, falling back to Llama 3.3 on Groq...');
+          try {
+            const groqResponse = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+              model: 'llama-3.3-70b-versatile',
+              messages: [
+                {
+                  role: 'user',
+                  content: message
+                }
+              ]
+            }, {
+              headers: {
+                'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            let replyMessage = '';
+            if (groqResponse.data && groqResponse.data.choices?.[0]?.message) {
+              replyMessage = `*(Catatan: Menggunakan Llama 3.3 70B karena OPENROUTER_API_KEY belum dikonfigurasi)*\n\n` + groqResponse.data.choices[0].message.content;
+            }
+            return res.json({
+              message: replyMessage,
+              toolsUsed: [],
+              groundingSources: [],
+              toolExecution: null,
+              timestamp: new Date(),
+              userId: userId
+            });
+          } catch (err) {
+            console.error('Groq Llama 3.3 fallback failed:', err.message);
+          }
+        }
+        
         return res.status(400).json({
           error: 'OPENROUTER_API_KEY belum dikonfigurasi di backend/.env. Silakan gunakan model Gemini (100% Gratis & Pintar) atau tambahkan key OpenRouter Anda.'
         });
