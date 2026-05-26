@@ -22,7 +22,11 @@ Proyek ini adalah platform AI Agent bertenaga Google Gemini API, Groq Cloud API,
    - **Multi-thread Chat Drawer**: Drawer sidebar responsif untuk membuat dan mengelola riwayat chat.
 2. **`backend/server.js`**:
    - Express server routing untuk melayani API call dari frontend.
-   - **Kepala Agent (Multi-Agent Orchestrator)**: Jika dipilih, backend menggunakan model koordinator untuk membuat plan sekuensial, kemudian mengeksekusi sub-agent khusus (researcher, coder, communicator) secara berurutan dan mengembalikan log eksekusinya ke frontend.
+   - **Kepala Agent (Multi-Agent Orchestrator) dengan Groq-First Engine**:
+     - Jika dipilih, backend secara default menggunakan **Groq Llama 3.3 70B** (menghindari limit harian 20 request Gemini Free Tier).
+     - Mengeksekusi sub-agent (researcher, coder, communicator) secara berurutan dan mengembalikan log eksekusinya.
+     - **Researcher Graceful Fallback**: Jika penelusuran web Gemini rate-limited, sub-agent researcher otomatis beralih menggunakan pengetahuan internal Llama 3.3 tanpa membuat aplikasi crash.
+     - **OpenRouter Fallback**: Jika model OpenRouter (seperti DeepSeek R1) dipilih tetapi `OPENROUTER_API_KEY` kosong, sistem otomatis mengalihkan request ke Groq Llama 3.3 70B dengan ramah.
    - **Gemini Function Calling (Tool Use)**: 
      - `execute_javascript`: Mengeksekusi script JS secara nyata di runtime Node sandbox.
      - `make_api_call`: Mengirim HTTP request nyata ke API luar menggunakan Axios.
