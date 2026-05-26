@@ -102,11 +102,16 @@ export default function AIAgent() {
     return saved || 'default';
   });
 
+  const [selectedModel, setSelectedModel] = useState(() => {
+    return localStorage.getItem('ai_agent_selected_model') || 'gemini-2.5-flash';
+  });
+
   // Save conversations to localStorage when they change
   useEffect(() => {
     localStorage.setItem('ai_agent_conversations', JSON.stringify(conversations));
     localStorage.setItem('ai_agent_current_id', currentConversationId);
-  }, [conversations, currentConversationId]);
+    localStorage.setItem('ai_agent_selected_model', selectedModel);
+  }, [conversations, currentConversationId, selectedModel]);
 
   const activeConversation = conversations.find(c => c.id === currentConversationId) || conversations[0];
   const messages = activeConversation.messages;
@@ -204,6 +209,7 @@ export default function AIAgent() {
         body: JSON.stringify({
           message: currentInput,
           tools: selectedTools,
+          model: selectedModel,
           userId: 'user-123'
         })
       });
@@ -448,18 +454,33 @@ export default function AIAgent() {
 
         {/* Main Chat Area */}
         <div className="flex-1 flex flex-col overflow-hidden w-full">
-          {/* Mobile Header */}
-          <div className="flex items-center justify-between px-6 py-4 bg-slate-900/30 border-b border-purple-500/20 md:hidden">
+          {/* Top Bar Header (Desktop & Mobile) */}
+          <div className="flex items-center justify-between px-6 py-4 bg-slate-900/40 backdrop-blur border-b border-purple-500/20">
             <div className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-purple-400" />
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="p-2 text-slate-400 hover:text-white rounded-lg bg-slate-800/40 border border-purple-500/20 md:hidden mr-1"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+              <Zap className="w-5 h-5 text-purple-400 font-semibold" />
               <span className="font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">AI Agent</span>
             </div>
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="p-2 text-slate-400 hover:text-white rounded-lg bg-slate-800/40 border border-purple-500/20"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
+
+            {/* Model Selector Dropdown */}
+            <div className="flex items-center gap-2">
+              <span className="hidden sm:inline text-xs text-slate-400">Brain Model:</span>
+              <select
+                value={selectedModel}
+                onChange={e => setSelectedModel(e.target.value)}
+                className="bg-slate-800 border border-purple-500/30 text-purple-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-purple-500 transition-all font-medium cursor-pointer"
+              >
+                <option value="gemini-2.5-flash">Gemini 2.5 Flash (Gratis & Cepat)</option>
+                <option value="gemini-2.5-pro">Gemini 2.5 Pro (Sangat Pintar - Gratis)</option>
+                <option value="openrouter-llama-3">Llama 3 8B (Free via OpenRouter)</option>
+                <option value="openrouter-deepseek-r1">DeepSeek R1 (Free via OpenRouter)</option>
+              </select>
+            </div>
           </div>
 
           {/* Messages */}

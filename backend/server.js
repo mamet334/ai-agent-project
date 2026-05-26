@@ -133,157 +133,194 @@ app.post('/api/agent/process', async (req, res) => {
       geminiPayload.tools = geminiTools;
     }
 
-    // Call Google Gemini API
-    let response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, geminiPayload, {
-      headers: {
-        'content-type': 'application/json'
-      }
-    });
-
-    let candidate = response.data.candidates?.[0];
-    let firstPart = candidate?.content?.parts?.[0];
+    let replyMessage = 'Gagal memproses jawaban dari AI.';
+    let groundingSources = [];
     let toolExecution = null;
 
-    // If Gemini requests a function call (Function Calling)
-    if (firstPart && firstPart.functionCall) {
-      const { name, args } = firstPart.functionCall;
-      console.log(`AI requested function call: ${name} with args:`, args);
-      
-      toolExecution = {
-        name: name,
-        args: args
-      };
-
-      let functionResult = null;
-      try {
-        if (name === 'execute_javascript') {
-          // Execute Javascript code
-          const codeToRun = args.code;
-          const runSandbox = (code) => {
-            const sandboxLogs = [];
-            const customConsole = {
-              log: (...msgs) => sandboxLogs.push(msgs.map(m => typeof m === 'object' ? JSON.stringify(m) : m).join(' '))
-            };
-            const fn = new Function('console', `
-              try {
-                ${code.includes('return') ? code : 'return (' + code + ');'}
-              } catch (e) {
-                return 'Error: ' + e.message;
-              }
-            `);
-            const result = fn(customConsole);
-            return {
-              result: result,
-              logs: sandboxLogs
-            };
-          };
-
-          const execution = runSandbox(codeToRun);
-          functionResult = {
-            output: execution.result,
-            logs: execution.logs
-          };
-        } else if (name === 'make_api_call') {
-          const { url, method, headers, body } = args;
-          const axiosConfig = {
-            method: method,
-            url: url,
-            headers: headers || {},
-          };
-          if (body) {
-            try {
-              axiosConfig.data = JSON.parse(body);
-            } catch (e) {
-              axiosConfig.data = body;
-            }
-          }
-          const apiRes = await axios(axiosConfig);
-          functionResult = {
-            status: apiRes.status,
-            data: apiRes.data
-          };
-        } else if (name === 'post_to_slack') {
-          const { message: slackMessage } = args;
-          const webhookUrl = process.env.SLACK_WEBHOOK_URL;
-          if (webhookUrl) {
-            await axios.post(webhookUrl, { text: slackMessage });
-            functionResult = {
-              status: 'success',
-              message: 'Message successfully posted to Slack Webhook.'
-            };
-          } else {
-            console.log(`[SIMULATED SLACK] Message: ${slackMessage}`);
-            functionResult = {
-              status: 'simulated',
-              message: 'Slack Webhook is not configured in .env. Message printed to console instead.',
-              logged_message: slackMessage
-            };
-          }
-        }
-      } catch (err) {
-        console.error(`Error executing function ${name}:`, err.message);
-        functionResult = {
-          error: err.message
-        };
+    if (model && model.startsWith('openrouter-')) {
+      // Check if OpenRouter API Key exists
+      if (!process.env.OPENROUTER_API_KEY) {
+        return res.status(400).json({
+          error: 'OPENROUTER_API_KEY belum dikonfigurasi di backend/.env. Silakan gunakan model Gemini (100% Gratis & Pintar) atau tambahkan key OpenRouter Anda.'
+        });
       }
 
-      console.log(`Function result for ${name}:`, functionResult);
+      let openRouterModel = 'meta-llama/llama-3-8b-instruct:free';
+      if (model === 'openrouter-deepseek-r1') {
+        openRouterModel = 'deepseek/deepseek-r1:free';
+      }
 
-      // Send function response back to Gemini to get final output text
-      const followUpPayload = {
-        contents: [
+      console.log(`Calling OpenRouter API using model: ${openRouterModel}`);
+      const openRouterResponse = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+        model: openRouterModel,
+        messages: [
           {
             role: 'user',
-            parts: [{ text: message }]
-          },
-          {
-            role: 'model',
-            parts: [firstPart]
-          },
-          {
-            role: 'user',
-            parts: [
-              {
-                functionResponse: {
-                  name: name,
-                  response: {
-                    result: functionResult
-                  }
-                }
-              }
-            ]
+            content: message
           }
         ]
-      };
+      }, {
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
-      if (geminiPayload.tools) {
-        followUpPayload.tools = geminiPayload.tools;
+      if (openRouterResponse.data && openRouterResponse.data.choices?.[0]?.message) {
+        replyMessage = openRouterResponse.data.choices[0].message.content;
       }
-
-      const followUpResponse = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, followUpPayload, {
+    } else {
+      // Call Google Gemini API (Flash or Pro)
+      const geminiModel = model === 'gemini-2.5-pro' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+      console.log(`Calling Gemini API using model: ${geminiModel}`);
+      
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+      
+      let response = await axios.post(geminiUrl, geminiPayload, {
         headers: {
           'content-type': 'application/json'
         }
       });
 
-      candidate = followUpResponse.data.candidates?.[0];
-    }
+      let candidate = response.data.candidates?.[0];
+      let firstPart = candidate?.content?.parts?.[0];
 
-    // Extract text and grounding sources from Gemini response structure
-    let replyMessage = 'Gagal memproses jawaban dari AI.';
-    let groundingSources = [];
+      // If Gemini requests a function call (Function Calling)
+      if (firstPart && firstPart.functionCall) {
+        const { name, args } = firstPart.functionCall;
+        console.log(`AI requested function call: ${name} with args:`, args);
+        
+        toolExecution = {
+          name: name,
+          args: args
+        };
 
-    if (candidate?.content?.parts?.[0]) {
-      replyMessage = candidate.content.parts[0].text;
-    }
+        let functionResult = null;
+        try {
+          if (name === 'execute_javascript') {
+            const codeToRun = args.code;
+            const runSandbox = (code) => {
+              const sandboxLogs = [];
+              const customConsole = {
+                log: (...msgs) => sandboxLogs.push(msgs.map(m => typeof m === 'object' ? JSON.stringify(m) : m).join(' '))
+              };
+              const fn = new Function('console', `
+                try {
+                  ${code.includes('return') ? code : 'return (' + code + ');'}
+                } catch (e) {
+                  return 'Error: ' + e.message;
+                }
+              `);
+              const result = fn(customConsole);
+              return {
+                result: result,
+                logs: sandboxLogs
+              };
+            };
 
-    if (candidate?.groundingMetadata?.groundingChunks) {
-      groundingSources = candidate.groundingMetadata.groundingChunks
-        .map(chunk => ({
-          title: chunk.web?.title || 'Sumber Web',
-          uri: chunk.web?.uri
-        }))
-        .filter(source => source.uri);
+            const execution = runSandbox(codeToRun);
+            functionResult = {
+              output: execution.result,
+              logs: execution.logs
+            };
+          } else if (name === 'make_api_call') {
+            const { url, method, headers, body } = args;
+            const axiosConfig = {
+              method: method,
+              url: url,
+              headers: headers || {},
+            };
+            if (body) {
+              try {
+                axiosConfig.data = JSON.parse(body);
+              } catch (e) {
+                axiosConfig.data = body;
+              }
+            }
+            const apiRes = await axios(axiosConfig);
+            functionResult = {
+              status: apiRes.status,
+              data: apiRes.data
+            };
+          } else if (name === 'post_to_slack') {
+            const { message: slackMessage } = args;
+            const webhookUrl = process.env.SLACK_WEBHOOK_URL;
+            if (webhookUrl) {
+              await axios.post(webhookUrl, { text: slackMessage });
+              functionResult = {
+                status: 'success',
+                message: 'Message successfully posted to Slack Webhook.'
+              };
+            } else {
+              console.log(`[SIMULATED SLACK] Message: ${slackMessage}`);
+              functionResult = {
+                status: 'simulated',
+                message: 'Slack Webhook is not configured in .env. Message printed to console instead.',
+                logged_message: slackMessage
+              };
+            }
+          }
+        } catch (err) {
+          console.error(`Error executing function ${name}:`, err.message);
+          functionResult = {
+            error: err.message
+          };
+        }
+
+        console.log(`Function result for ${name}:`, functionResult);
+
+        // Send function response back to Gemini to get final output text
+        const followUpPayload = {
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: message }]
+            },
+            {
+              role: 'model',
+              parts: [firstPart]
+            },
+            {
+              role: 'user',
+              parts: [
+                {
+                  functionResponse: {
+                    name: name,
+                    response: {
+                      result: functionResult
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        };
+
+        if (geminiPayload.tools) {
+          followUpPayload.tools = geminiPayload.tools;
+        }
+
+        const followUpResponse = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${process.env.GEMINI_API_KEY}`, followUpPayload, {
+          headers: {
+            'content-type': 'application/json'
+          }
+        });
+
+        candidate = followUpResponse.data.candidates?.[0];
+      }
+
+      if (candidate?.content?.parts?.[0]) {
+        replyMessage = candidate.content.parts[0].text;
+      }
+
+      if (candidate?.groundingMetadata?.groundingChunks) {
+        groundingSources = candidate.groundingMetadata.groundingChunks
+          .map(chunk => ({
+            title: chunk.web?.title || 'Sumber Web',
+            uri: chunk.web?.uri
+          }))
+          .filter(source => source.uri);
+      }
     }
 
     const aiResponse = {
