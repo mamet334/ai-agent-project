@@ -230,6 +230,8 @@ export default function AIAgent() {
         content: data.message,
         tools: data.toolsUsed || [],
         groundingSources: data.groundingSources || [],
+        toolExecution: data.toolExecution || null,
+        subagentRuns: data.subagentRuns || [],
         timestamp: new Date(data.timestamp || Date.now()),
       };
 
@@ -475,6 +477,7 @@ export default function AIAgent() {
                 onChange={e => setSelectedModel(e.target.value)}
                 className="bg-slate-800 border border-purple-500/30 text-purple-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-purple-500 transition-all font-medium cursor-pointer"
               >
+                <option value="coordinator-agent">Kepala Agent (Multi-Agent Orchestrator)</option>
                 <option value="gemini-2.5-flash">Gemini 2.5 Flash (Gratis & Cepat)</option>
                 <option value="gemini-2.5-pro">Gemini 2.5 Pro (Sangat Pintar - Gratis)</option>
                 <option value="groq-llama-3.3">Llama 3.3 70B (Groq - Gratis & Cepat)</option>
@@ -585,6 +588,67 @@ export default function AIAgent() {
                                 <div className="text-yellow-300 mt-1">{message.toolExecution.args.message}</div>
                               </>
                             )}
+                          </div>
+                        </div>
+                      )}
+                      {message.subagentRuns && message.subagentRuns.length > 0 && (
+                        <div className="mt-4 space-y-3">
+                          <div className="text-xs font-semibold text-purple-400 flex items-center gap-1">
+                            <Zap className="w-3.5 h-3.5 animate-pulse text-purple-400" />
+                            Alur Kerja Sub-Agent (Orchestration):
+                          </div>
+                          <div className="border-l-2 border-purple-500/30 pl-4 space-y-4">
+                            {message.subagentRuns.map((run, idx) => (
+                              <div key={idx} className="relative">
+                                {/* Pip node */}
+                                <div className="absolute -left-[21px] top-1.5 w-2 h-2 rounded-full bg-purple-500 border border-slate-950 shadow-[0_0_8px_rgba(168,85,247,0.5)]" />
+                                
+                                <div className="bg-slate-950/60 rounded-xl p-3 border border-purple-500/10 text-xs">
+                                  <div className="flex items-center justify-between mb-1.5">
+                                    <span className="font-bold text-blue-400 capitalize">
+                                      🤖 Sub-Agent: {run.subagent}
+                                    </span>
+                                    <span className="text-[9px] text-green-400 bg-green-500/10 border border-green-500/20 px-1.5 py-0.5 rounded font-mono">
+                                      SUCCESS
+                                    </span>
+                                  </div>
+                                  <div className="text-slate-400 italic mb-1.5">
+                                    Tugas: {run.task}
+                                  </div>
+                                  <div className="text-slate-200 bg-black/40 p-2 rounded whitespace-pre-wrap max-h-40 overflow-y-auto font-sans leading-relaxed">
+                                    {run.output}
+                                  </div>
+                                  
+                                  {/* Grounding sources for the subagent if any */}
+                                  {run.sources && run.sources.length > 0 && (
+                                    <div className="mt-2 pt-2 border-t border-slate-800/40">
+                                      <div className="text-[10px] text-slate-400 mb-1">Referensi Web:</div>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {run.sources.map((src, sIdx) => (
+                                          <a
+                                            key={sIdx}
+                                            href={src.uri}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-[10px] text-purple-300 hover:text-purple-100 bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded-full transition-all truncate max-w-xs"
+                                          >
+                                            {src.title}
+                                          </a>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  
+                                  {/* Tool execution details for the subagent if any */}
+                                  {run.toolExecution && (
+                                    <div className="mt-2 pt-2 border-t border-slate-800/40 font-mono text-[9px] text-purple-400 flex items-center gap-1">
+                                      <Code2 className="w-3 h-3" />
+                                      Eksekusi Tool: {run.toolExecution.name}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         </div>
                       )}
