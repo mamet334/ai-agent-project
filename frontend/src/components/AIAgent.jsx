@@ -534,6 +534,37 @@ export default function AIAgent() {
                           </div>
                         </div>
                       )}
+                      {message.toolExecution && (
+                        <div className="mt-3 p-3 bg-slate-900/80 rounded-lg text-[11px] border border-purple-500/20 font-mono">
+                          <div className="flex items-center gap-1.5 text-purple-400 font-semibold mb-1.5">
+                            <Code2 className="w-3.5 h-3.5" />
+                            Eksekusi Tool: {message.toolExecution.name}
+                          </div>
+                          <div className="text-slate-300 bg-black/40 p-2 rounded max-h-40 overflow-y-auto whitespace-pre-wrap">
+                            {message.toolExecution.name === 'execute_javascript' && (
+                              <>
+                                <span className="text-slate-500">// Kode yang dijalankan:</span>
+                                <pre className="text-blue-300 mt-1">{message.toolExecution.args.code}</pre>
+                              </>
+                            )}
+                            {message.toolExecution.name === 'make_api_call' && (
+                              <>
+                                <span className="text-slate-500">// HTTP Request:</span>
+                                <div className="text-green-300 mt-1">{message.toolExecution.args.method} {message.toolExecution.args.url}</div>
+                                {message.toolExecution.args.body && (
+                                  <pre className="text-yellow-300 mt-1 text-[10px]">{message.toolExecution.args.body}</pre>
+                                )}
+                              </>
+                            )}
+                            {message.toolExecution.name === 'post_to_slack' && (
+                              <>
+                                <span className="text-slate-500">// Kirim Slack:</span>
+                                <div className="text-yellow-300 mt-1">{message.toolExecution.args.message}</div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )}
                       <div className="text-xs opacity-50 mt-2">
                         {message.timestamp.toLocaleTimeString('id-ID')}
                       </div>
