@@ -477,6 +477,8 @@ export default function AIAgent() {
               >
                 <option value="gemini-2.5-flash">Gemini 2.5 Flash (Gratis & Cepat)</option>
                 <option value="gemini-2.5-pro">Gemini 2.5 Pro (Sangat Pintar - Gratis)</option>
+                <option value="groq-llama-3.3">Llama 3.3 70B (Groq - Gratis & Cepat)</option>
+                <option value="groq-llama-3.1">Llama 3.1 8B (Groq - Instan & Cepat)</option>
                 <option value="openrouter-llama-3">Llama 3 8B (Free via OpenRouter)</option>
                 <option value="openrouter-deepseek-r1">DeepSeek R1 (Free via OpenRouter)</option>
               </select>

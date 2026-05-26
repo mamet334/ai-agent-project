@@ -169,6 +169,38 @@ app.post('/api/agent/process', async (req, res) => {
       if (openRouterResponse.data && openRouterResponse.data.choices?.[0]?.message) {
         replyMessage = openRouterResponse.data.choices[0].message.content;
       }
+    } else if (model && model.startsWith('groq-')) {
+      // Check if Groq API Key exists
+      if (!process.env.GROQ_API_KEY) {
+        return res.status(400).json({
+          error: 'GROQ_API_KEY belum dikonfigurasi di backend/.env. Silakan buat API Key gratis di https://console.groq.com dan pasang di file .env Anda.'
+        });
+      }
+
+      let groqModel = 'llama-3.3-70b-versatile';
+      if (model === 'groq-llama-3.1') {
+        groqModel = 'llama-3.1-8b-instant';
+      }
+
+      console.log(`Calling Groq API using model: ${groqModel}`);
+      const groqResponse = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+        model: groqModel,
+        messages: [
+          {
+            role: 'user',
+            content: message
+          }
+        ]
+      }, {
+        headers: {
+          'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (groqResponse.data && groqResponse.data.choices?.[0]?.message) {
+        replyMessage = groqResponse.data.choices[0].message.content;
+      }
     } else {
       // Call Google Gemini API (Flash or Pro)
       const geminiModel = model === 'gemini-2.5-pro' ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
