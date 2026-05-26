@@ -17,11 +17,12 @@ Proyek ini adalah platform AI Agent bertenaga Google Gemini API, Groq Cloud API,
 ## 📂 FITUR UTAMA & FILE KUNCI
 1. **`frontend/src/components/AIAgent.jsx`**:
    - UI chat utama menggunakan Tailwind CSS.
-   - **Model Selector**: Dropdown pemilihan model AI (Gemini 2.5 Flash, Gemini 2.5 Pro, Llama 3.3 70B, Llama 3.1 8B, Llama 3 8B OpenRouter, DeepSeek R1 OpenRouter) dengan penyimpanan otomatis di `localStorage`.
-   - **Citations & Tool Logs**: Menampilkan tautan sumber referensi dari pencarian Google dan kotak log eksekusi kode/API secara visual di bawah balon pesan.
+   - **Model Selector**: Dropdown pemilihan model AI (termasuk "Kepala Agent", Gemini 2.5 Flash, Gemini 2.5 Pro, Llama 3.3 70B, Llama 3.1 8B, Llama 3 8B OpenRouter, DeepSeek R1 OpenRouter) dengan penyimpanan otomatis di `localStorage`.
+   - **Citations, Tool Logs, & Subagent Pipeline**: Menampilkan tautan sumber referensi dari pencarian Google, kotak log eksekusi kode/API, serta **alur kerja pipeline sub-agent** secara visual di bawah balon pesan.
    - **Multi-thread Chat Drawer**: Drawer sidebar responsif untuk membuat dan mengelola riwayat chat.
 2. **`backend/server.js`**:
    - Express server routing untuk melayani API call dari frontend.
+   - **Kepala Agent (Multi-Agent Orchestrator)**: Jika dipilih, backend menggunakan model koordinator untuk membuat plan sekuensial, kemudian mengeksekusi sub-agent khusus (researcher, coder, communicator) secara berurutan dan mengembalikan log eksekusinya ke frontend.
    - **Gemini Function Calling (Tool Use)**: 
      - `execute_javascript`: Mengeksekusi script JS secara nyata di runtime Node sandbox.
      - `make_api_call`: Mengirim HTTP request nyata ke API luar menggunakan Axios.
