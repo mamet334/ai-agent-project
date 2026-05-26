@@ -223,6 +223,7 @@ export default function AIAgent() {
         type: 'agent',
         content: data.message,
         tools: data.toolsUsed || [],
+        groundingSources: data.groundingSources || [],
         timestamp: new Date(data.timestamp || Date.now()),
       };
 
@@ -512,6 +513,25 @@ export default function AIAgent() {
                               {tool.replace('_', ' ')}
                             </span>
                           ))}
+                        </div>
+                      )}
+                      {message.groundingSources && message.groundingSources.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-purple-500/10">
+                          <p className="text-[10px] text-slate-400 font-semibold mb-1.5 uppercase tracking-wider">Sumber Referensi:</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {message.groundingSources.map((source, index) => (
+                              <a
+                                key={index}
+                                href={source.uri}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[11px] px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20 hover:bg-purple-500/25 transition-all truncate max-w-xs inline-flex items-center gap-1"
+                              >
+                                <Zap className="w-2.5 h-2.5 shrink-0" />
+                                {source.title}
+                              </a>
+                            ))}
+                          </div>
                         </div>
                       )}
                       <div className="text-xs opacity-50 mt-2">

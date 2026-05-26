@@ -38,8 +38,8 @@ app.post('/api/agent/process', async (req, res) => {
       });
     }
 
-    // Call Google Gemini API
-    const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+    // Prepare Gemini request payload
+    const geminiPayload = {
       contents: [
         {
           parts: [
@@ -49,21 +49,46 @@ app.post('/api/agent/process', async (req, res) => {
           ]
         }
       ]
-    }, {
+    };
+
+    // If web_search is enabled, attach real Google Search Grounding tool
+    if (tools.includes('web_search')) {
+      geminiPayload.tools = [
+        {
+          google_search: {}
+        }
+      ];
+    }
+
+    // Call Google Gemini API
+    const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, geminiPayload, {
       headers: {
         'content-type': 'application/json'
       }
     });
 
-    // Extract text from Gemini response structure
+    // Extract text and grounding sources from Gemini response structure
     let replyMessage = 'Gagal memproses jawaban dari AI.';
-    if (response.data && response.data.candidates && response.data.candidates[0] && response.data.candidates[0].content && response.data.candidates[0].content.parts[0]) {
-      replyMessage = response.data.candidates[0].content.parts[0].text;
+    let groundingSources = [];
+
+    const candidate = response.data.candidates?.[0];
+    if (candidate?.content?.parts?.[0]) {
+      replyMessage = candidate.content.parts[0].text;
+    }
+
+    if (candidate?.groundingMetadata?.groundingChunks) {
+      groundingSources = candidate.groundingMetadata.groundingChunks
+        .map(chunk => ({
+          title: chunk.web?.title || 'Sumber Web',
+          uri: chunk.web?.uri
+        }))
+        .filter(source => source.uri);
     }
 
     const aiResponse = {
       message: replyMessage,
       toolsUsed: tools.filter(t => ['web_search', 'code_executor', 'api_caller', 'slack_integration'].includes(t)),
+      groundingSources: groundingSources,
       timestamp: new Date(),
       userId: userId
     };
