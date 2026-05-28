@@ -111,26 +111,11 @@ export default function AIAgent() {
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
 
-  const [conversations, setConversations] = useState(() => {
-    const saved = localStorage.getItem('ai_agent_conversations');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        return parsed.map(c => ({
-          ...c,
-          messages: (c.messages || []).map(m => ({ ...m, timestamp: new Date(m.timestamp) }))
-        }));
-      } catch (e) {
-        return [{ id: 'default', title: 'Percakapan Baru', messages: [] }];
-      }
-    }
-    return [{ id: 'default', title: 'Percakapan Baru', messages: [] }];
-  });
-  
-  const [currentConversationId, setCurrentConversationId] = useState(() => localStorage.getItem('ai_agent_current_chat') || 'default');
+  const [conversations, setConversations] = useState([{ id: 'default', title: 'Percakapan Baru', messages: [] }]);
+  const [currentConversationId, setCurrentConversationId] = useState('default');
   const [currentlyTypingId, setCurrentlyTypingId] = useState(null);
   const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('ai_agent_selected_model') || 'gemini-2.5-flash');
-  const [globalMemory, setGlobalMemory] = useState(() => localStorage.getItem('ai_agent_global_memory') || '');
+  const [globalMemory, setGlobalMemory] = useState('');
 
   // Supabase Auth State
   const [user, setUser] = useState(null);
@@ -153,6 +138,33 @@ export default function AIAgent() {
 
   // Fetch chats when user changes
   useEffect(() => {
+    const userKey = user ? user.id : 'anon';
+    const localChats = localStorage.getItem(`ai_agent_conversations_${userKey}`);
+    const localMemory = localStorage.getItem(`ai_agent_global_memory_${userKey}`);
+    const localCurrentChat = localStorage.getItem(`ai_agent_current_chat_${userKey}`);
+
+    if (localMemory) setGlobalMemory(localMemory);
+    else if (user?.user_metadata?.global_memory) setGlobalMemory(user.user_metadata.global_memory);
+    else setGlobalMemory('');
+
+    if (localChats) {
+      try {
+        const parsed = JSON.parse(localChats);
+        const restored = parsed.map(c => ({
+          ...c,
+          messages: (c.messages || []).map(m => ({ ...m, timestamp: new Date(m.timestamp) }))
+        }));
+        setConversations(restored);
+        if (localCurrentChat) setCurrentConversationId(localCurrentChat);
+      } catch (e) {
+        setConversations([{ id: 'default', title: 'Percakapan Baru', messages: [] }]);
+        setCurrentConversationId('default');
+      }
+    } else {
+      setConversations([{ id: 'default', title: 'Percakapan Baru', messages: [] }]);
+      setCurrentConversationId('default');
+    }
+
     if (user) {
       const fetchChats = async () => {
         const { data, error } = await supabase.from('chats').select('*').order('updated_at', { ascending: false });
@@ -165,9 +177,8 @@ export default function AIAgent() {
             }))
           }));
           
-          // Merge local un-synced chats with DB chats if needed, but for simplicity just overwrite
           setConversations(parsedChats);
-          if (!parsedChats.find(c => c.id === currentConversationId)) {
+          if (!parsedChats.find(c => c.id === localCurrentChat)) {
             setCurrentConversationId(parsedChats[0].id);
           }
         }
@@ -178,9 +189,10 @@ export default function AIAgent() {
 
   // Sync conversations to localStorage
   useEffect(() => {
-    localStorage.setItem('ai_agent_conversations', JSON.stringify(conversations));
-    localStorage.setItem('ai_agent_current_chat', currentConversationId);
-  }, [conversations, currentConversationId]);
+    const userKey = user ? user.id : 'anon';
+    localStorage.setItem(`ai_agent_conversations_${userKey}`, JSON.stringify(conversations));
+    localStorage.setItem(`ai_agent_current_chat_${userKey}`, currentConversationId);
+  }, [conversations, currentConversationId, user]);
 
   // Sync state that doesn't go to Supabase
   useEffect(() => {
@@ -188,8 +200,19 @@ export default function AIAgent() {
   }, [selectedModel]);
 
   useEffect(() => {
-    localStorage.setItem('ai_agent_global_memory', globalMemory);
-  }, [globalMemory]);
+    const userKey = user ? user.id : 'anon';
+    localStorage.setItem(`ai_agent_global_memory_${userKey}`, globalMemory);
+    
+    // Save to DB metadata dynamically with debounce to avoid spamming
+    if (user && globalMemory !== (user.user_metadata?.global_memory || '')) {
+      const timeoutId = setTimeout(() => {
+        supabase.auth.updateUser({
+          data: { global_memory: globalMemory }
+        });
+      }, 1500);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [globalMemory, user]);
 
   // Supabase Sync Helper
   const syncConversationToDB = async (conv) => {
