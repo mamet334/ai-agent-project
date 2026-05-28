@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X } from 'lucide-react';
+import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail } from 'lucide-react';
+import { supabase } from '../supabase';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -74,44 +75,78 @@ export default function AIAgent() {
   const [logs, setLogs] = useState([]);
   const messagesEndRef = useRef(null);
 
-  // Load conversations from localStorage on mount
-  const [conversations, setConversations] = useState(() => {
-    const saved = localStorage.getItem('ai_agent_conversations');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.length > 0) {
-          // Re-convert timestamp strings back to Date objects
-          return parsed.map(c => ({
+  const [conversations, setConversations] = useState([{ id: 'default', title: 'Percakapan Baru', messages: [] }]);
+  const [currentConversationId, setCurrentConversationId] = useState('default');
+  const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('ai_agent_selected_model') || 'gemini-2.5-flash');
+
+  // Supabase Auth State
+  const [user, setUser] = useState(null);
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [isLoginMode, setIsLoginMode] = useState(true);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+
+  // Check auth & listen to changes
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user || null);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Fetch chats when user changes
+  useEffect(() => {
+    if (user) {
+      const fetchChats = async () => {
+        const { data, error } = await supabase.from('chats').select('*').order('updated_at', { ascending: false });
+        if (data && data.length > 0) {
+          const parsedChats = data.map(c => ({
             ...c,
-            messages: c.messages.map(m => ({
+            messages: (c.messages || []).map(m => ({
               ...m,
               timestamp: new Date(m.timestamp)
             }))
           }));
+          setConversations(parsedChats);
+          setCurrentConversationId(parsedChats[0].id);
+        } else {
+          setConversations([{ id: 'default', title: 'Percakapan Baru', messages: [] }]);
+          setCurrentConversationId('default');
         }
-      } catch (e) {
-        console.error('Failed to parse saved conversations:', e);
-      }
+      };
+      fetchChats();
+    } else {
+      setConversations([{ id: 'default', title: 'Percakapan Baru', messages: [] }]);
+      setCurrentConversationId('default');
     }
-    return [{ id: 'default', title: 'Percakapan Baru', messages: [] }];
-  });
+  }, [user]);
 
-  const [currentConversationId, setCurrentConversationId] = useState(() => {
-    const saved = localStorage.getItem('ai_agent_current_id');
-    return saved || 'default';
-  });
-
-  const [selectedModel, setSelectedModel] = useState(() => {
-    return localStorage.getItem('ai_agent_selected_model') || 'gemini-2.5-flash';
-  });
-
-  // Save conversations to localStorage when they change
+  // Sync state that doesn't go to Supabase
   useEffect(() => {
-    localStorage.setItem('ai_agent_conversations', JSON.stringify(conversations));
-    localStorage.setItem('ai_agent_current_id', currentConversationId);
     localStorage.setItem('ai_agent_selected_model', selectedModel);
-  }, [conversations, currentConversationId, selectedModel]);
+  }, [selectedModel]);
+
+  // Supabase Sync Helper
+  const syncConversationToDB = async (conv) => {
+    if (!user) return conv;
+    try {
+      if (conv.id === 'default' || String(conv.id).startsWith('temp-')) {
+        const { data, error } = await supabase.from('chats')
+          .insert({ user_id: user.id, title: conv.title, messages: conv.messages })
+          .select().single();
+        if (data) return { ...data, messages: (data.messages || []).map(m => ({...m, timestamp: new Date(m.timestamp)})) };
+      } else {
+        await supabase.from('chats').update({ title: conv.title, messages: conv.messages, updated_at: new Date() }).eq('id', conv.id);
+      }
+    } catch (e) {
+      console.error('Error syncing to DB:', e);
+    }
+    return conv;
+  };
 
   const activeConversation = conversations.find(c => c.id === currentConversationId) || conversations[0];
   const messages = activeConversation.messages;
@@ -125,28 +160,35 @@ export default function AIAgent() {
   }, [messages]);
 
   const handleNewChat = () => {
-    const newId = Date.now().toString();
-    const newConv = {
-      id: newId,
-      title: 'Percakapan Baru',
-      messages: []
-    };
+    const newId = `temp-${Date.now()}`;
+    const newConv = { id: newId, title: 'Percakapan Baru', messages: [] };
     setConversations(prev => [newConv, ...prev]);
     setCurrentConversationId(newId);
     setSidebarOpen(false);
   };
 
-  const handleDeleteConversation = (id) => {
+  const handleDeleteConversation = async (id) => {
+    if (user && id !== 'default' && !String(id).startsWith('temp-')) {
+      await supabase.from('chats').delete().eq('id', id);
+    }
     setConversations(prev => {
       const filtered = prev.filter(c => c.id !== id);
-      if (filtered.length === 0) {
-        return [{ id: 'default', title: 'Percakapan Baru', messages: [] }];
-      }
+      if (filtered.length === 0) return [{ id: 'default', title: 'Percakapan Baru', messages: [] }];
       return filtered;
     });
-    if (currentConversationId === id) {
-      setCurrentConversationId('default');
-    }
+    if (currentConversationId === id) setCurrentConversationId('default');
+  };
+
+  const handleAuth = async (e) => {
+    e.preventDefault();
+    setAuthLoading(true);
+    setAuthError('');
+    const { error } = isLoginMode 
+      ? await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword })
+      : await supabase.auth.signUp({ email: authEmail, password: authPassword });
+    if (error) setAuthError(error.message);
+    else { setAuthEmail(''); setAuthPassword(''); }
+    setAuthLoading(false);
   };
 
   const toolIcons = {
@@ -175,14 +217,22 @@ export default function AIAgent() {
     };
 
     // Update active conversation's messages
+    let syncedConvId = currentConversationId;
     setConversations(prev => prev.map(c => {
       if (c.id === currentConversationId) {
         const updatedMessages = [...c.messages, userMessage];
-        // If it was empty, update title based on first query
         const title = c.title === 'Percakapan Baru' && c.messages.length === 0
           ? (currentInput.length > 25 ? currentInput.substring(0, 25) + '...' : currentInput)
           : c.title;
-        return { ...c, title, messages: updatedMessages };
+        const newC = { ...c, title, messages: updatedMessages };
+        syncConversationToDB(newC).then(synced => {
+          if (synced.id !== c.id) {
+            setConversations(curr => curr.map(cc => cc.id === c.id ? synced : cc));
+            setCurrentConversationId(synced.id);
+            syncedConvId = synced.id;
+          }
+        });
+        return newC;
       }
       return c;
     }));
@@ -236,8 +286,10 @@ export default function AIAgent() {
       };
 
       setConversations(prev => prev.map(c => {
-        if (c.id === currentConversationId) {
-          return { ...c, messages: [...c.messages, agentMessage] };
+        if (c.id === currentConversationId || c.id === syncedConvId) {
+          const newC = { ...c, messages: [...c.messages, agentMessage] };
+          syncConversationToDB(newC);
+          return newC;
         }
         return c;
       }));
@@ -290,6 +342,51 @@ export default function AIAgent() {
   };
 
   const availableTools = ['web_search', 'code_executor', 'api_caller', 'slack_integration'];
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative overflow-hidden text-white">
+        <div className="absolute top-20 left-10 w-72 h-72 bg-purple-500/20 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-40 right-20 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse delay-700"></div>
+        <div className="z-10 bg-slate-900/80 backdrop-blur-xl p-8 rounded-3xl border border-purple-500/30 w-full max-w-md shadow-2xl">
+          <div className="flex justify-center mb-6">
+            <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/30">
+              <Zap className="w-8 h-8 text-white" />
+            </div>
+          </div>
+          <h2 className="text-2xl font-bold text-center mb-2 bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">AI Agent Platform</h2>
+          <p className="text-center text-slate-400 mb-8 text-sm">{isLoginMode ? 'Login untuk menyimpan memori AI Anda' : 'Buat akun untuk memulai'}</p>
+          
+          <form onSubmit={handleAuth} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">Email</label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <input type="email" required value={authEmail} onChange={e => setAuthEmail(e.target.value)} className="w-full bg-slate-800/50 border border-slate-700 rounded-xl py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-purple-500 transition-all text-white" placeholder="nama@email.com" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <input type="password" required value={authPassword} onChange={e => setAuthPassword(e.target.value)} className="w-full bg-slate-800/50 border border-slate-700 rounded-xl py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-purple-500 transition-all text-white" placeholder="••••••••" />
+              </div>
+            </div>
+            {authError && <div className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 p-2.5 rounded-lg">{authError}</div>}
+            <button type="submit" disabled={authLoading} className="w-full py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-semibold text-sm transition-all shadow-lg shadow-purple-500/30">
+              {authLoading ? 'Memproses...' : (isLoginMode ? 'Sign In' : 'Sign Up')}
+            </button>
+          </form>
+          <div className="mt-6 text-center text-sm text-slate-400">
+            {isLoginMode ? 'Belum punya akun? ' : 'Sudah punya akun? '}
+            <button onClick={() => setIsLoginMode(!isLoginMode)} className="text-purple-400 hover:text-purple-300 font-medium transition-colors">
+              {isLoginMode ? 'Daftar sekarang' : 'Login di sini'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-900 to-slate-950 text-white">
@@ -445,11 +542,15 @@ export default function AIAgent() {
             </div>
           </div>
 
-          {/* Settings */}
-          <div className="p-4 border-t border-purple-500/20">
-            <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800/40 hover:bg-slate-700/50 text-slate-300 transition-all text-sm">
-              <Settings className="w-4 h-4" />
-              Settings
+          {/* Settings & User */}
+          <div className="p-4 border-t border-purple-500/20 space-y-2">
+            <div className="flex items-center gap-2 px-3 py-2 text-xs text-slate-400 truncate">
+              <User className="w-4 h-4 shrink-0" />
+              <span className="truncate">{user?.email}</span>
+            </div>
+            <button onClick={() => supabase.auth.signOut()} className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all text-sm font-medium">
+              <LogOut className="w-4 h-4" />
+              Logout
             </button>
           </div>
         </div>
