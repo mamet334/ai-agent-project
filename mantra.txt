@@ -14,6 +14,7 @@
 1. **Autonomous Scheduled Agent (Cron)**: Mamet dapat mengeksekusi riset/tugas berulang setiap jam tertentu tanpa perlu di-trigger manual.
 2. **Deep Research Mode**: Web scraping berantai (menyelami link dari Google untuk mensintesis laporan riset mendalam).
 3. **Multi-Key Round-Robin API**: Sistem rotasi kunci API (Groq/Gemini) otomatis di backend untuk mencegah Error 429 / Rate Limit Habis tanpa perlu berlangganan versi Pro.
+4. **Sistem BYOK (Bring Your Own Key)**: Fitur UI "Settings" agar setiap user login memakai API Key Groq/Gemini milik mereka sendiri (mencegah kuota developer terkuras jika dirilis ke publik).
 
 Bacalah file ini, dan langsung tanyakan fitur dari "Roadmap Medvi Tahap 4" mana yang akan dieksekusi selanjutnya!
 ==================================================

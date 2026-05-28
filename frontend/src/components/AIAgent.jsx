@@ -785,6 +785,22 @@ export default function AIAgent() {
               />
             </div>
 
+            {/* Scheduled Tasks (Cron) Section */}
+            <div className="border-t border-purple-500/20 pt-4">
+              <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
+                ⏰ Tugas Otomatis (Cron)
+              </h3>
+              <p className="text-[10px] text-slate-400 mb-3 leading-tight">
+                Mamet akan mengerjakan riset/tugas secara mandiri di belakang layar sesuai jadwal.
+              </p>
+              <button 
+                onClick={() => alert('Fitur UI Penambahan Jadwal sedang dirakit! (Mesin Backend & Database sudah siap beroperasi).')}
+                className="w-full py-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-600 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 text-purple-300"
+              >
+                <Plus className="w-3.5 h-3.5" /> Tambah Jadwal Baru
+              </button>
+            </div>
+
             <div className="border-t border-purple-500/20 pt-4">
               <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">
                 Examples
