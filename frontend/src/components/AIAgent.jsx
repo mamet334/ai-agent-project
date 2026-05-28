@@ -167,7 +167,15 @@ export default function AIAgent() {
         const { data, error } = await supabase.from('chats')
           .insert({ user_id: user.id, title: conv.title, messages: conv.messages })
           .select().single();
-        if (data) return { ...data, messages: (data.messages || []).map(m => ({...m, timestamp: new Date(m.timestamp)})) };
+        if (data) {
+          const syncedConv = { ...data, messages: (data.messages || []).map(m => ({...m, timestamp: new Date(m.timestamp)})) };
+          
+          // Update the local state with the real UUID from Supabase
+          setConversations(prev => prev.map(c => c.id === conv.id ? syncedConv : c));
+          setCurrentConversationId(syncedConv.id);
+          
+          return syncedConv;
+        }
       } else {
         await supabase.from('chats').update({ title: conv.title, messages: conv.messages, updated_at: new Date() }).eq('id', conv.id);
       }
