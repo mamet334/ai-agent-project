@@ -111,8 +111,23 @@ export default function AIAgent() {
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
 
-  const [conversations, setConversations] = useState([{ id: 'default', title: 'Percakapan Baru', messages: [] }]);
-  const [currentConversationId, setCurrentConversationId] = useState('default');
+  const [conversations, setConversations] = useState(() => {
+    const saved = localStorage.getItem('ai_agent_conversations');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return parsed.map(c => ({
+          ...c,
+          messages: (c.messages || []).map(m => ({ ...m, timestamp: new Date(m.timestamp) }))
+        }));
+      } catch (e) {
+        return [{ id: 'default', title: 'Percakapan Baru', messages: [] }];
+      }
+    }
+    return [{ id: 'default', title: 'Percakapan Baru', messages: [] }];
+  });
+  
+  const [currentConversationId, setCurrentConversationId] = useState(() => localStorage.getItem('ai_agent_current_chat') || 'default');
   const [currentlyTypingId, setCurrentlyTypingId] = useState(null);
   const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('ai_agent_selected_model') || 'gemini-2.5-flash');
   const [globalMemory, setGlobalMemory] = useState(() => localStorage.getItem('ai_agent_global_memory') || '');
@@ -149,19 +164,23 @@ export default function AIAgent() {
               timestamp: new Date(m.timestamp)
             }))
           }));
+          
+          // Merge local un-synced chats with DB chats if needed, but for simplicity just overwrite
           setConversations(parsedChats);
-          setCurrentConversationId(parsedChats[0].id);
-        } else {
-          setConversations([{ id: 'default', title: 'Percakapan Baru', messages: [] }]);
-          setCurrentConversationId('default');
+          if (!parsedChats.find(c => c.id === currentConversationId)) {
+            setCurrentConversationId(parsedChats[0].id);
+          }
         }
       };
       fetchChats();
-    } else {
-      setConversations([{ id: 'default', title: 'Percakapan Baru', messages: [] }]);
-      setCurrentConversationId('default');
     }
   }, [user]);
+
+  // Sync conversations to localStorage
+  useEffect(() => {
+    localStorage.setItem('ai_agent_conversations', JSON.stringify(conversations));
+    localStorage.setItem('ai_agent_current_chat', currentConversationId);
+  }, [conversations, currentConversationId]);
 
   // Sync state that doesn't go to Supabase
   useEffect(() => {
