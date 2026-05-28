@@ -4,6 +4,7 @@ import coder from './coder.ts';
 import communicator from './communicator.ts';
 import logika from './logic.ts';
 import bahasa from './language.ts';
+import debate from './debate.ts';
 
 // Daftarkan semua plugin di sini
 export const plugins = [
@@ -12,7 +13,8 @@ export const plugins = [
   coder,
   communicator,
   logika,
-  bahasa
+  bahasa,
+  debate
 ];
 
 // Fungsi helper untuk membangun daftar tool otomatis bagi LLM

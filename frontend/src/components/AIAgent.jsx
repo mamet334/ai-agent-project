@@ -290,7 +290,8 @@ export default function AIAgent() {
     api_caller: <GitBranch className="w-4 h-4" />,
     slack_integration: <MessageCircle className="w-4 h-4" />,
     logika: <Zap className="w-4 h-4 text-yellow-400" />,
-    bahasa: <MessageCircle className="w-4 h-4 text-pink-400" />
+    bahasa: <MessageCircle className="w-4 h-4 text-pink-400" />,
+    debate: <User className="w-4 h-4 text-cyan-400" />
   };
 
   const toolDescriptions = {
@@ -301,6 +302,7 @@ export default function AIAgent() {
     slack_integration: 'Sub-Agent Notifikasi Slack',
     logika: 'Sub-Agent Analisis & Penalaran Kompleks',
     bahasa: 'Sub-Agent Nuansa & Gaya Bahasa',
+    debate: 'Mode Diskusi Agent (Logika vs Kritikus)'
   };
 
   const handleSendMessage = async () => {
@@ -589,7 +591,7 @@ export default function AIAgent() {
     );
   };
 
-  const availableTools = ['web_search', 'code_executor', 'api_caller', 'slack_integration', 'logika', 'bahasa'];
+  const availableTools = ['web_search', 'code_executor', 'api_caller', 'slack_integration', 'logika', 'bahasa', 'debate'];
 
   if (!user) {
     return (
