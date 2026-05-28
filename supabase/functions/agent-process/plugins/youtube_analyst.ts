@@ -30,7 +30,7 @@ export default {
 
       if (!transcriptText || transcriptText.trim().length === 0) {
         return {
-          output: `Gagal mengekstrak teks dari YouTube. Video ini (ID: ${videoId}) kemungkinan besar tidak memiliki Subtitle otomatis yang diaktifkan oleh kreatornya.`
+          output: `[SISTEM ERROR: GAGAL MENARIK SUBTITLE]\nVideo ini (ID: ${videoId}) kemungkinan besar tidak memiliki Subtitle otomatis yang diaktifkan oleh kreatornya. JANGAN merangkum apapun, langsung beri tahu pengguna bahwa videonya tidak dapat diakses teksnya.`
         };
       }
 
