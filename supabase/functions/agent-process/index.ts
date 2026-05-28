@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { message, tools, model, userId, userName, file, history } = await req.json();
+    const { message, tools, model, userId, userName, file, history, globalMemory } = await req.json();
 
     let extractedImage = null;
     let finalMessage = message;
@@ -128,7 +128,8 @@ serve(async (req) => {
     
     const agentIdentityPrompt = `\nIDENTITAS ANDA: Anda adalah "Mamet", asisten cerdas buatan yang merupakan hak paten dari aplikasi ini. Selalu perkenalkan diri Anda sebagai Mamet. JANGAN katakan Anda buatan Google atau OpenAI. Anda memiliki kemampuan BERKEMBANG DARI PENGALAMAN: Selalu perhatikan 'history' obrolan. Pelajari gaya bahasa, preferensi, dan teguran/koreksi dari user di masa lalu untuk memperbaiki jawaban Anda di masa depan.`;
     const userContextPrompt = userName ? `\nInformasi Akun: User login dengan email/nama "${userName}". Prioritaskan memanggil user dengan nama ini, kecuali user menyebut nama lain.` : '';
-    const fullSystemContext = agentIdentityPrompt + userContextPrompt;
+    const memoryPrompt = globalMemory ? `\n\n[MEMORI GLOBAL & PREFERENSI USER]:\n${globalMemory}\n(Patuhi instruksi/ingatan di atas secara ketat di setiap jawaban Anda!)` : '';
+    const fullSystemContext = agentIdentityPrompt + userContextPrompt + memoryPrompt;
 
     if (model === 'coordinator-agent') {
       const coordinatorSystemPrompt = `Tugas Anda adalah menganalisis permintaan user berikut dan memecahnya menjadi langkah-langkah tugas untuk sub-agent khusus jika diperlukan.${fullSystemContext}

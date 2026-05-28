@@ -115,6 +115,7 @@ export default function AIAgent() {
   const [currentConversationId, setCurrentConversationId] = useState('default');
   const [currentlyTypingId, setCurrentlyTypingId] = useState(null);
   const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('ai_agent_selected_model') || 'gemini-2.5-flash');
+  const [globalMemory, setGlobalMemory] = useState(() => localStorage.getItem('ai_agent_global_memory') || '');
 
   // Supabase Auth State
   const [user, setUser] = useState(null);
@@ -166,6 +167,10 @@ export default function AIAgent() {
   useEffect(() => {
     localStorage.setItem('ai_agent_selected_model', selectedModel);
   }, [selectedModel]);
+
+  useEffect(() => {
+    localStorage.setItem('ai_agent_global_memory', globalMemory);
+  }, [globalMemory]);
 
   // Supabase Sync Helper
   const syncConversationToDB = async (conv) => {
@@ -355,15 +360,13 @@ export default function AIAgent() {
     ];
 
     try {
-      const endpoint = API_URL.includes('supabase.co') ? API_URL : `${API_URL}/api/agent/process`;
+      // Selalu gunakan API Supabase Edge Function (API_URL) secara mutlak
+      const endpoint = import.meta.env.VITE_API_URL || 'https://uuyzdjifhdfyyvpxsofu.supabase.co/functions/v1/agent-process';
       
       const headers = {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
       };
-      
-      if (endpoint.includes('supabase.co')) {
-        headers['Authorization'] = `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`;
-      }
       
       const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Teman';
 
@@ -377,6 +380,7 @@ export default function AIAgent() {
           model: selectedModel,
           userId: user?.id || 'anonymous',
           userName: userName,
+          globalMemory: globalMemory,
           history: messages.map(m => ({ role: m.type === 'user' ? 'user' : 'model', content: m.content })).slice(-10)
         })
       });
@@ -636,6 +640,22 @@ export default function AIAgent() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Global Memory Section */}
+            <div className="border-t border-purple-500/20 pt-4">
+              <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
+                🧠 Memori Global Mamet
+              </h3>
+              <p className="text-[10px] text-slate-400 mb-2 leading-tight">
+                Tuliskan preferensi, konteks proyek, atau gaya bicara. Mamet akan SELALU mengingat ini di setiap percakapan.
+              </p>
+              <textarea
+                value={globalMemory}
+                onChange={(e) => setGlobalMemory(e.target.value)}
+                placeholder="Contoh: Saya adalah programmer JS. Selalu jawab dengan singkat. Panggil saya Bos."
+                className="w-full h-24 bg-slate-900/50 border border-purple-500/30 rounded-lg p-2 text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-purple-500/60 resize-none transition-all"
+              />
             </div>
 
             <div className="border-t border-purple-500/20 pt-4">

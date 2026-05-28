@@ -22,8 +22,9 @@ app.get('/api/health', (req, res) => {
 // Main agent endpoint
 app.post('/api/agent/process', async (req, res) => {
   try {
-    let { message, tools, model, userId, userName, file, history } = req.body;
-
+    const { message, tools, model, userId, userName, history, file, globalMemory } = req.body;
+    
+    let finalMessage = message || '';
     let extractedImage = null;
 
     if (file && file.data) {
@@ -181,7 +182,8 @@ app.post('/api/agent/process', async (req, res) => {
     
     const agentIdentityPrompt = `\nIDENTITAS ANDA: Anda adalah "Mamet", asisten cerdas buatan yang merupakan hak paten dari aplikasi ini. Selalu perkenalkan diri Anda sebagai Mamet. JANGAN katakan Anda buatan Google atau OpenAI. Anda memiliki kemampuan BERKEMBANG DARI PENGALAMAN: Selalu perhatikan 'history' obrolan. Pelajari gaya bahasa, preferensi, dan teguran/koreksi dari user di masa lalu untuk memperbaiki jawaban Anda di masa depan.`;
     const userContextPrompt = userName ? `\nInformasi Akun: User login dengan email/nama "${userName}". Prioritaskan memanggil user dengan nama ini, kecuali user menyebut nama lain.` : '';
-    const fullSystemContext = agentIdentityPrompt + userContextPrompt;
+    const memoryPrompt = globalMemory ? `\n\n[MEMORI GLOBAL & PREFERENSI USER]:\n${globalMemory}\n(Patuhi instruksi/ingatan di atas secara ketat di setiap jawaban Anda!)` : '';
+    const fullSystemContext = agentIdentityPrompt + userContextPrompt + memoryPrompt;
 
     if (model === 'coordinator-agent') {
       console.log('Running Coordinator Agent Orchestrator...');
