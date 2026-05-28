@@ -126,6 +126,8 @@ serve(async (req) => {
 
     if (model === 'coordinator-agent') {
       const coordinatorSystemPrompt = `Anda adalah Kepala Agent (Coordinator). Tugas Anda adalah menganalisis permintaan user berikut dan memecahnya menjadi langkah-langkah tugas untuk sub-agent khusus jika diperlukan.${userContextPrompt}
+Anda memiliki kemampuan Multi-Modal. Jika user meminta data perbandingan, harga, atau jadwal, SELALU gunakan Markdown Tables. Jika user meminta diagram alur, flowchart, atau arsitektur, SELALU gunakan blok kode \`\`\`mermaid.
+
 Sub-agent yang tersedia:
 1. "researcher": Menggunakan penelusuran web (web_search) untuk mencari info.
 2. "scraper": Mengekstrak teks langsung dari sebuah URL spesifik.
@@ -237,7 +239,7 @@ Kembalikan HANYA JSON array: [{ "subagent": "researcher", "task": "..." }]`;
           accumulatedContext += `--- Hasil Sub-Agent [${subagent.toUpperCase()}]: ---\nTugas: ${task}\nOutput: ${subagentResText}\n\n`;
         }
 
-        const synthesisPrompt = `Anda adalah Kepala Agent (Coordinator). Anda telah menugaskan beberapa sub-agent.${userContextPrompt}\n\nPermintaan Awal User: "${finalMessage}"\n\nRiwayat pekerjaan:\n${accumulatedContext}\n\nBuat ringkasan laporan hasil kerja sub-agent untuk user secara ramah, lengkap, dan terstruktur.`;
+        const synthesisPrompt = `Anda adalah Kepala Agent (Coordinator). Anda telah menugaskan beberapa sub-agent.${userContextPrompt}\n\nPermintaan Awal User: "${finalMessage}"\n\nRiwayat pekerjaan:\n${accumulatedContext}\n\nBuat ringkasan laporan hasil kerja sub-agent untuk user secara ramah, lengkap, dan terstruktur. \n\nPENTING: \n- Gunakan format Tabel Markdown jika menyajikan data, harga, atau perbandingan.\n- Jika user meminta diagram, flowchart, atau alur kerja, buatlah visualisasinya menggunakan blok \`\`\`mermaid\n(contoh diagram graph TD, sequenceDiagram, dll)\`\`\`.\nJANGAN ragu menggunakan gambar/diagram jika itu mempermudah penjelasan!`;
         replyMessage = await runLLM(synthesisPrompt, '', history);
       } else {
         replyMessage = await runLLM(finalMessage, userContextPrompt, history);

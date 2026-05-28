@@ -263,6 +263,7 @@ app.post('/api/agent/process', async (req, res) => {
       };
 
       const coordinatorSystemPrompt = `Anda adalah Kepala Agent (Coordinator). Tugas Anda adalah menganalisis permintaan user berikut dan memecahnya menjadi langkah-langkah tugas untuk sub-agent khusus jika diperlukan.${userContextPrompt}
+Anda memiliki kemampuan Multi-Modal. Jika user meminta data perbandingan, harga, atau jadwal, SELALU gunakan Markdown Tables. Jika user meminta diagram alur, flowchart, atau arsitektur, SELALU gunakan blok kode \`\`\`mermaid.
               
 Sub-agent yang tersedia:
 1. "researcher": Menggunakan penelusuran web (web_search) untuk mencari info aktual, berita terkini, atau referensi online.
@@ -476,7 +477,12 @@ Permintaan Awal User: "${message}"
 Berikut adalah riwayat pekerjaan dari sub-agent yang telah selesai berjalan:
 ${accumulatedContext}
 
-Buatlah ringkasan laporan hasil kerja sub-agent tersebut untuk user secara ramah, lengkap, terstruktur, dan profesional. Sebutkan secara singkat sub-agent apa saja yang telah bekerja membantu Anda.`;
+Buatlah ringkasan laporan hasil kerja sub-agent tersebut untuk user secara ramah, lengkap, terstruktur, dan profesional. Sebutkan secara singkat sub-agent apa saja yang telah bekerja membantu Anda.
+
+PENTING:
+- Gunakan format Tabel Markdown jika menyajikan data, harga, atau perbandingan.
+- Jika user meminta diagram, flowchart, atau alur kerja, buatlah visualisasinya menggunakan blok \`\`\`mermaid\n(contoh diagram graph TD, sequenceDiagram, dll)\`\`\`.
+JANGAN ragu menggunakan gambar/diagram jika itu mempermudah penjelasan!`;
 
         replyMessage = await runLLM(synthesisPromptText, '', history);
       } else {

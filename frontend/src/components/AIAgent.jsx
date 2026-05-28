@@ -4,64 +4,72 @@ import { supabase } from '../supabase';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
-const renderMessageContent = (text) => {
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import mermaid from 'mermaid';
+
+const Mermaid = ({ chart }) => {
+  const chartRef = useRef(null);
+
+  useEffect(() => {
+    mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+    if (chartRef.current) {
+      try {
+        const uniqueId = `mermaid-${Math.random().toString(36).substring(2)}`;
+        mermaid.render(uniqueId, chart).then(({ svg }) => {
+          if (chartRef.current) {
+            chartRef.current.innerHTML = svg;
+          }
+        }).catch(e => {
+          console.error("Mermaid parsing error:", e);
+          if (chartRef.current) {
+            chartRef.current.innerHTML = `<div class="text-red-400 p-2 text-xs">Error rendering chart: ${e.message}</div>`;
+          }
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  }, [chart]);
+
+  return <div ref={chartRef} className="mermaid flex justify-center my-6 bg-slate-900/60 p-6 rounded-xl border border-purple-500/20 w-full overflow-x-auto shadow-inner shadow-black/50" />;
+};
+
+const MessageContent = ({ text }) => {
   if (!text) return null;
-
-  const lines = text.split('\n');
-
   return (
-    <div className="space-y-1">
-      {lines.map((line, index) => {
-        let processedLine = line;
-
-        // Convert bold markdown **bold** to <strong>bold</strong>
-        const boldRegex = /\*\*(.*?)\*\*/g;
-        processedLine = processedLine.replace(boldRegex, '<strong>$1</strong>');
-
-        // Check if it's a bullet point: starting with "* " or "- "
-        const isBullet = processedLine.trim().startsWith('* ') || processedLine.trim().startsWith('- ');
-        if (isBullet) {
-          const content = processedLine.trim().replace(/^[\*\-]\s+/, '');
-          return (
-            <ul key={index} className="list-disc pl-5 my-0.5">
-              <li 
-                className="text-sm leading-relaxed" 
-                dangerouslySetInnerHTML={{ __html: content }} 
-              />
-            </ul>
-          );
-        }
-
-        // Check if it's a numbered list item
-        const numberedRegex = /^(\d+)\.\s+(.*)/;
-        if (numberedRegex.test(processedLine.trim())) {
-          const match = processedLine.trim().match(numberedRegex);
-          const num = match[1];
-          const content = match[2];
-          return (
-            <ol key={index} className="list-decimal pl-5 my-0.5" start={num}>
-              <li 
-                className="text-sm leading-relaxed" 
-                dangerouslySetInnerHTML={{ __html: content }} 
-              />
-            </ol>
-          );
-        }
-
-        // Empty lines
-        if (processedLine.trim() === '') {
-          return <div key={index} className="h-2" />;
-        }
-
-        // Standard paragraph
-        return (
-          <p 
-            key={index} 
-            className="text-sm leading-relaxed mb-0.5" 
-            dangerouslySetInnerHTML={{ __html: processedLine }} 
-          />
-        );
-      })}
+    <div className="prose prose-invert prose-purple max-w-none text-sm leading-relaxed prose-pre:bg-slate-950/80 prose-pre:border prose-pre:border-purple-500/20 prose-code:text-purple-300 prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline prose-td:border-purple-500/20 prose-th:border-purple-500/20 prose-tr:border-purple-500/20">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          code({node, inline, className, children, ...props}) {
+            const match = /language-(\w+)/.exec(className || '');
+            const lang = match ? match[1] : '';
+            if (!inline && lang === 'mermaid') {
+              return <Mermaid chart={String(children).replace(/\n$/, '')} />
+            }
+            return !inline ? (
+              <div className="relative group rounded-xl overflow-hidden my-4 border border-purple-500/20 shadow-lg shadow-purple-500/10">
+                <div className="flex items-center justify-between px-4 py-2 bg-slate-900/80 border-b border-purple-500/20">
+                  <span className="text-[10px] text-purple-400 font-mono uppercase tracking-wider">{lang || 'Code'}</span>
+                </div>
+                <pre className="p-4 overflow-x-auto text-sm text-slate-300" {...props}>
+                  <code className={className}>{children}</code>
+                </pre>
+              </div>
+            ) : (
+              <code className="bg-purple-500/10 text-purple-300 px-1.5 py-0.5 rounded-md text-xs border border-purple-500/20" {...props}>
+                {children}
+              </code>
+            )
+          },
+          table({node, ...props}) {
+             return <div className="overflow-x-auto my-4 rounded-xl border border-purple-500/20"><table className="w-full text-left" {...props} /></div>
+          }
+        }}
+      >
+        {text}
+      </ReactMarkdown>
     </div>
   );
 };
@@ -89,7 +97,7 @@ const TypewriterText = ({ text, onComplete }) => {
     return () => clearInterval(interval);
   }, [text]);
 
-  return renderMessageContent(done ? text : displayed + ' ▍');
+  return <MessageContent text={done ? text : displayed + ' ▍'} />;
 };
 
 export default function AIAgent() {
@@ -736,7 +744,7 @@ export default function AIAgent() {
                     >
                       {message.type === 'agent' && currentlyTypingId === message.id
                         ? <TypewriterText text={message.content} onComplete={() => setCurrentlyTypingId(null)} />
-                        : renderMessageContent(message.content)
+                        : <MessageContent text={message.content} />
                       }
                       {message.response && (
                         <div className="mt-3 p-3 bg-slate-900/50 rounded-lg text-xs text-slate-300 border border-slate-700/50">
