@@ -11,11 +11,11 @@
 3. **Advanced Features**: RAG (PDF/Docx), Vision Agent, Dockerized Coder Sandbox (Piston API), True SSE Streaming (Realtime).
 
 ## 🚀 ROADMAP SELANJUTNYA (MEDVI TAHAP 4)
-1. **Autonomous Scheduled Agent (Cron)**: Mamet dapat mengeksekusi riset/tugas berulang setiap jam tertentu tanpa perlu di-trigger manual.
-2. **Deep Research Mode**: Web scraping berantai (menyelami link dari Google untuk mensintesis laporan riset mendalam).
+1. [✅ Backend Selesai, UI Menyusul] **Autonomous Scheduled Agent (Cron)**: Mamet dapat mengeksekusi riset/tugas berulang setiap jam tertentu tanpa perlu di-trigger manual.
+2. [✅ SELESAI] **Deep Research Mode**: Web scraping berantai (menyelami link dari Google untuk mensintesis laporan riset mendalam).
 3. **Multi-Key Round-Robin API**: Sistem rotasi kunci API (Groq/Gemini) otomatis di backend untuk mencegah Error 429 / Rate Limit Habis tanpa perlu berlangganan versi Pro.
 4. **Sistem BYOK (Bring Your Own Key)**: Fitur UI "Settings" agar setiap user login memakai API Key Groq/Gemini milik mereka sendiri (mencegah kuota developer terkuras jika dirilis ke publik).
-5. **YouTube Analyst Agent**: Mengekstrak transkrip/subtitle video YouTube, mem-filter kata-kata typo/kotor menggunakan agen bahasa, lalu merangkum isi video berjam-jam dalam hitungan detik.
+5. [🔄 SEDANG DIKERJAKAN] **YouTube Analyst Agent**: Mengekstrak transkrip/subtitle video YouTube, mem-filter kata-kata typo/kotor menggunakan agen bahasa, lalu merangkum isi video berjam-jam dalam hitungan detik.
 
 Bacalah file ini, dan langsung tanyakan fitur dari "Roadmap Medvi Tahap 4" mana yang akan dieksekusi selanjutnya!
 ==================================================

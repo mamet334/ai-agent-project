@@ -6,6 +6,7 @@ import logika from './logic.ts';
 import bahasa from './language.ts';
 import debate from './debate.ts';
 import deepResearch from './deep_research.ts';
+import youtubeAnalyst from './youtube_analyst.ts';
 
 // Daftarkan semua plugin di sini
 export const plugins = [
@@ -16,7 +17,8 @@ export const plugins = [
   logika,
   bahasa,
   debate,
-  deepResearch
+  deepResearch,
+  youtubeAnalyst
 ];
 
 // Fungsi helper untuk membangun daftar tool otomatis bagi LLM

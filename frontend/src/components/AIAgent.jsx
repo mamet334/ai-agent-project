@@ -286,6 +286,7 @@ export default function AIAgent() {
   const toolIcons = {
     web_search: <Zap className="w-4 h-4" />,
     deep_research: <Globe className="w-4 h-4 text-emerald-400" />,
+    youtube_analyst: <Globe className="w-4 h-4 text-red-500" />,
     web_scraper: <Globe className="w-4 h-4" />,
     code_executor: <Code2 className="w-4 h-4" />,
     api_caller: <GitBranch className="w-4 h-4" />,
@@ -298,6 +299,7 @@ export default function AIAgent() {
   const toolDescriptions = {
     web_search: 'Sub-Agent Riset Internet',
     deep_research: 'Sub-Agent Riset Mendalam (Multi-Web Scraping)',
+    youtube_analyst: 'Sub-Agent Pengekstrak & Perangkum YouTube',
     web_scraper: 'Sub-Agent Web Scraper (URL)',
     code_executor: 'Sub-Agent Penulis & Eksekutor Kode',
     api_caller: 'Sub-Agent Integrasi API',
@@ -593,7 +595,7 @@ export default function AIAgent() {
     );
   };
 
-  const availableTools = ['web_search', 'deep_research', 'code_executor', 'api_caller', 'slack_integration', 'logika', 'bahasa', 'debate'];
+  const availableTools = ['web_search', 'deep_research', 'youtube_analyst', 'code_executor', 'api_caller', 'slack_integration', 'logika', 'bahasa', 'debate'];
 
   if (!user) {
     return (
