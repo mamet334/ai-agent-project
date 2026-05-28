@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe } from 'lucide-react';
+import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe, Clock } from 'lucide-react';
 import { supabase } from '../supabase';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -125,6 +125,12 @@ export default function AIAgent() {
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState('');
 
+  // Cron State
+  const [scheduledTasks, setScheduledTasks] = useState([]);
+  const [isCronModalOpen, setIsCronModalOpen] = useState(false);
+  const [cronForm, setCronForm] = useState({ title: '', prompt: '', interval_hours: 24 });
+  const [cronLoading, setCronLoading] = useState(false);
+
   // Check auth & listen to changes
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -183,7 +189,14 @@ export default function AIAgent() {
           }
         }
       };
+      
+      const fetchCron = async () => {
+        const { data, error } = await supabase.from('scheduled_tasks').select('*').order('created_at', { ascending: false });
+        if (data) setScheduledTasks(data);
+      };
+
       fetchChats();
+      fetchCron();
     }
   }, [user]);
 
@@ -281,6 +294,31 @@ export default function AIAgent() {
     if (error) setAuthError(error.message);
     else { setAuthEmail(''); setAuthPassword(''); }
     setAuthLoading(false);
+  };
+
+  const handleCronSubmit = async (e) => {
+    e.preventDefault();
+    if (!cronForm.title || !cronForm.prompt) return;
+    setCronLoading(true);
+    const { data, error } = await supabase.from('scheduled_tasks').insert([{
+      user_id: user.id,
+      title: cronForm.title,
+      prompt: cronForm.prompt,
+      interval_hours: parseInt(cronForm.interval_hours),
+      tools: selectedTools
+    }]).select();
+    
+    if (data) {
+      setScheduledTasks(prev => [data[0], ...prev]);
+      setIsCronModalOpen(false);
+      setCronForm({ title: '', prompt: '', interval_hours: 24 });
+    }
+    setCronLoading(false);
+  };
+
+  const handleDeleteCron = async (id) => {
+    await supabase.from('scheduled_tasks').delete().eq('id', id);
+    setScheduledTasks(prev => prev.filter(t => t.id !== id));
   };
 
   const toolIcons = {
@@ -797,8 +835,24 @@ export default function AIAgent() {
               <p className="text-[10px] text-slate-400 mb-3 leading-tight">
                 Mamet akan mengerjakan riset/tugas secara mandiri di belakang layar sesuai jadwal.
               </p>
+              
+              <div className="space-y-2 mb-3 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
+                {scheduledTasks.map(task => (
+                  <div key={task.id} className="p-2 bg-slate-900/50 border border-slate-700 rounded-lg text-[10px] group relative">
+                    <div className="font-semibold text-purple-300 truncate pr-6">{task.title}</div>
+                    <div className="text-slate-500 mt-1">Setiap {task.interval_hours} jam</div>
+                    <button 
+                      onClick={() => handleDeleteCron(task.id)}
+                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-opacity"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
               <button 
-                onClick={() => alert('Fitur UI Penambahan Jadwal sedang dirakit! (Mesin Backend & Database sudah siap beroperasi).')}
+                onClick={() => setIsCronModalOpen(true)}
                 className="w-full py-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-600 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 text-purple-300"
               >
                 <Plus className="w-3.5 h-3.5" /> Tambah Jadwal Baru
@@ -1135,6 +1189,81 @@ export default function AIAgent() {
           </div>
         </div>
       </div>
+
+      {/* Cron Settings Modal */}
+      {isCronModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-purple-500/30 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+            <div className="p-4 border-b border-purple-500/20 flex justify-between items-center bg-slate-800/50">
+              <h2 className="text-sm font-bold text-slate-200 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-emerald-400" />
+                Tambah Jadwal Agen (Cron)
+              </h2>
+              <button onClick={() => setIsCronModalOpen(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleCronSubmit} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Judul Tugas</label>
+                <input 
+                  type="text" 
+                  required
+                  value={cronForm.title}
+                  onChange={e => setCronForm({...cronForm, title: e.target.value})}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500"
+                  placeholder="Cth: Riset Harga Kripto Harian"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Instruksi Prompt</label>
+                <textarea 
+                  required
+                  value={cronForm.prompt}
+                  onChange={e => setCronForm({...cronForm, prompt: e.target.value})}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 h-24 resize-none focus:outline-none focus:border-emerald-500"
+                  placeholder="Ketik prompt lengkap di sini..."
+                ></textarea>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Jadwal Eksekusi</label>
+                <select 
+                  value={cronForm.interval_hours}
+                  onChange={e => setCronForm({...cronForm, interval_hours: e.target.value})}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500"
+                >
+                  <option value={1}>Setiap 1 Jam</option>
+                  <option value={6}>Setiap 6 Jam</option>
+                  <option value={12}>Setiap 12 Jam</option>
+                  <option value={24}>Setiap 24 Jam (Harian)</option>
+                  <option value={168}>Setiap 7 Hari (Mingguan)</option>
+                </select>
+              </div>
+
+              <div className="pt-4 border-t border-slate-800 flex justify-end gap-2">
+                <button 
+                  type="button" 
+                  onClick={() => setIsCronModalOpen(false)}
+                  className="px-4 py-2 text-sm text-slate-400 hover:text-white"
+                >
+                  Batal
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={cronLoading}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                >
+                  {cronLoading ? 'Menyimpan...' : 'Simpan Jadwal'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
