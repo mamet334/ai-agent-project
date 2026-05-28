@@ -2,18 +2,15 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const google = require('googlethis');
-const multer = require('multer');
 const pdf = require('pdf-parse');
 const mammoth = require('mammoth');
 require('dotenv').config();
-
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB limit
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(cors());
 
 // Health check endpoint
@@ -21,48 +18,34 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date() });
 });
 
-// File upload and extraction endpoint (RAG)
-app.post('/api/agent/upload', upload.single('file'), async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    
-    const buffer = req.file.buffer;
-    const filename = req.file.originalname.toLowerCase();
-    let extractedText = '';
-
-    if (filename.endsWith('.pdf')) {
-      const data = await pdf(buffer);
-      extractedText = data.text;
-    } else if (filename.endsWith('.docx')) {
-      const result = await mammoth.extractRawText({ buffer: buffer });
-      extractedText = result.value;
-    } else if (filename.endsWith('.txt') || filename.endsWith('.csv') || filename.endsWith('.md')) {
-      extractedText = buffer.toString('utf-8');
-    } else if (req.file.mimetype.startsWith('image/')) {
-      return res.json({
-        filename: req.file.originalname,
-        isImage: true,
-        mimeType: req.file.mimetype,
-        data: buffer.toString('base64')
-      });
-    } else {
-      return res.status(400).json({ error: 'Unsupported file type. Please upload PDF, DOCX, TXT, CSV, MD, or Images.' });
-    }
-
-    res.json({ 
-      filename: req.file.originalname, 
-      text: extractedText.substring(0, 50000) // Limit to 50k chars to prevent context overflow 
-    });
-  } catch (error) {
-    console.error('File parsing error:', error);
-    res.status(500).json({ error: 'Failed to parse file: ' + error.message });
-  }
-});
-
 // Main agent endpoint
 app.post('/api/agent/process', async (req, res) => {
   try {
-    const { message, tools, model, userId } = req.body;
+    let { message, tools, model, userId, file } = req.body;
+
+    let extractedImage = null;
+
+    if (file && file.data) {
+      try {
+        const filename = file.name.toLowerCase();
+        const buffer = Buffer.from(file.data, 'base64');
+        
+        if (file.mimeType.startsWith('image/')) {
+          extractedImage = { mimeType: file.mimeType, data: file.data };
+        } else if (filename.endsWith('.pdf')) {
+          const data = await pdf(buffer);
+          message = `Permintaan User: ${message}\n\n[DOKUMEN TERLAMPIR: ${file.name}]\nIsi Dokumen:\n${data.text.substring(0, 50000)}`;
+        } else if (filename.endsWith('.docx')) {
+          const result = await mammoth.extractRawText({ buffer: buffer });
+          message = `Permintaan User: ${message}\n\n[DOKUMEN TERLAMPIR: ${file.name}]\nIsi Dokumen:\n${result.value.substring(0, 50000)}`;
+        } else if (filename.endsWith('.txt') || filename.endsWith('.csv') || filename.endsWith('.md')) {
+          message = `Permintaan User: ${message}\n\n[DOKUMEN TERLAMPIR: ${file.name}]\nIsi Dokumen:\n${buffer.toString('utf-8').substring(0, 50000)}`;
+        }
+      } catch (err) {
+        console.error('File extraction error:', err);
+        return res.status(500).json({ error: 'Gagal mengekstrak teks dari file: ' + err.message });
+      }
+    }
 
     // Validate input
     if (!message || !Array.isArray(tools)) {
@@ -95,11 +78,11 @@ app.post('/api/agent/process', async (req, res) => {
       ]
     };
 
-    if (req.body.image && req.body.image.data) {
+    if (extractedImage) {
       geminiPayload.contents[0].parts.push({
         inlineData: {
-          mimeType: req.body.image.mimeType,
-          data: req.body.image.data
+          mimeType: extractedImage.mimeType,
+          data: extractedImage.data
         }
       });
     }
@@ -216,7 +199,7 @@ app.post('/api/agent/process', async (req, res) => {
 
       // General function executor to choose Groq or Gemini fallback
       const runLLM = async (promptText, systemPromptText = '') => {
-        if (process.env.GROQ_API_KEY && !(req.body.image && req.body.image.data)) {
+        if (process.env.GROQ_API_KEY && !extractedImage) {
           try {
             console.log('Running on Groq (Llama 3.3 70B)...');
             return await callGroq(promptText, systemPromptText);
@@ -235,11 +218,11 @@ app.post('/api/agent/process', async (req, res) => {
         }
 
         const userParts = [{ text: promptText }];
-        if (req.body.image && req.body.image.data) {
+        if (extractedImage) {
           userParts.push({
             inlineData: {
-              mimeType: req.body.image.mimeType,
-              data: req.body.image.data
+              mimeType: extractedImage.mimeType,
+              data: extractedImage.data
             }
           });
         }
@@ -506,9 +489,9 @@ Buatlah ringkasan laporan hasil kerja sub-agent tersebut untuk user secara ramah
         messages: [
           {
             role: 'user',
-            content: req.body.image && req.body.image.data ? [
+            content: extractedImage ? [
               { type: 'text', text: message },
-              { type: 'image_url', image_url: { url: `data:${req.body.image.mimeType};base64,${req.body.image.data}` } }
+              { type: 'image_url', image_url: { url: `data:${extractedImage.mimeType};base64,${extractedImage.data}` } }
             ] : message
           }
         ]

@@ -212,7 +212,6 @@ export default function AIAgent() {
 
     const displayInput = input || 'Tolong pelajari dokumen ini.';
     let apiInput = displayInput;
-    let apiImage = null;
     const currentFile = attachedFile;
     const currentFileName = currentFile ? currentFile.name : null;
 
@@ -221,27 +220,24 @@ export default function AIAgent() {
     setLoading(true);
     setLogs(['🔍 Memulai proses...']);
 
+    let filePayload = null;
     if (currentFileName) {
-      setLogs(prev => [...prev, `📁 Mengunggah dan membaca file: ${currentFileName}...`]);
+      setLogs(prev => [...prev, `📁 Membaca file: ${currentFileName}...`]);
       try {
-        const formData = new FormData();
-        formData.append('file', currentFile);
-        
-        const uploadRes = await fetch(`${API_URL}/api/agent/upload`, {
-          method: 'POST',
-          body: formData
+        const base64Data = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(currentFile);
+          reader.onload = () => resolve(reader.result.split(',')[1]);
+          reader.onerror = error => reject(error);
         });
-        
-        if (!uploadRes.ok) throw new Error('Gagal membaca file');
-        const uploadData = await uploadRes.json();
-        
-        if (uploadData.isImage) {
-           apiImage = { mimeType: uploadData.mimeType, data: uploadData.data };
-        } else {
-           apiInput = `Permintaan User: ${displayInput}\n\n[DOKUMEN TERLAMPIR: ${uploadData.filename}]\nIsi Dokumen:\n${uploadData.text}`;
-        }
+
+        filePayload = {
+          name: currentFile.name,
+          mimeType: currentFile.type || 'application/octet-stream',
+          data: base64Data
+        };
       } catch (err) {
-        setLogs(prev => [...prev, `❌ Gagal memproses file: ${err.message}`]);
+        setLogs(prev => [...prev, `❌ Gagal membaca file: ${err.message}`]);
         setLoading(false);
         return;
       }
@@ -294,7 +290,7 @@ export default function AIAgent() {
         },
         body: JSON.stringify({
           message: apiInput,
-          image: apiImage,
+          file: filePayload,
           tools: selectedTools,
           model: selectedModel,
           userId: 'user-123'
