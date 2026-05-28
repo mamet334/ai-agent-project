@@ -22,7 +22,7 @@ app.get('/api/health', (req, res) => {
 // Main agent endpoint
 app.post('/api/agent/process', async (req, res) => {
   try {
-    let { message, tools, model, userId, file } = req.body;
+    let { message, tools, model, userId, userName, file, history } = req.body;
 
     let extractedImage = null;
 
@@ -178,16 +178,28 @@ app.post('/api/agent/process', async (req, res) => {
     let replyMessage = 'Gagal memproses jawaban dari AI.';
     let groundingSources = [];
     let toolExecution = null;
+    
+    const userContextPrompt = userName ? `\nInformasi: Nama user yang sedang Anda ajak bicara adalah ${userName} (akun Gmail). Anda harus mengingat identitas ini dan gunakan untuk menyapanya.` : '';
 
     if (model === 'coordinator-agent') {
       console.log('Running Coordinator Agent Orchestrator...');
       
       // Helper function to call Groq Llama 3.3
-      const callGroq = async (promptText, systemPromptText = '') => {
+      const callGroq = async (promptText, systemPromptText = '', chatHistory = []) => {
         const messages = [];
         if (systemPromptText) {
           messages.push({ role: 'system', content: systemPromptText });
         }
+        
+        if (chatHistory && chatHistory.length > 0) {
+          for (const msg of chatHistory) {
+            messages.push({
+              role: msg.role === 'model' ? 'assistant' : 'user',
+              content: msg.content
+            });
+          }
+        }
+        
         messages.push({ role: 'user', content: promptText });
         
         const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
@@ -204,11 +216,11 @@ app.post('/api/agent/process', async (req, res) => {
       };
 
       // General function executor to choose Groq or Gemini fallback
-      const runLLM = async (promptText, systemPromptText = '') => {
+      const runLLM = async (promptText, systemPromptText = '', chatHistory = []) => {
         if (process.env.GROQ_API_KEY && !extractedImage) {
           try {
             console.log('Running on Groq (Llama 3.3 70B)...');
-            return await callGroq(promptText, systemPromptText);
+            return await callGroq(promptText, systemPromptText, chatHistory);
           } catch (e) {
             console.warn('Groq failed, falling back to Gemini...', e.message);
           }
@@ -221,6 +233,16 @@ app.post('/api/agent/process', async (req, res) => {
         };
         if (systemPromptText) {
           payload.contents.push({ role: 'user', parts: [{ text: `System Instruction: ${systemPromptText}` }] });
+          payload.contents.push({ role: 'model', parts: [{ text: 'Dimengerti.' }] });
+        }
+        
+        if (chatHistory && chatHistory.length > 0) {
+          for (const msg of chatHistory) {
+            payload.contents.push({
+              role: msg.role === 'model' ? 'model' : 'user',
+              parts: [{ text: msg.content }]
+            });
+          }
         }
 
         const userParts = [{ text: promptText }];
@@ -240,7 +262,7 @@ app.post('/api/agent/process', async (req, res) => {
         return response.data.candidates?.[0]?.content?.parts?.[0]?.text || '';
       };
 
-      const coordinatorSystemPrompt = `Anda adalah Kepala Agent (Coordinator). Tugas Anda adalah menganalisis permintaan user berikut dan memecahnya menjadi langkah-langkah tugas untuk sub-agent khusus jika diperlukan.
+      const coordinatorSystemPrompt = `Anda adalah Kepala Agent (Coordinator). Tugas Anda adalah menganalisis permintaan user berikut dan memecahnya menjadi langkah-langkah tugas untuk sub-agent khusus jika diperlukan.${userContextPrompt}
               
 Sub-agent yang tersedia:
 1. "researcher": Menggunakan penelusuran web (web_search) untuk mencari info aktual, berita terkini, atau referensi online.
@@ -447,7 +469,7 @@ Kembalikan respon Anda HANYA dalam JSON format berikut:
           accumulatedContext += `--- Hasil Sub-Agent [${subagent.toUpperCase()}]: ---\nTugas: ${task}\nOutput: ${subagentResText}\n\n`;
         }
 
-        const synthesisPromptText = `Anda adalah Kepala Agent (Coordinator). Anda telah menugaskan beberapa sub-agent untuk menyelesaikan tugas dari user.
+        const synthesisPromptText = `Anda adalah Kepala Agent (Coordinator). Anda telah menugaskan beberapa sub-agent untuk menyelesaikan tugas dari user.${userContextPrompt}
                 
 Permintaan Awal User: "${message}"
 
@@ -456,9 +478,9 @@ ${accumulatedContext}
 
 Buatlah ringkasan laporan hasil kerja sub-agent tersebut untuk user secara ramah, lengkap, terstruktur, dan profesional. Sebutkan secara singkat sub-agent apa saja yang telah bekerja membantu Anda.`;
 
-        replyMessage = await runLLM(synthesisPromptText);
+        replyMessage = await runLLM(synthesisPromptText, '', history);
       } else {
-        replyMessage = await runLLM(message);
+        replyMessage = await runLLM(message, userContextPrompt, history);
       }
 
       return res.json({
