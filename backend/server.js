@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const google = require('googlethis');
+const cheerio = require('cheerio');
 const PDFParser = require('pdf2json');
 const mammoth = require('mammoth');
 require('dotenv').config();
@@ -243,8 +244,9 @@ app.post('/api/agent/process', async (req, res) => {
               
 Sub-agent yang tersedia:
 1. "researcher": Menggunakan penelusuran web (web_search) untuk mencari info aktual, berita terkini, atau referensi online.
-2. "coder": Menggunakan eksekusi kode JS (code_executor) untuk melakukan perhitungan matematika, manipulasi teks/array, atau pemrosesan logika data.
-3. "communicator": Menggunakan kirim pesan Slack (post_to_slack) atau pemanggilan API eksternal (api_caller) untuk mengirimkan notifikasi atau integrasi data.
+2. "scraper": Mengekstrak dan membaca teks langsung dari sebuah URL spesifik jika user memberikan link (http/https).
+3. "coder": Menggunakan eksekusi kode JS (code_executor) untuk melakukan perhitungan matematika, manipulasi teks/array, atau pemrosesan logika data.
+4. "communicator": Menggunakan kirim pesan Slack (post_to_slack) atau pemanggilan API eksternal (api_caller) untuk mengirimkan notifikasi atau integrasi data.
 
 Jika permintaan membutuhkan eksekusi salah satu atau beberapa sub-agent di atas secara berurutan, Anda WAJIB merespon HANYA dengan JSON array dengan format berikut:
 [
@@ -333,6 +335,27 @@ PENTING: Jangan berikan teks penjelasan lain, jangan gunakan markdown code block
               } catch (fallbackErr) {
                 subagentResText = `Riset gagal: ${fallbackErr.message}`;
               }
+            }
+
+          } else if (subagent === 'scraper') {
+            try {
+              let urlToScrape = task.match(/(https?:\/\/[^\s]+)/g)?.[0];
+              if (!urlToScrape && accumulatedContext.match(/(https?:\/\/[^\s]+)/g)) {
+                urlToScrape = accumulatedContext.match(/(https?:\/\/[^\s]+)/g)[0];
+              }
+              if (urlToScrape) {
+                const scrapeRes = await axios.get(urlToScrape);
+                const $ = cheerio.load(scrapeRes.data);
+                $('script, style, nav, footer, header').remove();
+                const text = $('body').text().replace(/\s+/g, ' ').trim();
+                subagentResText = `Isi konten dari ${urlToScrape}:\n\n${text.substring(0, 15000)}`;
+                subagentSources = [{ title: $('title').text() || 'Scraped Page', uri: urlToScrape }];
+                subagentToolExec = { name: 'web_scraper', args: { url: urlToScrape } };
+              } else {
+                subagentResText = "Gagal memproses URL: URL tidak ditemukan dalam instruksi atau input user.";
+              }
+            } catch (err) {
+              subagentResText = `Gagal melakukan web scraping: ${err.message}`;
             }
 
           } else if (subagent === 'coder') {

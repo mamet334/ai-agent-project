@@ -21,10 +21,11 @@ Proyek ini adalah platform AI Agent canggih bertenaga Google Gemini API, Groq Cl
 6. **Vision Agent (Analisis Gambar)**: Ekstraksi gambar dan kompresi otomatis untuk dianalisis oleh AI.
 7. **Agent Riset & Penulis Kode**: Sub-agent khusus yang siap mencari informasi dari internet dan mengeksekusi kode secara dinamis.
 
+8. **Web Scraper Agent**: Agen khusus untuk mengekstrak dan membaca artikel/teks langsung dari URL spesifik yang diberikan user.
+
 ## 🚀 ROADMAP PENGEMBANGAN SELANJUTNYA (VISI "MEDVI")
 Kita akan mengerjakan fitur-fitur mutakhir berikut secara bertahap:
-1. **Web Scraper Agent**: Agen khusus untuk mengekstrak dan membaca artikel/teks langsung dari URL spesifik yang diberikan user.
-2. **Streaming Response**: Menampilkan ketikan AI kata demi kata secara *real-time* agar terasa lebih hidup dan cepat.
+1. **Streaming Response**: Menampilkan ketikan AI kata demi kata secara *real-time* agar terasa lebih hidup dan cepat.
 
 Bacalah file ini, dan langsung tanyakan kepada user fitur mana dari "Roadmap Visi Medvi" di atas yang akan kita eksekusi sekarang!
 ==================================================

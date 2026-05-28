@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon } from 'lucide-react';
+import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe } from 'lucide-react';
 import { supabase } from '../supabase';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -195,6 +195,7 @@ export default function AIAgent() {
 
   const toolIcons = {
     web_search: <Zap className="w-4 h-4" />,
+    web_scraper: <Globe className="w-4 h-4" />,
     code_executor: <Code2 className="w-4 h-4" />,
     api_caller: <GitBranch className="w-4 h-4" />,
     slack_integration: <MessageCircle className="w-4 h-4" />,
@@ -202,6 +203,7 @@ export default function AIAgent() {
 
   const toolDescriptions = {
     web_search: 'Sub-Agent Riset Internet',
+    web_scraper: 'Sub-Agent Web Scraper (URL)',
     code_executor: 'Sub-Agent Penulis & Eksekutor Kode',
     api_caller: 'Sub-Agent Integrasi API',
     slack_integration: 'Sub-Agent Notifikasi Slack',
