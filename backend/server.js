@@ -179,7 +179,7 @@ app.post('/api/agent/process', async (req, res) => {
     let groundingSources = [];
     let toolExecution = null;
     
-    const userContextPrompt = userName ? `\nInformasi: Nama user yang sedang Anda ajak bicara adalah ${userName} (akun Gmail). Anda harus mengingat identitas ini dan gunakan untuk menyapanya.` : '';
+    const userContextPrompt = userName ? `\nInformasi Akun: User login dengan identitas/email "${userName}". Namun, jika di dalam chat user memperkenalkan nama aslinya (misalnya "namaku Slamet"), SELALU prioritaskan dan gunakan nama asli yang diberikan user tersebut untuk memanggilnya.` : '';
 
     if (model === 'coordinator-agent') {
       console.log('Running Coordinator Agent Orchestrator...');

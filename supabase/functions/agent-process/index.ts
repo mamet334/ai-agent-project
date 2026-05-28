@@ -122,7 +122,7 @@ serve(async (req) => {
     let toolExecution = null;
     let subagentRuns: any[] = [];
     
-    const userContextPrompt = userName ? `\nInformasi: Nama user yang sedang Anda ajak bicara adalah ${userName}. Anda harus mengingat ini.` : '';
+    const userContextPrompt = userName ? `\nInformasi Akun: User login dengan identitas/email "${userName}". Namun, jika di dalam chat user memperkenalkan nama aslinya (misalnya "namaku Slamet"), SELALU prioritaskan dan gunakan nama asli yang diberikan user tersebut untuk memanggilnya.` : '';
 
     if (model === 'coordinator-agent') {
       const coordinatorSystemPrompt = `Anda adalah Kepala Agent (Coordinator). Tugas Anda adalah menganalisis permintaan user berikut dan memecahnya menjadi langkah-langkah tugas untuk sub-agent khusus jika diperlukan.${userContextPrompt}
