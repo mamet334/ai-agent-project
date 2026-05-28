@@ -233,9 +233,8 @@ app.post('/api/agent/process', async (req, res) => {
         const payload = {
           contents: []
         };
-        if (systemPromptText) {
-          payload.systemInstruction = { parts: [{ text: systemPromptText }] };
-        }
+        
+        payload.systemInstruction = { parts: [{ text: fullSystemContext + '\n' + systemPromptText }] };
         
         if (chatHistory && chatHistory.length > 0) {
           for (const msg of chatHistory) {
@@ -509,6 +508,10 @@ JANGAN ragu menggunakan gambar/diagram jika itu mempermudah penjelasan!`;
               model: 'llama-3.3-70b-versatile',
               messages: [
                 {
+                  role: 'system',
+                  content: fullSystemContext
+                },
+                {
                   role: 'user',
                   content: message
                 }
@@ -551,6 +554,10 @@ JANGAN ragu menggunakan gambar/diagram jika itu mempermudah penjelasan!`;
         model: openRouterModel,
         messages: [
           {
+            role: 'system',
+            content: fullSystemContext
+          },
+          {
             role: 'user',
             content: extractedImage ? [
               { type: 'text', text: message },
@@ -585,6 +592,10 @@ JANGAN ragu menggunakan gambar/diagram jika itu mempermudah penjelasan!`;
       const groqResponse = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
         model: groqModel,
         messages: [
+          {
+            role: 'system',
+            content: fullSystemContext
+          },
           {
             role: 'user',
             content: message
