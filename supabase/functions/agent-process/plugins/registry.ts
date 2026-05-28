@@ -2,13 +2,17 @@ import researcher from './researcher.ts';
 import scraper from './scraper.ts';
 import coder from './coder.ts';
 import communicator from './communicator.ts';
+import logika from './logic.ts';
+import bahasa from './language.ts';
 
 // Daftarkan semua plugin di sini
 export const plugins = [
   researcher,
   scraper,
   coder,
-  communicator
+  communicator,
+  logika,
+  bahasa
 ];
 
 // Fungsi helper untuk membangun daftar tool otomatis bagi LLM
