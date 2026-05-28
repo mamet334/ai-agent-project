@@ -339,7 +339,8 @@ export default function AIAgent() {
     ];
 
     try {
-      const response = await fetch(`${API_URL}/api/agent/process`, {
+      const endpoint = API_URL.includes('supabase.co') ? API_URL : `${API_URL}/api/agent/process`;
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
