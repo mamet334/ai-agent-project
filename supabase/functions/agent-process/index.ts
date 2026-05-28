@@ -14,7 +14,7 @@ serve(async (req) => {
   }
 
   try {
-    const { message, tools, model, userId, file, history } = await req.json();
+    const { message, tools, model, userId, userName, file, history } = await req.json();
 
     let extractedImage = null;
     let finalMessage = message;
@@ -121,9 +121,11 @@ serve(async (req) => {
     let groundingSources: any[] = [];
     let toolExecution = null;
     let subagentRuns: any[] = [];
+    
+    const userContextPrompt = userName ? `\nInformasi: Nama user yang sedang Anda ajak bicara adalah ${userName}. Anda harus mengingat ini.` : '';
 
     if (model === 'coordinator-agent') {
-      const coordinatorSystemPrompt = `Anda adalah Kepala Agent (Coordinator). Tugas Anda adalah menganalisis permintaan user berikut dan memecahnya menjadi langkah-langkah tugas untuk sub-agent khusus jika diperlukan.
+      const coordinatorSystemPrompt = `Anda adalah Kepala Agent (Coordinator). Tugas Anda adalah menganalisis permintaan user berikut dan memecahnya menjadi langkah-langkah tugas untuk sub-agent khusus jika diperlukan.${userContextPrompt}
 Sub-agent yang tersedia:
 1. "researcher": Menggunakan penelusuran web (web_search) untuk mencari info.
 2. "scraper": Mengekstrak teks langsung dari sebuah URL spesifik.
@@ -235,13 +237,13 @@ Kembalikan HANYA JSON array: [{ "subagent": "researcher", "task": "..." }]`;
           accumulatedContext += `--- Hasil Sub-Agent [${subagent.toUpperCase()}]: ---\nTugas: ${task}\nOutput: ${subagentResText}\n\n`;
         }
 
-        const synthesisPrompt = `Anda adalah Kepala Agent (Coordinator). Anda telah menugaskan beberapa sub-agent.\n\nPermintaan Awal User: "${finalMessage}"\n\nRiwayat pekerjaan:\n${accumulatedContext}\n\nBuat ringkasan laporan hasil kerja sub-agent untuk user secara ramah, lengkap, dan terstruktur.`;
+        const synthesisPrompt = `Anda adalah Kepala Agent (Coordinator). Anda telah menugaskan beberapa sub-agent.${userContextPrompt}\n\nPermintaan Awal User: "${finalMessage}"\n\nRiwayat pekerjaan:\n${accumulatedContext}\n\nBuat ringkasan laporan hasil kerja sub-agent untuk user secara ramah, lengkap, dan terstruktur.`;
         replyMessage = await runLLM(synthesisPrompt, '', history);
       } else {
-        replyMessage = await runLLM(finalMessage, '', history);
+        replyMessage = await runLLM(finalMessage, userContextPrompt, history);
       }
     } else {
-      replyMessage = await runLLM(finalMessage, '', history);
+      replyMessage = await runLLM(finalMessage, userContextPrompt, history);
     }
 
     const aiResponse = {

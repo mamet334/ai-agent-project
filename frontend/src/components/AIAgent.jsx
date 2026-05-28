@@ -348,6 +348,8 @@ export default function AIAgent() {
       if (endpoint.includes('supabase.co')) {
         headers['Authorization'] = `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`;
       }
+      
+      const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Teman';
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -358,7 +360,8 @@ export default function AIAgent() {
           tools: selectedTools,
           model: selectedModel,
           userId: user?.id || 'anonymous',
-          history: messages.map(m => ({ role: m.type === 'user' ? 'user' : 'model', content: m.content })).slice(-10) // Ambil 10 pesan terakhir
+          userName: userName,
+          history: messages.map(m => ({ role: m.type === 'user' ? 'user' : 'model', content: m.content })).slice(-10)
         })
       });
 
