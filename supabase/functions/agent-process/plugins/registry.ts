@@ -5,6 +5,7 @@ import communicator from './communicator.ts';
 import logika from './logic.ts';
 import bahasa from './language.ts';
 import debate from './debate.ts';
+import deepResearch from './deep_research.ts';
 
 // Daftarkan semua plugin di sini
 export const plugins = [
@@ -14,7 +15,8 @@ export const plugins = [
   communicator,
   logika,
   bahasa,
-  debate
+  debate,
+  deepResearch
 ];
 
 // Fungsi helper untuk membangun daftar tool otomatis bagi LLM
