@@ -340,11 +340,18 @@ export default function AIAgent() {
 
     try {
       const endpoint = API_URL.includes('supabase.co') ? API_URL : `${API_URL}/api/agent/process`;
+      
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (endpoint.includes('supabase.co')) {
+        headers['Authorization'] = `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`;
+      }
+
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: headers,
         body: JSON.stringify({
           message: apiInput,
           file: filePayload,

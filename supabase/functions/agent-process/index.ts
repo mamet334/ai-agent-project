@@ -236,7 +236,7 @@ Kembalikan HANYA JSON array: [{ "subagent": "researcher", "task": "..." }]`;
         }
 
         const synthesisPrompt = `Anda adalah Kepala Agent (Coordinator). Anda telah menugaskan beberapa sub-agent.\n\nPermintaan Awal User: "${finalMessage}"\n\nRiwayat pekerjaan:\n${accumulatedContext}\n\nBuat ringkasan laporan hasil kerja sub-agent untuk user secara ramah, lengkap, dan terstruktur.`;
-        replyMessage = await runLLM(synthesisPrompt);
+        replyMessage = await runLLM(synthesisPrompt, '', history);
       } else {
         replyMessage = await runLLM(finalMessage, '', history);
       }
