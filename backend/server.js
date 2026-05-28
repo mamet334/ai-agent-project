@@ -216,7 +216,7 @@ app.post('/api/agent/process', async (req, res) => {
 
       // General function executor to choose Groq or Gemini fallback
       const runLLM = async (promptText, systemPromptText = '') => {
-        if (process.env.GROQ_API_KEY) {
+        if (process.env.GROQ_API_KEY && !(req.body.image && req.body.image.data)) {
           try {
             console.log('Running on Groq (Llama 3.3 70B)...');
             return await callGroq(promptText, systemPromptText);
@@ -233,7 +233,17 @@ app.post('/api/agent/process', async (req, res) => {
         if (systemPromptText) {
           payload.contents.push({ role: 'user', parts: [{ text: `System Instruction: ${systemPromptText}` }] });
         }
-        payload.contents.push({ role: 'user', parts: [{ text: promptText }] });
+
+        const userParts = [{ text: promptText }];
+        if (req.body.image && req.body.image.data) {
+          userParts.push({
+            inlineData: {
+              mimeType: req.body.image.mimeType,
+              data: req.body.image.data
+            }
+          });
+        }
+        payload.contents.push({ role: 'user', parts: userParts });
         
         const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, payload, {
           headers: { 'content-type': 'application/json' }
