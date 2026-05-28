@@ -36,6 +36,12 @@ export default {
 
       // Bersihkan teks (hapus jeda seperti [Musik], dll jika perlu, walau LLM sudah cukup pintar)
       let cleanedText = transcriptText.replace(/\[.*?\]/g, ' ').substring(0, 30000); // Batasi max karakter
+      
+      if (cleanedText.trim().length === 0) {
+        return {
+          output: `[SISTEM ERROR: GAGAL MENARIK SUBTITLE]\nVideo ini (ID: ${videoId}) kemungkinan hanya berisi musik tanpa teks yang bisa dibaca. JANGAN merangkum apapun!`
+        };
+      }
 
       // 3. Masukkan teks kotor ke "Pipeline" LLM untuk disaring & dirangkum
       const prompt = `Anda adalah seorang Analis Video Profesional. 
@@ -50,7 +56,8 @@ Instruksi Anda:
 1. Abaikan salah ketik atau kata-kata yang tidak masuk akal (filter noise).
 2. Temukan gagasan utama dan fakta penting dari pembicaraan di atas.
 3. Susunlah Rangkuman Komprehensif dengan bahasa Indonesia yang sangat rapi, profesional, dan mudah dipahami.
-4. Gunakan poin-poin (bullet points) untuk menyoroti bagian-bagian krusial.`;
+4. Gunakan poin-poin (bullet points) untuk menyoroti bagian-bagian krusial.
+5. PENTING: JIKA TEKS MENTAH YOUTUBE DI ATAS KOSONG ATAU HANYA BERISI KATA-KATA TIDAK BERMAKNA, ANDA DILARANG KERAS MENGARANG CERITA (SEPERTI BAHAS MESIN CUCI DLL). CUKUP JAWAB: "Video ini tidak memiliki percakapan yang jelas yang dapat dirangkum."`;
 
       const summary = await runLLM(prompt);
 
