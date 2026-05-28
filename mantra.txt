@@ -1,44 +1,29 @@
 # MANTRA ANTIGRAVITY - DOKUMENTASI RESUME PROYEK 🔮
 ==================================================
-Halo Antigravity! Baca file ini untuk melanjutkan pengembangan proyek AI Agent ini secara cepat dan tepat.
+Halo Antigravity! Baca file ini untuk melanjutkan pengembangan proyek AI Agent ini secara cepat dan tepat. Menuju AI kelas dunia ala "Medvi"!
 
 ## 📌 RINGKASAN PROYEK
-Proyek ini adalah platform AI Agent bertenaga Google Gemini API, Groq Cloud API, dan OpenRouter yang dideploy sepenuhnya di Vercel secara gratis tanpa kartu kredit.
+Proyek ini adalah platform AI Agent canggih bertenaga Google Gemini API, Groq Cloud API, dan OpenRouter yang dideploy sepenuhnya di Vercel secara gratis.
 
-## 🌐 DATA DEPLOYMENT
+## 🌐 DATA DEPLOYMENT & INFRASTRUKTUR
 - **GitHub Repository**: `https://github.com/mamet334/ai-agent-project.git`
-- **Frontend Vercel**: `https://ai-agent-project-2a9h.vercel.app`
-  - *Pengaturan Vercel*: Preset Vite, Root Directory: `frontend`
-  - *Environment Variable*: `VITE_API_URL = https://ai-agent-project-eight.vercel.app`
-- **Backend Vercel**: `https://ai-agent-project-eight.vercel.app`
-  - *Pengaturan Vercel*: Preset Other, Root Directory: `backend`
-  - *Environment Variable*: `GEMINI_API_KEY`, `GROQ_API_KEY` (Telah Dikonfigurasi), `OPENROUTER_API_KEY` (Optional), `SLACK_WEBHOOK_URL` (Optional).
+- **Frontend Vercel**: `https://ai-agent-project-2a9h.vercel.app` (Vite, TailwindCSS)
+- **Backend Vercel**: `https://ai-agent-project-eight.vercel.app` (Express.js)
+- **Database & Auth**: Supabase (`chats` table dengan Row Level Security)
+- **Sub-Agent Search**: Menggunakan `googlethis` sebagai fallback gratis jika Gemini API terkena rate-limit.
 
-## 📂 FITUR UTAMA & FILE KUNCI
-1. **`frontend/src/components/AIAgent.jsx`**:
-   - UI chat utama menggunakan Tailwind CSS.
-   - **Model Selector**: Dropdown pemilihan model AI (termasuk "Kepala Agent", Gemini 2.5 Flash, Gemini 2.5 Pro, Llama 3.3 70B, Llama 3.1 8B, Llama 3 8B OpenRouter, DeepSeek R1 OpenRouter) dengan penyimpanan otomatis di `localStorage`.
-   - **Citations, Tool Logs, & Subagent Pipeline**: Menampilkan tautan sumber referensi dari pencarian Google, kotak log eksekusi kode/API, serta **alur kerja pipeline sub-agent** secara visual di bawah balon pesan.
-   - **Multi-thread Chat Drawer**: Drawer sidebar responsif untuk membuat dan mengelola riwayat chat.
-2. **`backend/server.js`**:
-   - Express server routing untuk melayani API call dari frontend.
-   - **Kepala Agent (Multi-Agent Orchestrator) dengan Groq-First Engine**:
-     - Jika dipilih, backend secara default menggunakan **Groq Llama 3.3 70B** (menghindari limit harian 20 request Gemini Free Tier).
-     - Mengeksekusi sub-agent (researcher, coder, communicator) secara berurutan dan mengembalikan log eksekusinya.
-     - **Researcher Graceful Fallback**: Jika penelusuran web Gemini rate-limited, sub-agent researcher otomatis beralih menggunakan pengetahuan internal Llama 3.3 tanpa membuat aplikasi crash.
-     - **OpenRouter Fallback**: Jika model OpenRouter (seperti DeepSeek R1) dipilih tetapi `OPENROUTER_API_KEY` kosong, sistem otomatis mengalihkan request ke Groq Llama 3.3 70B dengan ramah.
-   - **Gemini Function Calling (Tool Use)**: 
-     - `execute_javascript`: Mengeksekusi script JS secara nyata di runtime Node sandbox.
-     - `make_api_call`: Mengirim HTTP request nyata ke API luar menggunakan Axios.
-     - `post_to_slack`: Mengirim webhook Slack jika URL diset.
-     - `google_search`: Menggunakan pencarian Google grounding bawaan Gemini.
-   - **OpenRouter Proxy**: Mengirim chat ke OpenRouter API jika model OpenRouter dipilih.
-   - **Groq Cloud API**: Mengirim chat ke Groq API menggunakan `GROQ_API_KEY` jika model Groq Llama dipilih.
+## ✅ FITUR YANG SUDAH SELESAI
+1. **Multi-Agent Orchestrator (Kepala Agent)**: Memecah tugas untuk sub-agent (Researcher, Coder, Communicator).
+2. **User Authentication (Supabase)**: Form Login/Register dan integrasi RLS (Row Level Security).
+3. **Database Integration (Supabase)**: Sinkronisasi riwayat chat *real-time* ke cloud, persisten antar perangkat.
+4. **Graceful Fallbacks**: Penanganan error canggih jika API key OpenRouter kosong, atau kuota Gemini habis (fallback ke Groq + GoogleThis).
 
-## 🚀 IDE PENGEMBANGAN SELANJUTNYA (BACKLOG)
-1. **Database Integration**: Pindahkan penyimpanan chat dari `localStorage` browser ke database cloud (seperti Supabase atau MongoDB) agar chat bisa diakses lintas perangkat.
-2. **User Authentication**: Tambahkan login/register pengguna.
-3. **Pencadangan Otomatis AirKas RT & CashMe**: Tambahkan fungsi tool lokal di backend untuk membaca file database/JSON proyek lokal tersebut, memampatkannya ke ZIP, dan mengunggahnya ke Google Drive/GitHub.
+## 🚀 ROADMAP PENGEMBANGAN SELANJUTNYA (VISI "MEDVI")
+Kita akan mengerjakan fitur-fitur mutakhir berikut secara bertahap:
+1. **Fitur RAG (Document Upload)**: Menambahkan tombol attachment untuk mengunggah PDF/Word/Excel agar AI bisa membaca data internal user.
+2. **Vision Agent (Analisis Gambar)**: Kemampuan untuk mengirim dan menganalisis gambar/foto di dalam chat menggunakan model Vision (Gemini 2.5 Flash/Pro).
+3. **Web Scraper Agent**: Agen khusus untuk mengekstrak dan membaca artikel/teks langsung dari URL spesifik yang diberikan user.
+4. **Streaming Response**: Menampilkan ketikan AI kata demi kata secara *real-time* agar terasa lebih hidup dan cepat.
 
-Bacalah file ini, dan tanyakan kepada user fitur mana di atas yang ingin mereka kembangkan selanjutnya!
+Bacalah file ini, dan langsung tanyakan kepada user fitur mana dari "Roadmap Visi Medvi" di atas yang akan kita eksekusi sekarang!
 ==================================================

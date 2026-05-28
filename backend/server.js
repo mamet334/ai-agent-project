@@ -2,7 +2,12 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const google = require('googlethis');
+const multer = require('multer');
+const pdf = require('pdf-parse');
+const mammoth = require('mammoth');
 require('dotenv').config();
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB limit
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -14,6 +19,37 @@ app.use(cors());
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date() });
+});
+
+// File upload and extraction endpoint (RAG)
+app.post('/api/agent/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    
+    const buffer = req.file.buffer;
+    const filename = req.file.originalname.toLowerCase();
+    let extractedText = '';
+
+    if (filename.endsWith('.pdf')) {
+      const data = await pdf(buffer);
+      extractedText = data.text;
+    } else if (filename.endsWith('.docx')) {
+      const result = await mammoth.extractRawText({ buffer: buffer });
+      extractedText = result.value;
+    } else if (filename.endsWith('.txt') || filename.endsWith('.csv') || filename.endsWith('.md')) {
+      extractedText = buffer.toString('utf-8');
+    } else {
+      return res.status(400).json({ error: 'Unsupported file type. Please upload PDF, DOCX, TXT, CSV, or MD.' });
+    }
+
+    res.json({ 
+      filename: req.file.originalname, 
+      text: extractedText.substring(0, 50000) // Limit to 50k chars to prevent context overflow 
+    });
+  } catch (error) {
+    console.error('File parsing error:', error);
+    res.status(500).json({ error: 'Failed to parse file: ' + error.message });
+  }
 });
 
 // Main agent endpoint

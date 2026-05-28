@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail } from 'lucide-react';
+import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText } from 'lucide-react';
 import { supabase } from '../supabase';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -73,6 +73,8 @@ export default function AIAgent() {
   const [selectedTools, setSelectedTools] = useState(['web_search']);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [logs, setLogs] = useState([]);
+  const [attachedFile, setAttachedFile] = useState(null);
+  const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
 
   const [conversations, setConversations] = useState([{ id: 'default', title: 'Percakapan Baru', messages: [] }]);
@@ -206,13 +208,44 @@ export default function AIAgent() {
   };
 
   const handleSendMessage = async () => {
-    if (!input.trim() || loading) return;
+    if ((!input.trim() && !attachedFile) || loading) return;
 
-    const currentInput = input;
+    const displayInput = input || 'Tolong pelajari dokumen ini.';
+    let apiInput = displayInput;
+    const currentFile = attachedFile;
+    const currentFileName = currentFile ? currentFile.name : null;
+
+    setInput('');
+    setAttachedFile(null); // Clear early
+    setLoading(true);
+    setLogs(['🔍 Memulai proses...']);
+
+    if (currentFileName) {
+      setLogs(prev => [...prev, `📁 Mengunggah dan membaca file: ${currentFileName}...`]);
+      try {
+        const formData = new FormData();
+        formData.append('file', currentFile);
+        
+        const uploadRes = await fetch(`${API_URL}/api/agent/upload`, {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (!uploadRes.ok) throw new Error('Gagal membaca file');
+        const uploadData = await uploadRes.json();
+        
+        apiInput = `Permintaan User: ${displayInput}\n\n[DOKUMEN TERLAMPIR: ${uploadData.filename}]\nIsi Dokumen:\n${uploadData.text}`;
+      } catch (err) {
+        setLogs(prev => [...prev, `❌ Gagal memproses file: ${err.message}`]);
+        setLoading(false);
+        return;
+      }
+    }
+
     const userMessage = {
       id: Date.now(),
       type: 'user',
-      content: currentInput,
+      content: currentFileName ? `${displayInput}\n\n*(File Terlampir: ${currentFileName})*` : displayInput,
       timestamp: new Date(),
     };
 
@@ -222,7 +255,7 @@ export default function AIAgent() {
       if (c.id === currentConversationId) {
         const updatedMessages = [...c.messages, userMessage];
         const title = c.title === 'Percakapan Baru' && c.messages.length === 0
-          ? (currentInput.length > 25 ? currentInput.substring(0, 25) + '...' : currentInput)
+          ? (displayInput.length > 25 ? displayInput.substring(0, 25) + '...' : displayInput)
           : c.title;
         const newC = { ...c, title, messages: updatedMessages };
         syncConversationToDB(newC).then(synced => {
@@ -237,17 +270,15 @@ export default function AIAgent() {
       return c;
     }));
 
-    setInput('');
-    setLoading(true);
-    setLogs([
+    setLogs(prev => [...prev, 
       '🔍 Menganalisis permintaan...',
       '🛠️ Mempersiapkan tools: ' + (selectedTools.length > 0 ? selectedTools.join(', ') : 'none')
     ]);
 
     // Simulate logs stream
     const logIntervals = [
-      setTimeout(() => setLogs(prev => [...prev, '⚡ Memanggil API Google Gemini 2.5 Flash...']), 600),
-      setTimeout(() => setLogs(prev => [...prev, '🧠 AI sedang merumuskan jawaban terbaik...']), 1300),
+      setTimeout(() => setLogs(p => [...p, '⚡ Menghubungi Model AI (LLM)...']), 600),
+      setTimeout(() => setLogs(p => [...p, '🧠 AI sedang merumuskan jawaban terbaik...']), 1300),
     ];
 
     try {
@@ -257,7 +288,7 @@ export default function AIAgent() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: currentInput,
+          message: apiInput,
           tools: selectedTools,
           model: selectedModel,
           userId: 'user-123'
@@ -785,21 +816,56 @@ export default function AIAgent() {
           </div>
 
           {/* Input Area */}
-          <div className="border-t border-purple-500/20 bg-slate-900/50 backdrop-blur-md p-6">
-            <div className="flex gap-3">
+          <div className="border-t border-purple-500/20 bg-slate-900/50 backdrop-blur-md p-4 md:p-6">
+            
+            {/* File attachment preview */}
+            {attachedFile && (
+              <div className="mb-3 flex items-center gap-2 bg-purple-500/10 border border-purple-500/30 rounded-lg px-3 py-2 w-max animate-in fade-in slide-in-from-bottom-2">
+                <FileText className="w-4 h-4 text-purple-400" />
+                <span className="text-xs text-purple-200 truncate max-w-[200px]">{attachedFile.name}</span>
+                <button onClick={() => setAttachedFile(null)} className="ml-2 text-slate-400 hover:text-red-400 p-0.5 rounded-full hover:bg-slate-800/50 transition-all">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            <div className="flex gap-2 md:gap-3 items-end">
               <input
-                type="text"
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyPress={e => e.key === 'Enter' && handleSendMessage()}
-                placeholder="Ketik permintaan Anda di sini..."
-                className="flex-1 bg-slate-800/50 border border-purple-500/30 rounded-xl px-4 py-3 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all text-white placeholder-slate-500"
-                disabled={loading}
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept=".pdf,.txt,.md,.csv,.docx"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    setAttachedFile(e.target.files[0]);
+                  }
+                }}
               />
               <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={loading}
+                className="p-3.5 bg-slate-800/50 hover:bg-slate-700 border border-purple-500/30 rounded-xl text-slate-400 hover:text-purple-400 transition-all focus:outline-none disabled:opacity-50 h-[50px] flex items-center justify-center"
+                title="Lampirkan Dokumen (PDF, TXT, DOCX)"
+              >
+                <Paperclip className="w-5 h-5" />
+              </button>
+
+              <div className="flex-1 relative">
+                <input
+                  type="text"
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyPress={e => e.key === 'Enter' && handleSendMessage()}
+                  placeholder="Ketik permintaan atau pertanyaan..."
+                  className="w-full bg-slate-800/50 border border-purple-500/30 rounded-xl px-4 py-3.5 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all text-white placeholder-slate-500 h-[50px]"
+                  disabled={loading}
+                />
+              </div>
+
+              <button
                 onClick={handleSendMessage}
-                disabled={loading || !input.trim()}
-                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 disabled:from-slate-600 disabled:to-slate-600 text-white rounded-xl px-6 py-3 font-medium flex items-center gap-2 transition-all shadow-lg shadow-purple-500/50 hover:shadow-purple-500/70 disabled:shadow-none"
+                disabled={loading || (!input.trim() && !attachedFile)}
+                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 disabled:from-slate-600 disabled:to-slate-600 text-white rounded-xl px-6 py-3 font-medium flex items-center gap-2 transition-all shadow-lg shadow-purple-500/50 hover:shadow-purple-500/70 disabled:shadow-none h-[50px]"
               >
                 <Send className="w-4 h-4" />
                 Send
