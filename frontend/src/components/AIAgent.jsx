@@ -225,15 +225,42 @@ export default function AIAgent() {
       setLogs(prev => [...prev, `📁 Membaca file: ${currentFileName}...`]);
       try {
         const base64Data = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.readAsDataURL(currentFile);
-          reader.onload = () => resolve(reader.result.split(',')[1]);
-          reader.onerror = error => reject(error);
+          if (currentFile.type && currentFile.type.startsWith('image/')) {
+            const img = new window.Image();
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              let width = img.width;
+              let height = img.height;
+              const maxDim = 1200;
+              if (width > maxDim || height > maxDim) {
+                if (width > height) {
+                  height = Math.round((height * maxDim) / width);
+                  width = maxDim;
+                } else {
+                  width = Math.round((width * maxDim) / height);
+                  height = maxDim;
+                }
+              }
+              canvas.width = width;
+              canvas.height = height;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, width, height);
+              const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+              resolve(dataUrl.split(',')[1]);
+            };
+            img.onerror = () => reject(new Error('Gagal memproses gambar'));
+            img.src = URL.createObjectURL(currentFile);
+          } else {
+            const reader = new FileReader();
+            reader.readAsDataURL(currentFile);
+            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = error => reject(error);
+          }
         });
 
         filePayload = {
           name: currentFile.name,
-          mimeType: currentFile.type || 'application/octet-stream',
+          mimeType: currentFile.type && currentFile.type.startsWith('image/') ? 'image/jpeg' : (currentFile.type || 'application/octet-stream'),
           data: base64Data
         };
       } catch (err) {
