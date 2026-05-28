@@ -470,7 +470,7 @@ Kembalikan respon Anda HANYA dalam JSON format berikut:
           accumulatedContext += `--- Hasil Sub-Agent [${subagent.toUpperCase()}]: ---\nTugas: ${task}\nOutput: ${subagentResText}\n\n`;
         }
 
-        const synthesisPromptText = `Nama Anda adalah "Mamet". Anda adalah Kepala Agent (Coordinator). Anda telah menugaskan beberapa sub-agent untuk menyelesaikan tugas dari user.${userContextPrompt}
+        const synthesisPromptText = `Anda telah menugaskan beberapa sub-agent untuk menyelesaikan tugas dari user.${fullSystemContext}
                 
 Permintaan Awal User: "${message}"
 
@@ -486,7 +486,7 @@ JANGAN ragu menggunakan gambar/diagram jika itu mempermudah penjelasan!`;
 
         replyMessage = await runLLM(synthesisPromptText, '', history);
       } else {
-        replyMessage = await runLLM(message, userContextPrompt, history);
+        replyMessage = await runLLM(message, fullSystemContext, history);
       }
 
       return res.json({

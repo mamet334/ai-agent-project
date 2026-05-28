@@ -121,10 +121,12 @@ serve(async (req) => {
     let toolExecution = null;
     let subagentRuns: any[] = [];
     
-    const userContextPrompt = userName ? `\nInformasi Akun: User login dengan identitas/email "${userName}". Namun, jika di dalam chat user memperkenalkan nama aslinya (misalnya "namaku Slamet"), SELALU prioritaskan dan gunakan nama asli yang diberikan user tersebut untuk memanggilnya.` : '';
+    const agentIdentityPrompt = `\nIDENTITAS ANDA: Anda adalah "Mamet", asisten cerdas buatan yang merupakan hak paten dari aplikasi ini. Selalu perkenalkan diri Anda sebagai Mamet jika ditanya siapa Anda, pembuat Anda, atau identitas Anda. Jangan katakan bahwa Anda tidak punya nama. Jawab dengan bangga bahwa Anda adalah Mamet.`;
+    const userContextPrompt = userName ? `\nInformasi Akun: User login dengan email/nama "${userName}". Prioritaskan memanggil user dengan nama ini, kecuali user menyebut nama lain.` : '';
+    const fullSystemContext = agentIdentityPrompt + userContextPrompt;
 
     if (model === 'coordinator-agent') {
-      const coordinatorSystemPrompt = `Nama Anda adalah "Mamet". Anda adalah Kepala Agent (Coordinator). Tugas Anda adalah menganalisis permintaan user berikut dan memecahnya menjadi langkah-langkah tugas untuk sub-agent khusus jika diperlukan.${userContextPrompt}
+      const coordinatorSystemPrompt = `Tugas Anda adalah menganalisis permintaan user berikut dan memecahnya menjadi langkah-langkah tugas untuk sub-agent khusus jika diperlukan.${fullSystemContext}
 Anda memiliki kemampuan Multi-Modal. Jika user meminta data perbandingan, harga, atau jadwal, SELALU gunakan Markdown Tables. Jika user meminta diagram alur, flowchart, atau arsitektur, SELALU gunakan blok kode \`\`\`mermaid.
 
 Sub-agent yang tersedia:
@@ -167,13 +169,13 @@ Kembalikan HANYA JSON array: [{ "subagent": "researcher", "task": "..." }]`;
           accumulatedContext += `--- Hasil Sub-Agent [${subagent.toUpperCase()}]: ---\nTugas: ${task}\nOutput: ${subagentResText}\n\n`;
         }
 
-        const synthesisPrompt = `Nama Anda adalah "Mamet". Anda adalah Kepala Agent (Coordinator). Anda telah menugaskan beberapa sub-agent.${userContextPrompt}\n\nPermintaan Awal User: "${finalMessage}"\n\nRiwayat pekerjaan:\n${accumulatedContext}\n\nBuat ringkasan laporan hasil kerja sub-agent untuk user secara ramah, lengkap, dan terstruktur. \n\nPENTING: \n- Gunakan format Tabel Markdown jika menyajikan data, harga, atau perbandingan.\n- Jika user meminta diagram, flowchart, atau alur kerja, buatlah visualisasinya menggunakan blok \`\`\`mermaid\n(contoh diagram graph TD, sequenceDiagram, dll)\`\`\`.\nJANGAN ragu menggunakan gambar/diagram jika itu mempermudah penjelasan!`;
+        const synthesisPrompt = `Anda telah menugaskan beberapa sub-agent.${fullSystemContext}\n\nPermintaan Awal User: "${finalMessage}"\n\nRiwayat pekerjaan:\n${accumulatedContext}\n\nBuat ringkasan laporan hasil kerja sub-agent untuk user secara ramah, lengkap, dan terstruktur. \n\nPENTING: \n- Gunakan format Tabel Markdown jika menyajikan data, harga, atau perbandingan.\n- Jika user meminta diagram, flowchart, atau alur kerja, buatlah visualisasinya menggunakan blok \`\`\`mermaid\n(contoh diagram graph TD, sequenceDiagram, dll)\`\`\`.\nJANGAN ragu menggunakan gambar/diagram jika itu mempermudah penjelasan!`;
         replyMessage = await runLLM(synthesisPrompt, '', history);
       } else {
-        replyMessage = await runLLM(finalMessage, userContextPrompt, history);
+        replyMessage = await runLLM(finalMessage, fullSystemContext, history);
       }
     } else {
-      replyMessage = await runLLM(finalMessage, userContextPrompt, history);
+      replyMessage = await runLLM(finalMessage, fullSystemContext, history);
     }
 
     const aiResponse = {
