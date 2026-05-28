@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const google = require('googlethis');
-const pdf = require('pdf-parse');
+const PDFParser = require('pdf2json');
 const mammoth = require('mammoth');
 require('dotenv').config();
 
@@ -33,8 +33,13 @@ app.post('/api/agent/process', async (req, res) => {
         if (file.mimeType.startsWith('image/')) {
           extractedImage = { mimeType: file.mimeType, data: file.data };
         } else if (filename.endsWith('.pdf')) {
-          const data = await pdf(buffer);
-          message = `Permintaan User: ${message}\n\n[DOKUMEN TERLAMPIR: ${file.name}]\nIsi Dokumen:\n${data.text.substring(0, 50000)}`;
+          const pdfText = await new Promise((resolve, reject) => {
+            const pdfParser = new PDFParser(this, 1);
+            pdfParser.on("pdfParser_dataError", errData => reject(errData.parserError));
+            pdfParser.on("pdfParser_dataReady", () => resolve(pdfParser.getRawTextContent()));
+            pdfParser.parseBuffer(buffer);
+          });
+          message = `Permintaan User: ${message}\n\n[DOKUMEN TERLAMPIR: ${file.name}]\nIsi Dokumen:\n${pdfText.substring(0, 50000)}`;
         } else if (filename.endsWith('.docx')) {
           const result = await mammoth.extractRawText({ buffer: buffer });
           message = `Permintaan User: ${message}\n\n[DOKUMEN TERLAMPIR: ${file.name}]\nIsi Dokumen:\n${result.value.substring(0, 50000)}`;
