@@ -350,7 +350,8 @@ export default function AIAgent() {
           file: filePayload,
           tools: selectedTools,
           model: selectedModel,
-          userId: 'user-123'
+          userId: user?.id || 'anonymous',
+          history: messages.map(m => ({ role: m.type === 'user' ? 'user' : 'model', content: m.content })).slice(-10) // Ambil 10 pesan terakhir
         })
       });
 

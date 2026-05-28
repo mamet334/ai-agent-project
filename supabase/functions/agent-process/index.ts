@@ -14,7 +14,7 @@ serve(async (req) => {
   }
 
   try {
-    const { message, tools, model, userId, file } = await req.json();
+    const { message, tools, model, userId, file, history } = await req.json();
 
     let extractedImage = null;
     let finalMessage = message;
@@ -47,9 +47,19 @@ serve(async (req) => {
       throw new Error('GEMINI_API_KEY is not set');
     }
 
-    const callGroq = async (promptText: string, systemPromptText = '') => {
+    const callGroq = async (promptText: string, systemPromptText = '', chatHistory: any[] = []) => {
       const messages = [];
       if (systemPromptText) messages.push({ role: 'system', content: systemPromptText });
+      
+      if (chatHistory && chatHistory.length > 0) {
+        for (const msg of chatHistory) {
+          messages.push({
+            role: msg.role === 'model' ? 'assistant' : 'user',
+            content: msg.content
+          });
+        }
+      }
+      
       messages.push({ role: 'user', content: promptText });
       
       const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -68,10 +78,10 @@ serve(async (req) => {
       return data.choices?.[0]?.message?.content || '';
     };
 
-    const runLLM = async (promptText: string, systemPromptText = '') => {
+    const runLLM = async (promptText: string, systemPromptText = '', chatHistory: any[] = []) => {
       if (GROQ_API_KEY && !extractedImage) {
         try {
-          return await callGroq(promptText, systemPromptText);
+          return await callGroq(promptText, systemPromptText, chatHistory);
         } catch (e) {
           console.warn('Groq failed, falling back to Gemini...', e);
         }
@@ -80,6 +90,16 @@ serve(async (req) => {
       const payload: any = { contents: [] };
       if (systemPromptText) {
         payload.contents.push({ role: 'user', parts: [{ text: `System Instruction: ${systemPromptText}` }] });
+        payload.contents.push({ role: 'model', parts: [{ text: 'Dimengerti.' }] });
+      }
+
+      if (chatHistory && chatHistory.length > 0) {
+        for (const msg of chatHistory) {
+          payload.contents.push({
+            role: msg.role === 'model' ? 'model' : 'user',
+            parts: [{ text: msg.content }]
+          });
+        }
       }
 
       const userParts: any[] = [{ text: promptText }];
@@ -173,22 +193,32 @@ Kembalikan HANYA JSON array: [{ "subagent": "researcher", "task": "..." }]`;
             }
           } else if (subagent === 'coder') {
             try {
-              const coderPrompt = `Anda adalah CODER. Tugas: ${task}\nKembalikan HANYA kode JavaScript valid. Harus mengembalikan string output (tanpa console.log) via \`return\` statement di baris terakhir.`;
+              const coderPrompt = `Anda adalah CODER. Tugas: ${task}\nKembalikan HANYA kode JavaScript murni tanpa penjelasan. Agar tidak terjadi error syntax, gunakan 'console.log()' untuk mencetak hasil akhir, dan JANGAN gunakan return statement di luar function.`;
               let codeOutput = await runLLM(`Konteks:\n${accumulatedContext}\nSelesaikan.`, coderPrompt);
               const match = codeOutput.match(/```(?:javascript|js)([\s\S]*?)```/) || [null, codeOutput];
               const cleanCode = (match[1] || codeOutput).trim();
 
-              let executionResult = 'Eksekusi dibatasi di Edge Function untuk keamanan.';
+              let executionResult = '';
               try {
-                // Basic secure sandboxing for Edge
-                const fn = new Function(`
+                // Menangkap output console.log
+                const logs: string[] = [];
+                const fakeConsole = {
+                  log: (...args: any[]) => logs.push(args.join(' ')),
+                  error: (...args: any[]) => logs.push('ERROR: ' + args.join(' '))
+                };
+                
+                const fn = new Function('console', `
                   try {
-                    ${cleanCode.includes('return') ? cleanCode : 'return (' + cleanCode + ');'}
-                  } catch(e) { return 'Error: ' + e.message; }
+                    ${cleanCode}
+                  } catch(e) {
+                    console.error(e.message);
+                  }
                 `);
-                executionResult = String(fn());
+                
+                fn(fakeConsole);
+                executionResult = logs.length > 0 ? logs.join('\\n') : 'Tidak ada output. Pastikan menggunakan console.log()';
               } catch(e) {
-                executionResult = 'Error kompilasi: ' + e;
+                executionResult = 'Error eksekusi syntax: ' + e;
               }
               subagentResText = `Menjalankan Kode:\n\`\`\`javascript\n${cleanCode}\n\`\`\`\n\nOutput:\n${executionResult}`;
               subagentToolExec = { name: 'execute_javascript', args: { code: cleanCode } };
@@ -208,10 +238,10 @@ Kembalikan HANYA JSON array: [{ "subagent": "researcher", "task": "..." }]`;
         const synthesisPrompt = `Anda adalah Kepala Agent (Coordinator). Anda telah menugaskan beberapa sub-agent.\n\nPermintaan Awal User: "${finalMessage}"\n\nRiwayat pekerjaan:\n${accumulatedContext}\n\nBuat ringkasan laporan hasil kerja sub-agent untuk user secara ramah, lengkap, dan terstruktur.`;
         replyMessage = await runLLM(synthesisPrompt);
       } else {
-        replyMessage = await runLLM(finalMessage);
+        replyMessage = await runLLM(finalMessage, '', history);
       }
     } else {
-      replyMessage = await runLLM(finalMessage);
+      replyMessage = await runLLM(finalMessage, '', history);
     }
 
     const aiResponse = {
