@@ -165,10 +165,10 @@ serve(async (req) => {
     const fullSystemContext = agentIdentityPrompt + userContextPrompt + memoryPrompt;
 
     if (tools && tools.length > 0) {
-      const coordinatorSystemPrompt = `Tugas Anda adalah menganalisis permintaan user berikut dan memecahnya menjadi langkah-langkah tugas untuk sub-agent khusus jika diperlukan.${fullSystemContext}
-Anda memiliki kemampuan Multi-Modal. Jika user meminta data perbandingan, harga, atau jadwal, SELALU gunakan Markdown Tables. Jika user meminta diagram alur, flowchart, atau arsitektur, SELALU gunakan blok kode \`\`\`mermaid.
-
-Kembalikan HANYA JSON array: [{ "subagent": "researcher", "task": "..." }]`;
+      const coordinatorSystemPrompt = `Tugas Anda adalah menganalisis permintaan user dan memilih sub-agent yang tepat.${fullSystemContext}
+PENTING: Anda adalah mesin parsing JSON. Anda DILARANG KERAS merespons dengan kalimat atau teks biasa. 
+Anda WAJIB mengembalikan HANYA sebuah Array JSON murni. Jika tidak butuh sub-agent, kembalikan [].
+Contoh Output Wajib: [{"subagent": "youtube_analyst", "task": "Ekstrak teks dari link youtube ini"}]`;
 
       let planText = '[]';
       try {
@@ -176,8 +176,12 @@ Kembalikan HANYA JSON array: [{ "subagent": "researcher", "task": "..." }]`;
         planText = planText.replace(/```json/g, '').replace(/```/g, '').trim();
       } catch (err) {}
 
+      console.log("PLAN TEXT:", planText);
+
       let plan: any[] = [];
-      try { plan = JSON.parse(planText); } catch (e) {}
+      try { plan = JSON.parse(planText); } catch (e) {
+         console.error("JSON Parse Error for PlanText:", planText);
+      }
 
       let accumulatedContext = `Permintaan awal user: "${finalMessage}"\n\n`;
 
