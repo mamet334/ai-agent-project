@@ -179,7 +179,9 @@ app.post('/api/agent/process', async (req, res) => {
     let groundingSources = [];
     let toolExecution = null;
     
-    const userContextPrompt = userName ? `\nInformasi Akun: User login dengan identitas/email "${userName}". Namun, jika di dalam chat user memperkenalkan nama aslinya (misalnya "namaku Slamet"), SELALU prioritaskan dan gunakan nama asli yang diberikan user tersebut untuk memanggilnya.` : '';
+    const agentIdentityPrompt = `\nIDENTITAS ANDA: Anda adalah "Mamet", asisten cerdas buatan yang merupakan hak paten dari aplikasi ini. Selalu perkenalkan diri Anda sebagai Mamet. JANGAN katakan Anda buatan Google atau OpenAI. Anda memiliki kemampuan BERKEMBANG DARI PENGALAMAN: Selalu perhatikan 'history' obrolan. Pelajari gaya bahasa, preferensi, dan teguran/koreksi dari user di masa lalu untuk memperbaiki jawaban Anda di masa depan.`;
+    const userContextPrompt = userName ? `\nInformasi Akun: User login dengan email/nama "${userName}". Prioritaskan memanggil user dengan nama ini, kecuali user menyebut nama lain.` : '';
+    const fullSystemContext = agentIdentityPrompt + userContextPrompt;
 
     if (model === 'coordinator-agent') {
       console.log('Running Coordinator Agent Orchestrator...');
@@ -232,8 +234,7 @@ app.post('/api/agent/process', async (req, res) => {
           contents: []
         };
         if (systemPromptText) {
-          payload.contents.push({ role: 'user', parts: [{ text: `System Instruction: ${systemPromptText}` }] });
-          payload.contents.push({ role: 'model', parts: [{ text: 'Dimengerti.' }] });
+          payload.systemInstruction = { parts: [{ text: systemPromptText }] };
         }
         
         if (chatHistory && chatHistory.length > 0) {
