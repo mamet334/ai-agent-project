@@ -28,6 +28,12 @@ export default {
         };
       }
 
+      if (!transcriptText || transcriptText.trim().length === 0) {
+        return {
+          output: `Gagal mengekstrak teks dari YouTube. Video ini (ID: ${videoId}) kemungkinan besar tidak memiliki Subtitle otomatis yang diaktifkan oleh kreatornya.`
+        };
+      }
+
       // Bersihkan teks (hapus jeda seperti [Musik], dll jika perlu, walau LLM sudah cukup pintar)
       let cleanedText = transcriptText.replace(/\[.*?\]/g, ' ').substring(0, 30000); // Batasi max karakter
 
