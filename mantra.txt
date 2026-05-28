@@ -15,7 +15,20 @@
 2. [✅ SELESAI] **Deep Research Mode**: Web scraping berantai (menyelami link dari Google untuk mensintesis laporan riset mendalam).
 3. **Multi-Key Round-Robin API**: Sistem rotasi kunci API (Groq/Gemini) otomatis di backend untuk mencegah Error 429 / Rate Limit Habis tanpa perlu berlangganan versi Pro.
 4. **Sistem BYOK (Bring Your Own Key)**: Fitur UI "Settings" agar setiap user login memakai API Key Groq/Gemini milik mereka sendiri (mencegah kuota developer terkuras jika dirilis ke publik).
-5. [🔄 SEDANG DIKERJAKAN] **YouTube Analyst Agent**: Mengekstrak transkrip/subtitle video YouTube, mem-filter kata-kata typo/kotor menggunakan agen bahasa, lalu merangkum isi video berjam-jam dalam hitungan detik.
+5. [⚠️ PENDING / DALAM PERBAIKAN] **YouTube Analyst Agent**: Pustaka scraping saat ini diblokir oleh anti-bot YouTube. Menunggu implementasi API YouTube resmi atau metode bypass yang lebih kuat.
+
+## 📊 MAMET VS MEDVI PROGRESS (40% SELESAI)
+Saat ini Mamet adalah prototipe yang mewakili 40% dari Visi Utama "MEDVI". 
+**✅ Sudah Tercapai (40%):**
+- Multi-Agent Orchestrator (Otomatisasi Sub-Agent).
+- Database & Auth terintegrasi (Supabase).
+- Deep Web Scraping (Riset Mendalam).
+**🚀 Kurang untuk 100% MEDVI (60%):**
+- RAG (Parsing PDF/Word 1.000+ halaman dengan Vector DB).
+- True Autonomous Agent (Cron UI Kalender Otomatis).
+- Eksekusi Kode Nyata (Piston API Sandbox).
+- Voice/Speech Interaction (Seperti Jarvis).
+- Anti-Bot Bypass Kelas Atas (Untuk API YouTube & Scraper).
 
 Bacalah file ini, dan langsung tanyakan fitur dari "Roadmap Medvi Tahap 4" mana yang akan dieksekusi selanjutnya!
 ==================================================
