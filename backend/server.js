@@ -38,8 +38,15 @@ app.post('/api/agent/upload', upload.single('file'), async (req, res) => {
       extractedText = result.value;
     } else if (filename.endsWith('.txt') || filename.endsWith('.csv') || filename.endsWith('.md')) {
       extractedText = buffer.toString('utf-8');
+    } else if (req.file.mimetype.startsWith('image/')) {
+      return res.json({
+        filename: req.file.originalname,
+        isImage: true,
+        mimeType: req.file.mimetype,
+        data: buffer.toString('base64')
+      });
     } else {
-      return res.status(400).json({ error: 'Unsupported file type. Please upload PDF, DOCX, TXT, CSV, or MD.' });
+      return res.status(400).json({ error: 'Unsupported file type. Please upload PDF, DOCX, TXT, CSV, MD, or Images.' });
     }
 
     res.json({ 
@@ -87,6 +94,15 @@ app.post('/api/agent/process', async (req, res) => {
         }
       ]
     };
+
+    if (req.body.image && req.body.image.data) {
+      geminiPayload.contents[0].parts.push({
+        inlineData: {
+          mimeType: req.body.image.mimeType,
+          data: req.body.image.data
+        }
+      });
+    }
 
     const geminiTools = [];
 
@@ -480,7 +496,10 @@ Buatlah ringkasan laporan hasil kerja sub-agent tersebut untuk user secara ramah
         messages: [
           {
             role: 'user',
-            content: message
+            content: req.body.image && req.body.image.data ? [
+              { type: 'text', text: message },
+              { type: 'image_url', image_url: { url: `data:${req.body.image.mimeType};base64,${req.body.image.data}` } }
+            ] : message
           }
         ]
       }, {

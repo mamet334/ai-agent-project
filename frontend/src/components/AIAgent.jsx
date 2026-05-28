@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText } from 'lucide-react';
+import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '../supabase';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -212,6 +212,7 @@ export default function AIAgent() {
 
     const displayInput = input || 'Tolong pelajari dokumen ini.';
     let apiInput = displayInput;
+    let apiImage = null;
     const currentFile = attachedFile;
     const currentFileName = currentFile ? currentFile.name : null;
 
@@ -234,7 +235,11 @@ export default function AIAgent() {
         if (!uploadRes.ok) throw new Error('Gagal membaca file');
         const uploadData = await uploadRes.json();
         
-        apiInput = `Permintaan User: ${displayInput}\n\n[DOKUMEN TERLAMPIR: ${uploadData.filename}]\nIsi Dokumen:\n${uploadData.text}`;
+        if (uploadData.isImage) {
+           apiImage = { mimeType: uploadData.mimeType, data: uploadData.data };
+        } else {
+           apiInput = `Permintaan User: ${displayInput}\n\n[DOKUMEN TERLAMPIR: ${uploadData.filename}]\nIsi Dokumen:\n${uploadData.text}`;
+        }
       } catch (err) {
         setLogs(prev => [...prev, `❌ Gagal memproses file: ${err.message}`]);
         setLoading(false);
@@ -245,7 +250,7 @@ export default function AIAgent() {
     const userMessage = {
       id: Date.now(),
       type: 'user',
-      content: currentFileName ? `${displayInput}\n\n*(File Terlampir: ${currentFileName})*` : displayInput,
+      content: currentFileName ? `${displayInput}\n\n*(File/Gambar Terlampir: ${currentFileName})*` : displayInput,
       timestamp: new Date(),
     };
 
@@ -289,6 +294,7 @@ export default function AIAgent() {
         },
         body: JSON.stringify({
           message: apiInput,
+          image: apiImage,
           tools: selectedTools,
           model: selectedModel,
           userId: 'user-123'
@@ -821,7 +827,7 @@ export default function AIAgent() {
             {/* File attachment preview */}
             {attachedFile && (
               <div className="mb-3 flex items-center gap-2 bg-purple-500/10 border border-purple-500/30 rounded-lg px-3 py-2 w-max animate-in fade-in slide-in-from-bottom-2">
-                <FileText className="w-4 h-4 text-purple-400" />
+                {attachedFile.type.startsWith('image/') ? <ImageIcon className="w-4 h-4 text-purple-400" /> : <FileText className="w-4 h-4 text-purple-400" />}
                 <span className="text-xs text-purple-200 truncate max-w-[200px]">{attachedFile.name}</span>
                 <button onClick={() => setAttachedFile(null)} className="ml-2 text-slate-400 hover:text-red-400 p-0.5 rounded-full hover:bg-slate-800/50 transition-all">
                   <X className="w-3.5 h-3.5" />
@@ -834,7 +840,7 @@ export default function AIAgent() {
                 type="file"
                 ref={fileInputRef}
                 className="hidden"
-                accept=".pdf,.txt,.md,.csv,.docx"
+                accept=".pdf,.txt,.md,.csv,.docx,image/*"
                 onChange={(e) => {
                   if (e.target.files && e.target.files[0]) {
                     setAttachedFile(e.target.files[0]);
