@@ -73,6 +73,9 @@ serve(async (req) => {
           temperature: 0.1
         })
       });
+      if (!res.ok) {
+        throw new Error(`Groq API Error: ${res.status}`);
+      }
       const data = await res.json();
       return data.choices?.[0]?.message?.content || '';
     };
@@ -112,6 +115,9 @@ serve(async (req) => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(payload)
       });
+      if (!res.ok) {
+        throw new Error(`Gemini API Error: ${res.status}`);
+      }
       const data = await res.json();
       return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     };
