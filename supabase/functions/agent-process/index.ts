@@ -203,6 +203,9 @@ Kembalikan HANYA JSON array: [{ "subagent": "researcher", "task": "..." }]`;
             subagent, task, output: subagentResText, sources: subagentSources, toolExecution: subagentToolExec
           });
           accumulatedContext += `--- Hasil Sub-Agent [${subagent.toUpperCase()}]: ---\nTugas: ${task}\nOutput: ${subagentResText}\n\n`;
+          
+          // Penundaan 2 detik untuk menghindari API Rate Limit (Error 429) pada akun gratis
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
 
         const synthesisPrompt = `Anda telah menugaskan beberapa sub-agent.${fullSystemContext}\n\nPermintaan Awal User: "${finalMessage}"\n\nRiwayat pekerjaan:\n${accumulatedContext}\n\nBuat ringkasan laporan hasil kerja sub-agent untuk user secara ramah, lengkap, dan terstruktur. \n\nPENTING: \n- Gunakan format Tabel Markdown jika menyajikan data, harga, atau perbandingan.\n- Jika user meminta diagram, flowchart, atau alur kerja, buatlah visualisasinya menggunakan blok \`\`\`mermaid\n(contoh diagram graph TD, sequenceDiagram, dll)\`\`\`.\nJANGAN ragu menggunakan gambar/diagram jika itu mempermudah penjelasan!`;
