@@ -130,6 +130,7 @@ export default function AIAgent() {
   const [isCronModalOpen, setIsCronModalOpen] = useState(false);
   const [cronForm, setCronForm] = useState({ title: '', prompt: '', interval_hours: 24 });
   const [cronLoading, setCronLoading] = useState(false);
+  const [activeView, setActiveView] = useState('chat'); // 'chat' | 'cron'
 
   // Check auth & listen to changes
   useEffect(() => {
@@ -836,27 +837,14 @@ export default function AIAgent() {
                 Mamet akan mengerjakan riset/tugas secara mandiri di belakang layar sesuai jadwal.
               </p>
               
-              <div className="space-y-2 mb-3 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
-                {scheduledTasks.map(task => (
-                  <div key={task.id} className="p-2 bg-slate-900/50 border border-slate-700 rounded-lg text-[10px] group relative">
-                    <div className="font-semibold text-purple-300 truncate pr-6">{task.title}</div>
-                    <div className="text-slate-500 mt-1">Setiap {task.interval_hours} jam</div>
-                    <button 
-                      onClick={() => handleDeleteCron(task.id)}
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-opacity"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
+              <div className="flex flex-col gap-2">
+                <button 
+                  onClick={() => setActiveView('cron')}
+                  className={`w-full py-2 border rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${activeView === 'cron' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-600 hover:text-white'}`}
+                >
+                  <Clock className="w-3.5 h-3.5" /> Dashboard Automasi
+                </button>
               </div>
-
-              <button 
-                onClick={() => setIsCronModalOpen(true)}
-                className="w-full py-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-600 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 text-purple-300"
-              >
-                <Plus className="w-3.5 h-3.5" /> Tambah Jadwal Baru
-              </button>
             </div>
 
             <div className="border-t border-purple-500/20 pt-4">
@@ -929,9 +917,80 @@ export default function AIAgent() {
             </div>
           </div>
 
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
-            {messages.length === 0 ? (
+          {/* Main Content Area */}
+          {activeView === 'cron' ? (
+            <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-900/50">
+              <div className="max-w-4xl mx-auto">
+                <div className="flex items-center justify-between mb-8">
+                  <div>
+                    <h2 className="text-2xl font-bold text-slate-100 flex items-center gap-3">
+                      <Clock className="w-6 h-6 text-emerald-400" />
+                      Dashboard Automasi (Cron)
+                    </h2>
+                    <p className="text-slate-400 mt-2 text-sm">
+                      Kelola jadwal agen AI untuk berjalan otomatis di latar belakang.
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => setIsCronModalOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium shadow-lg shadow-emerald-500/20 transition-all"
+                  >
+                    <Plus className="w-4 h-4" /> Tambah Jadwal Baru
+                  </button>
+                </div>
+
+                <div className="bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden shadow-xl">
+                  {scheduledTasks.length === 0 ? (
+                    <div className="p-12 text-center">
+                      <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Clock className="w-8 h-8 text-slate-500" />
+                      </div>
+                      <h3 className="text-lg font-medium text-slate-300 mb-2">Belum Ada Tugas Otomatis</h3>
+                      <p className="text-slate-500 text-sm">Tambahkan jadwal baru agar Mamet bisa bekerja selagi Anda tidur.</p>
+                    </div>
+                  ) : (
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-800/80 border-b border-slate-700 text-xs uppercase tracking-wider text-slate-400">
+                          <th className="p-4 font-medium">Tugas & Instruksi</th>
+                          <th className="p-4 font-medium">Jadwal</th>
+                          <th className="p-4 font-medium text-right">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {scheduledTasks.map(task => (
+                          <tr key={task.id} className="border-b border-slate-700/50 hover:bg-slate-800/30 transition-colors">
+                            <td className="p-4">
+                              <div className="font-medium text-purple-300 mb-1">{task.title}</div>
+                              <div className="text-xs text-slate-400 line-clamp-2 max-w-lg">{task.prompt}</div>
+                            </td>
+                            <td className="p-4">
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                Setiap {task.interval_hours} Jam
+                              </span>
+                            </td>
+                            <td className="p-4 text-right">
+                              <button 
+                                onClick={() => handleDeleteCron(task.id)}
+                                className="p-2 text-red-400 hover:text-white hover:bg-red-500/20 rounded-lg transition-colors border border-transparent hover:border-red-500/30"
+                                title="Hapus Tugas"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
+                {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center">
                 <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center mb-6 shadow-2xl">
                   <Zap className="w-10 h-10" />
@@ -1187,6 +1246,8 @@ export default function AIAgent() {
               Active tools: {selectedTools.length > 0 ? selectedTools.join(', ') : 'none selected'}
             </p>
           </div>
+          </>
+          )}
         </div>
       </div>
 
