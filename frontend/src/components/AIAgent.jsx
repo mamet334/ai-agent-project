@@ -201,10 +201,10 @@ export default function AIAgent() {
   };
 
   const toolDescriptions = {
-    web_search: 'Search & research web content',
-    code_executor: 'Execute & analyze code',
-    api_caller: 'Call & integrate APIs',
-    slack_integration: 'Send Slack messages & get updates',
+    web_search: 'Sub-Agent Riset Internet',
+    code_executor: 'Sub-Agent Penulis & Eksekutor Kode',
+    api_caller: 'Sub-Agent Integrasi API',
+    slack_integration: 'Sub-Agent Notifikasi Slack',
   };
 
   const handleSendMessage = async () => {
