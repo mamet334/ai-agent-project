@@ -1,7 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import google from 'npm:googlethis';
-import * as cheerio from 'npm:cheerio';
 import { Buffer } from 'node:buffer';
+import { getPluginPromptList, getPluginByName } from './plugins/registry.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -129,10 +128,7 @@ serve(async (req) => {
 Anda memiliki kemampuan Multi-Modal. Jika user meminta data perbandingan, harga, atau jadwal, SELALU gunakan Markdown Tables. Jika user meminta diagram alur, flowchart, atau arsitektur, SELALU gunakan blok kode \`\`\`mermaid.
 
 Sub-agent yang tersedia:
-1. "researcher": Menggunakan penelusuran web (web_search) untuk mencari info.
-2. "scraper": Mengekstrak teks langsung dari sebuah URL spesifik.
-3. "coder": Eksekusi kode JS (code_executor) untuk perhitungan/logika.
-4. "communicator": Kirim pesan Slack atau API eksternal.
+${getPluginPromptList()}
 
 Kembalikan HANYA JSON array: [{ "subagent": "researcher", "task": "..." }]`;
 
@@ -154,83 +150,15 @@ Kembalikan HANYA JSON array: [{ "subagent": "researcher", "task": "..." }]`;
           let subagentSources: any[] = [];
           let subagentToolExec = null;
 
-          if (subagent === 'researcher') {
-            try {
-              const subPayload = {
-                contents: [{ role: 'user', parts: [{ text: `Cari informasi web mengenai: ${task}\n\nKonteks:\n${accumulatedContext}` }] }],
-                tools: [{ googleSearch: {} }]
-              };
-              const subRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify(subPayload)
-              });
-              const subData = await subRes.json();
-              const candidate = subData.candidates?.[0];
-              subagentResText = candidate?.content?.parts?.[0]?.text || '';
-              if (candidate?.groundingMetadata?.groundingChunks) {
-                subagentSources = candidate.groundingMetadata.groundingChunks
-                  .map((chunk: any) => ({ title: chunk.web?.title || 'Sumber Web', uri: chunk.web?.uri }))
-                  .filter((s: any) => s.uri);
-              }
-            } catch (err) {
-              subagentResText = `Riset gagal: ${err}`;
-            }
-          } else if (subagent === 'scraper') {
-            try {
-              const urlMatch = task.match(/(https?:\/\/[^\s]+)/g) || accumulatedContext.match(/(https?:\/\/[^\s]+)/g);
-              const urlToScrape = urlMatch ? urlMatch[0] : null;
-              if (urlToScrape) {
-                const scrapeRes = await fetch(urlToScrape);
-                const html = await scrapeRes.text();
-                const $ = cheerio.load(html);
-                $('script, style, nav, footer, header').remove();
-                const text = $('body').text().replace(/\s+/g, ' ').trim();
-                subagentResText = `Isi konten dari ${urlToScrape}:\n\n${text.substring(0, 10000)}`;
-                subagentSources = [{ title: $('title').text() || 'Scraped Page', uri: urlToScrape }];
-                subagentToolExec = { name: 'web_scraper', args: { url: urlToScrape } };
-              } else {
-                 subagentResText = "Gagal memproses URL: URL tidak ditemukan.";
-              }
-            } catch (err) {
-              subagentResText = `Scraping gagal: ${err}`;
-            }
-          } else if (subagent === 'coder') {
-            try {
-              const coderPrompt = `Anda adalah CODER. Tugas: ${task}\nKembalikan HANYA kode JavaScript murni tanpa penjelasan. Agar tidak terjadi error syntax, gunakan 'console.log()' untuk mencetak hasil akhir, dan JANGAN gunakan return statement di luar function.`;
-              let codeOutput = await runLLM(`Konteks:\n${accumulatedContext}\nSelesaikan.`, coderPrompt);
-              const match = codeOutput.match(/```(?:javascript|js)([\s\S]*?)```/) || [null, codeOutput];
-              const cleanCode = (match[1] || codeOutput).trim();
-
-              let executionResult = '';
-              try {
-                // Menangkap output console.log
-                const logs: string[] = [];
-                const fakeConsole = {
-                  log: (...args: any[]) => logs.push(args.join(' ')),
-                  error: (...args: any[]) => logs.push('ERROR: ' + args.join(' '))
-                };
-                
-                const fn = new Function('console', `
-                  try {
-                    ${cleanCode}
-                  } catch(e) {
-                    console.error(e.message);
-                  }
-                `);
-                
-                fn(fakeConsole);
-                executionResult = logs.length > 0 ? logs.join('\\n') : 'Tidak ada output. Pastikan menggunakan console.log()';
-              } catch(e) {
-                executionResult = 'Error eksekusi syntax: ' + e;
-              }
-              subagentResText = `Menjalankan Kode:\n\`\`\`javascript\n${cleanCode}\n\`\`\`\n\nOutput:\n${executionResult}`;
-              subagentToolExec = { name: 'execute_javascript', args: { code: cleanCode } };
-            } catch (err) {
-              subagentResText = `Eksekusi coder gagal: ${err}`;
-            }
-          } else if (subagent === 'communicator') {
-             subagentResText = `[Simulasi Edge Function] Aksi Komunikasi diselesaikan untuk tugas: ${task}`;
+          const plugin = getPluginByName(subagent);
+          if (plugin) {
+            const env = { GEMINI_API_KEY, GROQ_API_KEY };
+            const result = await plugin.execute({ task, accumulatedContext, env, runLLM });
+            subagentResText = result.output;
+            subagentSources = result.sources || [];
+            subagentToolExec = result.toolExecution || null;
+          } else {
+             subagentResText = `Sub-agent '${subagent}' tidak ditemukan di sistem plugin.`;
           }
 
           subagentRuns.push({
