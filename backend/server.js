@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const google = require('googlethis');
 require('dotenv').config();
 
 const app = express();
@@ -252,15 +253,35 @@ PENTING: Jangan berikan teks penjelasan lain, jangan gunakan markdown code block
                   .filter(s => s.uri);
               }
             } catch (err) {
-              console.warn('Gemini researcher failed, falling back to Llama knowledge:', err.message);
+              console.warn('Gemini researcher failed, falling back to googlethis + Llama 3.3...', err.message);
               try {
+                const searchResults = await google.search(task, {
+                  page: 0, 
+                  safe: false,
+                  parse_ads: false,
+                  additional_params: { hl: 'id' }
+                });
+                
+                let searchContext = '';
+                let sources = [];
+                if (searchResults.results && searchResults.results.length > 0) {
+                  const topResults = searchResults.results.slice(0, 5);
+                  searchContext = topResults.map((r, idx) => `[${idx+1}] ${r.title}\n${r.description}`).join('\n\n');
+                  sources = topResults.map(r => ({ title: r.title, uri: r.url }));
+                } else if (searchResults.knowledge_panel && searchResults.knowledge_panel.title) {
+                  searchContext = `Knowledge Panel:\nTitle: ${searchResults.knowledge_panel.title}\nDescription: ${searchResults.knowledge_panel.description}`;
+                  sources = [{ title: searchResults.knowledge_panel.title, uri: searchResults.knowledge_panel.url }];
+                } else {
+                  searchContext = "Tidak ditemukan hasil spesifik di web.";
+                }
+
                 subagentResText = await runLLM(
-                  `Berikan penjelasan aktual terbaik berdasarkan pengetahuan Anda tentang tugas berikut:\nTugas: ${task}\n\n(Catatan: Akses pencarian web langsung sedang limit, jadi gunakan pengetahuan internal Anda).`,
-                  'Anda adalah Sub-Agent RESEARCHER. Jawab dengan cerdas dan informatif.'
+                  `Anda adalah Sub-Agent RESEARCHER. Jawab tugas berikut secara detail berdasarkan kutipan pencarian web terbaru ini:\n\nTugas: ${task}\n\nHasil Pencarian Web:\n${searchContext}`,
+                  'Anda adalah Sub-Agent RESEARCHER. Rangkum info web secara akurat dan informatif.'
                 );
-                subagentSources = [{ title: 'Internal Knowledge (Llama)', uri: '#' }];
+                subagentSources = sources.length > 0 ? sources : [{ title: 'Internal Knowledge (Llama)', uri: '#' }];
               } catch (fallbackErr) {
-                subagentResText = `Riset gagal: ${err.message}`;
+                subagentResText = `Riset gagal: ${fallbackErr.message}`;
               }
             }
 
