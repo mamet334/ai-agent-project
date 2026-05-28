@@ -8,29 +8,30 @@ Proyek ini adalah platform AI Agent canggih bertenaga Google Gemini API, Groq Cl
 ## 🌐 DATA DEPLOYMENT & INFRASTRUKTUR
 - **GitHub Repository**: `https://github.com/mamet334/ai-agent-project.git`
 - **Frontend Vercel**: `https://ai-agent-project-2a9h.vercel.app` (Vite, TailwindCSS)
-- **Backend Vercel**: `https://ai-agent-project-eight.vercel.app` (Express.js)
+- **Backend Edge Functions**: Dideploy ke Supabase Edge Functions (Deno) sebagai pengganti Express.js untuk menembus limit 10 detik Vercel.
+- **Backend Lokal (Fallback)**: Node.js Express server (`backend/server.js`)
 - **Database & Auth**: Supabase (`chats` table dengan Row Level Security)
-- **Sub-Agent Search**: Menggunakan `googlethis` sebagai fallback gratis jika Gemini API terkena rate-limit.
+- **Sub-Agent Search**: Menggunakan Google Custom Search/Scraping sebagai referensi data aktual.
 
 ## ✅ FITUR YANG SUDAH SELESAI
-1. **Multi-Agent Orchestrator (Kepala Agent)**: Memecah tugas untuk sub-agent (Researcher, Coder, Communicator).
-2. **User Authentication (Supabase)**: Form Login/Register dan integrasi RLS (Row Level Security).
-3. **Database Integration (Supabase)**: Sinkronisasi riwayat chat *real-time* ke cloud, persisten antar perangkat.
-4. **Graceful Fallbacks**: Penanganan error canggih jika API key OpenRouter kosong, atau kuota Gemini habis.
+1. **Multi-Agent Orchestrator (Kepala Agent)**: Memecah tugas untuk sub-agent (Researcher, Scraper, Coder, Communicator).
+2. **User Authentication (Supabase)**: Login/Register dengan Google/Email dan RLS.
+3. **Database Integration (Supabase)**: Sinkronisasi riwayat chat *real-time* ke cloud yang diikat ke profil Gmail.
+4. **Memory & Context Window**: AI dapat mengingat nama user dari Gmail dan memahami riwayat percakapan sebelumnya seperti ChatGPT.
 5. **Fitur RAG (Document Upload)**: Upload dan ekstraksi teks dari PDF, DOCX, TXT, CSV tanpa batas memori Vercel.
 6. **Vision Agent (Analisis Gambar)**: Ekstraksi gambar dan kompresi otomatis untuk dianalisis oleh AI.
-7. **Agent Riset & Penulis Kode**: Sub-agent khusus yang siap mencari informasi dari internet dan mengeksekusi kode secara dinamis.
+7. **Agent Riset & Penulis Kode**: Sub-agent khusus yang mencari info dari internet dan mengeksekusi kode secara dinamis.
+8. **Web Scraper Agent**: Mengekstrak dan membaca teks langsung dari URL spesifik.
+9. **Streaming Response (Typewriter)**: Efek visual mengetik kata demi kata secara *real-time*.
+10. **Multi-Modal Output**: AI mampu merender tabel Markdown interaktif dan visualisasi grafis/diagram alur dengan Mermaid.js.
+11. **Arsitektur Plugin Dinamis**: Sub-agent dipisah secara modular ke dalam folder `plugins/` agar lebih rapi dan mudah diekstensi.
 
-8. **Web Scraper Agent**: Agen khusus untuk mengekstrak dan membaca artikel/teks langsung dari URL spesifik yang diberikan user.
-9. **Streaming Response (Typewriter)**: Efek visual mengetik kata demi kata secara *real-time* agar terasa hidup dan cepat seperti ChatGPT.
+## 🚀 ROADMAP PENGEMBANGAN SELANJUTNYA (VISI "MEDVI" TAHAP 3)
+Sebagian besar fitur utama telah rampung. Berikut adalah tahapan lanjutan jika ingin lebih *advance*:
+1. **True SSE Streaming (Server-Sent Events)**: Mengganti efek "Typewriter" palsu dengan True Streaming API dari Backend agar AI mengetik kata demi kata seiring datangnya respons dari LLM (tanpa menunggu proses selesai total).
+2. **Dockerized Coder Sandbox**: Membuat *sandbox* eksekutor kode terisolasi (via Docker/WebContainers) agar agen Coder bisa menginstall paket NPM dan menjalankan script Python/NodeJS yang berat dengan aman tanpa *Syntax Error*.
+3. **Voice Interaction (Speech-to-Text)**: Menambah fitur perekam suara (*microphone*) agar user bisa berbicara langsung dengan AI (diolah dengan Whisper API).
+4. **Agent Scheduled Tasks**: AI dapat disetel untuk menjalankan riset secara otomatis setiap jam 08:00 pagi dan mengirimkan laporannya via WhatsApp/Slack.
 
-## 🚀 ROADMAP PENGEMBANGAN SELANJUTNYA (VISI "MEDVI" LANJUTAN)
-Semua fitur inti dari Visi Medvi telah selesai! Fitur lanjutan yang bisa dieksplor:
-1. **Vercel AI SDK v6**: Migrasi backend ke `ai` package untuk true streaming (`streamText`), `useChat` hook, tool calling terstruktur (Zod), dan multi-model fallback otomatis. ~15-25% lebih cepat.
-2. **Vercel Workflow**: Durable execution untuk sub-agent — tahan banting, bisa resume jika gagal, cocok untuk tugas panjang yang sering timeout di serverless.
-3. **Memory & Context Window**: AI mengingat percakapan sebelumnya untuk konteks lebih dalam.
-4. **Multi-Modal Output**: AI bisa menghasilkan gambar, diagram, atau tabel interaktif.
-5. **Plugin System**: Arsitektur plugin agar user bisa menambah tool/sub-agent sendiri.
-
-Bacalah file ini, dan langsung tanyakan kepada user fitur mana dari "Roadmap Visi Medvi" di atas yang akan kita eksekusi sekarang!
+Bacalah file ini, dan langsung tanyakan kepada user fitur mana dari "Roadmap Visi Medvi Tahap 3" di atas yang akan kita eksekusi selanjutnya!
 ==================================================
