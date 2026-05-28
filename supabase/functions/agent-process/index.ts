@@ -46,6 +46,39 @@ serve(async (req) => {
       throw new Error('GEMINI_API_KEY is not set');
     }
 
+    const streamGroqResponse = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], metaData: any = {}) => {
+      const messages = [];
+      if (systemPromptText) messages.push({ role: 'system', content: systemPromptText });
+      if (chatHistory && chatHistory.length > 0) {
+        for (const msg of chatHistory) {
+          messages.push({ role: msg.role === 'model' ? 'assistant' : 'user', content: msg.content });
+        }
+      }
+      messages.push({ role: 'user', content: promptText });
+      
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${GROQ_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: messages,
+          temperature: 0.1,
+          stream: true
+        })
+      });
+
+      return new Response(res.body, {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'text/event-stream',
+          'X-Agent-Metadata': JSON.stringify(metaData)
+        }
+      });
+    };
+
     const callGroq = async (promptText: string, systemPromptText = '', chatHistory: any[] = []) => {
       const messages = [];
       if (systemPromptText) messages.push({ role: 'system', content: systemPromptText });
@@ -173,11 +206,17 @@ Kembalikan HANYA JSON array: [{ "subagent": "researcher", "task": "..." }]`;
         }
 
         const synthesisPrompt = `Anda telah menugaskan beberapa sub-agent.${fullSystemContext}\n\nPermintaan Awal User: "${finalMessage}"\n\nRiwayat pekerjaan:\n${accumulatedContext}\n\nBuat ringkasan laporan hasil kerja sub-agent untuk user secara ramah, lengkap, dan terstruktur. \n\nPENTING: \n- Gunakan format Tabel Markdown jika menyajikan data, harga, atau perbandingan.\n- Jika user meminta diagram, flowchart, atau alur kerja, buatlah visualisasinya menggunakan blok \`\`\`mermaid\n(contoh diagram graph TD, sequenceDiagram, dll)\`\`\`.\nJANGAN ragu menggunakan gambar/diagram jika itu mempermudah penjelasan!`;
+        
+        if (req.stream && GROQ_API_KEY && !extractedImage) {
+          return streamGroqResponse(synthesisPrompt, '', history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns });
+        }
         replyMessage = await runLLM(synthesisPrompt, '', history);
       } else {
+        if (req.stream && GROQ_API_KEY && !extractedImage) return streamGroqResponse(finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns });
         replyMessage = await runLLM(finalMessage, fullSystemContext, history);
       }
     } else {
+      if (req.stream && GROQ_API_KEY && !extractedImage) return streamGroqResponse(finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns });
       replyMessage = await runLLM(finalMessage, fullSystemContext, history);
     }
 

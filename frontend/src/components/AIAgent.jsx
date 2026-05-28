@@ -427,6 +427,7 @@ export default function AIAgent() {
           userId: user?.id || 'anonymous',
           userName: userName,
           globalMemory: globalMemory,
+          stream: true,
           history: messages.map(m => ({ role: m.type === 'user' ? 'user' : 'model', content: m.content })).slice(-10)
         })
       });
@@ -439,29 +440,107 @@ export default function AIAgent() {
         throw new Error(errorData.error || 'Server responded with an error');
       }
 
-      const data = await response.json();
+      if (response.headers.get('Content-Type')?.includes('text/event-stream')) {
+        const metadataHeader = response.headers.get('X-Agent-Metadata');
+        const meta = metadataHeader ? JSON.parse(metadataHeader) : {};
+        
+        const agentMessage = {
+          id: Date.now() + 1,
+          type: 'agent',
+          content: '',
+          tools: meta.toolsUsed || selectedTools,
+          groundingSources: meta.groundingSources || [],
+          toolExecution: meta.toolExecution || null,
+          subagentRuns: meta.subagentRuns || [],
+          timestamp: new Date(),
+          isStreaming: true
+        };
 
-      const agentMessage = {
-        id: Date.now() + 1,
-        type: 'agent',
-        content: data.message,
-        tools: data.toolsUsed || [],
-        groundingSources: data.groundingSources || [],
-        toolExecution: data.toolExecution || null,
-        subagentRuns: data.subagentRuns || [],
-        timestamp: new Date(data.timestamp || Date.now()),
-      };
+        setCurrentlyTypingId(agentMessage.id);
+        
+        // Push initial empty message
+        setConversations(prev => prev.map(c => {
+          if (c.id === currentConversationId || c.id === syncedConvId) {
+            return { ...c, messages: [...c.messages, agentMessage] };
+          }
+          return c;
+        }));
 
-      setCurrentlyTypingId(agentMessage.id);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let done = false;
+        let streamedContent = '';
 
-      setConversations(prev => prev.map(c => {
-        if (c.id === currentConversationId || c.id === syncedConvId) {
-          const newC = { ...c, messages: [...c.messages, agentMessage] };
-          syncConversationToDB(newC);
-          return newC;
+        while (!done) {
+          const { value, done: readerDone } = await reader.read();
+          done = readerDone;
+          if (value) {
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split('\n');
+            for (const line of lines) {
+              if (line.startsWith('data: ') && line.trim() !== 'data: [DONE]') {
+                try {
+                  const data = JSON.parse(line.substring(6));
+                  if (data.choices && data.choices[0].delta && data.choices[0].delta.content) {
+                    streamedContent += data.choices[0].delta.content;
+                    
+                    // Update state with new chunk
+                    setConversations(prev => prev.map(c => {
+                      if (c.id === currentConversationId || c.id === syncedConvId) {
+                        const updatedMessages = c.messages.map(m => 
+                          m.id === agentMessage.id ? { ...m, content: streamedContent } : m
+                        );
+                        return { ...c, messages: updatedMessages };
+                      }
+                      return c;
+                    }));
+                  }
+                } catch(e) {}
+              }
+            }
+          }
         }
-        return c;
-      }));
+        
+        // Streaming finished, sync to DB
+        setConversations(prev => {
+          const updatedPrev = prev.map(c => {
+            if (c.id === currentConversationId || c.id === syncedConvId) {
+              const updatedMessages = c.messages.map(m => 
+                m.id === agentMessage.id ? { ...m, isStreaming: false } : m
+              );
+              const newC = { ...c, messages: updatedMessages };
+              syncConversationToDB(newC);
+              return newC;
+            }
+            return c;
+          });
+          return updatedPrev;
+        });
+
+      } else {
+        const data = await response.json();
+        const agentMessage = {
+          id: Date.now() + 1,
+          type: 'agent',
+          content: data.message,
+          tools: data.toolsUsed || [],
+          groundingSources: data.groundingSources || [],
+          toolExecution: data.toolExecution || null,
+          subagentRuns: data.subagentRuns || [],
+          timestamp: new Date(data.timestamp || Date.now()),
+        };
+
+        setCurrentlyTypingId(agentMessage.id);
+
+        setConversations(prev => prev.map(c => {
+          if (c.id === currentConversationId || c.id === syncedConvId) {
+            const newC = { ...c, messages: [...c.messages, agentMessage] };
+            syncConversationToDB(newC);
+            return newC;
+          }
+          return c;
+        }));
+      }
     } catch (error) {
       console.error('Error contacting backend:', error);
       // Clear pending mock logs timeouts
@@ -808,9 +887,9 @@ export default function AIAgent() {
                           : 'bg-slate-800/50 backdrop-blur rounded-3xl rounded-tl-lg border border-purple-500/30'
                       } px-4 md:px-6 py-3 md:py-4`}
                     >
-                      {message.type === 'agent' && currentlyTypingId === message.id
+                      {message.type === 'agent' && currentlyTypingId === message.id && !message.isStreaming
                         ? <TypewriterText text={message.content} onComplete={() => setCurrentlyTypingId(null)} />
-                        : <MessageContent text={message.content} />
+                        : <MessageContent text={message.content || (message.isStreaming ? ' ▍' : '')} />
                       }
                       {message.response && (
                         <div className="mt-3 p-3 bg-slate-900/50 rounded-lg text-xs text-slate-300 border border-slate-700/50">
