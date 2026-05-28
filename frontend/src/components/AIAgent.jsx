@@ -66,6 +66,32 @@ const renderMessageContent = (text) => {
   );
 };
 
+const TypewriterText = ({ text, onComplete }) => {
+  const [displayed, setDisplayed] = React.useState('');
+  const [done, setDone] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!text) return;
+    let i = 0;
+    const speed = 12;
+    const chars = 3;
+    const interval = setInterval(() => {
+      i += chars;
+      if (i >= text.length) {
+        setDisplayed(text);
+        setDone(true);
+        clearInterval(interval);
+        if (onComplete) onComplete();
+      } else {
+        setDisplayed(text.substring(0, i));
+      }
+    }, speed);
+    return () => clearInterval(interval);
+  }, [text]);
+
+  return renderMessageContent(done ? text : displayed + ' ▍');
+};
+
 export default function AIAgent() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -79,6 +105,7 @@ export default function AIAgent() {
 
   const [conversations, setConversations] = useState([{ id: 'default', title: 'Percakapan Baru', messages: [] }]);
   const [currentConversationId, setCurrentConversationId] = useState('default');
+  const [currentlyTypingId, setCurrentlyTypingId] = useState(null);
   const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('ai_agent_selected_model') || 'gemini-2.5-flash');
 
   // Supabase Auth State
@@ -346,6 +373,8 @@ export default function AIAgent() {
         subagentRuns: data.subagentRuns || [],
         timestamp: new Date(data.timestamp || Date.now()),
       };
+
+      setCurrentlyTypingId(agentMessage.id);
 
       setConversations(prev => prev.map(c => {
         if (c.id === currentConversationId || c.id === syncedConvId) {
@@ -685,7 +714,10 @@ export default function AIAgent() {
                           : 'bg-slate-800/50 backdrop-blur rounded-3xl rounded-tl-lg border border-purple-500/30'
                       } px-4 md:px-6 py-3 md:py-4`}
                     >
-                      {renderMessageContent(message.content)}
+                      {message.type === 'agent' && currentlyTypingId === message.id
+                        ? <TypewriterText text={message.content} onComplete={() => setCurrentlyTypingId(null)} />
+                        : renderMessageContent(message.content)
+                      }
                       {message.response && (
                         <div className="mt-3 p-3 bg-slate-900/50 rounded-lg text-xs text-slate-300 border border-slate-700/50">
                           {message.response}

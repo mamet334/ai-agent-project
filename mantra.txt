@@ -22,10 +22,13 @@ Proyek ini adalah platform AI Agent canggih bertenaga Google Gemini API, Groq Cl
 7. **Agent Riset & Penulis Kode**: Sub-agent khusus yang siap mencari informasi dari internet dan mengeksekusi kode secara dinamis.
 
 8. **Web Scraper Agent**: Agen khusus untuk mengekstrak dan membaca artikel/teks langsung dari URL spesifik yang diberikan user.
+9. **Streaming Response (Typewriter)**: Efek visual mengetik kata demi kata secara *real-time* agar terasa hidup dan cepat seperti ChatGPT.
 
-## 🚀 ROADMAP PENGEMBANGAN SELANJUTNYA (VISI "MEDVI")
-Kita akan mengerjakan fitur-fitur mutakhir berikut secara bertahap:
-1. **Streaming Response**: Menampilkan ketikan AI kata demi kata secara *real-time* agar terasa lebih hidup dan cepat.
+## 🚀 ROADMAP PENGEMBANGAN SELANJUTNYA (VISI "MEDVI" LANJUTAN)
+Semua fitur inti dari Visi Medvi telah selesai! Fitur lanjutan yang bisa dieksplor:
+1. **Memory & Context Window**: AI mengingat percakapan sebelumnya untuk konteks lebih dalam.
+2. **Multi-Modal Output**: AI bisa menghasilkan gambar, diagram, atau tabel interaktif.
+3. **Plugin System**: Arsitektur plugin agar user bisa menambah tool/sub-agent sendiri.
 
 Bacalah file ini, dan langsung tanyakan kepada user fitur mana dari "Roadmap Visi Medvi" di atas yang akan kita eksekusi sekarang!
 ==================================================
