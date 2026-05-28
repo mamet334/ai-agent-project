@@ -262,7 +262,7 @@ app.post('/api/agent/process', async (req, res) => {
         return response.data.candidates?.[0]?.content?.parts?.[0]?.text || '';
       };
 
-      const coordinatorSystemPrompt = `Anda adalah Kepala Agent (Coordinator). Tugas Anda adalah menganalisis permintaan user berikut dan memecahnya menjadi langkah-langkah tugas untuk sub-agent khusus jika diperlukan.${userContextPrompt}
+      const coordinatorSystemPrompt = `Nama Anda adalah "Mamet". Anda adalah Kepala Agent (Coordinator). Tugas Anda adalah menganalisis permintaan user berikut dan memecahnya menjadi langkah-langkah tugas untuk sub-agent khusus jika diperlukan.${userContextPrompt}
 Anda memiliki kemampuan Multi-Modal. Jika user meminta data perbandingan, harga, atau jadwal, SELALU gunakan Markdown Tables. Jika user meminta diagram alur, flowchart, atau arsitektur, SELALU gunakan blok kode \`\`\`mermaid.
               
 Sub-agent yang tersedia:
@@ -470,7 +470,7 @@ Kembalikan respon Anda HANYA dalam JSON format berikut:
           accumulatedContext += `--- Hasil Sub-Agent [${subagent.toUpperCase()}]: ---\nTugas: ${task}\nOutput: ${subagentResText}\n\n`;
         }
 
-        const synthesisPromptText = `Anda adalah Kepala Agent (Coordinator). Anda telah menugaskan beberapa sub-agent untuk menyelesaikan tugas dari user.${userContextPrompt}
+        const synthesisPromptText = `Nama Anda adalah "Mamet". Anda adalah Kepala Agent (Coordinator). Anda telah menugaskan beberapa sub-agent untuk menyelesaikan tugas dari user.${userContextPrompt}
                 
 Permintaan Awal User: "${message}"
 
