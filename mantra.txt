@@ -26,9 +26,11 @@ Proyek ini adalah platform AI Agent canggih bertenaga Google Gemini API, Groq Cl
 
 ## 🚀 ROADMAP PENGEMBANGAN SELANJUTNYA (VISI "MEDVI" LANJUTAN)
 Semua fitur inti dari Visi Medvi telah selesai! Fitur lanjutan yang bisa dieksplor:
-1. **Memory & Context Window**: AI mengingat percakapan sebelumnya untuk konteks lebih dalam.
-2. **Multi-Modal Output**: AI bisa menghasilkan gambar, diagram, atau tabel interaktif.
-3. **Plugin System**: Arsitektur plugin agar user bisa menambah tool/sub-agent sendiri.
+1. **Vercel AI SDK v6**: Migrasi backend ke `ai` package untuk true streaming (`streamText`), `useChat` hook, tool calling terstruktur (Zod), dan multi-model fallback otomatis. ~15-25% lebih cepat.
+2. **Vercel Workflow**: Durable execution untuk sub-agent — tahan banting, bisa resume jika gagal, cocok untuk tugas panjang yang sering timeout di serverless.
+3. **Memory & Context Window**: AI mengingat percakapan sebelumnya untuk konteks lebih dalam.
+4. **Multi-Modal Output**: AI bisa menghasilkan gambar, diagram, atau tabel interaktif.
+5. **Plugin System**: Arsitektur plugin agar user bisa menambah tool/sub-agent sendiri.
 
 Bacalah file ini, dan langsung tanyakan kepada user fitur mana dari "Roadmap Visi Medvi" di atas yang akan kita eksekusi sekarang!
 ==================================================
