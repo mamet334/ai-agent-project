@@ -402,8 +402,8 @@ export default function AIAgent() {
     ];
 
     try {
-      // Selalu gunakan API Supabase Edge Function (API_URL) secara mutlak
-      const endpoint = import.meta.env.VITE_API_URL || 'https://uuyzdjifhdfyyvpxsofu.supabase.co/functions/v1/agent-process';
+      // Hardcode ke Supabase Edge Function agar tidak terganggu oleh konfigurasi Vercel yang salah
+      const endpoint = 'https://uuyzdjifhdfyyvpxsofu.supabase.co/functions/v1/agent-process';
       
       const headers = {
         'Content-Type': 'application/json',
