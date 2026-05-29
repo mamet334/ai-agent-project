@@ -90,10 +90,10 @@ serve(async (req) => {
     const byokOpenAI = req.headers.get('x-byok-openai');
     const byokOpenRouter = req.headers.get('x-byok-openrouter');
 
-    const GEMINI_API_KEY = byokGemini || getActiveKey('GEMINI_API_KEY', geminiKeyIndex, (idx) => { geminiKeyIndex = idx; });
-    const GROQ_API_KEY = byokGroq || getActiveKey('GROQ_API_KEY', groqKeyIndex, (idx) => { groqKeyIndex = idx; });
-    const OPENAI_API_KEY = byokOpenAI || getActiveKey('OPENAI_API_KEY', openaiKeyIndex, (idx) => { openaiKeyIndex = idx; });
-    const OPENROUTER_API_KEY = byokOpenRouter || getActiveKey('OPENROUTER_API_KEY', openrouterKeyIndex, (idx) => { openrouterKeyIndex = idx; });
+    const GEMINI_API_KEY = (byokGemini || getActiveKey('GEMINI_API_KEY', geminiKeyIndex, (idx) => { geminiKeyIndex = idx; }) || '').trim();
+    const GROQ_API_KEY = (byokGroq || getActiveKey('GROQ_API_KEY', groqKeyIndex, (idx) => { groqKeyIndex = idx; }) || '').trim();
+    const OPENAI_API_KEY = (byokOpenAI || getActiveKey('OPENAI_API_KEY', openaiKeyIndex, (idx) => { openaiKeyIndex = idx; }) || '').trim();
+    const OPENROUTER_API_KEY = (byokOpenRouter || getActiveKey('OPENROUTER_API_KEY', openrouterKeyIndex, (idx) => { openrouterKeyIndex = idx; }) || '').trim();
 
     if (!GEMINI_API_KEY) {
       throw new Error('GEMINI_API_KEY is not set');
@@ -403,70 +403,82 @@ serve(async (req) => {
     let subagentRuns: any[] = [];
 
     const streamGeminiResponse = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], metaData: any = {}) => {
-      const payload: any = { contents: [] };
-      if (systemPromptText) {
-        payload.systemInstruction = { parts: [{ text: systemPromptText }] };
-      }
-      if (chatHistory && chatHistory.length > 0) {
-        for (const msg of chatHistory) {
-          payload.contents.push({
-            role: msg.role === 'model' ? 'model' : 'user',
-            parts: [{ text: msg.content }]
-          });
+      try {
+        const payload: any = { contents: [] };
+        if (systemPromptText) {
+          payload.systemInstruction = { parts: [{ text: systemPromptText }] };
         }
-      }
-      const userParts: any[] = [{ text: promptText }];
-      if (extractedImage) {
-        userParts.push({ inlineData: { mimeType: extractedImage.mimeType, data: extractedImage.data } });
-      }
-      payload.contents.push({ role: 'user', parts: userParts });
+        if (chatHistory && chatHistory.length > 0) {
+          for (const msg of chatHistory) {
+            payload.contents.push({
+              role: msg.role === 'model' ? 'model' : 'user',
+              parts: [{ text: msg.content }]
+            });
+          }
+        }
+        const userParts: any[] = [{ text: promptText }];
+        if (extractedImage) {
+          userParts.push({ inlineData: { mimeType: extractedImage.mimeType, data: extractedImage.data } });
+        }
+        payload.contents.push({ role: 'user', parts: userParts });
 
-      const geminiModel = model && model.includes('gemini') ? model : 'gemini-2.5-flash';
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+        const geminiModel = model && model.includes('gemini') ? model : 'gemini-2.5-flash';
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
 
-      if (!res.ok) {
-        const errText = await res.text();
+        if (!res.ok) {
+          const errText = await res.text();
+          const stream = new ReadableStream({
+            start(controller) {
+              const data = JSON.stringify({ choices: [{ delta: { content: `\n\n**Gemini API Error**: ${errText}` } }] });
+              controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
+              controller.close();
+            }
+          });
+          return new Response(stream, { headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' } });
+        }
+
+        // Convert Gemini SSE format to OpenAI SSE format expected by frontend
+        const transformStream = new TransformStream({
+          transform(chunk, controller) {
+            const text = new TextDecoder().decode(chunk);
+            const lines = text.split('\n');
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const data = JSON.parse(line.substring(6));
+                  const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                  if (content) {
+                    const openAiFormat = JSON.stringify({ choices: [{ delta: { content } }] });
+                    controller.enqueue(new TextEncoder().encode(`data: ${openAiFormat}\n\n`));
+                  }
+                } catch (e) {}
+              }
+            }
+          }
+        });
+
+        return new Response(res.body?.pipeThrough(transformStream), {
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'text/event-stream',
+            'X-Agent-Metadata': JSON.stringify(metaData)
+          }
+        });
+      } catch (err: any) {
+        console.error("streamGeminiResponse Error:", err);
         const stream = new ReadableStream({
           start(controller) {
-            const data = JSON.stringify({ choices: [{ delta: { content: `\n\n**Gemini API Error**: ${errText}` } }] });
+            const data = JSON.stringify({ choices: [{ delta: { content: `\n\n**Internal Server Error di Gemini Stream**: ${err.message}` } }] });
             controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
             controller.close();
           }
         });
         return new Response(stream, { headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' } });
       }
-
-      // Convert Gemini SSE format to OpenAI SSE format expected by frontend
-      const transformStream = new TransformStream({
-        transform(chunk, controller) {
-          const text = new TextDecoder().decode(chunk);
-          const lines = text.split('\n');
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.substring(6));
-                const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                if (content) {
-                  const openAiFormat = JSON.stringify({ choices: [{ delta: { content } }] });
-                  controller.enqueue(new TextEncoder().encode(`data: ${openAiFormat}\n\n`));
-                }
-              } catch (e) {}
-            }
-          }
-        }
-      });
-
-      return new Response(res.body?.pipeThrough(transformStream), {
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'text/event-stream',
-          'X-Agent-Metadata': JSON.stringify(metaData)
-        }
-      });
     };
 
     const getStreamResponse = (prompt: string, sysPrompt: string, hist: any[], meta: any) => {

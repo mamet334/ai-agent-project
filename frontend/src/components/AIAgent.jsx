@@ -217,10 +217,10 @@ export default function AIAgent() {
   });
 
   const saveByokKeys = () => {
-    localStorage.setItem('x-byok-gemini', byokKeys.gemini);
-    localStorage.setItem('x-byok-groq', byokKeys.groq);
-    localStorage.setItem('x-byok-openai', byokKeys.openai);
-    localStorage.setItem('x-byok-openrouter', byokKeys.openrouter);
+    localStorage.setItem('x-byok-gemini', (byokKeys.gemini || '').trim());
+    localStorage.setItem('x-byok-groq', (byokKeys.groq || '').trim());
+    localStorage.setItem('x-byok-openai', (byokKeys.openai || '').trim());
+    localStorage.setItem('x-byok-openrouter', (byokKeys.openrouter || '').trim());
     setIsSettingsModalOpen(false);
   };
 
@@ -651,10 +651,10 @@ export default function AIAgent() {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          'x-byok-gemini': localStorage.getItem('x-byok-gemini') || '',
-          'x-byok-groq': localStorage.getItem('x-byok-groq') || '',
-          'x-byok-openai': localStorage.getItem('x-byok-openai') || '',
-          'x-byok-openrouter': localStorage.getItem('x-byok-openrouter') || ''
+          'x-byok-gemini': (localStorage.getItem('x-byok-gemini') || '').trim(),
+          'x-byok-groq': (localStorage.getItem('x-byok-groq') || '').trim(),
+          'x-byok-openai': (localStorage.getItem('x-byok-openai') || '').trim(),
+          'x-byok-openrouter': (localStorage.getItem('x-byok-openrouter') || '').trim()
         },
         body: JSON.stringify(payload)
       });
