@@ -44,20 +44,19 @@ export default {
       }
 
       // 3. Masukkan teks kotor ke "Pipeline" LLM untuk disaring & dirangkum
-      const prompt = `Anda adalah seorang Analis Video Profesional. 
-Berikut adalah hasil ekstraksi teks mentah (Subtitle) dari sebuah video YouTube. Teks ini mungkin mengandung banyak typo, kata-kata tidak baku, atau kalimat yang terpotong.
+      const prompt = `Anda adalah seorang YouTube Content Analyst & Creative Writer. 
+Berikut adalah hasil ekstraksi teks mentah (Subtitle) dari sebuah video YouTube. Teks ini mungkin mengandung banyak typo atau kalimat terpotong.
 
-Tugas Tambahan dari User: "${task}"
+Tugas Spesifik dari User: "${task}"
 
 TEKS MENTAH YOUTUBE:
 "${cleanedText}"
 
 Instruksi Anda:
-1. Abaikan salah ketik atau kata-kata yang tidak masuk akal (filter noise).
-2. Temukan gagasan utama dan fakta penting dari pembicaraan di atas.
-3. Susunlah Rangkuman Komprehensif dengan bahasa Indonesia yang sangat rapi, profesional, dan mudah dipahami.
-4. Gunakan poin-poin (bullet points) untuk menyoroti bagian-bagian krusial.
-5. PENTING: JIKA TEKS MENTAH YOUTUBE DI ATAS KOSONG ATAU HANYA BERISI KATA-KATA TIDAK BERMAKNA, ANDA DILARANG KERAS MENGARANG CERITA (SEPERTI BAHAS MESIN CUCI DLL). CUKUP JAWAB: "Video ini tidak memiliki percakapan yang jelas yang dapat dirangkum."`;
+1. Pahami isi Teks Mentah Youtube di atas. Abaikan salah ketik.
+2. KERJAKAN Tugas Spesifik dari User dengan sempurna. Jika user meminta merangkum, buatlah rangkuman. Jika user meminta dibuatkan Naskah TikTok, Artikel SEO, atau Skrip Video, buatkan sesuai gaya bahasa yang cocok untuk format tersebut.
+3. Gunakan data dari Teks Mentah YouTube sebagai sumber kebenaran (source of truth).
+4. PENTING: Jika Teks Mentah kosong atau isinya sama sekali tidak berhubungan dengan konteks wajar, beri tahu user bahwa video tidak memiliki teks yang valid.`;
 
       const summary = await runLLM(prompt);
 
