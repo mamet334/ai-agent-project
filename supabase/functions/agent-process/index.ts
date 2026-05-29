@@ -11,6 +11,7 @@ const corsHeaders = {
 let geminiKeyIndex = 0;
 let groqKeyIndex = 0;
 let openaiKeyIndex = 0;
+let openrouterKeyIndex = 0;
 
 const getActiveKey = (envVarName: string, currentIndex: number, setIndex: (idx: number) => void): string => {
   const keysString = Deno.env.get(envVarName) || '';
@@ -58,6 +59,7 @@ serve(async (req) => {
     const GEMINI_API_KEY = getActiveKey('GEMINI_API_KEY', geminiKeyIndex, (idx) => { geminiKeyIndex = idx; });
     const GROQ_API_KEY = getActiveKey('GROQ_API_KEY', groqKeyIndex, (idx) => { groqKeyIndex = idx; });
     const OPENAI_API_KEY = getActiveKey('OPENAI_API_KEY', openaiKeyIndex, (idx) => { openaiKeyIndex = idx; });
+    const OPENROUTER_API_KEY = getActiveKey('OPENROUTER_API_KEY', openrouterKeyIndex, (idx) => { openrouterKeyIndex = idx; });
 
     if (!GEMINI_API_KEY) {
       throw new Error('GEMINI_API_KEY is not set');
@@ -86,6 +88,19 @@ serve(async (req) => {
           stream: true
         })
       });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("Groq Stream Error:", errText);
+        const stream = new ReadableStream({
+          start(controller) {
+            const data = JSON.stringify({ choices: [{ delta: { content: `\n\n**Groq API Error**: ${errText}` } }] });
+            controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
+            controller.close();
+          }
+        });
+        return new Response(stream, { headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' } });
+      }
 
       return new Response(res.body, {
         headers: {
@@ -154,6 +169,19 @@ serve(async (req) => {
         })
       });
 
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("OpenAI Stream Error:", errText);
+        const stream = new ReadableStream({
+          start(controller) {
+            const data = JSON.stringify({ choices: [{ delta: { content: `\n\n**OpenAI API Error**: ${errText}` } }] });
+            controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
+            controller.close();
+          }
+        });
+        return new Response(stream, { headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' } });
+      }
+
       return new Response(res.body, {
         headers: {
           ...corsHeaders,
@@ -190,10 +218,97 @@ serve(async (req) => {
       return data.choices?.[0]?.message?.content || '';
     };
 
+    const streamOpenRouterResponse = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], metaData: any = {}) => {
+      const messages = [];
+      if (systemPromptText) messages.push({ role: 'system', content: systemPromptText });
+      if (chatHistory && chatHistory.length > 0) {
+        for (const msg of chatHistory) {
+          messages.push({ role: msg.role === 'model' ? 'assistant' : 'user', content: msg.content });
+        }
+      }
+      messages.push({ role: 'user', content: promptText });
+      
+      let openRouterModel = 'deepseek/deepseek-r1:free';
+      if (model === 'openrouter-llama-3') openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
+      else if (model === 'openrouter-deepseek-r1') openRouterModel = 'deepseek/deepseek-r1:free';
+      
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+          'HTTP-Referer': 'https://ai-agent-project.vercel.app',
+          'X-Title': 'Mamet AI Agent',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: openRouterModel,
+          messages: messages,
+          temperature: 0.1,
+          stream: true
+        })
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("OpenRouter Stream Error:", errText);
+        const stream = new ReadableStream({
+          start(controller) {
+            const data = JSON.stringify({ choices: [{ delta: { content: `\n\n**OpenRouter API Error**: ${errText}` } }] });
+            controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
+            controller.close();
+          }
+        });
+        return new Response(stream, { headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' } });
+      }
+
+      return new Response(res.body, {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'text/event-stream',
+          'X-Agent-Metadata': JSON.stringify(metaData)
+        }
+      });
+    };
+
+    const callOpenRouter = async (promptText: string, systemPromptText = '', chatHistory: any[] = []) => {
+      const messages = [];
+      if (systemPromptText) messages.push({ role: 'system', content: systemPromptText });
+      if (chatHistory && chatHistory.length > 0) {
+        for (const msg of chatHistory) {
+          messages.push({ role: msg.role === 'model' ? 'assistant' : 'user', content: msg.content });
+        }
+      }
+      messages.push({ role: 'user', content: promptText });
+      
+      let openRouterModel = 'deepseek/deepseek-r1:free';
+      if (model === 'openrouter-llama-3') openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
+      else if (model === 'openrouter-deepseek-r1') openRouterModel = 'deepseek/deepseek-r1:free';
+      
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+          'HTTP-Referer': 'https://ai-agent-project.vercel.app',
+          'X-Title': 'Mamet AI Agent',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: openRouterModel,
+          messages: messages,
+          temperature: 0.1
+        })
+      });
+      if (!res.ok) throw new Error(`OpenRouter API Error: ${res.status}`);
+      const data = await res.json();
+      return data.choices?.[0]?.message?.content || '';
+    };
+
     const runLLM = async (promptText: string, systemPromptText = '', chatHistory: any[] = []) => {
       if (!extractedImage) {
         if (model && model.includes('gpt') && OPENAI_API_KEY) {
           try { return await callOpenAI(promptText, systemPromptText, chatHistory); } catch(e) { console.warn('OpenAI failed:', e); }
+        } else if (model && model.includes('openrouter') && OPENROUTER_API_KEY) {
+          try { return await callOpenRouter(promptText, systemPromptText, chatHistory); } catch(e) { console.warn('OpenRouter failed:', e); }
         } else if (model && model.includes('gemini') && GEMINI_API_KEY) {
           // Fallthrough to Gemini
         } else if (GROQ_API_KEY) {
@@ -241,6 +356,8 @@ serve(async (req) => {
     const getStreamResponse = (prompt: string, sysPrompt: string, hist: any[], meta: any) => {
       if (model && model.includes('gpt') && OPENAI_API_KEY) {
         return streamOpenAIResponse(prompt, sysPrompt, hist, meta);
+      } else if (model && model.includes('openrouter') && OPENROUTER_API_KEY) {
+        return streamOpenRouterResponse(prompt, sysPrompt, hist, meta);
       } else if (GROQ_API_KEY) {
         return streamGroqResponse(prompt, sysPrompt, hist, meta);
       }
@@ -301,7 +418,7 @@ Contoh Output Wajib: [{"subagent": "youtube_analyst", "task": "Ekstrak teks dari
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
 
-        const synthesisPrompt = `Anda telah menugaskan beberapa sub-agent.${fullSystemContext}\n\nPermintaan Awal User: "${finalMessage}"\n\nRiwayat pekerjaan sub-agent:\n${accumulatedContext}\n\nBuat ringkasan laporan hasil kerja sub-agent untuk user secara ramah, lengkap, dan terstruktur. \n\nPENTING: \n- Jika Sub-Agent mengembalikan pesan ERROR atau GAGAL (misal: gagal scrape, subtitle tidak ada), sampaikan kepada user bahwa tugas tersebut gagal. JANGAN PERNAH mengarang, menebak, atau berhalusinasi membuat data palsu (seperti timestamp palsu) untuk menutupi kegagalan tersebut!\n- Gunakan format Tabel Markdown jika menyajikan data, harga, atau perbandingan.\n- Jika user meminta diagram, flowchart, atau alur kerja, buatlah visualisasinya menggunakan blok \`\`\`mermaid\n(contoh diagram graph TD, sequenceDiagram, dll)\`\`\`.\nJANGAN ragu menggunakan gambar/diagram jika itu mempermudah penjelasan!`;
+        const synthesisPrompt = `Anda telah menugaskan beberapa sub-agent.${fullSystemContext}\n\nPermintaan Awal User: "${finalMessage}"\n\nRiwayat pekerjaan sub-agent:\n${accumulatedContext}\n\nJAWABLAH pesan/pertanyaan user dengan ramah dan natural berdasarkan informasi dari sub-agent di atas. \n\nPENTING: \n- JANGAN gunakan format kaku seperti "Laporan Hasil Kerja". Bersikaplah seperti manusia biasa (asisten yang ramah bernama Mamet).\n- Langsung berikan jawaban, sapaan balik, atau solusi tanpa perlu panjang lebar menjelaskan proses sub-agent (kecuali user secara spesifik bertanya tentang prosesnya).\n- Jika Sub-Agent mengembalikan pesan ERROR atau GAGAL, sampaikan kepada user dengan sopan bahwa tugas tersebut gagal. Jangan pernah mengarang data palsu!\n- Gunakan format Tabel Markdown HANYA jika menyajikan data terstruktur, statistik, harga, atau perbandingan.\n- Jika user meminta diagram, flowchart, atau alur kerja, buatlah visualisasinya menggunakan blok \`\`\`mermaid\n(contoh diagram graph TD, sequenceDiagram, dll)\`\`\`.\nJANGAN ragu menggunakan gambar/diagram jika itu mempermudah penjelasan!`;
         
         if (stream && !extractedImage) {
           const streamRes = getStreamResponse(synthesisPrompt, '', history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns });

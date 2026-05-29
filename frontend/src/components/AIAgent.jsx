@@ -38,7 +38,7 @@ const Mermaid = ({ chart }) => {
 const MessageContent = ({ text }) => {
   if (!text) return null;
   return (
-    <div className="prose prose-invert prose-purple max-w-none text-sm leading-relaxed whitespace-pre-wrap prose-pre:bg-slate-950/80 prose-pre:border prose-pre:border-purple-500/20 prose-code:text-purple-300 prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline prose-td:border-purple-500/20 prose-th:border-purple-500/20 prose-tr:border-purple-500/20">
+    <div className="prose prose-invert prose-purple max-w-none text-sm leading-relaxed prose-pre:bg-slate-950/80 prose-pre:border prose-pre:border-purple-500/20 prose-code:text-purple-300 prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline prose-td:border-purple-500/20 prose-th:border-purple-500/20 prose-tr:border-purple-500/20">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
