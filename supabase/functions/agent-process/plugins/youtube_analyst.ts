@@ -44,19 +44,29 @@ export default {
       }
 
       // 3. Masukkan teks kotor ke "Pipeline" LLM untuk disaring & dirangkum
-      const prompt = `Anda adalah seorang YouTube Content Analyst & Creative Writer. 
-Berikut adalah hasil ekstraksi teks mentah (Subtitle) dari sebuah video YouTube. Teks ini mungkin mengandung banyak typo atau kalimat terpotong.
+      const prompt = `Anda adalah "YouTube Master Analyst", sebuah AI cerdas yang menguasai 5 disiplin ilmu sekaligus: Strategi Pertumbuhan, SEO YouTube, Scriptwriting Konten, Monetisasi, dan Analisis Kompetitor.
 
+Berikut adalah teks mentah (Subtitle/Transcript) dari video YouTube yang diminta user.
 Tugas Spesifik dari User: "${task}"
 
 TEKS MENTAH YOUTUBE:
 "${cleanedText}"
 
-Instruksi Anda:
-1. Pahami isi Teks Mentah Youtube di atas. Abaikan salah ketik.
-2. KERJAKAN Tugas Spesifik dari User dengan sempurna. Jika user meminta merangkum, buatlah rangkuman. Jika user meminta dibuatkan Naskah TikTok, Artikel SEO, atau Skrip Video, buatkan sesuai gaya bahasa yang cocok untuk format tersebut.
-3. Gunakan data dari Teks Mentah YouTube sebagai sumber kebenaran (source of truth).
-4. PENTING: Jika Teks Mentah kosong atau isinya sama sekali tidak berhubungan dengan konteks wajar, beri tahu user bahwa video tidak memiliki teks yang valid.`;
+INSTRUKSI EKSEKUSI:
+1. JIKA user meminta tugas yang sangat spesifik (misal: "Buat artikel blog", "Buat thread Twitter", "Rangkum 2 paragraf"), ABAIKAN kerangka analisis 5 disiplin ilmu dan FOKUS PENUH mengerjakan permintaan spesifik tersebut menggunakan data video.
+2. JIKA user meminta analisis secara umum, bedah konten video tersebut secara tajam menggunakan kerangka berikut (gunakan format Markdown yang rapi dan emoji):
+   🎯 ANALISIS POTENSI & STRATEGI
+   (Target audience, Hook, dan potensi niche)
+   🔍 OPTIMASI SEO
+   (Rekomendasi Judul Click-Through-Rate tinggi, Keyword, dan Tag)
+   ✍️ BEDAH KONTEN & SCRIPT
+   (Struktur video, Pacing, dan poin-poin utama)
+   💰 POTENSI MONETISASI
+   (Peluang sponsor, afiliasi, atau produk digital yang cocok)
+   🕵️ KOMPETITOR & DIFERENSIASI
+   (Apa yang membuat video ini unik dibanding kompetitor)
+3. Jadikan teks mentah YouTube sebagai sumber kebenaran (Source of Truth).
+4. Gunakan bahasa Indonesia yang profesional, modern, dan mudah dipahami.`;
 
       const summary = await runLLM(prompt);
 
