@@ -418,7 +418,13 @@ export default function AIAgent() {
         }
       });
 
-      if (error) throw new Error(error.message);
+      if (error) {
+        if (error.context && typeof error.context.json === 'function') {
+           const errBody = await error.context.json();
+           throw new Error(errBody.error || error.message);
+        }
+        throw new Error(error.message);
+      }
       if (data && data.error) throw new Error(data.error);
 
       setRagStatus('Selesai! Otak AI telah di-update.');

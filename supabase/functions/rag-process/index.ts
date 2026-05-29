@@ -6,23 +6,24 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-byok-gemini',
 };
 
-// Fungsi pemotong teks (Chunker)
-function chunkText(text: string, maxTokens: number = 1000): string[] {
-  const paragraphs = text.split(/\n\s*\n/);
+// Fungsi pemotong teks (Chunker) yang lebih aman
+function chunkText(text: string, maxLength: number = 1500): string[] {
   const chunks: string[] = [];
-  let currentChunk = '';
-
-  for (const para of paragraphs) {
-    if (currentChunk.length + para.length > maxTokens && currentChunk.length > 0) {
-      chunks.push(currentChunk.trim());
-      currentChunk = '';
+  let i = 0;
+  while (i < text.length) {
+    let end = i + maxLength;
+    if (end < text.length) {
+      // Try to find a natural break point (newline or period)
+      let breakPoint = text.lastIndexOf('\n', end);
+      if (breakPoint <= i) breakPoint = text.lastIndexOf('. ', end);
+      if (breakPoint > i) {
+        end = breakPoint + 1;
+      }
     }
-    currentChunk += para + '\n\n';
+    chunks.push(text.substring(i, end).trim());
+    i = end;
   }
-  if (currentChunk.trim()) {
-    chunks.push(currentChunk.trim());
-  }
-  return chunks;
+  return chunks.filter(c => c.length > 0);
 }
 
 // Fungsi mendapatkan Embedding dari Gemini
@@ -114,6 +115,10 @@ serve(async (req) => {
       } catch (err) {
         console.error('Error embedding chunk:', err);
       }
+    }
+
+    if (successCount === 0) {
+      throw new Error(`Gagal memproses semua ${chunks.length} potongan teks. Pastikan Gemini API Key valid dan teks bisa dibaca.`);
     }
 
     return new Response(
