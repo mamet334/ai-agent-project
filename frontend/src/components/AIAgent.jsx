@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe, Clock, Copy, Check, BrainCircuit } from 'lucide-react';
 import { supabase } from '../supabase';
-import * as pdfjsLib from 'pdfjs-dist';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+import mammoth from 'mammoth';
+import * as XLSX from 'xlsx';
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -392,6 +394,7 @@ export default function AIAgent() {
       let extractedText = '';
       
       if (ragFile.type === 'application/pdf') {
+        setRagStatus('Membaca file PDF...');
         const arrayBuffer = await ragFile.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         for (let i = 1; i <= pdf.numPages; i++) {
@@ -399,6 +402,20 @@ export default function AIAgent() {
           const textContent = await page.getTextContent();
           extractedText += textContent.items.map(s => s.str).join(' ') + '\n';
         }
+      } else if (ragFile.name.toLowerCase().endsWith('.docx')) {
+        setRagStatus('Membaca file Word (.docx)...');
+        const arrayBuffer = await ragFile.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        extractedText = result.value;
+      } else if (ragFile.name.toLowerCase().endsWith('.xlsx') || ragFile.name.toLowerCase().endsWith('.xls')) {
+        setRagStatus('Membaca file Excel...');
+        const arrayBuffer = await ragFile.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        workbook.SheetNames.forEach(sheetName => {
+          const sheet = workbook.Sheets[sheetName];
+          const text = XLSX.utils.sheet_to_csv(sheet);
+          extractedText += `\n\n--- Sheet: ${sheetName} ---\n\n` + text;
+        });
       } else {
         extractedText = await ragFile.text();
       }

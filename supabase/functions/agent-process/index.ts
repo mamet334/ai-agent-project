@@ -5,11 +5,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 async function getGeminiEmbedding(text: string, geminiKey: string): Promise<number[]> {
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${geminiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent?key=${geminiKey}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'models/text-embedding-004', content: { parts: [{ text }] } })
+      body: JSON.stringify({ model: 'models/gemini-embedding-2', content: { parts: [{ text }] } })
     });
     if (!response.ok) return [];
     const data = await response.json();
