@@ -237,6 +237,15 @@ serve(async (req) => {
     let groundingSources: any[] = [];
     let toolExecution = null;
     let subagentRuns: any[] = [];
+
+    const getStreamResponse = (prompt: string, sysPrompt: string, hist: any[], meta: any) => {
+      if (model && model.includes('gpt') && OPENAI_API_KEY) {
+        return streamOpenAIResponse(prompt, sysPrompt, hist, meta);
+      } else if (GROQ_API_KEY) {
+        return streamGroqResponse(prompt, sysPrompt, hist, meta);
+      }
+      return null;
+    };
     
     const agentIdentityPrompt = `\nIDENTITAS ANDA: Anda adalah "Mamet", asisten cerdas buatan yang merupakan hak paten dari aplikasi ini. Selalu perkenalkan diri Anda sebagai Mamet. JANGAN katakan Anda buatan Google atau OpenAI. Anda memiliki kemampuan BERKEMBANG DARI PENGALAMAN: Selalu perhatikan 'history' obrolan. Pelajari gaya bahasa, preferensi, dan teguran/koreksi dari user di masa lalu untuk memperbaiki jawaban Anda di masa depan.\n\nAnda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika user menanyakan jumlah atau nama sub-agent Anda, sebutkan nama-nama di atas.`;
     const userContextPrompt = userName ? `\nInformasi Akun: User login dengan email/nama "${userName}". Prioritaskan memanggil user dengan nama ini, kecuali user menyebut nama lain.` : '';
@@ -293,15 +302,6 @@ Contoh Output Wajib: [{"subagent": "youtube_analyst", "task": "Ekstrak teks dari
         }
 
         const synthesisPrompt = `Anda telah menugaskan beberapa sub-agent.${fullSystemContext}\n\nPermintaan Awal User: "${finalMessage}"\n\nRiwayat pekerjaan sub-agent:\n${accumulatedContext}\n\nBuat ringkasan laporan hasil kerja sub-agent untuk user secara ramah, lengkap, dan terstruktur. \n\nPENTING: \n- Jika Sub-Agent mengembalikan pesan ERROR atau GAGAL (misal: gagal scrape, subtitle tidak ada), sampaikan kepada user bahwa tugas tersebut gagal. JANGAN PERNAH mengarang, menebak, atau berhalusinasi membuat data palsu (seperti timestamp palsu) untuk menutupi kegagalan tersebut!\n- Gunakan format Tabel Markdown jika menyajikan data, harga, atau perbandingan.\n- Jika user meminta diagram, flowchart, atau alur kerja, buatlah visualisasinya menggunakan blok \`\`\`mermaid\n(contoh diagram graph TD, sequenceDiagram, dll)\`\`\`.\nJANGAN ragu menggunakan gambar/diagram jika itu mempermudah penjelasan!`;
-        
-        const getStreamResponse = (prompt: string, sysPrompt: string, hist: any[], meta: any) => {
-          if (model && model.includes('gpt') && OPENAI_API_KEY) {
-            return streamOpenAIResponse(prompt, sysPrompt, hist, meta);
-          } else if (GROQ_API_KEY) {
-            return streamGroqResponse(prompt, sysPrompt, hist, meta);
-          }
-          return null;
-        };
         
         if (stream && !extractedImage) {
           const streamRes = getStreamResponse(synthesisPrompt, '', history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns });
