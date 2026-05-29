@@ -7,6 +7,7 @@ import bahasa from './language.ts';
 import debate from './debate.ts';
 import deepResearch from './deep_research.ts';
 import youtubeAnalyst from './youtube_analyst.ts';
+import memoryManager from './memory_manager.ts';
 
 // Daftarkan semua plugin di sini
 export const plugins = [
@@ -18,7 +19,8 @@ export const plugins = [
   bahasa,
   debate,
   deepResearch,
-  youtubeAnalyst
+  youtubeAnalyst,
+  memoryManager
 ];
 
 // Fungsi helper untuk membangun daftar tool otomatis bagi LLM

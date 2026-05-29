@@ -4,6 +4,7 @@ import { supabase } from '../supabase';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import mammoth from 'mammoth';
 import * as XLSX from 'xlsx';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, CartesianGrid, Legend } from 'recharts';
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -71,6 +72,49 @@ const MessageContent = ({ text }) => {
             const lang = match ? match[1] : '';
             if (!inline && lang === 'mermaid') {
               return <Mermaid chart={String(children).replace(/\n$/, '')} />
+            }
+            if (!inline && lang === 'json_chart') {
+              try {
+                const config = JSON.parse(String(children).replace(/\n$/, ''));
+                const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899'];
+                
+                return (
+                  <div className="w-full h-64 mt-4 mb-4 bg-slate-900/50 p-4 rounded-xl border border-purple-500/20">
+                    <h4 className="text-center text-xs font-bold text-slate-300 mb-2">{config.title || 'Data Chart'}</h4>
+                    <ResponsiveContainer width="100%" height="100%">
+                      {config.type === 'line' ? (
+                        <LineChart data={config.data}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                          <XAxis dataKey={config.xKey || 'name'} stroke="#94a3b8" fontSize={10} />
+                          <YAxis stroke="#94a3b8" fontSize={10} />
+                          <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #8b5cf6', borderRadius: '8px' }} />
+                          <Legend />
+                          <Line type="monotone" dataKey={config.yKey || 'value'} stroke="#8b5cf6" strokeWidth={2} activeDot={{ r: 8 }} />
+                        </LineChart>
+                      ) : config.type === 'pie' ? (
+                        <PieChart>
+                          <Pie data={config.data} cx="50%" cy="50%" innerRadius={40} outerRadius={80} paddingAngle={5} dataKey={config.yKey || 'value'}>
+                            {config.data.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                          </Pie>
+                          <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #8b5cf6', borderRadius: '8px' }} />
+                          <Legend />
+                        </PieChart>
+                      ) : (
+                        <BarChart data={config.data}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                          <XAxis dataKey={config.xKey || 'name'} stroke="#94a3b8" fontSize={10} />
+                          <YAxis stroke="#94a3b8" fontSize={10} />
+                          <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #8b5cf6', borderRadius: '8px' }} />
+                          <Legend />
+                          <Bar dataKey={config.yKey || 'value'} fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      )}
+                    </ResponsiveContainer>
+                  </div>
+                );
+              } catch(e) {
+                return <div className="text-red-400 text-xs p-2 border border-red-500/20 bg-red-500/10 rounded">Gagal merender grafik: {e.message}</div>;
+              }
             }
             return !inline ? (
               <div className="relative group rounded-xl overflow-hidden my-4 border border-purple-500/20 shadow-lg shadow-purple-500/10">
