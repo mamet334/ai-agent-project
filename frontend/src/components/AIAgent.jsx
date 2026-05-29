@@ -178,6 +178,12 @@ export default function AIAgent() {
     setIsSettingsModalOpen(false);
   };
 
+  const fetchKnowledgeBase = async () => {
+    if (!user) return;
+    const { data } = await supabase.from('documents').select('*').order('created_at', { ascending: false });
+    if (data) setKnowledgeBase(data);
+  };
+
   // Check auth & listen to changes
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -240,11 +246,6 @@ export default function AIAgent() {
       const fetchCron = async () => {
         const { data, error } = await supabase.from('scheduled_tasks').select('*').order('created_at', { ascending: false });
         if (data) setScheduledTasks(data);
-      };
-
-      const fetchKnowledgeBase = async () => {
-        const { data } = await supabase.from('documents').select('*').order('created_at', { ascending: false });
-        if (data) setKnowledgeBase(data);
       };
 
       fetchChats();
