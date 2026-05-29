@@ -1,6 +1,24 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { Buffer } from 'node:buffer';
 import { getPluginPromptList, getPluginByName } from './plugins/registry.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+
+async function getGeminiEmbedding(text: string, geminiKey: string): Promise<number[]> {
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${geminiKey}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'models/text-embedding-004', content: { parts: [{ text }] } })
+    });
+    if (!response.ok) return [];
+    const data = await response.json();
+    return data.embedding?.values || [];
+  } catch (e) {
+    console.error("Embedding API failed", e);
+    return [];
+  }
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -394,10 +412,40 @@ serve(async (req) => {
       return null;
     };
     
+    // --- RAG KNOWLEDGE BASE SEARCH ---
+    let ragContext = '';
+    if (userId) {
+      try {
+        const queryEmbedding = await getGeminiEmbedding(message, GEMINI_API_KEY);
+        if (queryEmbedding.length > 0) {
+          const supabaseClient = createClient(
+            Deno.env.get('SUPABASE_URL') ?? '',
+            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+          );
+          
+          const { data: matchedDocs, error: matchError } = await supabaseClient.rpc('match_documents', {
+            query_embedding: queryEmbedding,
+            match_threshold: 0.5,
+            match_count: 5,
+            p_user_id: userId
+          });
+
+          if (!matchError && matchedDocs && matchedDocs.length > 0) {
+            ragContext = `\n\n[DOKUMEN REFERENSI KNOWLEDGE BASE]:\nBerikan jawaban berdasarkan data relevan yang ditemukan dalam database dokumen milik user berikut ini:\n`;
+            for (const doc of matchedDocs) {
+              ragContext += `- [Dari file "${doc.title}"]: "${doc.content}"\n`;
+            }
+          }
+        }
+      } catch (err) {
+        console.error("RAG Search Error:", err);
+      }
+    }
+
     const agentIdentityPrompt = `\nIDENTITAS ANDA: Anda adalah "Mamet", asisten cerdas buatan yang merupakan hak paten dari aplikasi ini. Selalu perkenalkan diri Anda sebagai Mamet. JANGAN katakan Anda buatan Google atau OpenAI. Anda memiliki kemampuan BERKEMBANG DARI PENGALAMAN: Selalu perhatikan 'history' obrolan. Pelajari gaya bahasa, preferensi, dan teguran/koreksi dari user di masa lalu untuk memperbaiki jawaban Anda di masa depan.\n\nAnda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika user menanyakan jumlah atau nama sub-agent Anda, sebutkan nama-nama di atas.`;
     const userContextPrompt = userName ? `\nInformasi Akun: User login dengan email/nama "${userName}". Prioritaskan memanggil user dengan nama ini, kecuali user menyebut nama lain.` : '';
     const memoryPrompt = globalMemory ? `\n\n[MEMORI GLOBAL & PREFERENSI USER]:\n${globalMemory}\n(Patuhi instruksi/ingatan di atas secara ketat di setiap jawaban Anda!)` : '';
-    const fullSystemContext = agentIdentityPrompt + userContextPrompt + memoryPrompt;
+    const fullSystemContext = agentIdentityPrompt + userContextPrompt + memoryPrompt + ragContext;
 
     if (tools && tools.length > 0) {
       const coordinatorSystemPrompt = `Tugas Anda adalah menganalisis permintaan user dan memilih sub-agent yang tepat.${fullSystemContext}

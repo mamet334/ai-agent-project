@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe, Clock, Copy, Check, BrainCircuit } from 'lucide-react';
 import { supabase } from '../supabase';
 import * as pdfjsLib from 'pdfjs-dist';
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
