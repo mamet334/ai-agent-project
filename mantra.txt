@@ -1,35 +1,15 @@
-# MANTRA ANTIGRAVITY - DOKUMENTASI PROYEK (RINGKAS) 🔮
-==================================================
-## 📌 INFRASTRUKTUR
-- **Frontend**: Vercel (React/Vite) | **Backend**: Supabase Edge Functions (Deno)
-- **Database/Auth**: Supabase | **LLM/Brain**: Groq, Gemini, OpenAI, OpenRouter
+# MANTRA MAMET AI 🔮
+[Tech: React/Vite (PWA) & Supabase Edge (Deno)]
 
-## ✅ FITUR UTAMA (SUDAH RILIS)
-1. **Multi-Brain Orchestrator**: Sub-Agent Eksekutor dengan rotasi & fallback model (DeepSeek, Llama, ChatGPT).
-2. **Mamet Healer (Self-Healing)**: Sistem pertahanan anti-crash (Memory Sweeper, Infinite Loop Breaker, JSON Surgeon, Error Shield).
-3. **Autonomous Cron Agent**: Dashboard penjadwalan AI otomatis.
-4. **Sistem BYOK (Bring Your Own Key)**: User bisa memakai API Key sendiri (Local Storage) tanpa menguras kuota developer.
-5. **Optimasi UI/UX**: Gelembung compact, Tombol Copy MD bersih, Typewriter anti-glitch.
+## ✅ SELESAI (80% MEDVI)
+1. Multi-Agent & Orchestrator (DeepSeek, Llama, Gemini)
+2. Self-Healing (Anti-Crash, Memory Sweeper, JSON Surgeon)
+3. BYOK (Bring Your Own Key) & Dashboard Cron
+4. YouTube Analyst (5 Ahli: Strategi, SEO, Konten, Monetisasi, Kompetitor)
+5. PWA (Bisa diinstal di HP/Desktop)
 
-## 🚀 ROADMAP SELANJUTNYA (MENUJU 100% MEDVI)
-1. [⚠️ PENDING] **YouTube Analyst**: Bypass proteksi Anti-Bot YouTube.
-2. [ ] **Vector RAG (Massive Docs)**: Embedding & Vector DB untuk membaca PDF/Word ribuan halaman.
-3. [ ] **True Code Sandbox**: Eksekusi kode nyata terisolasi (via Piston API).
-4. [ ] **Voice Interaction**: Mode percakapan suara (*Speech-to-Text* & *Text-to-Speech*).
-
-## 📊 PROGRESS MAMET VS MEDVI (75% SELESAI)
-Saat ini Mamet telah berevolusi dari prototipe sederhana menjadi sistem *Production-Ready* dengan arsitektur tahan banting (*Self-Healing*). Visi "MEDVI" kini sudah tercapai 75%.
-
-**✅ Sudah Tercapai (75%):**
-- Multi-Agent Orchestrator dengan parsing JSON yang ketat.
-- Arsitektur Self-Healing & Auto-Fallback Multi-Model.
-- Sinkronisasi Database, Auth, dan Global Memory.
-- Deep Web Scraping & Penjadwalan Otomatis (Cron).
-- Perlindungan Kuota Developer via BYOK.
-
-**🚀 Kekurangan untuk 100% MEDVI (25%):**
-- Vector Database untuk dokumen raksasa.
-- Bak Pasir Eksekusi Kode Nyata (Sandbox).
-- Interaksi Suara ala Jarvis.
-- Bypass Anti-Bot YouTube kelas atas.
-==================================================
+## 🚀 ROADMAP TERSISA
+1. Vector RAG (Embedding PDF/Word raksasa)
+2. True Code Sandbox (Eksekusi kode nyata via Piston)
+3. Voice Interaction (Suara AI)
+4. Anti-Bot YouTube (Bypass Captcha via VPS/Apify)
