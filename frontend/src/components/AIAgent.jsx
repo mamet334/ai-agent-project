@@ -152,6 +152,23 @@ export default function AIAgent() {
   const [cronLoading, setCronLoading] = useState(false);
   const [activeView, setActiveView] = useState('chat'); // 'chat' | 'cron'
 
+  // BYOK Settings State
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [byokKeys, setByokKeys] = useState({
+    gemini: localStorage.getItem('x-byok-gemini') || '',
+    groq: localStorage.getItem('x-byok-groq') || '',
+    openai: localStorage.getItem('x-byok-openai') || '',
+    openrouter: localStorage.getItem('x-byok-openrouter') || ''
+  });
+
+  const saveByokKeys = () => {
+    localStorage.setItem('x-byok-gemini', byokKeys.gemini);
+    localStorage.setItem('x-byok-groq', byokKeys.groq);
+    localStorage.setItem('x-byok-openai', byokKeys.openai);
+    localStorage.setItem('x-byok-openrouter', byokKeys.openrouter);
+    setIsSettingsModalOpen(false);
+  };
+
   // Check auth & listen to changes
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -471,30 +488,32 @@ export default function AIAgent() {
     ];
 
     try {
+      const payload = {
+        message: apiInput,
+        file: filePayload,
+        tools: selectedTools,
+        model: selectedModel,
+        userId: user?.id || 'anonymous',
+        userName: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Teman',
+        globalMemory: globalMemory,
+        stream: true,
+        history: messages.map(m => ({ role: m.type === 'user' ? 'user' : 'model', content: m.content })).slice(-10)
+      };
+
       // Hardcode ke Supabase Edge Function agar tidak terganggu oleh konfigurasi Vercel yang salah
       const endpoint = 'https://uuyzdjifhdfyyvpxsofu.supabase.co/functions/v1/agent-process';
-      
-      const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
-      };
-      
-      const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Teman';
 
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: headers,
-        body: JSON.stringify({
-          message: apiInput,
-          file: filePayload,
-          tools: selectedTools,
-          model: selectedModel,
-          userId: user?.id || 'anonymous',
-          userName: userName,
-          globalMemory: globalMemory,
-          stream: true,
-          history: messages.map(m => ({ role: m.type === 'user' ? 'user' : 'model', content: m.content })).slice(-10)
-        })
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'x-byok-gemini': localStorage.getItem('x-byok-gemini') || '',
+          'x-byok-groq': localStorage.getItem('x-byok-groq') || '',
+          'x-byok-openai': localStorage.getItem('x-byok-openai') || '',
+          'x-byok-openrouter': localStorage.getItem('x-byok-openrouter') || ''
+        },
+        body: JSON.stringify(payload)
       });
 
       // Clear pending mock logs timeouts
@@ -897,10 +916,16 @@ export default function AIAgent() {
               <User className="w-4 h-4 shrink-0" />
               <span className="truncate">{user?.email}</span>
             </div>
-            <button onClick={() => supabase.auth.signOut()} className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all text-sm font-medium">
-              <LogOut className="w-4 h-4" />
-              Logout
-            </button>
+            <div className="flex gap-2">
+              <button onClick={() => setIsSettingsModalOpen(true)} className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 text-slate-300 border border-slate-700/50 transition-all text-sm font-medium">
+                <Settings className="w-4 h-4" />
+                Settings
+              </button>
+              <button onClick={() => supabase.auth.signOut()} className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all text-sm font-medium">
+                <LogOut className="w-4 h-4" />
+                Logout
+              </button>
+            </div>
           </div>
         </div>
 

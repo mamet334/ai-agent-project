@@ -3,18 +3,20 @@
 ## 📌 INFRASTRUKTUR & DEPLOYMENT
 - **GitHub**: `mamet334/ai-agent-project` | **Frontend**: Vercel (React/Vite)
 - **Backend**: Supabase Edge Functions (Deno) & Lokal Express
-- **Database**: Supabase (RLS Auth) | **LLM**: Groq (Llama 3.3) & Gemini (Vision/Fallback)
+- **Database**: Supabase (RLS Auth) | **LLM**: Groq, Gemini, OpenAI (ChatGPT), & OpenRouter (DeepSeek R1)
 
 ## ✅ FITUR UTAMA (SUDAH SELESAI)
-1. **Multi-Agent Orchestrator**: Sub-Agent Researcher, Scraper, Coder, Communicator, Logika, Bahasa.
-2. **Memori & Identitas**: Memori Per-Akun (Supabase) + Prompt Identitas Mamet permanen.
-3. **Advanced Features**: RAG (PDF/Docx), Vision Agent, Dockerized Coder Sandbox (Piston API), True SSE Streaming (Realtime).
+1. **Multi-Agent Orchestrator**: Sub-Agent Researcher, Scraper, Coder, Communicator, Logika, Bahasa. (Sekarang dengan mode natural/non-kaku).
+2. **Memori & Identitas**: Memori Per-Akun + Prompt Identitas Mamet.
+3. **Advanced Features**: RAG (PDF/Docx), Vision Agent, True SSE Streaming (Realtime).
+4. **Optimasi UI/UX**: Gelembung chat compact/responsif, Tombol Copy (Markdown murni), dan Typewriter anti-glitch.
+5. **Multi-Brain & Round-Robin API**: Mendukung rotasi API otomatis dan multi-model on-the-fly (ChatGPT, Llama 3.1, DeepSeek R1).
 
 ## 🚀 ROADMAP SELANJUTNYA (MEDVI TAHAP 4)
-1. [✅ SELESAI FULL UI] **Autonomous Scheduled Agent (Cron)**: Dashboard layar penuh terintegrasi. Mamet dapat mengeksekusi riset/tugas berulang setiap jam tertentu tanpa perlu di-trigger manual. Database Supabase tersinkronisasi.
-2. [✅ SELESAI] **Deep Research Mode**: Web scraping berantai (menyelami link dari Google untuk mensintesis laporan riset mendalam).
-3. **Multi-Key Round-Robin API**: Sistem rotasi kunci API (Groq/Gemini) otomatis di backend untuk mencegah Error 429 / Rate Limit Habis tanpa perlu berlangganan versi Pro.
-4. **Sistem BYOK (Bring Your Own Key)**: Fitur UI "Settings" agar setiap user login memakai API Key Groq/Gemini milik mereka sendiri (mencegah kuota developer terkuras jika dirilis ke publik).
+1. [✅ SELESAI] **Autonomous Scheduled Agent (Cron)**: Dashboard layar penuh terintegrasi.
+2. [✅ SELESAI] **Deep Research Mode**: Web scraping berantai.
+3. [✅ SELESAI] **Multi-Brain Integration**: ChatGPT & OpenRouter terpasang stabil di backend.
+4. **Sistem BYOK (Bring Your Own Key)**: Fitur UI "Settings" agar setiap user login memakai API Key mereka sendiri (mencegah kuota developer terkuras).
 5. [⚠️ PENDING / DALAM PERBAIKAN] **YouTube Analyst Agent**: Pustaka scraping saat ini diblokir oleh anti-bot YouTube. Menunggu implementasi API YouTube resmi atau metode bypass yang lebih kuat.
 
 ## 📊 MAMET VS MEDVI PROGRESS (45% SELESAI)

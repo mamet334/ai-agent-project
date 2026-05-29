@@ -4,7 +4,7 @@ import { getPluginPromptList, getPluginByName } from './plugins/registry.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-byok-gemini, x-byok-groq, x-byok-openai, x-byok-openrouter',
 };
 
 // Global state for Round-Robin API Keys (persists across warm invocations)
@@ -30,7 +30,17 @@ serve(async (req) => {
   }
 
   try {
-    const { message, tools, model, userId, userName, file, history, globalMemory, stream } = await req.json();
+    let { message, tools, model, userId, userName, file, history, globalMemory, stream } = await req.json();
+
+    // --- MAMET HEALER (TERAPIS PIKIRAN) ---
+    if (history && history.length > 15) {
+      console.log("Mamet Healer: Melakukan Memory Sweeping...");
+      history = [
+        history[0], 
+        { role: 'model', content: '[MAMET HEALER: Memori obrolan lama telah diringkas untuk mencegah kepenuhan memori dan menjaga kestabilan.]' }, 
+        ...history.slice(-10)
+      ];
+    }
 
     let extractedImage = null;
     let finalMessage = message;
@@ -56,10 +66,16 @@ serve(async (req) => {
       });
     }
 
-    const GEMINI_API_KEY = getActiveKey('GEMINI_API_KEY', geminiKeyIndex, (idx) => { geminiKeyIndex = idx; });
-    const GROQ_API_KEY = getActiveKey('GROQ_API_KEY', groqKeyIndex, (idx) => { groqKeyIndex = idx; });
-    const OPENAI_API_KEY = getActiveKey('OPENAI_API_KEY', openaiKeyIndex, (idx) => { openaiKeyIndex = idx; });
-    const OPENROUTER_API_KEY = getActiveKey('OPENROUTER_API_KEY', openrouterKeyIndex, (idx) => { openrouterKeyIndex = idx; });
+    // BYOK (Bring Your Own Key) Support
+    const byokGemini = req.headers.get('x-byok-gemini');
+    const byokGroq = req.headers.get('x-byok-groq');
+    const byokOpenAI = req.headers.get('x-byok-openai');
+    const byokOpenRouter = req.headers.get('x-byok-openrouter');
+
+    const GEMINI_API_KEY = byokGemini || getActiveKey('GEMINI_API_KEY', geminiKeyIndex, (idx) => { geminiKeyIndex = idx; });
+    const GROQ_API_KEY = byokGroq || getActiveKey('GROQ_API_KEY', groqKeyIndex, (idx) => { groqKeyIndex = idx; });
+    const OPENAI_API_KEY = byokOpenAI || getActiveKey('OPENAI_API_KEY', openaiKeyIndex, (idx) => { openaiKeyIndex = idx; });
+    const OPENROUTER_API_KEY = byokOpenRouter || getActiveKey('OPENROUTER_API_KEY', openrouterKeyIndex, (idx) => { openrouterKeyIndex = idx; });
 
     if (!GEMINI_API_KEY) {
       throw new Error('GEMINI_API_KEY is not set');
@@ -172,6 +188,13 @@ serve(async (req) => {
       if (!res.ok) {
         const errText = await res.text();
         console.error("OpenAI Stream Error:", errText);
+        
+        // --- MAMET HEALER (PENYEMBUH KOMA / AUTO-FALLBACK) ---
+        if (GROQ_API_KEY) {
+          console.log("Mamet Healer: Memutar rute ke Groq (Fallback)...");
+          return streamGroqResponse(promptText, systemPromptText + "\n\n(Catatan: Anda sedang menggunakan otak cadangan Groq karena OpenAI mengalami gangguan/limit)", chatHistory, metaData);
+        }
+
         const stream = new ReadableStream({
           start(controller) {
             const data = JSON.stringify({ choices: [{ delta: { content: `\n\n**OpenAI API Error**: ${errText}` } }] });
@@ -251,6 +274,13 @@ serve(async (req) => {
       if (!res.ok) {
         const errText = await res.text();
         console.error("OpenRouter Stream Error:", errText);
+        
+        // --- MAMET HEALER (PENYEMBUH KOMA / AUTO-FALLBACK) ---
+        if (GROQ_API_KEY) {
+          console.log("Mamet Healer: Memutar rute ke Groq (Fallback)...");
+          return streamGroqResponse(promptText, systemPromptText + "\n\n(Catatan: Anda sedang menggunakan otak cadangan Groq karena OpenRouter mengalami gangguan/limit)", chatHistory, metaData);
+        }
+
         const stream = new ReadableStream({
           start(controller) {
             const data = JSON.stringify({ choices: [{ delta: { content: `\n\n**OpenRouter API Error**: ${errText}` } }] });
@@ -376,23 +406,46 @@ Anda WAJIB mengembalikan HANYA sebuah Array JSON murni. Jika tidak butuh sub-age
 Contoh Output Wajib: [{"subagent": "youtube_analyst", "task": "Ekstrak teks dari link youtube ini"}]`;
 
       let planText = '[]';
+      let plan: any[] = [];
       try {
         planText = await runLLM(`Permintaan User: "${finalMessage}"`, coordinatorSystemPrompt);
         planText = planText.replace(/```json/g, '').replace(/```/g, '').trim();
-      } catch (err) {}
-
-      console.log("PLAN TEXT:", planText);
-
-      let plan: any[] = [];
-      try { plan = JSON.parse(planText); } catch (e) {
-         console.error("JSON Parse Error for PlanText:", planText);
+        plan = JSON.parse(planText);
+      } catch (err) {
+        console.error("Mamet Healer: Mendeteksi format JSON rusak. Memperbaiki...");
+        // --- MAMET HEALER (DOKTER BEDAH LOGIKA) ---
+        const jsonMatch = planText.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          try {
+            plan = JSON.parse(jsonMatch[0].replace(/,\s*]/g, ']'));
+            console.log("Mamet Healer: Berhasil memperbaiki JSON!");
+          } catch(e) {
+            console.error("Mamet Healer: Gagal memperbaiki JSON, sub-agent dibatalkan.");
+            plan = [];
+          }
+        }
       }
 
       let accumulatedContext = `Permintaan awal user: "${finalMessage}"\n\n`;
 
       if (plan && plan.length > 0) {
+        const seenTasks = new Set();
         for (let i = 0; i < plan.length; i++) {
+          // --- MAMET HEALER (OBAT PENENANG / INFINITE LOOP BREAKER) ---
+          if (i >= 5) {
+            console.log("Mamet Healer: Jumlah tugas terlalu banyak (>5). Menyuntikkan obat penenang...");
+            break;
+          }
+          
           const { subagent, task } = plan[i];
+          const taskSignature = subagent + ":" + (task || "").substring(0, 30);
+          
+          if (seenTasks.has(taskSignature)) {
+            console.log("Mamet Healer: Mendeteksi perulangan instruksi (Loop). Menghentikan proses sub-agent...");
+            break;
+          }
+          seenTasks.add(taskSignature);
+
           let subagentResText = 'Gagal memproses.';
           let subagentSources: any[] = [];
           let subagentToolExec = null;
@@ -401,10 +454,17 @@ Contoh Output Wajib: [{"subagent": "youtube_analyst", "task": "Ekstrak teks dari
           if (plugin) {
             const env = { GEMINI_API_KEY, GROQ_API_KEY };
             const fullTask = `Tugas Spesifik Anda: ${task}\n\nPermintaan Asli User: "${finalMessage}"\n\nKonteks Tambahan:\n${accumulatedContext}`;
-            const result = await plugin.execute({ task: fullTask, accumulatedContext, env, runLLM });
-            subagentResText = result.output;
-            subagentSources = result.sources || [];
-            subagentToolExec = result.toolExecution || null;
+            
+            // --- MAMET HEALER (PENAWAR RACUN / ERROR SHIELD) ---
+            try {
+              const result = await plugin.execute({ task: fullTask, accumulatedContext, env, runLLM });
+              subagentResText = result.output;
+              subagentSources = result.sources || [];
+              subagentToolExec = result.toolExecution || null;
+            } catch (err: any) {
+              console.error(`Mamet Healer: Menangkap Error mematikan dari Sub-Agent [${subagent}]!`, err);
+              subagentResText = `[SISTEM DILINDUNGI OLEH MAMET HEALER]: Sub-agent gagal beroperasi karena error teknis (${err.message || 'Unknown'}). Tolong sampaikan ke user dengan ramah bahwa fitur ini sedang terkendala.`;
+            }
           } else {
              subagentResText = `Sub-agent '${subagent}' tidak ditemukan di sistem plugin.`;
           }
