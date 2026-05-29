@@ -9,38 +9,39 @@ export default {
       const urlRegex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
       const match = task.match(urlRegex);
       
+      let cleanedText = "";
+      let videoUrl = "Teks Manual";
+      let videoId = "manual";
+
       if (!match) {
-        return { output: "Error: Tidak ada Link YouTube valid yang ditemukan di dalam permintaan Anda." };
-      }
+        // Jika tidak ada URL tapi teksnya lumayan panjang, asumsikan user menempelkan transkrip manual
+        if (task.length > 50) {
+          cleanedText = task.substring(0, 30000);
+        } else {
+          return { output: "Error: Tidak ada Link YouTube valid yang ditemukan, dan teks yang diberikan terlalu pendek untuk dianalisis." };
+        }
+      } else {
+        videoId = match[1];
+        videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        
+        // 2. Ambil Transkrip Teks menggunakan package youtube-transcript
+        let transcriptText = "";
+        try {
+          const transcript = await YoutubeTranscript.fetchTranscript(videoId);
+          transcriptText = transcript.map(t => t.text).join(' ');
+        } catch (err) {
+          return { 
+            output: `Gagal mengekstrak teks dari YouTube. Kemungkinan IP diblokir (CAPTCHA) atau video diproteksi. Error: ${err.message}\nSARAN: Silakan copy-paste transkrip video secara manual ke obrolan ini, dan saya akan menganalisisnya!` 
+          };
+        }
 
-      const videoId = match[1];
-      const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-      
-      // 2. Ambil Transkrip Teks menggunakan package youtube-transcript
-      let transcriptText = "";
-      try {
-        const transcript = await YoutubeTranscript.fetchTranscript(videoId);
-        // Gabungkan semua teks dari detik ke detik
-        transcriptText = transcript.map(t => t.text).join(' ');
-      } catch (err) {
-        return { 
-          output: `Gagal mengekstrak teks dari YouTube. Kemungkinan video ini tidak memiliki Subtitle (Closed Captions) atau diproteksi oleh pembuatnya. Error: ${err.message}` 
-        };
-      }
+        if (!transcriptText || transcriptText.trim().length === 0) {
+          return {
+            output: `[SISTEM ERROR: GAGAL MENARIK SUBTITLE]\nVideo ini kemungkinan tidak memiliki Subtitle otomatis. JANGAN merangkum apapun!`
+          };
+        }
 
-      if (!transcriptText || transcriptText.trim().length === 0) {
-        return {
-          output: `[SISTEM ERROR: GAGAL MENARIK SUBTITLE]\nVideo ini (ID: ${videoId}) kemungkinan besar tidak memiliki Subtitle otomatis yang diaktifkan oleh kreatornya. JANGAN merangkum apapun, langsung beri tahu pengguna bahwa videonya tidak dapat diakses teksnya.`
-        };
-      }
-
-      // Bersihkan teks (hapus jeda seperti [Musik], dll jika perlu, walau LLM sudah cukup pintar)
-      let cleanedText = transcriptText.replace(/\[.*?\]/g, ' ').substring(0, 30000); // Batasi max karakter
-      
-      if (cleanedText.trim().length === 0) {
-        return {
-          output: `[SISTEM ERROR: GAGAL MENARIK SUBTITLE]\nVideo ini (ID: ${videoId}) kemungkinan hanya berisi musik tanpa teks yang bisa dibaca. JANGAN merangkum apapun!`
-        };
+        cleanedText = transcriptText.replace(/\[.*?\]/g, ' ').substring(0, 30000);
       }
 
       // 3. Masukkan teks kotor ke "Pipeline" LLM untuk disaring & dirangkum

@@ -86,3 +86,7 @@ TENTANG LSPR CENTRE FOR ARTIFICIAL INTELLIGENCE AND COMMUNICATION (LSPR CAICT)  
 
 
 
+
+
+## ROADMAP MASA DEPAN (RAHASIA)
+- Peningkatan YouTube Analyst: Memindahkan ekstraksi transkrip ke VPS/Apify dengan dukungan layanan Anti-Captcha / 2Captcha untuk bypass blokir IP dari YouTube.
