@@ -907,6 +907,8 @@ export default function AIAgent() {
                 className="bg-slate-800 border border-purple-500/30 text-purple-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-purple-500 transition-all font-medium cursor-pointer"
               >
                 <option value="coordinator-agent">Kepala Agent (Multi-Agent Orchestrator)</option>
+                <option value="gpt-4o">ChatGPT-4o (OpenAI - Sangat Pintar)</option>
+                <option value="gpt-4o-mini">ChatGPT-4o Mini (OpenAI - Cepat)</option>
                 <option value="gemini-2.5-flash">Gemini 2.5 Flash (Gratis & Cepat)</option>
                 <option value="gemini-2.5-pro">Gemini 2.5 Pro (Sangat Pintar - Gratis)</option>
                 <option value="groq-llama-3.3">Llama 3.3 70B (Groq - Gratis & Cepat)</option>
