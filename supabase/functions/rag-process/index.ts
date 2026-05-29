@@ -28,12 +28,12 @@ function chunkText(text: string, maxLength: number = 1500): string[] {
 
 // Fungsi mendapatkan Embedding dari Gemini
 async function getGeminiEmbedding(text: string, geminiKey: string): Promise<number[]> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${geminiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent?key=${geminiKey}`;
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'models/text-embedding-004',
+      model: 'models/gemini-embedding-2',
       content: { parts: [{ text }] }
     })
   });
@@ -85,6 +85,12 @@ serve(async (req) => {
     // 2. Potong teks (Chunking)
     const chunks = chunkText(text, 1500); // 1500 karakter per chunk
 
+    if (chunks.length === 0) {
+      // Rollback document creation
+      await supabaseClient.from('documents').delete().eq('id', documentId);
+      throw new Error(`Dokumen "${title}" kosong atau tidak memiliki teks yang bisa dibaca. Pastikan dokumen (PDF/Word) berisi teks digital yang bisa di-blok, bukan sekadar gambar hasil scan.`);
+    }
+
     // 3. Proses Vektorisasi
     console.log(`Processing ${chunks.length} chunks for document ${title}...`);
     let successCount = 0;
@@ -105,19 +111,23 @@ serve(async (req) => {
           });
 
         if (chunkError) {
-          console.error('Failed to insert chunk:', chunkError);
+          throw new Error(`DB Insert Error: ${chunkError.message}`);
         } else {
           successCount++;
         }
         
         // Jeda kecil untuk menghindari Rate Limit Gemini
         await new Promise(r => setTimeout(r, 600));
-      } catch (err) {
-        console.error('Error embedding chunk:', err);
+      } catch (err: any) {
+        // Rollback document creation on FIRST failure
+        await supabaseClient.from('documents').delete().eq('id', documentId);
+        throw new Error(`Proses terhenti pada chunk ke-${successCount+1}. Detail Error: ${err.message}`);
       }
     }
 
     if (successCount === 0) {
+      // Just in case
+      await supabaseClient.from('documents').delete().eq('id', documentId);
       throw new Error(`Gagal memproses semua ${chunks.length} potongan teks. Pastikan Gemini API Key valid dan teks bisa dibaca.`);
     }
 

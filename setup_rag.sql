@@ -19,7 +19,7 @@ create table document_chunks (
   id uuid primary key default gen_random_uuid(),
   document_id uuid references documents(id) on delete cascade not null,
   content text not null,
-  embedding vector(768) -- 768 adalah dimensi standar dari model AI Gemini (text-embedding-004)
+  embedding vector(3072) -- 3072 adalah dimensi standar dari model AI gemini-embedding-2
 );
 
 -- 5. Buat indeks untuk mempercepat pencarian (Opsional tapi direkomendasikan)
@@ -27,7 +27,7 @@ create table document_chunks (
 
 -- 6. Buat fungsi pintar (RPC) untuk mencari paragraf yang paling mirip dengan pertanyaan user
 create or replace function match_documents (
-  query_embedding vector(768),
+  query_embedding vector(3072),
   match_threshold float,
   match_count int,
   p_user_id uuid

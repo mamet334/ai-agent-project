@@ -571,6 +571,22 @@ export default function AIAgent() {
             };
             img.onerror = () => reject(new Error('Gagal memproses gambar'));
             img.src = URL.createObjectURL(currentFile);
+          } else if (currentFile.name.toLowerCase().endsWith('.xlsx') || currentFile.name.toLowerCase().endsWith('.xls')) {
+            // Secretly convert Excel to CSV on the fly!
+            currentFile.arrayBuffer().then(arrayBuffer => {
+              try {
+                const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                let text = '';
+                workbook.SheetNames.forEach(sheetName => {
+                  const sheet = workbook.Sheets[sheetName];
+                  text += `\n\n--- Sheet: ${sheetName} ---\n\n` + XLSX.utils.sheet_to_csv(sheet);
+                });
+                const base64Str = btoa(unescape(encodeURIComponent(text)));
+                resolve(base64Str);
+              } catch(err) {
+                reject(err);
+              }
+            });
           } else {
             const reader = new FileReader();
             reader.readAsDataURL(currentFile);
@@ -579,9 +595,14 @@ export default function AIAgent() {
           }
         });
 
+        let finalFileName = currentFile.name;
+        if (finalFileName.toLowerCase().endsWith('.xlsx') || finalFileName.toLowerCase().endsWith('.xls')) {
+            finalFileName = finalFileName + '.csv'; // Trick the backend into reading it as text
+        }
+
         filePayload = {
-          name: currentFile.name,
-          mimeType: currentFile.type && currentFile.type.startsWith('image/') ? 'image/jpeg' : (currentFile.type || 'application/octet-stream'),
+          name: finalFileName,
+          mimeType: currentFile.type && currentFile.type.startsWith('image/') ? 'image/jpeg' : (finalFileName.endsWith('.csv') ? 'text/csv' : (currentFile.type || 'application/octet-stream')),
           data: base64Data
         };
       } catch (err) {
@@ -1435,7 +1456,7 @@ export default function AIAgent() {
                 type="file"
                 ref={fileInputRef}
                 className="hidden"
-                accept=".pdf,.txt,.md,.csv,.docx,image/*"
+                accept=".pdf,.txt,.md,.csv,.xlsx,.xls,.docx,image/*"
                 onChange={(e) => {
                   if (e.target.files && e.target.files[0]) {
                     setAttachedFile(e.target.files[0]);
