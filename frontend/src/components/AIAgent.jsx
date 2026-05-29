@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe, Clock, Copy, Check, BrainCircuit } from 'lucide-react';
 import { supabase } from '../supabase';
+import * as pdfjsLib from 'pdfjs-dist';
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -152,6 +154,13 @@ export default function AIAgent() {
   const [cronLoading, setCronLoading] = useState(false);
   const [activeView, setActiveView] = useState('chat'); // 'chat' | 'cron'
 
+  // RAG / Knowledge Base State
+  const [isRagModalOpen, setIsRagModalOpen] = useState(false);
+  const [ragFile, setRagFile] = useState(null);
+  const [ragLoading, setRagLoading] = useState(false);
+  const [ragStatus, setRagStatus] = useState('');
+  const [knowledgeBase, setKnowledgeBase] = useState([]);
+
   // BYOK Settings State
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [byokKeys, setByokKeys] = useState({
@@ -233,8 +242,14 @@ export default function AIAgent() {
         if (data) setScheduledTasks(data);
       };
 
+      const fetchKnowledgeBase = async () => {
+        const { data } = await supabase.from('documents').select('*').order('created_at', { ascending: false });
+        if (data) setKnowledgeBase(data);
+      };
+
       fetchChats();
       fetchCron();
+      fetchKnowledgeBase();
     }
   }, [user]);
 
@@ -363,6 +378,60 @@ export default function AIAgent() {
   const handleDeleteCron = async (id) => {
     await supabase.from('scheduled_tasks').delete().eq('id', id);
     setScheduledTasks(prev => prev.filter(t => t.id !== id));
+  };
+
+  const handleRagUpload = async (e) => {
+    e.preventDefault();
+    if (!ragFile || !user) return;
+    
+    setRagLoading(true);
+    setRagStatus('Membaca file...');
+    
+    try {
+      let extractedText = '';
+      
+      if (ragFile.type === 'application/pdf') {
+        const arrayBuffer = await ragFile.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          extractedText += textContent.items.map(s => s.str).join(' ') + '\n';
+        }
+      } else {
+        extractedText = await ragFile.text();
+      }
+
+      setRagStatus('Memproses AI Embedding ke Supabase...');
+      
+      const byokGemini = localStorage.getItem('x-byok-gemini') || '';
+      
+      const { data, error } = await supabase.functions.invoke('rag-process', {
+        body: {
+          title: ragFile.name,
+          text: extractedText,
+          userId: user.id
+        },
+        headers: {
+          'x-byok-gemini': byokGemini
+        }
+      });
+
+      if (error) throw new Error(error.message);
+      if (data && data.error) throw new Error(data.error);
+
+      setRagStatus('Selesai! Otak AI telah di-update.');
+      fetchKnowledgeBase(); // refresh list
+      setTimeout(() => {
+        setIsRagModalOpen(false);
+        setRagFile(null);
+        setRagStatus('');
+      }, 2000);
+    } catch (err) {
+      setRagStatus(`Error: ${err.message}`);
+    } finally {
+      setRagLoading(false);
+    }
   };
 
   const toolIcons = {
@@ -773,14 +842,21 @@ export default function AIAgent() {
             </button>
           </div>
 
-          {/* New Chat Button */}
-          <div className="p-4 border-b border-purple-500/20">
+          {/* Action Buttons */}
+          <div className="p-4 border-b border-purple-500/20 space-y-2">
             <button 
               onClick={handleNewChat}
               className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-semibold transition-all shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 text-sm"
             >
               <Plus className="w-4 h-4" />
               Percakapan Baru
+            </button>
+            <button 
+              onClick={() => setIsRagModalOpen(true)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600/20 border border-emerald-500/30 hover:bg-emerald-600/30 text-emerald-400 font-semibold transition-all text-sm"
+            >
+              <BrainCircuit className="w-4 h-4" />
+              Knowledge Base (RAG)
             </button>
           </div>
 
@@ -1477,6 +1553,78 @@ export default function AIAgent() {
                   Simpan Key
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RAG Knowledge Base Modal */}
+      {isRagModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl shadow-emerald-500/10">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-emerald-500/20 bg-slate-800/50">
+              <h3 className="font-semibold text-slate-100 flex items-center gap-2">
+                <BrainCircuit className="w-5 h-5 text-emerald-400" />
+                Knowledge Base (RAG)
+              </h3>
+              <button onClick={() => setIsRagModalOpen(false)} className="text-slate-400 hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6">
+              <p className="text-sm text-slate-400 mb-6">
+                Unggah dokumen (PDF, TXT) ke dalam Otak AI. Dokumen ini akan diingat secara permanen oleh Mamet untuk membantu menjawab pertanyaan Anda yang sangat spesifik.
+              </p>
+
+              <form onSubmit={handleRagUpload} className="space-y-4">
+                <div className="border-2 border-dashed border-slate-700 hover:border-emerald-500/50 rounded-xl p-8 text-center transition-all bg-slate-950/50 relative">
+                  <input 
+                    type="file" 
+                    accept=".pdf,.txt,.md"
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    onChange={e => {
+                      if (e.target.files && e.target.files[0]) setRagFile(e.target.files[0]);
+                    }}
+                  />
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <FileText className="w-8 h-8 text-slate-500" />
+                    {ragFile ? (
+                      <span className="text-emerald-400 font-medium">{ragFile.name}</span>
+                    ) : (
+                      <span className="text-slate-400 text-sm">Klik atau Seret file PDF/TXT ke sini</span>
+                    )}
+                  </div>
+                </div>
+
+                {ragStatus && (
+                  <div className="p-3 rounded-lg bg-slate-800 border border-slate-700 text-xs text-center text-emerald-300 font-mono">
+                    {ragStatus}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={ragLoading || !ragFile}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold transition-all shadow-lg shadow-emerald-500/30 disabled:opacity-50 disabled:shadow-none"
+                >
+                  {ragLoading ? 'Mengekstrak Dokumen...' : 'Tanamkan ke Otak AI'}
+                </button>
+              </form>
+
+              {knowledgeBase.length > 0 && (
+                <div className="mt-8">
+                  <h4 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">Dokumen Tersimpan:</h4>
+                  <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                    {knowledgeBase.map(doc => (
+                      <div key={doc.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-800/50 border border-slate-700/50">
+                        <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span className="text-sm text-slate-300 truncate">{doc.title}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
