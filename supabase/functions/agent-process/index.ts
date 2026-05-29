@@ -518,6 +518,7 @@ FITUR GRAFIK INTERAKTIF: Jika user meminta untuk membuat grafik (bar/pie/line ch
 { "title": "Judul Grafik", "type": "bar", "data": [{"name": "A", "value": 10}], "xKey": "name", "yKey": "value" }
 \`\`\`
 Pilih type "bar", "pie", atau "line" sesuai kebutuhan.
+DILARANG KERAS MENGGUNAKAN PYTHON ATAU "TOOL_CODE". JANGAN PERNAH MENULISKAN KODE PYTHON UNTUK MENGEKSEKUSI TOOL. JAWABLAH DENGAN TEKS BIASA.
 \nAnda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika user menanyakan jumlah atau nama sub-agent Anda, sebutkan nama-nama di atas.`;
     const userContextPrompt = userName ? `\nInformasi Akun: User login dengan email/nama "${userName}". Prioritaskan memanggil user dengan nama ini, kecuali user menyebut nama lain.` : '';
     const memoryPrompt = globalMemory ? `\n\n[MEMORI GLOBAL & PREFERENSI USER]:\n${globalMemory}\n(Patuhi instruksi/ingatan di atas secara ketat di setiap jawaban Anda!)` : '';
@@ -526,7 +527,7 @@ Pilih type "bar", "pie", atau "line" sesuai kebutuhan.
     if (tools && tools.length > 0) {
       const coordinatorSystemPrompt = `Tugas Anda adalah menganalisis permintaan user dan memilih sub-agent yang tepat.${fullSystemContext}
 PENTING: Anda adalah mesin parsing JSON. Anda DILARANG KERAS merespons dengan kalimat atau teks biasa. 
-Anda WAJIB mengembalikan HANYA sebuah Array JSON murni. Jika tidak butuh sub-agent, kembalikan [].
+Anda WAJIB mengembalikan HANYA sebuah Array JSON murni. Jika tidak butuh sub-agent, kembalikan []. DILARANG KERAS BERKOMUNIKASI BIASA. DILARANG KERAS MENGGUNAKAN "TOOL_CODE" ATAU PYTHON. HANYA KELUARKAN JSON ARRAY!
 Contoh Output Wajib: [{"subagent": "youtube_analyst", "task": "Ekstrak teks dari link youtube ini"}]`;
 
       let planText = '[]';
