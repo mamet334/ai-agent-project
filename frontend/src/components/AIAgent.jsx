@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe, Clock, Copy, Check } from 'lucide-react';
+import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe, Clock, Copy, Check, BrainCircuit } from 'lucide-react';
 import { supabase } from '../supabase';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -823,6 +823,23 @@ export default function AIAgent() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Global Memory Section */}
+            <div className="border-t border-purple-500/20 pt-4 mb-4">
+              <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <BrainCircuit className="w-3.5 h-3.5 text-purple-400" />
+                Memori Jangka Panjang
+              </h3>
+              <p className="text-[10px] text-slate-500 mb-2 leading-relaxed">
+                Tulis aturan, sifat, atau instruksi permanen yang harus selalu dipatuhi Mamet.
+              </p>
+              <textarea
+                value={globalMemory}
+                onChange={(e) => setGlobalMemory(e.target.value)}
+                placeholder="Cth: Kamu adalah asisten pajak. Selalu panggil saya Bos. Jangan pakai emoji."
+                className="w-full bg-slate-900/80 border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 transition-all resize-none min-h-[80px]"
+              />
             </div>
 
             {/* Tools Selection Section */}
