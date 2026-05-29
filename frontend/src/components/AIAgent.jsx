@@ -1064,7 +1064,10 @@ export default function AIAgent() {
                 <Menu className="w-5 h-5" />
               </button>
               <Zap className="w-5 h-5 text-purple-400 font-semibold" />
-              <span className="font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">AI Agent</span>
+              <div className="flex flex-col">
+                <span className="font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent leading-tight">AI Agent</span>
+                <span className="text-[10px] text-slate-500 font-medium tracking-wider">powered by mametdev@™</span>
+              </div>
             </div>
 
             {/* Model Selector Dropdown */}
