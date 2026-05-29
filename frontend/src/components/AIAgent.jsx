@@ -1378,6 +1378,87 @@ export default function AIAgent() {
         </div>
       )}
 
+      {/* Settings Modal (BYOK) */}
+      {isSettingsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-purple-500/30 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl shadow-purple-500/20">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-purple-500/20 bg-slate-800/50">
+              <h3 className="font-semibold text-slate-100 flex items-center gap-2">
+                <Lock className="w-4 h-4 text-purple-400" />
+                Bring Your Own Key (BYOK)
+              </h3>
+              <button onClick={() => setIsSettingsModalOpen(false)} className="text-slate-400 hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-slate-400 mb-4">
+                Masukkan API Key milik Anda sendiri untuk menggunakan model tanpa memotong kuota pusat. Key disimpan secara aman di browser Anda.
+              </p>
+              
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-300 ml-1">OpenAI API Key (ChatGPT)</label>
+                <input
+                  type="password"
+                  value={byokKeys.openai}
+                  onChange={(e) => setByokKeys({ ...byokKeys, openai: e.target.value })}
+                  placeholder="sk-..."
+                  className="w-full bg-slate-950 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-300 ml-1">Groq API Key (Llama 3)</label>
+                <input
+                  type="password"
+                  value={byokKeys.groq}
+                  onChange={(e) => setByokKeys({ ...byokKeys, groq: e.target.value })}
+                  placeholder="gsk_..."
+                  className="w-full bg-slate-950 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-300 ml-1">OpenRouter API Key (DeepSeek)</label>
+                <input
+                  type="password"
+                  value={byokKeys.openrouter}
+                  onChange={(e) => setByokKeys({ ...byokKeys, openrouter: e.target.value })}
+                  placeholder="sk-or-v1-..."
+                  className="w-full bg-slate-950 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-300 ml-1">Gemini API Key</label>
+                <input
+                  type="password"
+                  value={byokKeys.gemini}
+                  onChange={(e) => setByokKeys({ ...byokKeys, gemini: e.target.value })}
+                  placeholder="AIzaSy..."
+                  className="w-full bg-slate-950 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
+                />
+              </div>
+
+              <div className="pt-4 flex gap-3">
+                <button
+                  onClick={() => setIsSettingsModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-700/50 text-slate-300 hover:bg-slate-800 transition-all text-sm font-medium"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={saveByokKeys}
+                  className="flex-1 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-500/20 transition-all text-sm font-medium"
+                >
+                  Simpan Key
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
