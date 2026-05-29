@@ -223,11 +223,14 @@ serve(async (req) => {
         return new Response(stream, { headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' } });
       }
 
+      const safeMeta = { ...metaData };
+      if (safeMeta.subagentRuns) safeMeta.subagentRuns = safeMeta.subagentRuns.map((r: any) => ({ ...r, output: '[Omitted]' }));
+      
       return new Response(res.body, {
         headers: {
           ...corsHeaders,
           'Content-Type': 'text/event-stream',
-          'X-Agent-Metadata': JSON.stringify(metaData)
+          'X-Agent-Metadata': btoa(encodeURIComponent(JSON.stringify(safeMeta)))
         }
       });
     };
@@ -461,11 +464,17 @@ serve(async (req) => {
           }
         });
 
+        // Sanitize metadata to avoid header limits and invalid ByteString errors (emojis)
+        const safeMeta = { ...metaData };
+        if (safeMeta.subagentRuns) {
+          safeMeta.subagentRuns = safeMeta.subagentRuns.map((r: any) => ({ ...r, output: '[Omitted to save header space]' }));
+        }
+        
         return new Response(res.body?.pipeThrough(transformStream), {
           headers: {
             ...corsHeaders,
             'Content-Type': 'text/event-stream',
-            'X-Agent-Metadata': JSON.stringify(metaData)
+            'X-Agent-Metadata': btoa(encodeURIComponent(JSON.stringify(safeMeta)))
           }
         });
       } catch (err: any) {

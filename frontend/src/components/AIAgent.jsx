@@ -669,7 +669,14 @@ export default function AIAgent() {
 
       if (response.headers.get('Content-Type')?.includes('text/event-stream')) {
         const metadataHeader = response.headers.get('X-Agent-Metadata');
-        const meta = metadataHeader ? JSON.parse(metadataHeader) : {};
+        let meta = {};
+        if (metadataHeader) {
+          try {
+            meta = JSON.parse(decodeURIComponent(atob(metadataHeader)));
+          } catch (e) {
+            meta = JSON.parse(metadataHeader); // Fallback for old unencoded format just in case
+          }
+        }
         
         const agentMessage = {
           id: Date.now() + 1,
