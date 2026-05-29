@@ -1729,7 +1729,7 @@ export default function AIAgent() {
                         </div>
                         <button 
                           onClick={() => handleDeleteRagDocument(doc.id)}
-                          className="text-slate-500 hover:text-red-400 p-1.5 rounded-md hover:bg-slate-700/50 opacity-0 group-hover:opacity-100 transition-all"
+                          className="text-slate-500 hover:text-red-400 p-1.5 rounded-md hover:bg-slate-700/50 transition-all"
                           title="Hapus Dokumen"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
