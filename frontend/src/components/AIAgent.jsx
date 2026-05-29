@@ -38,7 +38,7 @@ const Mermaid = ({ chart }) => {
 const MessageContent = ({ text }) => {
   if (!text) return null;
   return (
-    <div className="prose prose-invert prose-purple max-w-none text-sm leading-relaxed prose-pre:bg-slate-950/80 prose-pre:border prose-pre:border-purple-500/20 prose-code:text-purple-300 prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline prose-td:border-purple-500/20 prose-th:border-purple-500/20 prose-tr:border-purple-500/20">
+    <div className="prose prose-sm prose-invert prose-purple max-w-none leading-normal prose-pre:bg-slate-950/80 prose-pre:border prose-pre:border-purple-500/20 prose-code:text-purple-300 prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline prose-td:border-purple-500/20 prose-th:border-purple-500/20 prose-tr:border-purple-500/20">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -1019,11 +1019,11 @@ export default function AIAgent() {
                     className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-4 duration-500`}
                   >
                     <div
-                      className={`max-w-[85%] md:max-w-2xl ${
+                      className={`max-w-[95%] md:max-w-xl ${
                         message.type === 'user'
-                          ? 'bg-gradient-to-r from-purple-600 to-blue-600 rounded-3xl rounded-tr-lg'
-                          : 'bg-slate-800/50 backdrop-blur rounded-3xl rounded-tl-lg border border-purple-500/30'
-                      } px-4 md:px-6 py-3 md:py-4`}
+                          ? 'bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl rounded-tr-sm'
+                          : 'bg-slate-800/50 backdrop-blur rounded-2xl rounded-tl-sm border border-purple-500/30'
+                      } px-3 md:px-5 py-2.5 md:py-3.5`}
                     >
                       {message.type === 'agent' && currentlyTypingId === message.id && !message.isStreaming
                         ? <TypewriterText text={message.content} onComplete={() => setCurrentlyTypingId(null)} />
