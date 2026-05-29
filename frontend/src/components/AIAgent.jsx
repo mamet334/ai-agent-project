@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe, Clock } from 'lucide-react';
+import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe, Clock, Copy, Check } from 'lucide-react';
 import { supabase } from '../supabase';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -35,10 +35,30 @@ const Mermaid = ({ chart }) => {
   return <div ref={chartRef} className="mermaid flex justify-center my-6 bg-slate-900/60 p-6 rounded-xl border border-purple-500/20 w-full overflow-x-auto shadow-inner shadow-black/50" />;
 };
 
+const CopyButton = ({ text }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700/50 hover:border-slate-600 transition-all z-10"
+      title="Copy message"
+    >
+      {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+    </button>
+  );
+};
+
 const MessageContent = ({ text }) => {
   if (!text) return null;
   return (
-    <div className="prose prose-sm prose-invert prose-purple max-w-none leading-normal prose-pre:bg-slate-950/80 prose-pre:border prose-pre:border-purple-500/20 prose-code:text-purple-300 prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline prose-td:border-purple-500/20 prose-th:border-purple-500/20 prose-tr:border-purple-500/20">
+    <div className="relative group prose prose-sm prose-invert prose-purple max-w-none leading-normal prose-pre:bg-slate-950/80 prose-pre:border prose-pre:border-purple-500/20 prose-code:text-purple-300 prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline prose-td:border-purple-500/20 prose-th:border-purple-500/20 prose-tr:border-purple-500/20">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -1019,23 +1039,28 @@ export default function AIAgent() {
                     className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-4 duration-500`}
                   >
                     <div
-                      className={`max-w-[95%] md:max-w-xl ${
+                      className={`relative max-w-[95%] md:max-w-xl ${
                         message.type === 'user'
                           ? 'bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl rounded-tr-sm'
-                          : 'bg-slate-800/50 backdrop-blur rounded-2xl rounded-tl-sm border border-purple-500/30'
+                          : 'bg-slate-800/50 backdrop-blur rounded-2xl rounded-tl-sm border border-purple-500/30 pb-10'
                       } px-3 md:px-5 py-2.5 md:py-3.5`}
                     >
                       {message.type === 'agent' && currentlyTypingId === message.id && !message.isStreaming
                         ? <TypewriterText text={message.content} onComplete={() => setCurrentlyTypingId(null)} />
                         : <MessageContent text={message.content || (message.isStreaming ? ' ▍' : '')} />
                       }
+                      
+                      {message.type === 'agent' && !message.isStreaming && message.content && (
+                        <CopyButton text={message.content} />
+                      )}
+
                       {message.response && (
                         <div className="mt-3 p-3 bg-slate-900/50 rounded-lg text-xs text-slate-300 border border-slate-700/50">
                           {message.response}
                         </div>
                       )}
                       {message.tools && message.tools.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-3">
+                        <div className="flex flex-wrap gap-2 mt-3 mb-2">
                           {message.tools.map(tool => (
                             <span
                               key={tool}
