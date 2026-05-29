@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe, Clock, Copy, Check, BrainCircuit } from 'lucide-react';
+import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe, Clock, Copy, Check, BrainCircuit, Trash2 } from 'lucide-react';
 import { supabase } from '../supabase';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import mammoth from 'mammoth';
@@ -425,6 +425,12 @@ export default function AIAgent() {
   const handleDeleteCron = async (id) => {
     await supabase.from('scheduled_tasks').delete().eq('id', id);
     setScheduledTasks(prev => prev.filter(t => t.id !== id));
+  };
+
+  const handleDeleteRagDocument = async (id) => {
+    // Delete from Supabase. Due to ON DELETE CASCADE, document_chunks will also be deleted automatically.
+    await supabase.from('documents').delete().eq('id', id);
+    setKnowledgeBase(prev => prev.filter(doc => doc.id !== id));
   };
 
   const handleRagUpload = async (e) => {
@@ -1716,9 +1722,18 @@ export default function AIAgent() {
                   <h4 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">Dokumen Tersimpan:</h4>
                   <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
                     {knowledgeBase.map(doc => (
-                      <div key={doc.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-800/50 border border-slate-700/50">
-                        <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span className="text-sm text-slate-300 truncate">{doc.title}</span>
+                      <div key={doc.id} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/50 border border-slate-700/50 hover:border-slate-600 transition-colors group">
+                        <div className="flex items-center gap-3 overflow-hidden">
+                          <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <span className="text-sm text-slate-300 truncate" title={doc.title}>{doc.title}</span>
+                        </div>
+                        <button 
+                          onClick={() => handleDeleteRagDocument(doc.id)}
+                          className="text-slate-500 hover:text-red-400 p-1.5 rounded-md hover:bg-slate-700/50 opacity-0 group-hover:opacity-100 transition-all"
+                          title="Hapus Dokumen"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     ))}
                   </div>
