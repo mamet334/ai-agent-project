@@ -328,7 +328,13 @@ export default function AIAgent() {
     setAuthError('');
     const { error } = isLoginMode 
       ? await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword })
-      : await supabase.auth.signUp({ email: authEmail, password: authPassword });
+      : await supabase.auth.signUp({ 
+          email: authEmail, 
+          password: authPassword,
+          options: {
+            emailRedirectTo: window.location.origin
+          }
+        });
     if (error) setAuthError(error.message);
     else { setAuthEmail(''); setAuthPassword(''); }
     setAuthLoading(false);
