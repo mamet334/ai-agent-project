@@ -8,15 +8,14 @@ export default {
       const urlMatch = task.match(/(https?:\/\/[^\s]+)/g) || accumulatedContext.match(/(https?:\/\/[^\s]+)/g);
       const urlToScrape = urlMatch ? urlMatch[0] : null;
       if (urlToScrape) {
-        const scrapeRes = await fetch(urlToScrape);
-        const html = await scrapeRes.text();
-        const $ = cheerio.load(html);
-        $('script, style, nav, footer, header').remove();
-        const text = $('body').text().replace(/\s+/g, ' ').trim();
+        // Upgrade: Menggunakan Jina AI (r.jina.ai) untuk menembus JS/CAPTCHA/Cloudflare dasar
+        const scrapeRes = await fetch(`https://r.jina.ai/${urlToScrape}`);
+        const markdown = await scrapeRes.text();
+        
         return {
-          output: `Isi konten dari ${urlToScrape}:\n\n${text.substring(0, 10000)}`,
-          sources: [{ title: $('title').text() || 'Scraped Page', uri: urlToScrape }],
-          toolExecution: { name: 'web_scraper', args: { url: urlToScrape } }
+          output: `Isi konten dari ${urlToScrape}:\n\n${markdown.substring(0, 15000)}`,
+          sources: [{ title: 'Web Scraped Page', uri: urlToScrape }],
+          toolExecution: { name: 'web_scraper', args: { url: urlToScrape, bypass_active: true } }
         };
       } else {
         return { output: "Gagal memproses URL: URL tidak ditemukan." };
