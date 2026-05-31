@@ -9,6 +9,7 @@
 5. PWA (Bisa diinstal di HP/Desktop)
 6. Vector RAG (Embedding PDF/Excel/Word raksasa)
 7. True Code Sandbox (Eksekusi kode via Piston Coder Plugin)
+8. Autonomous Agent (Cron) 100% Operational & Realtime Push (Bypass Kong JWT)
 
 ## 🚀 ROADMAP TERSISA
 1. Voice Interaction (Suara AI)
