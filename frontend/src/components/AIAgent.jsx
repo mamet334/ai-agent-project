@@ -999,7 +999,7 @@ export default function AIAgent() {
                 Riwayat Chat
               </h3>
               <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
-                {conversations.map(conv => (
+                {conversations.filter(c => !c.title.startsWith('[AUTO]')).map(conv => (
                   <div key={conv.id} className="relative group flex items-center">
                     <button
                       onClick={() => {
@@ -1032,6 +1032,48 @@ export default function AIAgent() {
                 ))}
               </div>
             </div>
+
+            {/* Auto Reports Section */}
+            {conversations.some(c => c.title.startsWith('[AUTO]')) && (
+              <div className="pt-4 border-t border-slate-700/50">
+                <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Zap className="w-4 h-4" /> Laporan Otomatis
+                </h3>
+                <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                  {conversations.filter(c => c.title.startsWith('[AUTO]')).map(conv => (
+                    <div key={conv.id} className="relative group flex items-center">
+                      <button
+                        onClick={() => {
+                          setCurrentConversationId(conv.id);
+                          setSidebarOpen(false);
+                          setActiveView('chat');
+                        }}
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-sm transition-all truncate pr-8 ${
+                          conv.id === currentConversationId
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-medium'
+                            : 'text-slate-400 hover:bg-slate-800/40 hover:text-slate-200'
+                        }`}
+                      >
+                        <Clock className="w-4 h-4 shrink-0 text-emerald-400" />
+                        <span className="truncate">{conv.title.replace('[AUTO] ', '')}</span>
+                      </button>
+                      {conversations.length > 1 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteConversation(conv.id);
+                          }}
+                          className="absolute right-2 text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded"
+                          title="Hapus percakapan"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Global Memory Section */}
             <div className="border-t border-purple-500/20 pt-4 mb-4">
