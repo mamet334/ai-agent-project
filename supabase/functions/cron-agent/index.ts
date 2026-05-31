@@ -51,13 +51,15 @@ serve(async (req) => {
         console.log(`Executing task ${task.id} for user ${task.user_id}`);
         
         // Panggil agent-process
-        // Panggil agent-process menggunakan ANON KEY yang otomatis diinjeksi oleh Supabase
-        const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || SUPABASE_SERVICE_ROLE_KEY;
+        // Panggil agent-process menggunakan ANON KEY yang di-hardcode untuk menghindari Invalid JWT dari Kong Gateway
+        const FALLBACK_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV1eXpkamlmaGRmeXl2cHhzb2Z1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2NjMyODUsImV4cCI6MjA5NTIzOTI4NX0.atDqwfpg_uwFI0nZuKQNxebCYh1KC7tdkSooC52m4YQ';
+        const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || FALLBACK_ANON;
+        
         const agentResponse = await fetch(`${SUPABASE_URL}/functions/v1/agent-process`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+            'Authorization': `Bearer ${FALLBACK_ANON}`
           },
           body: JSON.stringify({
             message: `[AUTOMATED TASK: ${task.title}]\n${task.prompt}`,
