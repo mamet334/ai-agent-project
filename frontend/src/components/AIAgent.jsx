@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe, Clock, Copy, Check, BrainCircuit, Trash2 } from 'lucide-react';
+import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe, Clock, Copy, Check, BrainCircuit, Trash2, Edit2 } from 'lucide-react';
 import { supabase } from '../supabase';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import mammoth from 'mammoth';
@@ -196,7 +196,7 @@ export default function AIAgent() {
   // Cron State
   const [scheduledTasks, setScheduledTasks] = useState([]);
   const [isCronModalOpen, setIsCronModalOpen] = useState(false);
-  const [cronForm, setCronForm] = useState({ title: '', prompt: '', interval_hours: 24 });
+  const [cronForm, setCronForm] = useState({ id: null, title: '', prompt: '', interval_hours: 24 });
   const [cronLoading, setCronLoading] = useState(false);
   const [activeView, setActiveView] = useState('chat'); // 'chat' | 'cron'
 
@@ -406,20 +406,46 @@ export default function AIAgent() {
     e.preventDefault();
     if (!cronForm.title || !cronForm.prompt) return;
     setCronLoading(true);
-    const { data, error } = await supabase.from('scheduled_tasks').insert([{
-      user_id: user.id,
-      title: cronForm.title,
-      prompt: cronForm.prompt,
-      interval_hours: parseInt(cronForm.interval_hours),
-      tools: selectedTools
-    }]).select();
     
-    if (data) {
-      setScheduledTasks(prev => [data[0], ...prev]);
-      setIsCronModalOpen(false);
-      setCronForm({ title: '', prompt: '', interval_hours: 24 });
+    if (cronForm.id) {
+      // Update
+      const { data, error } = await supabase.from('scheduled_tasks').update({
+        title: cronForm.title,
+        prompt: cronForm.prompt,
+        interval_hours: parseInt(cronForm.interval_hours)
+      }).eq('id', cronForm.id).select();
+      
+      if (data) {
+        setScheduledTasks(prev => prev.map(t => t.id === cronForm.id ? data[0] : t));
+      }
+    } else {
+      // Insert
+      const { data, error } = await supabase.from('scheduled_tasks').insert([{
+        user_id: user.id,
+        title: cronForm.title,
+        prompt: cronForm.prompt,
+        interval_hours: parseInt(cronForm.interval_hours),
+        tools: selectedTools
+      }]).select();
+      
+      if (data) {
+        setScheduledTasks(prev => [data[0], ...prev]);
+      }
     }
+    
+    setIsCronModalOpen(false);
+    setCronForm({ id: null, title: '', prompt: '', interval_hours: 24 });
     setCronLoading(false);
+  };
+
+  const handleEditCronClick = (task) => {
+    setCronForm({
+      id: task.id,
+      title: task.title,
+      prompt: task.prompt,
+      interval_hours: task.interval_hours
+    });
+    setIsCronModalOpen(true);
   };
 
   const handleDeleteCron = async (id) => {
@@ -1221,7 +1247,14 @@ export default function AIAgent() {
                                 Setiap {task.interval_hours} Jam
                               </span>
                             </td>
-                            <td className="p-4 text-right">
+                            <td className="p-4 text-right flex justify-end gap-2">
+                              <button 
+                                onClick={() => handleEditCronClick(task)}
+                                className="p-2 text-blue-400 hover:text-white hover:bg-blue-500/20 rounded-lg transition-colors border border-transparent hover:border-blue-500/30"
+                                title="Edit Tugas"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
                               <button 
                                 onClick={() => handleDeleteCron(task.id)}
                                 className="p-2 text-red-400 hover:text-white hover:bg-red-500/20 rounded-lg transition-colors border border-transparent hover:border-red-500/30"
@@ -1515,7 +1548,7 @@ export default function AIAgent() {
             <div className="p-4 border-b border-purple-500/20 flex justify-between items-center bg-slate-800/50">
               <h2 className="text-sm font-bold text-slate-200 flex items-center gap-2">
                 <Clock className="w-4 h-4 text-emerald-400" />
-                Tambah Jadwal Agen (Cron)
+                {cronForm.id ? 'Edit Jadwal Agen (Cron)' : 'Tambah Jadwal Agen (Cron)'}
               </h2>
               <button onClick={() => setIsCronModalOpen(false)} className="text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />

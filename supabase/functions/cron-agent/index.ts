@@ -75,12 +75,12 @@ serve(async (req) => {
           user_id: task.user_id,
           title: `[AUTO] ${task.title} - ${new Date().toLocaleDateString('id-ID')}`,
           messages: [
-            { id: Date.now(), type: 'user', content: `[Tugas Otomatis]: ${task.prompt}` },
-            { id: Date.now() + 1, type: 'bot', content: aiMessageText }
+            { id: Date.now(), type: 'user', content: `[Tugas Otomatis]: ${task.prompt}`, timestamp: new Date().toISOString() },
+            { id: Date.now() + 1, type: 'agent', content: aiMessageText, timestamp: new Date().toISOString() }
           ]
         };
 
-        const { error: insertError } = await supabase.from('conversations').insert(newConversation);
+        const { error: insertError } = await supabase.from('chats').insert(newConversation);
         if (insertError) console.error('Error saving conversation:', insertError);
 
         // Update waktu terakhir jalan

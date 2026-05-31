@@ -50,6 +50,14 @@ serve(async (req) => {
   try {
     let { message, tools, model, userId, userName, file, history, globalMemory, stream } = await req.json();
 
+    const logAgentEvent = async (eventType: string, provider: string, logMessage: string) => {
+      try {
+        const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+        await supClient.from('agent_logs').insert([{ user_id: userId || null, event_type: eventType, provider, message: logMessage }]);
+      } catch (e) { console.error("Log error failed:", e); }
+    };
+
+
     // --- MAMET HEALER (TERAPIS PIKIRAN) ---
     if (history && history.length > 15) {
       console.log("Mamet Healer: Melakukan Memory Sweeping...");
@@ -210,6 +218,7 @@ serve(async (req) => {
         // --- MAMET HEALER (PENYEMBUH KOMA / AUTO-FALLBACK) ---
         if (GROQ_API_KEY) {
           console.log("Mamet Healer: Memutar rute ke Groq (Fallback)...");
+          await logAgentEvent('FALLBACK_TRIGGERED', 'OpenAI', `Stream Error: ${errText.substring(0, 200)}`);
           return streamGroqResponse(promptText, systemPromptText + "\n\n(Catatan: Anda sedang menggunakan otak cadangan Groq karena OpenAI mengalami gangguan/limit)", chatHistory, metaData);
         }
 
@@ -299,6 +308,7 @@ serve(async (req) => {
         // --- MAMET HEALER (PENYEMBUH KOMA / AUTO-FALLBACK) ---
         if (GROQ_API_KEY) {
           console.log("Mamet Healer: Memutar rute ke Groq (Fallback)...");
+          await logAgentEvent('FALLBACK_TRIGGERED', 'OpenRouter', `Stream Error: ${errText.substring(0, 200)}`);
           return streamGroqResponse(promptText, systemPromptText + "\n\n(Catatan: Anda sedang menggunakan otak cadangan Groq karena OpenRouter mengalami gangguan/limit)", chatHistory, metaData);
         }
 
@@ -398,6 +408,42 @@ serve(async (req) => {
       }
       const data = await res.json();
       return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    };
+
+    // --- OTAK KHUSUS KEPALA AGENT (HEMAT KUOTA) ---
+    // Fungsi ini khusus untuk si Mamet (Orchestrator) merutekan sub-agent dan parsing JSON.
+    // Kita paksa pakai Groq (cepat & gratis) atau Gemini Flash agar tidak memakan kuota model mahal (OpenAI/DeepSeek).
+    const runCoordinatorLLM = async (promptText: string, systemPromptText = '') => {
+      // 1. Prioritas Utama: Groq (Llama) karena sangat cepat untuk JSON parsing
+      if (GROQ_API_KEY) {
+        try {
+          console.log("Mamet Kepala Agent: Berpikir menggunakan otak Groq (Hemat Kuota)...");
+          return await callGroq(promptText, systemPromptText, []); 
+        } catch(e) { console.warn('Coordinator Groq failed:', e); }
+      }
+      
+      // 2. Prioritas Kedua: Gemini Flash
+      if (GEMINI_API_KEY) {
+        try {
+          console.log("Mamet Kepala Agent: Berpikir menggunakan otak Gemini Flash (Hemat Kuota)...");
+          const payload: any = { contents: [{ role: 'user', parts: [{ text: promptText }] }] };
+          if (systemPromptText) payload.systemInstruction = { parts: [{ text: systemPromptText }] };
+          
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (res.ok) {
+            const data = await res.json();
+            return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          }
+        } catch(e) { console.warn('Coordinator Gemini failed:', e); }
+      }
+
+      // 3. Fallback ke LLM pilihan user jika yang gratis mati semua
+      console.log("Mamet Kepala Agent: Terpaksa menggunakan otak utama karena otak gratis sedang gangguan.");
+      return await runLLM(promptText, systemPromptText, []);
     };
 
     let replyMessage = 'Gagal memproses jawaban dari AI.';
@@ -554,7 +600,7 @@ Contoh Output Wajib: [{"subagent": "youtube_analyst", "task": "Ekstrak teks dari
       let planText = '[]';
       let plan: any[] = [];
       try {
-        planText = await runLLM(`Permintaan User: "${finalMessage}"`, coordinatorSystemPrompt);
+        planText = await runCoordinatorLLM(`Permintaan User: "${finalMessage}"`, coordinatorSystemPrompt);
         planText = planText.replace(/```json/g, '').replace(/```/g, '').trim();
         plan = JSON.parse(planText);
       } catch (err) {
