@@ -107,7 +107,7 @@ serve(async (req) => {
       throw new Error('GEMINI_API_KEY is not set');
     }
 
-    const streamGroqResponse = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], metaData: any = {}) => {
+    const streamGroqResponse = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], metaData: any = {}, fallbackSource = '') => {
       const messages = [];
       if (systemPromptText) messages.push({ role: 'system', content: systemPromptText });
       if (chatHistory && chatHistory.length > 0) {
@@ -134,9 +134,10 @@ serve(async (req) => {
       if (!res.ok) {
         const errText = await res.text();
         console.error("Groq Stream Error:", errText);
+        const fallbackNote = fallbackSource ? `\n\n*(Catatan Mamet Healer: Groq ikut meledak saat mencoba menjadi otak cadangan untuk ${fallbackSource} yang sebelumnya gagal.)*` : '';
         const stream = new ReadableStream({
           start(controller) {
-            const data = JSON.stringify({ choices: [{ delta: { content: `\n\n**Groq API Error**: ${errText}` } }] });
+            const data = JSON.stringify({ choices: [{ delta: { content: `\n\n**Groq API Error**: ${errText}${fallbackNote}` } }] });
             controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
             controller.close();
           }
@@ -219,7 +220,7 @@ serve(async (req) => {
         if (GROQ_API_KEY) {
           console.log("Mamet Healer: Memutar rute ke Groq (Fallback)...");
           await logAgentEvent('FALLBACK_TRIGGERED', 'OpenAI', `Stream Error: ${errText.substring(0, 200)}`);
-          return streamGroqResponse(promptText, systemPromptText + "\n\n(Catatan: Anda sedang menggunakan otak cadangan Groq karena OpenAI mengalami gangguan/limit)", chatHistory, metaData);
+          return streamGroqResponse(promptText, systemPromptText + "\n\n(Catatan: Anda sedang menggunakan otak cadangan Groq karena OpenAI mengalami gangguan/limit)", chatHistory, metaData, 'OpenAI');
         }
 
         const stream = new ReadableStream({
@@ -309,7 +310,7 @@ serve(async (req) => {
         if (GROQ_API_KEY) {
           console.log("Mamet Healer: Memutar rute ke Groq (Fallback)...");
           await logAgentEvent('FALLBACK_TRIGGERED', 'OpenRouter', `Stream Error: ${errText.substring(0, 200)}`);
-          return streamGroqResponse(promptText, systemPromptText + "\n\n(Catatan: Anda sedang menggunakan otak cadangan Groq karena OpenRouter mengalami gangguan/limit)", chatHistory, metaData);
+          return streamGroqResponse(promptText, systemPromptText + "\n\n(Catatan: Anda sedang menggunakan otak cadangan Groq karena OpenRouter mengalami gangguan/limit)", chatHistory, metaData, 'OpenRouter');
         }
 
         const stream = new ReadableStream({
