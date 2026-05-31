@@ -41,7 +41,28 @@ export default {
           };
         }
 
-        cleanedText = transcriptText.replace(/\[.*?\]/g, ' ').substring(0, 30000);
+        const rawText = transcriptText.replace(/\[.*?\]/g, ' ');
+        const taskLower = task.toLowerCase();
+        
+        // Mode Pintar: Potong teks berdasarkan instruksi untuk mengakali limit token (TPM)
+        if (taskLower.includes('depan') || taskLower.includes('awal')) {
+          cleanedText = rawText.substring(0, 12000);
+        } else if (taskLower.includes('tengah')) {
+          const start = Math.max(0, Math.floor(rawText.length / 2) - 6000);
+          cleanedText = rawText.substring(start, start + 12000);
+        } else if (taskLower.includes('akhir')) {
+          const start = Math.max(0, rawText.length - 12000);
+          cleanedText = rawText.substring(start);
+        } else if (taskLower.includes('seluruhnya') || taskLower.includes('semua')) {
+          cleanedText = rawText.substring(0, 30000); // Mode nekat (bisa kena limit)
+        } else {
+          // Default: Intisari (5000 depan + 5000 belakang) -> Total 10.000 karakter (~2000 token, dijamin aman dari limit Groq/OpenRouter)
+          if (rawText.length > 12000) {
+            cleanedText = rawText.substring(0, 6000) + "\n\n... [BAGIAN TENGAH DIPOTONG OTOMATIS OLEH MAMET UNTUK MENGHEMAT KUOTA] ...\n\n" + rawText.substring(rawText.length - 6000);
+          } else {
+            cleanedText = rawText;
+          }
+        }
       }
 
       // 3. Masukkan teks kotor ke "Pipeline" LLM untuk disaring & dirangkum
