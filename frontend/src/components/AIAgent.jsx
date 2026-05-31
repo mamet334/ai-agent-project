@@ -294,6 +294,31 @@ export default function AIAgent() {
       fetchChats();
       fetchCron();
       fetchKnowledgeBase();
+
+      // Fitur Realtime: Mendengarkan perubahan (INSERT/UPDATE) pada tabel chats secara live
+      const channel = supabase.channel('realtime_chats')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'chats', filter: `user_id=eq.${user.id}` },
+          (payload) => {
+            const newChat = {
+              ...payload.new,
+              messages: (payload.new.messages || []).map(m => ({
+                ...m,
+                timestamp: new Date(m.timestamp)
+              }))
+            };
+            setConversations(prev => {
+              if (prev.some(c => c.id === newChat.id)) return prev;
+              return [newChat, ...prev].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+            });
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [user]);
 
