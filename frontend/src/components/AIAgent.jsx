@@ -435,7 +435,8 @@ export default function AIAgent() {
       const { data, error } = await supabase.from('scheduled_tasks').update({
         title: cronForm.title,
         prompt: cronForm.prompt,
-        interval_hours: parseInt(cronForm.interval_hours)
+        interval_hours: parseInt(cronForm.interval_hours),
+        last_run_at: null // Reset waktu jalan agar otomatis dieksekusi langsung
       }).eq('id', cronForm.id).select();
       
       if (data) {
