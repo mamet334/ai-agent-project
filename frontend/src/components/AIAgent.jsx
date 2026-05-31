@@ -370,6 +370,7 @@ export default function AIAgent() {
     setConversations(prev => [newConv, ...prev]);
     setCurrentConversationId(newId);
     setSidebarOpen(false);
+    setActiveView('chat');
   };
 
   const handleDeleteConversation = async (id) => {
@@ -1002,6 +1003,7 @@ export default function AIAgent() {
                       onClick={() => {
                         setCurrentConversationId(conv.id);
                         setSidebarOpen(false);
+                        setActiveView('chat');
                       }}
                       className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-sm transition-all truncate pr-8 ${
                         conv.id === currentConversationId
