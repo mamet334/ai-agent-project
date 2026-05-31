@@ -1,14 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe, Clock, Copy, Check, BrainCircuit, Trash2, Edit2 } from 'lucide-react';
 import { supabase } from '../supabase';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
-import mammoth from 'mammoth';
-import * as XLSX from 'xlsx';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, CartesianGrid, Legend } from 'recharts';
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+// Lazy loaded imports for heavy libraries
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, CartesianGrid, Legend } from 'recharts';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import mermaid from 'mermaid';
@@ -472,6 +469,8 @@ export default function AIAgent() {
       
       if (ragFile.type === 'application/pdf') {
         setRagStatus('Membaca file PDF...');
+        const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
         const arrayBuffer = await ragFile.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         for (let i = 1; i <= pdf.numPages; i++) {
@@ -481,11 +480,13 @@ export default function AIAgent() {
         }
       } else if (ragFile.name.toLowerCase().endsWith('.docx')) {
         setRagStatus('Membaca file Word (.docx)...');
+        const mammoth = await import('mammoth');
         const arrayBuffer = await ragFile.arrayBuffer();
         const result = await mammoth.extractRawText({ arrayBuffer });
         extractedText = result.value;
       } else if (ragFile.name.toLowerCase().endsWith('.xlsx') || ragFile.name.toLowerCase().endsWith('.xls')) {
         setRagStatus('Membaca file Excel...');
+        const XLSX = await import('xlsx');
         const arrayBuffer = await ragFile.arrayBuffer();
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         workbook.SheetNames.forEach(sheetName => {
@@ -606,8 +607,9 @@ export default function AIAgent() {
             img.src = URL.createObjectURL(currentFile);
           } else if (currentFile.name.toLowerCase().endsWith('.xlsx') || currentFile.name.toLowerCase().endsWith('.xls')) {
             // Secretly convert Excel to CSV on the fly!
-            currentFile.arrayBuffer().then(arrayBuffer => {
+            currentFile.arrayBuffer().then(async arrayBuffer => {
               try {
+                const XLSX = await import('xlsx');
                 const workbook = XLSX.read(arrayBuffer, { type: 'array' });
                 let text = '';
                 workbook.SheetNames.forEach(sheetName => {
