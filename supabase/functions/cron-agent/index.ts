@@ -51,11 +51,13 @@ serve(async (req) => {
         console.log(`Executing task ${task.id} for user ${task.user_id}`);
         
         // Panggil agent-process
+        // Panggil agent-process menggunakan ANON KEY yang otomatis diinjeksi oleh Supabase
+        const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || SUPABASE_SERVICE_ROLE_KEY;
         const agentResponse = await fetch(`${SUPABASE_URL}/functions/v1/agent-process`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
           },
           body: JSON.stringify({
             message: `[AUTOMATED TASK: ${task.title}]\n${task.prompt}`,
