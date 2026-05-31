@@ -72,7 +72,9 @@ serve(async (req) => {
         });
 
         const agentData = await agentResponse.json();
-        const aiMessageText = agentData.message || 'Gagal mengeksekusi agen.';
+        
+        // Ambil pesan asli atau pesan error jika terjadi kegagalan dari LLM
+        const aiMessageText = agentData.message || (agentData.error ? `🚨 **Error dari AI:** ${agentData.error}` : 'Gagal mengeksekusi agen.');
 
         // Buat percakapan baru untuk user ini di tabel conversations
         const newConversation = {
