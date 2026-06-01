@@ -415,18 +415,10 @@ serve(async (req) => {
     // Fungsi ini khusus untuk si Mamet (Orchestrator) merutekan sub-agent dan parsing JSON.
     // Kita paksa pakai Groq (cepat & gratis) atau Gemini Flash agar tidak memakan kuota model mahal (OpenAI/DeepSeek).
     const runCoordinatorLLM = async (promptText: string, systemPromptText = '') => {
-      // 1. Prioritas Utama: Groq (Llama) karena sangat cepat untuk JSON parsing
-      if (GROQ_API_KEY) {
-        try {
-          console.log("Mamet Kepala Agent: Berpikir menggunakan otak Groq (Hemat Kuota)...");
-          return await callGroq(promptText, systemPromptText, []); 
-        } catch(e) { console.warn('Coordinator Groq failed:', e); }
-      }
-      
-      // 2. Prioritas Kedua: Gemini Flash
+      // 1. Prioritas Utama: Gemini Flash (Sangat pintar parsing JSON, gratis, dan cepat)
       if (GEMINI_API_KEY) {
         try {
-          console.log("Mamet Kepala Agent: Berpikir menggunakan otak Gemini Flash (Hemat Kuota)...");
+          console.log("Mamet Kepala Agent: Berpikir menggunakan otak Gemini Flash (Hemat Kuota & Jago JSON)...");
           const payload: any = { contents: [{ role: 'user', parts: [{ text: promptText }] }] };
           if (systemPromptText) payload.systemInstruction = { parts: [{ text: systemPromptText }] };
           
@@ -440,6 +432,14 @@ serve(async (req) => {
             return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
           }
         } catch(e) { console.warn('Coordinator Gemini failed:', e); }
+      }
+      
+      // 2. Prioritas Kedua: Groq (Llama)
+      if (GROQ_API_KEY) {
+        try {
+          console.log("Mamet Kepala Agent: Berpikir menggunakan otak Groq (Cepat tapi rawan gagal JSON)...");
+          return await callGroq(promptText, systemPromptText, []); 
+        } catch(e) { console.warn('Coordinator Groq failed:', e); }
       }
 
       // 3. Fallback ke LLM pilihan user jika yang gratis mati semua
@@ -624,15 +624,23 @@ DILARANG KERAS MENGGUNAKAN PYTHON ATAU "TOOL_CODE". JANGAN PERNAH MENULISKAN KOD
     if (tools && tools.length > 0) {
       // --- INTENT ROUTER (Pemotong Kompas Cerdas) ---
       let isChatBiasa = false;
-      try {
-        const intentCheckPrompt = `Apakah pesan berikut adalah obrolan santai, sapaan, ucapan terima kasih, atau obrolan ringan yang TIDAK memerlukan penggunaan fitur tambahan seperti pencarian internet/koding/analisis eksternal? Pesan: "${finalMessage}". Jawab HANYA dengan kata "CHAT_BIASA" jika ya, atau "BUTUH_AGENT" jika tidak.`;
-        const intentResult = await runCoordinatorLLM(intentCheckPrompt, "Anda adalah router intent super ringan. Jawab singkat padat.");
-        if (intentResult.toUpperCase().includes("CHAT_BIASA")) {
-           isChatBiasa = true;
-           console.log("Intent Router: Ini chat biasa. Bypass logika Sub-Agent untuk menghemat waktu dan kuota.");
+      const lowerMessage = finalMessage.toLowerCase();
+      
+      // Deteksi instan (Hardcoded) untuk fitur yang sangat spesifik
+      if (lowerMessage.includes("jadwal") || lowerMessage.includes("cron") || lowerMessage.includes("otomatis")) {
+        isChatBiasa = false;
+        console.log("Intent Router: Mendeteksi kata kunci Cron/Jadwal. Bypass LLM check -> BUTUH_AGENT");
+      } else {
+        try {
+          const intentCheckPrompt = `Apakah pesan berikut adalah obrolan santai, sapaan, ucapan terima kasih, atau obrolan ringan yang TIDAK memerlukan penggunaan fitur tambahan (seperti pencarian internet/koding/analisis/penjadwalan)? Pesan: "${finalMessage}". \n\nPENTING: Jika pesan mengandung permintaan untuk membuat jadwal, cron, atau tugas otomatis, WAJIB jawab "BUTUH_AGENT".\nJawab HANYA dengan kata "CHAT_BIASA" jika murni obrolan, atau "BUTUH_AGENT" jika butuh aksi/tool.`;
+          const intentResult = await runCoordinatorLLM(intentCheckPrompt, "Anda adalah router intent super ringan. Jawab singkat padat.");
+          if (intentResult.toUpperCase().includes("CHAT_BIASA")) {
+             isChatBiasa = true;
+             console.log("Intent Router: Ini chat biasa. Bypass logika Sub-Agent untuk menghemat waktu dan kuota.");
+          }
+        } catch (err) {
+          console.warn("Intent router error, mengabaikan intent check:", err);
         }
-      } catch (err) {
-        console.warn("Intent router error, mengabaikan intent check:", err);
       }
 
       if (isChatBiasa) {
@@ -645,7 +653,8 @@ DILARANG KERAS MENGGUNAKAN PYTHON ATAU "TOOL_CODE". JANGAN PERNAH MENULISKAN KOD
         const coordinatorSystemPrompt = `Tugas Anda adalah menganalisis permintaan user dan memilih sub-agent yang tepat.${fullSystemContext}
 PENTING: Anda adalah mesin parsing JSON. Anda DILARANG KERAS merespons dengan kalimat atau teks biasa. 
 Anda WAJIB mengembalikan HANYA sebuah Array JSON murni. Jika tidak butuh sub-agent, kembalikan []. DILARANG KERAS BERKOMUNIKASI BIASA. DILARANG KERAS MENGGUNAKAN "TOOL_CODE" ATAU PYTHON. HANYA KELUARKAN JSON ARRAY!
-Contoh Output Wajib: [{"subagent": "youtube_analyst", "task": "Ekstrak teks dari link youtube ini"}]`;
+Jika user meminta penjadwalan, tugas berulang, atau otomatisasi, Anda WAJIB memanggil sub-agent "cron_manager". DILARANG MENGARANG JADWAL SENDIRI.
+Contoh Output Wajib: [{"subagent": "cron_manager", "task": "Buat jadwal riset saham tiap 12 jam"}]`;
 
       let planText = '[]';
       let plan: any[] = [];
@@ -716,11 +725,11 @@ Contoh Output Wajib: [{"subagent": "youtube_analyst", "task": "Ekstrak teks dari
           });
           accumulatedContext += `--- Hasil Sub-Agent [${subagent.toUpperCase()}]: ---\nTugas: ${task}\nOutput: ${subagentResText}\n\n`;
           
-          // Penundaan 2 detik untuk menghindari API Rate Limit (Error 429) pada akun gratis
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          // Penundaan 1 detik untuk menghindari API Rate Limit (Error 429) pada akun gratis
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
 
-        const synthesisPrompt = `Anda telah menugaskan beberapa sub-agent.${fullSystemContext}\n\nPermintaan Awal User: "${finalMessage}"\n\nRiwayat pekerjaan sub-agent:\n${accumulatedContext}\n\nJAWABLAH pesan/pertanyaan user dengan ramah dan natural berdasarkan informasi dari sub-agent di atas. \n\nPENTING: \n- JANGAN gunakan format kaku seperti "Laporan Hasil Kerja". Bersikaplah seperti manusia biasa (asisten yang ramah bernama Mamet).\n- Langsung berikan jawaban, sapaan balik, atau solusi tanpa perlu panjang lebar menjelaskan proses sub-agent (kecuali user secara spesifik bertanya tentang prosesnya).\n- Jika Sub-Agent mengembalikan pesan ERROR atau GAGAL, sampaikan kepada user dengan sopan bahwa tugas tersebut gagal. Jangan pernah mengarang data palsu!\n- Gunakan format Tabel Markdown HANYA jika menyajikan data terstruktur, statistik, harga, atau perbandingan.\n- Jika user meminta diagram, flowchart, atau alur kerja, buatlah visualisasinya menggunakan blok \`\`\`mermaid\n(contoh diagram graph TD, sequenceDiagram, dll)\`\`\`.\nJANGAN ragu menggunakan gambar/diagram jika itu mempermudah penjelasan!`;
+        const synthesisPrompt = `Anda telah menugaskan beberapa sub-agent.${fullSystemContext}\n\nPermintaan Awal User: "${finalMessage}"\n\nRiwayat pekerjaan sub-agent:\n${accumulatedContext}\n\nJAWABLAH pesan/pertanyaan user dengan ramah dan natural berdasarkan informasi dari sub-agent di atas. \n\nPENTING: \n- JANGAN gunakan format kaku seperti "Laporan Hasil Kerja". Bersikaplah seperti manusia biasa (asisten yang ramah bernama Mamet).\n- Langsung berikan jawaban, sapaan balik, atau solusi tanpa perlu panjang lebar menjelaskan proses sub-agent (kecuali user secara spesifik bertanya tentang prosesnya).\n- Jika Sub-Agent mengembalikan pesan ERROR atau GAGAL, sampaikan kepada user dengan sopan bahwa tugas tersebut gagal. Jangan pernah mengarang data palsu!\n- Gunakan format Tabel Markdown HANYA jika menyajikan data terstruktur, statistik, harga, atau perbandingan.\n- DILARANG KERAS menggunakan blok \`\`\`mermaid\`\`\` KECUALI user secara tertulis meminta "buatkan diagram" atau "gambarkan flowchart". Jika user tidak meminta diagram, JANGAN pernah memakainya!`;
         
         if (stream && !extractedImage) {
           const streamRes = getStreamResponse(synthesisPrompt, '', history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns });

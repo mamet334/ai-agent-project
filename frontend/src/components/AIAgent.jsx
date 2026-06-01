@@ -856,10 +856,16 @@ export default function AIAgent() {
     ];
 
     try {
+      // Jika model adalah Kepala Agent (coordinator), otomatis inject semua tools
+      // agar logika sub-agent routing di backend tidak pernah ter-bypass
+      const effectiveTools = selectedModel === 'coordinator-agent'
+        ? ['web_search', 'deep_research', 'youtube_analyst', 'code_executor', 'api_caller', 'logika', 'bahasa', 'debate', 'cron_manager']
+        : selectedTools;
+
       const payload = {
         message: apiInput,
         file: filePayload,
-        tools: selectedTools,
+        tools: effectiveTools,
         model: selectedModel,
         userId: user?.id || 'anonymous',
         userName: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Teman',
@@ -1056,7 +1062,7 @@ export default function AIAgent() {
     );
   };
 
-  const availableTools = ['web_search', 'deep_research', 'youtube_analyst', 'code_executor', 'api_caller', 'slack_integration', 'logika', 'bahasa', 'debate'];
+  const availableTools = ['web_search', 'deep_research', 'youtube_analyst', 'code_executor', 'api_caller', 'slack_integration', 'logika', 'bahasa', 'debate', 'cron_manager'];
 
   if (!user) {
     return (
