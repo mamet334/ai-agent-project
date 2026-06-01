@@ -492,10 +492,14 @@ serve(async (req) => {
         }
 
         // Convert Gemini SSE format to OpenAI SSE format expected by frontend
+        let buffer = '';
         const transformStream = new TransformStream({
           transform(chunk, controller) {
             const text = new TextDecoder().decode(chunk);
-            const lines = text.split('\n');
+            buffer += text;
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            
             for (const line of lines) {
               if (line.startsWith('data: ')) {
                 try {
@@ -505,7 +509,9 @@ serve(async (req) => {
                     const openAiFormat = JSON.stringify({ choices: [{ delta: { content } }] });
                     controller.enqueue(new TextEncoder().encode(`data: ${openAiFormat}\n\n`));
                   }
-                } catch (e) {}
+                } catch (e) {
+                   console.error("Gemini parse error in Edge Function:", e.message);
+                }
               }
             }
           }
@@ -580,12 +586,35 @@ serve(async (req) => {
       }
     }
 
+    if (finalMessage.toLowerCase().includes('zip')) {
+      finalMessage += `\n\n[PERINTAH SANGAT PENTING DARI SISTEM]: User meminta file ZIP. Anda DILARANG menggunakan blok kode biasa seperti \`\`\`html. ANDA WAJIB MENGGUNAKAN format \`\`\`xml_zip. 
+Contoh Jawaban Anda yang BENAR:
+Baik, ini file zip-nya:
+\`\`\`xml_zip
+<filename>nama_file.zip</filename>
+<file name="index.html">
+<!-- isi html -->
+</file>
+\`\`\`
+Wajib ikuti struktur persis seperti contoh di atas!`;
+    }
+
     const agentIdentityPrompt = `\nIDENTITAS ANDA: Anda adalah "Mamet", asisten cerdas buatan yang merupakan hak paten dari aplikasi ini. Selalu perkenalkan diri Anda sebagai Mamet. JANGAN katakan Anda buatan Google atau OpenAI. Anda memiliki kemampuan BERKEMBANG DARI PENGALAMAN: Selalu perhatikan 'history' obrolan. Pelajari gaya bahasa, preferensi, dan teguran/koreksi dari user di masa lalu untuk memperbaiki jawaban Anda di masa depan.\n
 FITUR GRAFIK INTERAKTIF: Jika user meminta untuk membuat grafik (bar/pie/line chart) berdasarkan data, outputkan data tersebut DALAM BENTUK BLOK KODE seperti ini:
 \`\`\`json_chart
 { "title": "Judul Grafik", "type": "bar", "data": [{"name": "A", "value": 10}], "xKey": "name", "yKey": "value" }
 \`\`\`
 Pilih type "bar", "pie", atau "line" sesuai kebutuhan.
+FITUR ZIP GENERATOR: Jika user meminta Anda membuat file zip (project kodingan), outputkan data DALAM BENTUK BLOK KODE seperti ini (wajib persis):
+\`\`\`xml_zip
+<filename>nama_bebas.zip</filename>
+<file name="index.html">
+<h1>Halo</h1>
+</file>
+<file name="app.js">
+console.log('hi');
+</file>
+\`\`\`
 DILARANG KERAS MENGGUNAKAN PYTHON ATAU "TOOL_CODE". JANGAN PERNAH MENULISKAN KODE PYTHON UNTUK MENGEKSEKUSI TOOL. JAWABLAH DENGAN TEKS BIASA.
 \nAnda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika user menanyakan jumlah atau nama sub-agent Anda, sebutkan nama-nama di atas.`;
     const userContextPrompt = userName ? `\nInformasi Akun: User login dengan email/nama "${userName}". Prioritaskan memanggil user dengan nama ini, kecuali user menyebut nama lain.` : '';
@@ -593,7 +622,27 @@ DILARANG KERAS MENGGUNAKAN PYTHON ATAU "TOOL_CODE". JANGAN PERNAH MENULISKAN KOD
     const fullSystemContext = agentIdentityPrompt + userContextPrompt + memoryPrompt + ragContext;
 
     if (tools && tools.length > 0) {
-      const coordinatorSystemPrompt = `Tugas Anda adalah menganalisis permintaan user dan memilih sub-agent yang tepat.${fullSystemContext}
+      // --- INTENT ROUTER (Pemotong Kompas Cerdas) ---
+      let isChatBiasa = false;
+      try {
+        const intentCheckPrompt = `Apakah pesan berikut adalah obrolan santai, sapaan, ucapan terima kasih, atau obrolan ringan yang TIDAK memerlukan penggunaan fitur tambahan seperti pencarian internet/koding/analisis eksternal? Pesan: "${finalMessage}". Jawab HANYA dengan kata "CHAT_BIASA" jika ya, atau "BUTUH_AGENT" jika tidak.`;
+        const intentResult = await runCoordinatorLLM(intentCheckPrompt, "Anda adalah router intent super ringan. Jawab singkat padat.");
+        if (intentResult.toUpperCase().includes("CHAT_BIASA")) {
+           isChatBiasa = true;
+           console.log("Intent Router: Ini chat biasa. Bypass logika Sub-Agent untuk menghemat waktu dan kuota.");
+        }
+      } catch (err) {
+        console.warn("Intent router error, mengabaikan intent check:", err);
+      }
+
+      if (isChatBiasa) {
+        if (stream && !extractedImage) {
+          const streamRes = getStreamResponse(finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns });
+          if (streamRes) return streamRes;
+        }
+        replyMessage = await runLLM(finalMessage, fullSystemContext, history);
+      } else {
+        const coordinatorSystemPrompt = `Tugas Anda adalah menganalisis permintaan user dan memilih sub-agent yang tepat.${fullSystemContext}
 PENTING: Anda adalah mesin parsing JSON. Anda DILARANG KERAS merespons dengan kalimat atau teks biasa. 
 Anda WAJIB mengembalikan HANYA sebuah Array JSON murni. Jika tidak butuh sub-agent, kembalikan []. DILARANG KERAS BERKOMUNIKASI BIASA. DILARANG KERAS MENGGUNAKAN "TOOL_CODE" ATAU PYTHON. HANYA KELUARKAN JSON ARRAY!
 Contoh Output Wajib: [{"subagent": "youtube_analyst", "task": "Ekstrak teks dari link youtube ini"}]`;
@@ -684,6 +733,7 @@ Contoh Output Wajib: [{"subagent": "youtube_analyst", "task": "Ekstrak teks dari
           if (streamRes) return streamRes;
         }
         replyMessage = await runLLM(finalMessage, fullSystemContext, history);
+      }
       }
     } else {
       if (stream && !extractedImage) {

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe, Clock, Copy, Check, BrainCircuit, Trash2, Edit2 } from 'lucide-react';
+import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe, Clock, Copy, Check, BrainCircuit, Trash2, Edit2, Download, FolderOpen } from 'lucide-react';
 import { supabase } from '../supabase';
 // Lazy loaded imports for heavy libraries
 
@@ -9,6 +9,8 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, L
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import mermaid from 'mermaid';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 
 const Mermaid = ({ chart }) => {
   const chartRef = useRef(null);
@@ -57,7 +59,7 @@ const CopyButton = ({ text }) => {
   );
 };
 
-const MessageContent = ({ text }) => {
+const MessageContent = ({ text, workspaceHandle }) => {
   if (!text) return null;
   return (
     <div className="relative group prose prose-sm prose-invert prose-purple max-w-none leading-normal prose-pre:bg-slate-950/80 prose-pre:border prose-pre:border-purple-500/20 prose-code:text-purple-300 prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline prose-td:border-purple-500/20 prose-th:border-purple-500/20 prose-tr:border-purple-500/20">
@@ -65,10 +67,108 @@ const MessageContent = ({ text }) => {
         remarkPlugins={[remarkGfm]}
         components={{
           code({node, inline, className, children, ...props}) {
-            const match = /language-(\w+)/.exec(className || '');
-            const lang = match ? match[1] : '';
+            const match = /language-([a-zA-Z0-9_-]+)/i.exec(className || '');
+            let lang = match ? match[1].toLowerCase().replace('-', '_') : '';
+            const rawContent = String(children);
+            
             if (!inline && lang === 'mermaid') {
-              return <Mermaid chart={String(children).replace(/\n$/, '')} />
+              return <Mermaid chart={rawContent.replace(/\n$/, '')} />
+            }
+            
+            const isZipBlock = lang === 'json_zip' || lang === 'xml_zip' || rawContent.includes('<file name=');
+            
+            if (!inline && isZipBlock) {
+              try {
+                let config = { filename: 'project.zip', files: [] };
+                const rawContent = String(children);
+                
+                if (lang === 'json_zip') {
+                  config = JSON.parse(rawContent.replace(/\n$/, ''));
+                } else {
+                  const filenameMatch = rawContent.match(/<filename>([\s\S]*?)<\/filename>/i);
+                  if (filenameMatch) config.filename = filenameMatch[1].trim();
+                  
+                  // Menggunakan regex strict (wajib ada </file>) agar file zip tidak menjadi corrupt jika terpotong
+                  const fileRegex = /<file\s+name=["']([^"']+)["'][^>]*>([\s\S]*?)<\/file>/gi;
+                  let fileMatch;
+                  while ((fileMatch = fileRegex.exec(rawContent)) !== null) {
+                    // Hanya potong newline pertama dan terakhir agar indentasi kode terjaga
+                    let fileContent = fileMatch[2];
+                    if (fileContent.startsWith('\n')) fileContent = fileContent.substring(1);
+                    if (fileContent.endsWith('\n')) fileContent = fileContent.substring(0, fileContent.length - 1);
+                    config.files.push({ name: fileMatch[1].trim(), content: fileContent });
+                  }
+                  if (config.files.length === 0) {
+                     // Jika LLM menggunakan output teks tapi lupa ngasih tag bahasa, jangan lempar error, kembalikan teks biasa.
+                     throw new Error("No XML file tags found");
+                  }
+                }
+                const handleDownloadZip = async () => {
+                  const zip = new JSZip();
+                  if (config.files && Array.isArray(config.files)) {
+                    config.files.forEach(f => {
+                      zip.file(f.name, f.content);
+                    });
+                  }
+                  const content = await zip.generateAsync({ type: 'blob' });
+                  saveAs(content, config.filename || 'mamet_project.zip');
+                };
+
+                const handleSaveToWorkspace = async () => {
+                  try {
+                    if (!workspaceHandle) return alert('Workspace belum dipilih! Klik ikon Folder di kotak chat bawah.');
+                    for (const f of config.files) {
+                      const parts = f.name.split('/');
+                      const fileName = parts.pop();
+                      let currentHandle = workspaceHandle;
+                      for (const part of parts) {
+                        currentHandle = await currentHandle.getDirectoryHandle(part, { create: true });
+                      }
+                      const fileHandle = await currentHandle.getFileHandle(fileName, { create: true });
+                      const writable = await fileHandle.createWritable();
+                      await writable.write(f.content);
+                      await writable.close();
+                    }
+                    alert(`Sukses menyimpan ${config.files.length} file langsung ke folder kerja Anda!`);
+                  } catch(e) {
+                    alert('Gagal menyimpan ke workspace: ' + e.message);
+                  }
+                };
+
+                return (
+                  <div className="w-full mt-4 mb-4 bg-slate-900/80 p-4 rounded-xl border border-emerald-500/30 shadow-lg shadow-emerald-500/10 flex flex-col items-center justify-center">
+                    <div className="text-emerald-400 mb-2 font-bold flex items-center gap-2">
+                      <FileText className="w-5 h-5" /> File Project Siap Dieksekusi
+                    </div>
+                    <p className="text-xs text-slate-400 mb-4 text-center">
+                      Mamet telah merakit {config.files?.length || 0} file untuk Anda ({config.filename || 'project.zip'})
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <button onClick={handleDownloadZip} className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-200 rounded-lg text-sm font-semibold transition-all">
+                        <Download className="w-4 h-4" /> Download ZIP
+                      </button>
+                      <button onClick={handleSaveToWorkspace} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-semibold transition-all shadow-lg shadow-emerald-500/20">
+                        <FolderOpen className="w-4 h-4" /> Simpan ke Workspace
+                      </button>
+                    </div>
+                  </div>
+                );
+              } catch(e) {
+                if (e.message === "No XML file tags found") {
+                  // Fallback to normal code block if it wasn't actually a zip block
+                  return (
+                    <div className="relative group rounded-xl overflow-hidden my-4 border border-purple-500/20 shadow-lg shadow-purple-500/10">
+                      <div className="flex items-center justify-between px-4 py-2 bg-slate-900/80 border-b border-purple-500/20">
+                        <span className="text-[10px] text-purple-400 font-mono uppercase tracking-wider">{lang || 'Code'}</span>
+                      </div>
+                      <pre className="p-4 overflow-x-auto text-sm text-slate-300" {...props}>
+                        <code className={className}>{children}</code>
+                      </pre>
+                    </div>
+                  );
+                }
+                return <div className="text-red-400 text-xs p-2 border border-red-500/20 bg-red-500/10 rounded">Gagal membuat ZIP: {e.message}</div>;
+              }
             }
             if (!inline && lang === 'json_chart') {
               try {
@@ -139,7 +239,7 @@ const MessageContent = ({ text }) => {
   );
 };
 
-const TypewriterText = ({ text, onComplete }) => {
+const TypewriterText = ({ text, onComplete, workspaceHandle }) => {
   const [displayed, setDisplayed] = React.useState('');
   const [done, setDone] = React.useState(false);
 
@@ -162,19 +262,29 @@ const TypewriterText = ({ text, onComplete }) => {
     return () => clearInterval(interval);
   }, [text]);
 
-  return <MessageContent text={done ? text : displayed + ' ▍'} />;
+  return <MessageContent text={done ? text : displayed + ' ▍'} workspaceHandle={workspaceHandle} />;
 };
 
 export default function AIAgent() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [tools, setTools] = useState(['web_search', 'code_executor', 'api_caller']);
-  const [selectedTools, setSelectedTools] = useState(['web_search']);
+  const [selectedTools, setSelectedTools] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [logs, setLogs] = useState([]);
   const [attachedFile, setAttachedFile] = useState(null);
+  const [workspaceHandle, setWorkspaceHandle] = useState(null);
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
+
+  const handleSelectWorkspace = async () => {
+    try {
+      const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      setWorkspaceHandle(handle);
+    } catch(e) {
+      console.log('Batal memilih workspace atau tidak didukung browser.', e);
+    }
+  };
 
   const [conversations, setConversations] = useState([{ id: 'default', title: 'Percakapan Baru', messages: [] }]);
   const [currentConversationId, setCurrentConversationId] = useState('default');
@@ -631,6 +741,37 @@ export default function AIAgent() {
             };
             img.onerror = () => reject(new Error('Gagal memproses gambar'));
             img.src = URL.createObjectURL(currentFile);
+          } else if (currentFile.name.toLowerCase().endsWith('.zip')) {
+            // Unzip di frontend dan gabungkan semua file teks
+            currentFile.arrayBuffer().then(async arrayBuffer => {
+              try {
+                const JSZip = (await import('jszip')).default;
+                const zip = new JSZip();
+                const loadedZip = await zip.loadAsync(arrayBuffer);
+                let text = `--- KONTEN FILE ZIP (${currentFile.name}) ---\n\n`;
+                
+                const validExts = ['.js', '.jsx', '.ts', '.tsx', '.html', '.css', '.json', '.md', '.txt', '.py', '.sql', '.csv'];
+                let fileCount = 0;
+                
+                for (const [filename, zipEntry] of Object.entries(loadedZip.files)) {
+                  if (zipEntry.dir) continue;
+                  
+                  const isTextFile = validExts.some(ext => filename.toLowerCase().endsWith(ext));
+                  if (isTextFile) {
+                    const content = await zipEntry.async('string');
+                    text += `\n\n=== AWAL FILE: ${filename} ===\n${content}\n=== AKHIR FILE: ${filename} ===\n`;
+                    fileCount++;
+                  }
+                }
+                
+                if (fileCount === 0) text += "Tidak ada file teks/kodingan yang bisa dibaca dalam ZIP ini.";
+                
+                const base64Str = btoa(unescape(encodeURIComponent(text)));
+                resolve(base64Str);
+              } catch(err) {
+                reject(err);
+              }
+            });
           } else if (currentFile.name.toLowerCase().endsWith('.xlsx') || currentFile.name.toLowerCase().endsWith('.xls')) {
             // Secretly convert Excel to CSV on the fly!
             currentFile.arrayBuffer().then(async arrayBuffer => {
@@ -659,6 +800,8 @@ export default function AIAgent() {
         let finalFileName = currentFile.name;
         if (finalFileName.toLowerCase().endsWith('.xlsx') || finalFileName.toLowerCase().endsWith('.xls')) {
             finalFileName = finalFileName + '.csv'; // Trick the backend into reading it as text
+        } else if (finalFileName.toLowerCase().endsWith('.zip')) {
+            finalFileName = finalFileName + '.txt'; // Trick backend agar membaca sebagai file teks biasa
         }
 
         filePayload = {
@@ -786,13 +929,18 @@ export default function AIAgent() {
         const decoder = new TextDecoder("utf-8");
         let done = false;
         let streamedContent = '';
+        let buffer = '';
 
         while (!done) {
           const { value, done: readerDone } = await reader.read();
           done = readerDone;
           if (value) {
             const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split('\n');
+            buffer += chunk;
+            const lines = buffer.split('\n');
+            // Simpan baris terakhir yang mungkin belum selesai ke dalam buffer
+            buffer = lines.pop() || '';
+            
             for (const line of lines) {
               if (line.startsWith('data: ') && line.trim() !== 'data: [DONE]') {
                 try {
@@ -811,7 +959,9 @@ export default function AIAgent() {
                       return c;
                     }));
                   }
-                } catch(e) {}
+                } catch(e) {
+                   console.error("Partial JSON parse error:", e, line);
+                }
               }
             }
           }
@@ -1380,8 +1530,8 @@ export default function AIAgent() {
                       } px-3 md:px-5 py-2.5 md:py-3.5`}
                     >
                       {message.type === 'agent' && currentlyTypingId === message.id && !message.isStreaming
-                        ? <TypewriterText text={message.content} onComplete={() => setCurrentlyTypingId(null)} />
-                        : <MessageContent text={message.content || (message.isStreaming ? ' ▍' : '')} />
+                        ? <TypewriterText text={message.content} onComplete={() => setCurrentlyTypingId(null)} workspaceHandle={workspaceHandle} />
+                        : <MessageContent text={message.content || (message.isStreaming ? ' ▍' : '')} workspaceHandle={workspaceHandle} />
                       }
                       
                       {message.type === 'agent' && !message.isStreaming && message.content && (
@@ -1567,7 +1717,7 @@ export default function AIAgent() {
                 type="file"
                 ref={fileInputRef}
                 className="hidden"
-                accept=".pdf,.txt,.md,.csv,.xlsx,.xls,.docx,image/*"
+                accept=".zip,.pdf,.txt,.md,.csv,.xlsx,.xls,.docx,image/*"
                 onChange={(e) => {
                   if (e.target.files && e.target.files[0]) {
                     setAttachedFile(e.target.files[0]);
@@ -1581,6 +1731,15 @@ export default function AIAgent() {
                 title="Lampirkan Dokumen (PDF, TXT, DOCX)"
               >
                 <Paperclip className="w-5 h-5" />
+              </button>
+
+              <button
+                onClick={handleSelectWorkspace}
+                disabled={loading}
+                className={`p-3.5 border rounded-xl transition-all focus:outline-none disabled:opacity-50 h-[50px] flex items-center justify-center ${workspaceHandle ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/50 text-emerald-400' : 'bg-slate-800/50 hover:bg-slate-700 border-emerald-500/30 text-slate-400 hover:text-emerald-400'}`}
+                title={workspaceHandle ? "Workspace Terhubung: Siap Menyimpan File!" : "Pilih Folder Kerja (Workspace) Sementara"}
+              >
+                <FolderOpen className="w-5 h-5" />
               </button>
 
               <div className="flex-1 relative">
