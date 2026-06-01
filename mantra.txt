@@ -10,6 +10,7 @@
 6. Vector RAG (Embedding PDF/Excel/Word raksasa)
 7. True Code Sandbox (Eksekusi kode via Piston Coder Plugin)
 8. Autonomous Agent (Cron) 100% Operational & Realtime Push (Bypass Kong JWT)
+9. 5-Layer Anti-Limit (Multi-Key Rotation, Backoff, Cascade Fallback)
 
 ## 🚀 ROADMAP TERSISA
 1. Voice Interaction (Suara AI)
