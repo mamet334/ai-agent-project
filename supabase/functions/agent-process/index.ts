@@ -42,6 +42,49 @@ const getActiveKey = (envVarName: string, currentIndex: number, setIndex: (idx: 
   return key;
 };
 
+// === JURUS RAHASIA ANTI-LIMIT ===
+// Ambil SEMUA Gemini keys untuk dicoba satu per satu saat 429
+const getAllKeys = (envVarName: string): string[] => {
+  const keysString = Deno.env.get(envVarName) || '';
+  if (!keysString) return [];
+  return keysString.split(',').map(k => k.trim()).filter(k => k);
+};
+
+// Retry dengan exponential backoff + multi-key rotation
+const callGeminiWithRetry = async (payload: any, geminiModel: string, allGeminiKeys: string[], maxRetries = 3): Promise<any> => {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    for (let ki = 0; ki < allGeminiKeys.length; ki++) {
+      const key = allGeminiKeys[(geminiKeyIndex + ki) % allGeminiKeys.length];
+      try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${key}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          geminiKeyIndex = (geminiKeyIndex + ki + 1) % allGeminiKeys.length; // rotate to next key
+          return await res.json();
+        }
+        if (res.status === 429) {
+          console.warn(`Gemini key #${ki} got 429, trying next key...`);
+          continue; // Try next key
+        }
+        // Other errors - try next key too
+        console.warn(`Gemini key #${ki} error ${res.status}, trying next...`);
+      } catch (e) {
+        console.warn(`Gemini key #${ki} network error:`, e);
+      }
+    }
+    // All keys exhausted for this attempt, wait before retry
+    if (attempt < maxRetries - 1) {
+      const waitMs = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+      console.log(`All Gemini keys exhausted, retrying in ${waitMs}ms (attempt ${attempt + 1}/${maxRetries})...`);
+      await new Promise(r => setTimeout(r, waitMs));
+    }
+  }
+  return null; // All retries failed
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -365,24 +408,24 @@ serve(async (req) => {
       return data.choices?.[0]?.message?.content || '';
     };
 
+    const allGeminiKeys = getAllKeys('GEMINI_API_KEY');
+    if (allGeminiKeys.length === 0 && GEMINI_API_KEY) allGeminiKeys.push(GEMINI_API_KEY);
+
     const runLLM = async (promptText: string, systemPromptText = '', chatHistory: any[] = []) => {
+      // === JURUS 1: Coba provider yang dipilih user dulu ===
       if (!extractedImage) {
         if (model && model.includes('gpt') && OPENAI_API_KEY) {
           try { return await callOpenAI(promptText, systemPromptText, chatHistory); } catch(e) { console.warn('OpenAI failed:', e); }
         } else if (model && model.includes('openrouter') && OPENROUTER_API_KEY) {
           try { return await callOpenRouter(promptText, systemPromptText, chatHistory); } catch(e) { console.warn('OpenRouter failed:', e); }
-        } else if (model && model.includes('gemini') && GEMINI_API_KEY) {
-          // Fallthrough to Gemini
-        } else if (GROQ_API_KEY) {
-          try { return await callGroq(promptText, systemPromptText, chatHistory); } catch(e) { console.warn('Groq failed:', e); }
         }
       }
       
+      // === JURUS 2: Gemini dengan multi-key rotation + retry ===
       const payload: any = { contents: [] };
       if (systemPromptText) {
         payload.systemInstruction = { parts: [{ text: systemPromptText }] };
       }
-
       if (chatHistory && chatHistory.length > 0) {
         for (const msg of chatHistory) {
           payload.contents.push({
@@ -391,7 +434,6 @@ serve(async (req) => {
           });
         }
       }
-
       const userParts: any[] = [{ text: promptText }];
       if (extractedImage) {
         userParts.push({ inlineData: { mimeType: extractedImage.mimeType, data: extractedImage.data } });
@@ -399,52 +441,68 @@ serve(async (req) => {
       payload.contents.push({ role: 'user', parts: userParts });
       
       const geminiModel = model && model.includes('gemini') ? model : 'gemini-2.5-flash';
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok) {
-        throw new Error(`Gemini API Error: ${res.status}`);
+      
+      if (allGeminiKeys.length > 0) {
+        const data = await callGeminiWithRetry(payload, geminiModel, allGeminiKeys);
+        if (data) {
+          return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        }
+        console.warn('Mamet Anti-Limit: Semua Gemini keys habis kuota! Cascading ke fallback...');
       }
-      const data = await res.json();
-      return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+      // === JURUS 3: Groq sebagai fallback gratis ===
+      if (GROQ_API_KEY) {
+        try {
+          console.log('Mamet Anti-Limit: Beralih ke Groq (fallback gratis)...');
+          return await callGroq(promptText, systemPromptText, chatHistory);
+        } catch(e) { console.warn('Groq fallback also failed:', e); }
+      }
+
+      // === JURUS 4: OpenRouter free models sebagai fallback terakhir ===
+      if (OPENROUTER_API_KEY) {
+        try {
+          console.log('Mamet Anti-Limit: Beralih ke OpenRouter (fallback terakhir)...');
+          return await callOpenRouter(promptText, systemPromptText, chatHistory);
+        } catch(e) { console.warn('OpenRouter fallback also failed:', e); }
+      }
+
+      throw new Error('Semua provider AI sedang limit/gangguan. Coba lagi dalam beberapa menit.');
     };
 
-    // --- OTAK KHUSUS KEPALA AGENT (HEMAT KUOTA) ---
-    // Fungsi ini khusus untuk si Mamet (Orchestrator) merutekan sub-agent dan parsing JSON.
-    // Kita paksa pakai Groq (cepat & gratis) atau Gemini Flash agar tidak memakan kuota model mahal (OpenAI/DeepSeek).
+    // --- OTAK KHUSUS KEPALA AGENT (HEMAT KUOTA) + ANTI-LIMIT ---
     const runCoordinatorLLM = async (promptText: string, systemPromptText = '') => {
-      // 1. Prioritas Utama: Gemini Flash (Sangat pintar parsing JSON, gratis, dan cepat)
-      if (GEMINI_API_KEY) {
+      // JURUS 1: Gemini Flash dengan multi-key rotation
+      if (allGeminiKeys.length > 0) {
         try {
-          console.log("Mamet Kepala Agent: Berpikir menggunakan otak Gemini Flash (Hemat Kuota & Jago JSON)...");
+          console.log("Mamet Coordinator: Berpikir via Gemini Flash (multi-key)...");
           const payload: any = { contents: [{ role: 'user', parts: [{ text: promptText }] }] };
           if (systemPromptText) payload.systemInstruction = { parts: [{ text: systemPromptText }] };
           
-          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          if (res.ok) {
-            const data = await res.json();
+          const data = await callGeminiWithRetry(payload, 'gemini-2.5-flash', allGeminiKeys, 2);
+          if (data) {
             return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
           }
+          console.warn('Coordinator: Semua Gemini keys limit, cascading...');
         } catch(e) { console.warn('Coordinator Gemini failed:', e); }
       }
       
-      // 2. Prioritas Kedua: Groq (Llama)
+      // JURUS 2: Groq (Llama) - gratis & cepat
       if (GROQ_API_KEY) {
         try {
-          console.log("Mamet Kepala Agent: Berpikir menggunakan otak Groq (Cepat tapi rawan gagal JSON)...");
+          console.log("Mamet Coordinator: Beralih ke Groq...");
           return await callGroq(promptText, systemPromptText, []); 
         } catch(e) { console.warn('Coordinator Groq failed:', e); }
       }
 
-      // 3. Fallback ke LLM pilihan user jika yang gratis mati semua
-      console.log("Mamet Kepala Agent: Terpaksa menggunakan otak utama karena otak gratis sedang gangguan.");
-      return await runLLM(promptText, systemPromptText, []);
+      // JURUS 3: OpenRouter free models
+      if (OPENROUTER_API_KEY) {
+        try {
+          console.log("Mamet Coordinator: Beralih ke OpenRouter free...");
+          return await callOpenRouter(promptText, systemPromptText, []);
+        } catch(e) { console.warn('Coordinator OpenRouter failed:', e); }
+      }
+
+      throw new Error('Semua otak coordinator sedang limit. Coba lagi nanti.');
     };
 
     let replyMessage = 'Gagal memproses jawaban dari AI.';
@@ -473,22 +531,46 @@ serve(async (req) => {
         payload.contents.push({ role: 'user', parts: userParts });
 
         const geminiModel = model && model.includes('gemini') ? model : 'gemini-2.5-flash';
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
+        
+        // === JURUS ANTI-LIMIT STREAMING: Coba semua keys ===
+        let res: Response | null = null;
+        for (let ki = 0; ki < allGeminiKeys.length; ki++) {
+          const key = allGeminiKeys[(geminiKeyIndex + ki) % allGeminiKeys.length];
+          const attempt = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:streamGenerateContent?alt=sse&key=${key}`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (attempt.ok) {
+            res = attempt;
+            geminiKeyIndex = (geminiKeyIndex + ki + 1) % allGeminiKeys.length;
+            break;
+          }
+          if (attempt.status === 429) {
+            console.warn(`Stream: Gemini key #${ki} got 429, trying next...`);
+            continue;
+          }
+          // Other error, also try next key
+          console.warn(`Stream: Gemini key #${ki} error ${attempt.status}`);
+        }
 
-        if (!res.ok) {
-          const errText = await res.text();
-          const stream = new ReadableStream({
+        if (!res || !res.ok) {
+          // === FALLBACK STREAMING: Groq atau OpenRouter ===
+          console.log('Mamet Anti-Limit Stream: Semua Gemini keys limit, falling back...');
+          if (GROQ_API_KEY) {
+            return streamGroqResponse(promptText, systemPromptText, chatHistory, metaData, 'Gemini-429');
+          }
+          if (OPENROUTER_API_KEY) {
+            return streamOpenRouterResponse(promptText, systemPromptText, chatHistory, metaData);
+          }
+          const errStream = new ReadableStream({
             start(controller) {
-              const data = JSON.stringify({ choices: [{ delta: { content: `\n\n**Gemini API Error**: ${errText}` } }] });
+              const data = JSON.stringify({ choices: [{ delta: { content: `\n\n**Semua API sedang limit.** Coba lagi dalam beberapa menit atau tambahkan API key cadangan di Settings.` } }] });
               controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
               controller.close();
             }
           });
-          return new Response(stream, { headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' } });
+          return new Response(errStream, { headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' } });
         }
 
         // Convert Gemini SSE format to OpenAI SSE format expected by frontend
