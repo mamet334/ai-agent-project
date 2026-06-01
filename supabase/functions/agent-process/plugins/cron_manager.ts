@@ -13,14 +13,8 @@ export default {
       const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
       const supabase = createClient(supabaseUrl, supabaseKey);
 
-      // Validasi apakah userId ada di auth.users
-      const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(userId);
-      if (authError || !authUser?.user) {
-        console.error("Cron Manager: userId tidak ditemukan di auth.users:", userId, authError);
-        return { output: `Error: User ID "${userId}" tidak terdaftar di sistem autentikasi. Pastikan Anda sudah login dengan benar.` };
-      }
-
-      console.log(`Cron Manager: Memproses tugas untuk user ${authUser.user.email || userId}`);
+      console.log(`Cron Manager: Memproses tugas untuk userId=${userId}`);
+      console.log(`Cron Manager: Task="${task}"`);
 
       // Analyze the task to determine the action
       const analysisPrompt = `Anda adalah parser JSON untuk sistem Cron. Analisis permintaan berikut.
@@ -31,15 +25,16 @@ Tentukan Aksi:
 - READ: jika user menanyakan jadwal apa saja yang sedang aktif, atau cek cron
 - DELETE: jika user ingin menghapus, membatalkan, atau mematikan jadwal
 
-KELUARKAN HANYA JSON MURNI (tanpa markdown, tanpa backtick, tanpa teks lain):
+KELUARKAN HANYA JSON MURNI berikut (TANPA markdown, TANPA backtick, TANPA teks lain):
 {"action":"CREATE","create_data":{"title":"Judul singkat","prompt":"Instruksi lengkap untuk AI","interval_hours":24},"delete_title_keyword":"kata kunci"}`;
 
       const analysisResultText = await runLLM(analysisPrompt);
+      console.log(`Cron Manager: Analisis LLM raw = ${analysisResultText}`);
+      
       const cleanedJson = analysisResultText.replace(/```json/g, '').replace(/```/g, '').trim();
       
       let analysis;
       try {
-        // Coba parse langsung
         analysis = JSON.parse(cleanedJson);
       } catch (e) {
         // Coba ekstrak JSON dari teks
@@ -48,10 +43,12 @@ KELUARKAN HANYA JSON MURNI (tanpa markdown, tanpa backtick, tanpa teks lain):
           try {
             analysis = JSON.parse(jsonMatch[0]);
           } catch (e2) {
-            return { output: `Cron Manager gagal memahami perintah Anda. Coba ulangi dengan format yang lebih jelas, contoh: "buat jadwal riset AI setiap 12 jam"` };
+            console.error("Cron Manager: Gagal parse JSON:", cleanedJson);
+            return { output: `Cron Manager gagal memahami perintah. Coba ulangi dengan kalimat yang lebih jelas, contoh: "buat jadwal riset AI setiap 12 jam"` };
           }
         } else {
-          return { output: `Cron Manager gagal memahami perintah Anda. Coba ulangi dengan format yang lebih jelas, contoh: "buat jadwal riset AI setiap 12 jam"` };
+          console.error("Cron Manager: Tidak ada JSON ditemukan:", cleanedJson);
+          return { output: `Cron Manager gagal memahami perintah. Coba ulangi dengan kalimat yang lebih jelas, contoh: "buat jadwal riset AI setiap 12 jam"` };
         }
       }
 
@@ -60,16 +57,18 @@ KELUARKAN HANYA JSON MURNI (tanpa markdown, tanpa backtick, tanpa teks lain):
 
       if (action === 'READ') {
         const { data, error } = await supabase.from('scheduled_tasks').select('*').eq('user_id', userId);
-        if (error) throw error;
+        if (error) {
+          console.error("Cron Manager READ error:", error);
+          throw error;
+        }
         
         if (!data || data.length === 0) {
           return { output: "Saat ini Anda tidak memiliki jadwal Cron (tugas otomatis) yang aktif. Gunakan perintah seperti 'buat jadwal riset AI setiap 12 jam' untuk menambahkan jadwal baru." };
         }
         
         let report = "Berikut adalah daftar Jadwal Cron Anda yang sedang aktif:\n\n";
-        report += "| No | Judul | Interval | Prompt | Status |\n|---|---|---|---|---|\n";
         data.forEach((t: any, index: number) => {
-          report += `| ${index + 1} | **${t.title}** | Setiap ${t.interval_hours} jam | ${t.prompt.substring(0, 50)}... | ${t.is_active ? '✅ Aktif' : '❌ Nonaktif'} |\n`;
+          report += `${index + 1}. **${t.title}** - Setiap ${t.interval_hours} jam - "${t.prompt}" ${t.is_active ? '(✅ Aktif)' : '(❌ Nonaktif)'}\n`;
         });
         return { output: report };
       }
@@ -77,8 +76,10 @@ KELUARKAN HANYA JSON MURNI (tanpa markdown, tanpa backtick, tanpa teks lain):
       if (action === 'CREATE') {
         const cd = analysis.create_data;
         if (!cd || !cd.title || !cd.prompt) {
-          return { output: "Gagal membuat jadwal: Judul dan Prompt instruksi harus jelas. Contoh: 'buat jadwal dengan judul Riset AI, instruksinya cari peluang bisnis AI terbaru, setiap 12 jam'" };
+          return { output: "Gagal membuat jadwal: Judul dan Prompt instruksi harus jelas." };
         }
+        
+        console.log(`Cron Manager: INSERT -> user_id=${userId}, title=${cd.title}`);
         
         const { data, error } = await supabase.from('scheduled_tasks').insert([{
           user_id: userId,
@@ -90,12 +91,12 @@ KELUARKAN HANYA JSON MURNI (tanpa markdown, tanpa backtick, tanpa teks lain):
         }]).select();
         
         if (error) {
-          console.error("Cron Manager INSERT error:", error);
-          throw error;
+          console.error("Cron Manager INSERT error:", JSON.stringify(error));
+          throw new Error(`Database error: ${error.message} (code: ${error.code})`);
         }
 
-        console.log("Cron Manager: Jadwal berhasil dibuat!", data);
-        return { output: `✅ Berhasil membuat jadwal Cron baru!\n\n- **Judul**: ${cd.title}\n- **Interval**: Setiap ${cd.interval_hours || 24} jam\n- **Instruksi**: "${cd.prompt}"\n\nJadwal ini sudah aktif dan akan dieksekusi secara otomatis oleh sistem.` };
+        console.log("Cron Manager: INSERT berhasil!", JSON.stringify(data));
+        return { output: `Berhasil membuat jadwal Cron baru!\n\n- **Judul**: ${cd.title}\n- **Interval**: Setiap ${cd.interval_hours || 24} jam\n- **Instruksi**: "${cd.prompt}"\n\nJadwal ini sudah aktif dan akan dieksekusi secara otomatis oleh sistem.` };
       }
 
       if (action === 'DELETE') {
@@ -107,20 +108,20 @@ KELUARKAN HANYA JSON MURNI (tanpa markdown, tanpa backtick, tanpa teks lain):
         
         const taskToDelete = searchData?.find((t: any) => t.title.toLowerCase().includes(keyword.toLowerCase()));
         if (!taskToDelete) {
-          return { output: `Tidak ditemukan jadwal aktif yang mengandung kata kunci "${keyword}". Gunakan perintah "cek jadwal cron" untuk melihat daftar jadwal yang ada.` };
+          return { output: `Tidak ditemukan jadwal aktif yang mengandung kata kunci "${keyword}".` };
         }
         
         const { error: deleteError } = await supabase.from('scheduled_tasks').delete().eq('id', taskToDelete.id);
         if (deleteError) throw deleteError;
         
-        return { output: `🗑️ Berhasil MENGHAPUS jadwal Cron: **${taskToDelete.title}**.` };
+        return { output: `Berhasil MENGHAPUS jadwal Cron: **${taskToDelete.title}**.` };
       }
 
-      return { output: `Aksi Cron "${action}" tidak dikenali. Gunakan perintah seperti: "buat jadwal...", "cek jadwal cron", atau "hapus jadwal..."` };
+      return { output: `Aksi Cron "${action}" tidak dikenali. Gunakan: "buat jadwal...", "cek jadwal cron", atau "hapus jadwal..."` };
 
     } catch (err: any) {
       console.error("Cron Manager Fatal Error:", err);
-      return { output: `Cron Manager Error: ${err.message}. Pastikan tabel 'scheduled_tasks' sudah ada di database Supabase Anda.` };
+      return { output: `Cron Manager Error: ${err.message}` };
     }
   }
 };
