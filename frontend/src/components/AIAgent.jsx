@@ -1521,7 +1521,30 @@ export default function AIAgent() {
               <span className="hidden sm:inline text-xs text-slate-400">Brain Model:</span>
               <select
                 value={selectedModel}
-                onChange={e => setSelectedModel(e.target.value)}
+                onChange={e => {
+                  const val = e.target.value;
+                  if (val === 'ADD_CUSTOM_MODEL') {
+                    const modelName = prompt(
+                      "Masukkan model kustom baru Anda.\n\nContoh format:\n- OpenRouter: openrouter/author/model (cth: openrouter/google/gemini-2.5-pro)\n- Groq: groq/model (cth: groq/mixtral-8x7b-32768)\n- OpenAI: nama-model-openai (cth: gpt-3.5-turbo)"
+                    );
+                    if (modelName && modelName.trim()) {
+                      const cleanName = modelName.trim();
+                      // Save to customModels list in localStorage
+                      const storedCustom = localStorage.getItem('ai_agent_custom_models');
+                      let customList = [];
+                      try {
+                        if (storedCustom) customList = JSON.parse(storedCustom);
+                      } catch(err) {}
+                      if (!customList.includes(cleanName)) {
+                        customList.push(cleanName);
+                        localStorage.setItem('ai_agent_custom_models', JSON.stringify(customList));
+                      }
+                      setSelectedModel(cleanName);
+                    }
+                  } else {
+                    setSelectedModel(val);
+                  }
+                }}
                 className="bg-slate-800 border border-purple-500/30 text-purple-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-purple-500 transition-all font-medium cursor-pointer"
               >
                 <option value="coordinator-agent">Kepala Agent (Multi-Agent Orchestrator)</option>
@@ -1534,15 +1557,24 @@ export default function AIAgent() {
                 <option value="openrouter-llama-3">Llama 3 8B (Free via OpenRouter)</option>
                 <option value="openrouter-deepseek-r1">DeepSeek R1 (Free via OpenRouter)</option>
                 
-                {/* 
-                  === CARA TAMBAH MODEL BARU SECARA SIMPEL ===
-                  Gunakan format prefix di bawah ini agar otomatis di-routing oleh backend:
-                  - OpenRouter: openrouter/author/model-name (Contoh: openrouter/google/gemini-2.5-pro)
-                  - Groq: groq/model-name (Contoh: groq/mixtral-8x7b-32768)
-                  - OpenAI: model-name (Contoh: gpt-3.5-turbo)
-                */}
-                <option value="openrouter/deepseek/deepseek-chat">DeepSeek V3 (OpenRouter - Kencang & Murah)</option>
-                <option value="groq/mixtral-8x7b-32768">Mixtral 8x7B MoE (Groq - Cepat)</option>
+                {/* Custom User Models dynamically loaded from localStorage */}
+                {(() => {
+                  const storedCustom = localStorage.getItem('ai_agent_custom_models');
+                  let customList = [];
+                  try {
+                    if (storedCustom) customList = JSON.parse(storedCustom);
+                  } catch(err) {}
+                  return customList.map((m) => {
+                    const label = m.includes('/') ? m.substring(m.lastIndexOf('/') + 1) : m;
+                    return (
+                      <option key={m} value={m}>
+                        {label.toUpperCase()} ({m.split('/')[0].toUpperCase()} - Kustom)
+                      </option>
+                    );
+                  });
+                })()}
+
+                <option value="ADD_CUSTOM_MODEL" className="text-purple-400 font-semibold">+ Tambah Model Kustom...</option>
               </select>
             </div>
           </div>
