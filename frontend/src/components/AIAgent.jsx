@@ -393,6 +393,14 @@ export default function AIAgent() {
   const [currentlyTypingId, setCurrentlyTypingId] = useState(null);
   const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('ai_agent_selected_model') || 'gemini-2.5-flash');
   const [globalMemory, setGlobalMemory] = useState('');
+  const [customModels, setCustomModels] = useState(() => {
+    const storedCustom = localStorage.getItem('ai_agent_custom_models');
+    try {
+      return storedCustom ? JSON.parse(storedCustom) : [];
+    } catch(err) {
+      return [];
+    }
+  });
 
   // Supabase Auth State
   const [user, setUser] = useState(null);
@@ -460,6 +468,17 @@ export default function AIAgent() {
     if (localMemory) setGlobalMemory(localMemory);
     else if (user?.user_metadata?.global_memory) setGlobalMemory(user.user_metadata.global_memory);
     else setGlobalMemory('');
+
+    const localCustom = localStorage.getItem('ai_agent_custom_models');
+    if (localCustom) {
+      try {
+        setCustomModels(JSON.parse(localCustom));
+      } catch (e) {}
+    } else if (user?.user_metadata?.custom_models) {
+      setCustomModels(user.user_metadata.custom_models);
+    } else {
+      setCustomModels([]);
+    }
 
     if (localChats) {
       try {
@@ -560,6 +579,20 @@ export default function AIAgent() {
       return () => clearTimeout(timeoutId);
     }
   }, [globalMemory, user]);
+
+  useEffect(() => {
+    localStorage.setItem('ai_agent_custom_models', JSON.stringify(customModels));
+    
+    // Save to DB metadata dynamically with debounce to avoid spamming
+    if (user && JSON.stringify(customModels) !== JSON.stringify(user.user_metadata?.custom_models || [])) {
+      const timeoutId = setTimeout(() => {
+        supabase.auth.updateUser({
+          data: { custom_models: customModels }
+        });
+      }, 1500);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [customModels, user]);
 
   // Supabase Sync Helper
   const syncConversationToDB = async (conv) => {
@@ -1530,15 +1563,8 @@ export default function AIAgent() {
                       );
                       if (modelName && modelName.trim()) {
                         const cleanName = modelName.trim();
-                        // Save to customModels list in localStorage
-                        const storedCustom = localStorage.getItem('ai_agent_custom_models');
-                        let customList = [];
-                        try {
-                          if (storedCustom) customList = JSON.parse(storedCustom);
-                        } catch(err) {}
-                        if (!customList.includes(cleanName)) {
-                          customList.push(cleanName);
-                          localStorage.setItem('ai_agent_custom_models', JSON.stringify(customList));
+                        if (!customModels.includes(cleanName)) {
+                          setCustomModels(prev => [...prev, cleanName]);
                         }
                         setSelectedModel(cleanName);
                       }
@@ -1558,53 +1584,34 @@ export default function AIAgent() {
                   <option value="openrouter-llama-3" className="bg-slate-900 text-white">Llama 3 8B (Free via OpenRouter)</option>
                   <option value="openrouter-deepseek-r1" className="bg-slate-900 text-white">DeepSeek R1 (Free via OpenRouter)</option>
                   
-                  {/* Custom User Models dynamically loaded from localStorage */}
-                  {(() => {
-                    const storedCustom = localStorage.getItem('ai_agent_custom_models');
-                    let customList = [];
-                    try {
-                      if (storedCustom) customList = JSON.parse(storedCustom);
-                    } catch(err) {}
-                    return customList.map((m) => {
-                      const label = m.includes('/') ? m.substring(m.lastIndexOf('/') + 1) : m;
-                      return (
-                        <option key={m} value={m} className="bg-slate-900 text-white">
-                          {label.toUpperCase()} ({m.split('/')[0].toUpperCase()} - Kustom)
-                        </option>
-                      );
-                    });
-                  })()}
+                  {/* Custom User Models dynamically loaded from customModels state */}
+                  {customModels.map((m) => {
+                    const label = m.includes('/') ? m.substring(m.lastIndexOf('/') + 1) : m;
+                    return (
+                      <option key={m} value={m} className="bg-slate-900 text-white">
+                        {label.toUpperCase()} ({m.split('/')[0].toUpperCase()} - Kustom)
+                      </option>
+                    );
+                  })}
 
                   <option value="ADD_CUSTOM_MODEL" className="text-purple-400 font-semibold bg-slate-900">+ Tambah Model Kustom...</option>
                 </select>
 
                 {/* Trash button to delete currently selected custom model */}
-                {(() => {
-                  const storedCustom = localStorage.getItem('ai_agent_custom_models');
-                  let customList = [];
-                  try {
-                    if (storedCustom) customList = JSON.parse(storedCustom);
-                  } catch(err) {}
-                  
-                  if (customList.includes(selectedModel)) {
-                    return (
-                      <button
-                        onClick={() => {
-                          if (confirm(`Apakah Anda yakin ingin menghapus model kustom "${selectedModel}"?`)) {
-                            const updatedList = customList.filter(m => m !== selectedModel);
-                            localStorage.setItem('ai_agent_custom_models', JSON.stringify(updatedList));
-                            setSelectedModel('coordinator-agent'); // Fallback to coordinator
-                          }
-                        }}
-                        className="p-1 text-slate-400 hover:text-red-400 rounded transition-colors"
-                        title="Hapus Model Kustom Ini"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    );
-                  }
-                  return null;
-                })()}
+                {customModels.includes(selectedModel) && (
+                  <button
+                    onClick={() => {
+                      if (confirm(`Apakah Anda yakin ingin menghapus model kustom "${selectedModel}"?`)) {
+                        setCustomModels(prev => prev.filter(m => m !== selectedModel));
+                        setSelectedModel('coordinator-agent'); // Fallback to coordinator
+                      }
+                    }}
+                    className="p-1 text-slate-400 hover:text-red-400 rounded transition-colors"
+                    title="Hapus Model Kustom Ini"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
           </div>
