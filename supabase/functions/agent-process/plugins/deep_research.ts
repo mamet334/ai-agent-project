@@ -1,3 +1,45 @@
+import * as cheerio from 'npm:cheerio';
+
+async function searchDuckDuckGo(query: string) {
+  try {
+    const res = await fetch('https://lite.duckduckgo.com/lite/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
+      body: `q=${encodeURIComponent(query)}`
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const $ = cheerio.load(html);
+    const results: any[] = [];
+    
+    $('tr').each((_i, tr) => {
+      const resultLink = $(tr).find('a.result-link');
+      if (resultLink.length > 0) {
+        const title = resultLink.text().trim();
+        const link = resultLink.attr('href') || '';
+        
+        // Find next tr which contains the snippet
+        const nextTr = $(tr).next();
+        const snippet = nextTr.find('.result-snippet').text().trim();
+        
+        let cleanLink = link;
+        if (link.startsWith('//')) {
+          cleanLink = 'https:' + link;
+        }
+        
+        results.push({ title, link: cleanLink, snippet });
+      }
+    });
+    return results.slice(0, 5);
+  } catch (e) {
+    console.error("DDG fallback error:", e);
+    return null;
+  }
+}
+
 export default {
   name: 'deep_research',
   description: 'Melakukan riset mendalam (Deep Research). Mencari referensi di Google, lalu mengunjungi web tersebut untuk membaca seluruh isinya, dan menyusun laporan riset ekstensif.',
@@ -37,25 +79,30 @@ export default {
         }
       }
 
-      if (!searchData) {
-        return {
-          output: `Deep Research gagal: Semua Gemini API key habis kuota atau error. (${lastError?.message || lastError})`,
-          sources: []
-        };
-      }
-
-      const candidate = searchData.candidates?.[0];
-      
       let sources = [];
       let urlsToScrape = [];
-      
-      if (candidate?.groundingMetadata?.groundingChunks) {
-        sources = candidate.groundingMetadata.groundingChunks
-          .map((chunk: any) => ({ title: chunk.web?.title || 'Sumber Web', uri: chunk.web?.uri }))
-          .filter((s: any) => s.uri);
-          
-        // Ambil maksimal 3 URL teratas untuk di-scrape secara mendalam
-        urlsToScrape = sources.map(s => s.uri).slice(0, 3);
+
+      if (!searchData) {
+        console.warn("Deep Research: Semua kunci Gemini limit. Mengaktifkan fallback search DuckDuckGo Lite...");
+        const ddgResults = await searchDuckDuckGo(query);
+        if (ddgResults && ddgResults.length > 0) {
+          sources = ddgResults.map(r => ({ title: r.title, uri: r.link }));
+          urlsToScrape = ddgResults.map(r => r.link).slice(0, 3);
+        } else {
+          return {
+            output: `Deep Research gagal: Semua Gemini API key habis kuota atau error, dan pencarian fallback DuckDuckGo tidak mengembalikan hasil.`,
+            sources: []
+          };
+        }
+      } else {
+        const candidate = searchData.candidates?.[0];
+        if (candidate?.groundingMetadata?.groundingChunks) {
+          sources = candidate.groundingMetadata.groundingChunks
+            .map((chunk: any) => ({ title: chunk.web?.title || 'Sumber Web', uri: chunk.web?.uri }))
+            .filter((s: any) => s.uri);
+            
+          urlsToScrape = sources.map(s => s.uri).slice(0, 3);
+        }
       }
 
       if (urlsToScrape.length === 0) {
