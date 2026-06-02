@@ -117,26 +117,16 @@ export default {
       for (let i = 0; i < urlsToScrape.length; i++) {
         const url = urlsToScrape[i];
         try {
-          // Fetch raw HTML
-          const htmlRes = await fetch(url, { 
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AI-Agent-Deep-Research' } 
-          });
-          if (!htmlRes.ok) continue;
+          // Gunakan Jina AI (r.jina.ai) untuk menembus JS/CAPTCHA/Cloudflare dasar dan mengonversi halaman ke Markdown bersih
+          const scrapeRes = await fetch(`https://r.jina.ai/${url}`);
+          if (!scrapeRes.ok) continue;
           
-          const htmlText = await htmlRes.text();
-          
-          // Bersihkan tag HTML (Sangat Sederhana tapi efektif untuk LLM)
-          const cleanText = htmlText
-            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '') // Hapus CSS
-            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '') // Hapus JS
-            .replace(/<[^>]+>/g, ' ') // Hapus semua tag HTML
-            .replace(/\s+/g, ' ') // Rapikan spasi
-            .trim()
-            .substring(0, 5000); // Batasi 5000 karakter per halaman agar tidak Over-Token
+          const markdownText = await scrapeRes.text();
+          const cleanText = markdownText.substring(0, 5000); // Batasi 5000 karakter per halaman agar tidak Over-Token
             
           scrapedContents += `\n\n--- KONTEN DARI WEB: ${url} ---\n${cleanText}`;
         } catch (e) {
-          console.log(`Gagal scrape url ${url}`, e);
+          console.log(`Gagal scrape url ${url} via Jina Reader`, e);
         }
       }
 
