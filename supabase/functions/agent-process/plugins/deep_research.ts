@@ -40,6 +40,28 @@ async function searchDuckDuckGo(query: string) {
   }
 }
 
+async function fetchYahooImages(query: string): Promise<string[]> {
+  try {
+    const searchUrl = `https://images.search.yahoo.com/search/images?p=${encodeURIComponent(query)}`;
+    const res = await fetch(`https://r.jina.ai/${searchUrl}`);
+    if (!res.ok) return [];
+    const text = await res.text();
+    const imgRegex = /!\[([^\]]*)\]\((https?:\/\/[^\s\)]+)\)/g;
+    let match;
+    const images: string[] = [];
+    while ((match = imgRegex.exec(text)) !== null) {
+      const url = match[2];
+      if (url.includes('bing.net') || url.includes('yimg.com')) {
+        images.push(url);
+      }
+    }
+    return images.slice(0, 3);
+  } catch (e) {
+    console.error("Failed to fetch Yahoo images:", e);
+    return [];
+  }
+}
+
 export default {
   name: 'deep_research',
   description: 'Melakukan riset mendalam (Deep Research). Mencari referensi di Google, lalu mengunjungi web tersebut untuk membaca seluruh isinya, dan menyusun laporan riset ekstensif.',
@@ -144,7 +166,18 @@ Instruksi:
 4. Jika datanya mendukung, buatlah tabel perbandingan.
 5. Berikan kesimpulan akhir yang tajam.`;
 
-      const finalOutput = await runLLM(synthesisPrompt);
+      let finalOutput = await runLLM(synthesisPrompt);
+
+      // Coba sisipkan gambar terkait
+      try {
+        const imageUrls = await fetchYahooImages(query);
+        if (imageUrls && imageUrls.length > 0) {
+          finalOutput += "\n\n### 📷 Gambar Terkait\n" + 
+            imageUrls.map((url, index) => `![Gambar ${index + 1}](${url})`).join(' ');
+        }
+      } catch (e) {
+        console.warn("Failed to append Yahoo images:", e);
+      }
 
       return { 
         output: finalOutput, 

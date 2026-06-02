@@ -40,6 +40,28 @@ async function searchDuckDuckGo(query: string) {
   }
 }
 
+async function fetchYahooImages(query: string): Promise<string[]> {
+  try {
+    const searchUrl = `https://images.search.yahoo.com/search/images?p=${encodeURIComponent(query)}`;
+    const res = await fetch(`https://r.jina.ai/${searchUrl}`);
+    if (!res.ok) return [];
+    const text = await res.text();
+    const imgRegex = /!\[([^\]]*)\]\((https?:\/\/[^\s\)]+)\)/g;
+    let match;
+    const images: string[] = [];
+    while ((match = imgRegex.exec(text)) !== null) {
+      const url = match[2];
+      if (url.includes('bing.net') || url.includes('yimg.com')) {
+        images.push(url);
+      }
+    }
+    return images.slice(0, 3);
+  } catch (e) {
+    console.error("Failed to fetch Yahoo images:", e);
+    return [];
+  }
+}
+
 export default {
   name: 'researcher',
   description: 'Menggunakan penelusuran web (web_search) untuk mencari info aktual, berita terkini, atau referensi online.',
@@ -55,6 +77,10 @@ export default {
         : [env.GEMINI_API_KEY];
 
       let lastError = null;
+      let output = '';
+      let sources = [];
+      let success = false;
+
       for (const key of keys) {
         try {
           const subRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
@@ -69,26 +95,27 @@ export default {
             continue;
           }
           const candidate = subData.candidates?.[0];
-          const output = candidate?.content?.parts?.[0]?.text || '';
+          output = candidate?.content?.parts?.[0]?.text || '';
           
-          let sources = [];
           if (candidate?.groundingMetadata?.groundingChunks) {
             sources = candidate.groundingMetadata.groundingChunks
               .map((chunk: any) => ({ title: chunk.web?.title || 'Sumber Web', uri: chunk.web?.uri }))
               .filter((s: any) => s.uri);
           }
-          return { output, sources };
+          success = true;
+          break;
         } catch (e: any) {
           lastError = e;
           console.warn(`Researcher key rotation network error:`, e);
         }
       }
 
-      // Jika semua kunci Gemini gagal, gunakan Fallback DuckDuckGo Lite
-      console.warn("Researcher: Semua kunci Gemini limit. Mengaktifkan fallback search DuckDuckGo Lite...");
-      const ddgResults = await searchDuckDuckGo(query);
-      if (ddgResults && ddgResults.length > 0) {
-        const prompt = `Anda adalah sub-agent Researcher. Tugas Anda adalah mensintesis jawaban yang akurat berdasarkan hasil pencarian internet berikut.
+      if (!success) {
+        // Jika semua kunci Gemini gagal, gunakan Fallback DuckDuckGo Lite
+        console.warn("Researcher: Semua kunci Gemini limit. Mengaktifkan fallback search DuckDuckGo Lite...");
+        const ddgResults = await searchDuckDuckGo(query);
+        if (ddgResults && ddgResults.length > 0) {
+          const prompt = `Anda adalah sub-agent Researcher. Tugas Anda adalah mensintesis jawaban yang akurat berdasarkan hasil pencarian internet berikut.
 Topik: ${query}
 
 Hasil Pencarian:
@@ -99,9 +126,24 @@ ${accumulatedContext}
 
 Tolong berikan jawaban riset yang ringkas, objektif, dan faktual berdasarkan hasil pencarian di atas. Cantumkan nomor referensi seperti [1], [2] jika merujuk ke sumber tersebut.`;
 
-        const answer = await runLLM(prompt, "Anda adalah asisten peneliti yang objektif.");
-        const sources = ddgResults.map(r => ({ title: r.title, uri: r.link }));
-        return { output: answer, sources };
+          output = await runLLM(prompt, "Anda adalah asisten peneliti yang objektif.");
+          sources = ddgResults.map(r => ({ title: r.title, uri: r.link }));
+          success = true;
+        }
+      }
+
+      if (success) {
+        // Coba sisipkan gambar terkait
+        try {
+          const imageUrls = await fetchYahooImages(query);
+          if (imageUrls && imageUrls.length > 0) {
+            output += "\n\n### 📷 Gambar Terkait\n" + 
+              imageUrls.map((url, index) => `![Gambar ${index + 1}](${url})`).join(' ');
+          }
+        } catch (e) {
+          console.warn("Failed to append Yahoo images:", e);
+        }
+        return { output, sources };
       }
 
       return { output: `Riset gagal: Semua Gemini API key habis kuota atau error, dan pencarian fallback DuckDuckGo tidak mengembalikan hasil.` };
