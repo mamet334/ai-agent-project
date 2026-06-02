@@ -30,18 +30,26 @@ export default {
           const transcript = await YoutubeTranscript.fetchTranscript(videoId);
           transcriptText = transcript.map(t => t.text).join(' ');
         } catch (err) {
-          console.log("youtube-transcript failed, trying Apify fallback...");
+          console.log("youtube-transcript failed, trying Apify fallback...", err.message);
           const apifyToken = Deno.env.get("APIFY_API_TOKEN");
           
           if (apifyToken) {
             try {
-              // Menggunakan Actor "YouTube Transcript Scraper" di Apify
-              // API memanggil Endpoint Sync yang akan menjalankan task dan langsung mengembalikan hasilnya
-              const apifyRes = await fetch(`https://api.apify.com/v2/acts/h7vHXaVv4925Xq9c8/run-sync-get-dataset-items?token=${apifyToken}`, {
+              // Timeout 50 detik agar tidak melebihi batas Edge Function
+              const controller = new AbortController();
+              const timeout = setTimeout(() => controller.abort(), 50000);
+              
+              // Menggunakan Actor "supreme_coder/youtube-transcript-scraper" di Apify
+              const apifyRes = await fetch(`https://api.apify.com/v2/acts/supreme_coder~youtube-transcript-scraper/run-sync-get-dataset-items?token=${apifyToken}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ videoUrls: [videoUrl] })
+                body: JSON.stringify({ 
+                  urls: [{ url: videoUrl }],
+                  languages: ["id", "en", "auto"]
+                }),
+                signal: controller.signal
               });
+              clearTimeout(timeout);
               
               if (!apifyRes.ok) {
                  throw new Error("Apify API error: " + await apifyRes.text());
@@ -49,14 +57,31 @@ export default {
               const apifyData = await apifyRes.json();
               
               if (apifyData && apifyData.length > 0) {
-                 // Mengambil teks dari respon Apify (bervariasi tergantung actor, biasanya ada di text/transcript/captions)
-                 transcriptText = apifyData[0].text || apifyData[0].transcript || JSON.stringify(apifyData[0].captions || apifyData[0]);
+                 if (apifyData[0].errorCode || apifyData[0].error) {
+                    throw new Error(apifyData[0].error || "Transkrip tidak ditemukan");
+                 }
+                 const item = apifyData[0];
+                 if (typeof item.text === 'string' && item.text.length > 0) {
+                    transcriptText = item.text;
+                 } else if (typeof item.transcript === 'string' && item.transcript.length > 0) {
+                    transcriptText = item.transcript;
+                 } else if (Array.isArray(item.captions)) {
+                    transcriptText = item.captions.map(c => typeof c === 'string' ? c : (c.text || c.content || '')).join(' ');
+                 } else if (Array.isArray(item.text)) {
+                    transcriptText = item.text.map(t => typeof t === 'string' ? t : (t.text || t.content || '')).join(' ');
+                 } else if (Array.isArray(item.transcript)) {
+                    transcriptText = item.transcript.map(t => typeof t === 'string' ? t : (t.text || t.content || '')).join(' ');
+                 } else {
+                    const { videoDetails, ...rest } = item;
+                    transcriptText = JSON.stringify(rest);
+                 }
               } else {
                  throw new Error("Apify mengembalikan hasil kosong.");
               }
             } catch(apifyErr) {
+               const timeoutMsg = apifyErr.name === 'AbortError' ? ' (Timeout 50 detik)' : '';
                return { 
-                  output: `Gagal mengekstrak teks dari YouTube. Kedua metode (Gratis & Apify) diblokir.\nError Awal: ${err.message}\nError Apify: ${apifyErr.message}\n\nSARAN: Silakan copy-paste transkrip video secara manual ke obrolan ini.` 
+                  output: `⚠️ Gagal mengekstrak teks dari YouTube.\n\n**Metode 1 (Gratis):** ${err.message}\n**Metode 2 (Apify):** ${apifyErr.message}${timeoutMsg}\n\nKemungkinan penyebab:\n- Video tidak memiliki subtitle (manual maupun auto-generated)\n- YouTube memblokir IP server\n- Koneksi ke Apify timeout\n\n💡 **SARAN:** Copy-paste transkrip video secara manual ke chat ini, dan saya akan menganalisisnya!` 
                };
             }
           } else {
@@ -66,7 +91,8 @@ export default {
           }
         }
 
-        if (!transcriptText || transcriptText.trim().length === 0) {
+        transcriptText = String(transcriptText || "");
+        if (transcriptText.trim().length === 0) {
           return {
             output: `[SISTEM ERROR: GAGAL MENARIK SUBTITLE]\nVideo ini kemungkinan tidak memiliki Subtitle otomatis. JANGAN merangkum apapun!`
           };
@@ -76,20 +102,21 @@ export default {
         const taskLower = task.toLowerCase();
         
         // Mode Pintar: Potong teks berdasarkan instruksi untuk mengakali limit token (TPM)
+        // Groq Free Tier = 6000 TPM. Kita batasi transkrip maks 4000 karakter (~1000 token) untuk keamanan penuh.
         if (taskLower.includes('depan') || taskLower.includes('awal')) {
-          cleanedText = rawText.substring(0, 12000);
+          cleanedText = rawText.substring(0, 4000);
         } else if (taskLower.includes('tengah')) {
-          const start = Math.max(0, Math.floor(rawText.length / 2) - 6000);
-          cleanedText = rawText.substring(start, start + 12000);
+          const start = Math.max(0, Math.floor(rawText.length / 2) - 2000);
+          cleanedText = rawText.substring(start, start + 4000);
         } else if (taskLower.includes('akhir')) {
-          const start = Math.max(0, rawText.length - 12000);
+          const start = Math.max(0, rawText.length - 4000);
           cleanedText = rawText.substring(start);
         } else if (taskLower.includes('seluruhnya') || taskLower.includes('semua')) {
-          cleanedText = rawText.substring(0, 30000); // Mode nekat (bisa kena limit)
+          cleanedText = rawText.substring(0, 8000);
         } else {
-          // Default: Intisari (5000 depan + 5000 belakang) -> Total 10.000 karakter (~2000 token, dijamin aman dari limit Groq/OpenRouter)
-          if (rawText.length > 12000) {
-            cleanedText = rawText.substring(0, 6000) + "\n\n... [BAGIAN TENGAH DIPOTONG OTOMATIS OLEH MAMET UNTUK MENGHEMAT KUOTA] ...\n\n" + rawText.substring(rawText.length - 6000);
+          // Default: Intisari (2000 depan + 2000 belakang) → Total 4000 karakter (~1000 token, aman untuk Groq Free)
+          if (rawText.length > 4000) {
+            cleanedText = rawText.substring(0, 2000) + "\n\n... [BAGIAN TENGAH DIPOTONG OTOMATIS OLEH MAMET UNTUK MENGHEMAT KUOTA] ...\n\n" + rawText.substring(rawText.length - 2000);
           } else {
             cleanedText = rawText;
           }
@@ -128,7 +155,7 @@ INSTRUKSI EKSEKUSI:
         sources: [{ title: 'Video YouTube', uri: videoUrl }],
         toolExecution: {
           name: 'extract_youtube_transcript',
-          args: { videoId: videoId, transcript_length: transcriptText.length }
+          args: { videoId: videoId, transcript_length: cleanedText.length }
         }
       };
 
