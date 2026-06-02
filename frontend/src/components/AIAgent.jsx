@@ -1516,66 +1516,96 @@ export default function AIAgent() {
               </div>
             </div>
 
-            {/* Model Selector Dropdown */}
+            {/* Model Selector Dropdown & Manage Custom Model */}
             <div className="flex items-center gap-2">
               <span className="hidden sm:inline text-xs text-slate-400">Brain Model:</span>
-              <select
-                value={selectedModel}
-                onChange={e => {
-                  const val = e.target.value;
-                  if (val === 'ADD_CUSTOM_MODEL') {
-                    const modelName = prompt(
-                      "Masukkan model kustom baru Anda.\n\nContoh format:\n- OpenRouter: openrouter/author/model (cth: openrouter/google/gemini-2.5-pro)\n- Groq: groq/model (cth: groq/mixtral-8x7b-32768)\n- OpenAI: nama-model-openai (cth: gpt-3.5-turbo)"
-                    );
-                    if (modelName && modelName.trim()) {
-                      const cleanName = modelName.trim();
-                      // Save to customModels list in localStorage
-                      const storedCustom = localStorage.getItem('ai_agent_custom_models');
-                      let customList = [];
-                      try {
-                        if (storedCustom) customList = JSON.parse(storedCustom);
-                      } catch(err) {}
-                      if (!customList.includes(cleanName)) {
-                        customList.push(cleanName);
-                        localStorage.setItem('ai_agent_custom_models', JSON.stringify(customList));
+              <div className="flex items-center gap-1.5 bg-slate-800 border border-purple-500/30 rounded-lg px-2 py-1">
+                <select
+                  value={selectedModel}
+                  onChange={e => {
+                    const val = e.target.value;
+                    if (val === 'ADD_CUSTOM_MODEL') {
+                      const modelName = prompt(
+                        "Masukkan model kustom baru Anda.\n\nContoh format:\n- OpenRouter: openrouter/author/model (cth: openrouter/google/gemini-2.5-pro)\n- Groq: groq/model (cth: groq/mixtral-8x7b-32768)\n- OpenAI: nama-model-openai (cth: gpt-3.5-turbo)"
+                      );
+                      if (modelName && modelName.trim()) {
+                        const cleanName = modelName.trim();
+                        // Save to customModels list in localStorage
+                        const storedCustom = localStorage.getItem('ai_agent_custom_models');
+                        let customList = [];
+                        try {
+                          if (storedCustom) customList = JSON.parse(storedCustom);
+                        } catch(err) {}
+                        if (!customList.includes(cleanName)) {
+                          customList.push(cleanName);
+                          localStorage.setItem('ai_agent_custom_models', JSON.stringify(customList));
+                        }
+                        setSelectedModel(cleanName);
                       }
-                      setSelectedModel(cleanName);
+                    } else {
+                      setSelectedModel(val);
                     }
-                  } else {
-                    setSelectedModel(val);
-                  }
-                }}
-                className="bg-slate-800 border border-purple-500/30 text-purple-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-purple-500 transition-all font-medium cursor-pointer"
-              >
-                <option value="coordinator-agent">Kepala Agent (Multi-Agent Orchestrator)</option>
-                <option value="gpt-4o">ChatGPT-4o (OpenAI - Sangat Pintar)</option>
-                <option value="gpt-4o-mini">ChatGPT-4o Mini (OpenAI - Cepat)</option>
-                <option value="gemini-2.5-flash">Gemini 2.5 Flash (Gratis & Cepat)</option>
-                <option value="gemini-2.5-pro">Gemini 2.5 Pro (Sangat Pintar - Gratis)</option>
-                <option value="groq-llama-3.3">Llama 3.3 70B (Groq - Gratis & Cepat)</option>
-                <option value="groq-llama-3.1">Llama 3.1 8B (Groq - Instan & Cepat)</option>
-                <option value="openrouter-llama-3">Llama 3 8B (Free via OpenRouter)</option>
-                <option value="openrouter-deepseek-r1">DeepSeek R1 (Free via OpenRouter)</option>
-                
-                {/* Custom User Models dynamically loaded from localStorage */}
+                  }}
+                  className="bg-transparent text-purple-200 text-xs focus:outline-none transition-all font-medium cursor-pointer max-w-[180px] sm:max-w-xs"
+                >
+                  <option value="coordinator-agent" className="bg-slate-900 text-white">Kepala Agent (Multi-Agent Orchestrator)</option>
+                  <option value="gpt-4o" className="bg-slate-900 text-white">ChatGPT-4o (OpenAI - Sangat Pintar)</option>
+                  <option value="gpt-4o-mini" className="bg-slate-900 text-white">ChatGPT-4o Mini (OpenAI - Cepat)</option>
+                  <option value="gemini-2.5-flash" className="bg-slate-900 text-white">Gemini 2.5 Flash (Gratis & Cepat)</option>
+                  <option value="gemini-2.5-pro" className="bg-slate-900 text-white">Gemini 2.5 Pro (Sangat Pintar - Gratis)</option>
+                  <option value="groq-llama-3.3" className="bg-slate-900 text-white">Llama 3.3 70B (Groq - Gratis & Cepat)</option>
+                  <option value="groq-llama-3.1" className="bg-slate-900 text-white">Llama 3.1 8B (Groq - Instan & Cepat)</option>
+                  <option value="openrouter-llama-3" className="bg-slate-900 text-white">Llama 3 8B (Free via OpenRouter)</option>
+                  <option value="openrouter-deepseek-r1" className="bg-slate-900 text-white">DeepSeek R1 (Free via OpenRouter)</option>
+                  
+                  {/* Custom User Models dynamically loaded from localStorage */}
+                  {(() => {
+                    const storedCustom = localStorage.getItem('ai_agent_custom_models');
+                    let customList = [];
+                    try {
+                      if (storedCustom) customList = JSON.parse(storedCustom);
+                    } catch(err) {}
+                    return customList.map((m) => {
+                      const label = m.includes('/') ? m.substring(m.lastIndexOf('/') + 1) : m;
+                      return (
+                        <option key={m} value={m} className="bg-slate-900 text-white">
+                          {label.toUpperCase()} ({m.split('/')[0].toUpperCase()} - Kustom)
+                        </option>
+                      );
+                    });
+                  })()}
+
+                  <option value="ADD_CUSTOM_MODEL" className="text-purple-400 font-semibold bg-slate-900">+ Tambah Model Kustom...</option>
+                </select>
+
+                {/* Trash button to delete currently selected custom model */}
                 {(() => {
                   const storedCustom = localStorage.getItem('ai_agent_custom_models');
                   let customList = [];
                   try {
                     if (storedCustom) customList = JSON.parse(storedCustom);
                   } catch(err) {}
-                  return customList.map((m) => {
-                    const label = m.includes('/') ? m.substring(m.lastIndexOf('/') + 1) : m;
+                  
+                  if (customList.includes(selectedModel)) {
                     return (
-                      <option key={m} value={m}>
-                        {label.toUpperCase()} ({m.split('/')[0].toUpperCase()} - Kustom)
-                      </option>
+                      <button
+                        onClick={() => {
+                          if (confirm(`Apakah Anda yakin ingin menghapus model kustom "${selectedModel}"?`)) {
+                            const updatedList = customList.filter(m => m !== selectedModel);
+                            localStorage.setItem('ai_agent_custom_models', JSON.stringify(updatedList));
+                            setSelectedModel('coordinator-agent'); // Fallback to coordinator
+                          }
+                        }}
+                        className="p-1 text-slate-400 hover:text-red-400 rounded transition-colors"
+                        title="Hapus Model Kustom Ini"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     );
-                  });
+                  }
+                  return null;
                 })()}
-
-                <option value="ADD_CUSTOM_MODEL" className="text-purple-400 font-semibold">+ Tambah Model Kustom...</option>
-              </select>
+              </div>
             </div>
           </div>
 
