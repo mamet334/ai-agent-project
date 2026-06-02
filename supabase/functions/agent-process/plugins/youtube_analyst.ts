@@ -146,7 +146,8 @@ INSTRUKSI EKSEKUSI:
    🕵️ KOMPETITOR & DIFERENSIASI
    (Apa yang membuat video ini unik dibanding kompetitor)
 3. Jadikan teks mentah YouTube sebagai sumber kebenaran (Source of Truth).
-4. Gunakan bahasa Indonesia yang profesional, modern, dan mudah dipahami.`;
+4. Gunakan bahasa Indonesia yang profesional, modern, dan mudah dipahami.
+5. JIKA Anda diminta menampilkan teks/transkrip/lirik lengkap, tuliskan teks tersebut secara langsung sebagai paragraf biasa yang rapi dengan baris baru (line break) yang wajar (misal per kalimat atau bait lagu). DILARANG menggunakan blok kode (markdown code block \`\`\`) untuk menampilkan lirik/transkrip agar tidak sulit dibaca oleh user.`;
 
       const summary = await runLLM(prompt);
 

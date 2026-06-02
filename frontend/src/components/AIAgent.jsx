@@ -161,7 +161,7 @@ const MessageContent = ({ text, workspaceHandle }) => {
                       <div className="flex items-center justify-between px-4 py-2 bg-slate-900/80 border-b border-purple-500/20">
                         <span className="text-[10px] text-purple-400 font-mono uppercase tracking-wider">{lang || 'Code'}</span>
                       </div>
-                      <pre className="p-4 overflow-x-auto text-sm text-slate-300" {...props}>
+                      <pre className="p-4 overflow-x-auto whitespace-pre-wrap break-words text-sm text-slate-300" {...props}>
                         <code className={className}>{children}</code>
                       </pre>
                     </div>
@@ -218,7 +218,7 @@ const MessageContent = ({ text, workspaceHandle }) => {
                 <div className="flex items-center justify-between px-4 py-2 bg-slate-900/80 border-b border-purple-500/20">
                   <span className="text-[10px] text-purple-400 font-mono uppercase tracking-wider">{lang || 'Code'}</span>
                 </div>
-                <pre className="p-4 overflow-x-auto text-sm text-slate-300" {...props}>
+                <pre className="p-4 overflow-x-auto whitespace-pre-wrap break-words text-sm text-slate-300" {...props}>
                   <code className={className}>{children}</code>
                 </pre>
               </div>
