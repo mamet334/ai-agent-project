@@ -59,6 +59,25 @@ const CopyButton = ({ text }) => {
   );
 };
 
+const CodeCopyButton = ({ text }) => {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button
+      onClick={handleCopy}
+      className="flex items-center gap-1.5 text-[10px] text-slate-400 hover:text-slate-200 transition-colors font-medium bg-slate-800/50 hover:bg-slate-700/50 px-2 py-1 rounded"
+      title="Copy code"
+    >
+      {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+      {copied ? <span className="text-green-400">Copied!</span> : 'Copy'}
+    </button>
+  );
+};
+
 const MessageContent = ({ text, workspaceHandle }) => {
   if (!text) return null;
   return (
@@ -160,6 +179,7 @@ const MessageContent = ({ text, workspaceHandle }) => {
                     <div className="relative group rounded-xl overflow-hidden my-4 border border-purple-500/20 shadow-lg shadow-purple-500/10">
                       <div className="flex items-center justify-between px-4 py-2 bg-slate-900/80 border-b border-purple-500/20">
                         <span className="text-[10px] text-purple-400 font-mono uppercase tracking-wider">{lang || 'Code'}</span>
+                        <CodeCopyButton text={rawContent} />
                       </div>
                       <pre className="p-4 overflow-x-auto whitespace-pre-wrap break-words text-sm text-slate-300" {...props}>
                         <code className={className}>{children}</code>
@@ -217,6 +237,7 @@ const MessageContent = ({ text, workspaceHandle }) => {
               <div className="relative group rounded-xl overflow-hidden my-4 border border-purple-500/20 shadow-lg shadow-purple-500/10">
                 <div className="flex items-center justify-between px-4 py-2 bg-slate-900/80 border-b border-purple-500/20">
                   <span className="text-[10px] text-purple-400 font-mono uppercase tracking-wider">{lang || 'Code'}</span>
+                  <CodeCopyButton text={rawContent} />
                 </div>
                 <pre className="p-4 overflow-x-auto whitespace-pre-wrap break-words text-sm text-slate-300" {...props}>
                   <code className={className}>{children}</code>
