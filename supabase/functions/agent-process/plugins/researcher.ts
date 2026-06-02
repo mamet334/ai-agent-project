@@ -1,10 +1,11 @@
 export default {
   name: 'researcher',
   description: 'Menggunakan penelusuran web (web_search) untuk mencari info aktual, berita terkini, atau referensi online.',
-  execute: async ({ task, accumulatedContext, env, runLLM }) => {
+  execute: async ({ task, cleanTask, accumulatedContext, env, runLLM }) => {
     try {
+      const query = cleanTask || task;
       const subPayload = {
-        contents: [{ role: 'user', parts: [{ text: `Cari informasi web mengenai: ${task}\n\nKonteks:\n${accumulatedContext}` }] }],
+        contents: [{ role: 'user', parts: [{ text: `Cari informasi web mengenai: ${query}\n\nKonteks:\n${accumulatedContext}` }] }],
         tools: [{ googleSearch: {} }]
       };
       const subRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`, {

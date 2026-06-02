@@ -862,7 +862,7 @@ Contoh Output Wajib: [{"subagent": "cron_manager", "task": "Buat jadwal riset sa
             
             // --- MAMET HEALER (PENAWAR RACUN / ERROR SHIELD) ---
             try {
-              const result = await plugin.execute({ task: fullTask, accumulatedContext, env, runLLM, userId });
+              const result = await plugin.execute({ task: fullTask, cleanTask: task, accumulatedContext, env, runLLM, userId });
               subagentResText = result.output;
               subagentSources = result.sources || [];
               subagentToolExec = result.toolExecution || null;

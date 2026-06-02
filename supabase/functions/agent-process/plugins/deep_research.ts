@@ -1,11 +1,12 @@
 export default {
   name: 'deep_research',
   description: 'Melakukan riset mendalam (Deep Research). Mencari referensi di Google, lalu mengunjungi web tersebut untuk membaca seluruh isinya, dan menyusun laporan riset ekstensif.',
-  execute: async ({ task, env, runLLM }) => {
+  execute: async ({ task, cleanTask, env, runLLM }) => {
     try {
+      const query = cleanTask || task;
       // 1. Lakukan pencarian Google tahap pertama (mengambil Links)
       const searchPayload = {
-        contents: [{ role: 'user', parts: [{ text: `Tolong carikan informasi untuk: ${task}` }] }],
+        contents: [{ role: 'user', parts: [{ text: `Tolong carikan informasi untuk: ${query}` }] }],
         tools: [{ googleSearch: {} }]
       };
       
@@ -67,7 +68,7 @@ export default {
 
       // 3. Sintesis laporan akhir menggunakan LLM berdasarkan teks yang sudah di-scrape
       const synthesisPrompt = `Anda adalah seorang Analis Riset Senior. Tugas Anda adalah membuat Laporan Makalah Riset yang sangat mendalam dan profesional.
-Topik Riset: ${task}
+Topik Riset: ${query}
 
 Berikut adalah data mentah hasil kunjungan robot kami ke beberapa website:
 ${scrapedContents}
