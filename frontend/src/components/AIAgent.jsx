@@ -1634,12 +1634,17 @@ export default function AIAgent() {
                         </div>
                       )}
                       {message.subagentRuns && message.subagentRuns.length > 0 && (
-                        <div className="mt-4 space-y-3">
-                          <div className="text-xs font-semibold text-purple-400 flex items-center gap-1">
-                            <Zap className="w-3.5 h-3.5 animate-pulse text-purple-400" />
-                            Alur Kerja Sub-Agent (Orchestration):
-                          </div>
-                          <div className="border-l-2 border-purple-500/30 pl-4 space-y-4">
+                        <details className="mt-4 group">
+                          <summary className="text-xs font-semibold text-slate-400 hover:text-purple-400 flex items-center gap-2 cursor-pointer list-none transition-colors select-none">
+                            <div className="flex items-center gap-1 bg-slate-900/80 px-2.5 py-1.5 rounded-lg border border-slate-700/50 group-hover:border-purple-500/30">
+                              <BrainCircuit className="w-3.5 h-3.5 animate-pulse text-purple-400" />
+                              <span>Proses Orkestrasi AI ({message.subagentRuns.length} langkah)</span>
+                              <svg className="w-3.5 h-3.5 text-slate-500 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </div>
+                          </summary>
+                          <div className="mt-3 border-l-2 border-purple-500/30 pl-4 space-y-4 ml-3 animate-in fade-in slide-in-from-top-2 duration-300">
                             {message.subagentRuns.map((run, idx) => (
                               <div key={idx} className="relative">
                                 {/* Pip node */}
@@ -1657,14 +1662,14 @@ export default function AIAgent() {
                                   <div className="text-slate-400 italic mb-1.5">
                                     Tugas: {run.task}
                                   </div>
-                                  <div className="text-slate-200 bg-black/40 p-2 rounded whitespace-pre-wrap max-h-40 overflow-y-auto font-sans leading-relaxed">
+                                  <div className="text-slate-300 bg-black/40 p-2 rounded whitespace-pre-wrap max-h-40 overflow-y-auto font-sans leading-relaxed text-[11px]">
                                     {run.output}
                                   </div>
                                   
                                   {/* Grounding sources for the subagent if any */}
                                   {run.sources && run.sources.length > 0 && (
                                     <div className="mt-2 pt-2 border-t border-slate-800/40">
-                                      <div className="text-[10px] text-slate-400 mb-1">Referensi Web:</div>
+                                      <div className="text-[10px] text-slate-400 mb-1">Referensi:</div>
                                       <div className="flex flex-wrap gap-1.5">
                                         {run.sources.map((src, sIdx) => (
                                           <a
@@ -1672,9 +1677,9 @@ export default function AIAgent() {
                                             href={src.uri}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="text-[10px] text-purple-300 hover:text-purple-100 bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded-full transition-all truncate max-w-xs"
+                                            className="text-[10px] text-purple-300 hover:text-purple-100 bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded-full transition-all truncate max-w-xs flex items-center gap-1"
                                           >
-                                            {src.title}
+                                            <Zap className="w-2.5 h-2.5" /> {src.title}
                                           </a>
                                         ))}
                                       </div>
@@ -1692,7 +1697,7 @@ export default function AIAgent() {
                               </div>
                             ))}
                           </div>
-                        </div>
+                        </details>
                       )}
                       <div className="text-xs opacity-50 mt-2">
                         {message.timestamp.toLocaleTimeString('id-ID')}
