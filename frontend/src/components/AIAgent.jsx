@@ -449,12 +449,33 @@ export default function AIAgent() {
 
   // Check auth & listen to changes
   useEffect(() => {
+    const fetchFreshUser = async () => {
+      try {
+        const { data: { user: freshUser } } = await supabase.auth.getUser();
+        if (freshUser) setUser(freshUser);
+      } catch (err) {
+        console.error("Failed to fetch fresh user:", err);
+      }
+    };
+
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user || null);
+      if (session?.user) {
+        setUser(session.user);
+        fetchFreshUser();
+      } else {
+        setUser(null);
+      }
     });
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
+      if (session?.user) {
+        setUser(session.user);
+        fetchFreshUser();
+      } else {
+        setUser(null);
+      }
     });
+
     return () => subscription.unsubscribe();
   }, []);
 
