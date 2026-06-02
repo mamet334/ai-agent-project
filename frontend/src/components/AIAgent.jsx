@@ -92,10 +92,10 @@ const parseThinkingContent = (text) => {
 };
 
 // DeepSeek-style Thinking Block component
-const ThinkingBlock = ({ thinking, duration }) => {
-  if (!thinking) return null;
+const ThinkingBlock = ({ thinking, processingSteps, duration }) => {
+  if (!thinking && (!processingSteps || processingSteps.length === 0)) return null;
   return (
-    <details className="mb-3 group">
+    <details className="mb-3 group" open={true}>
       <summary className="text-xs font-medium text-slate-500 hover:text-purple-400 flex items-center gap-1.5 cursor-pointer list-none transition-colors select-none">
         <BrainCircuit className="w-3.5 h-3.5 text-purple-400" />
         <span>Berpikir{duration ? ` selama ${duration} detik` : ''}</span>
@@ -103,13 +103,30 @@ const ThinkingBlock = ({ thinking, duration }) => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </summary>
-      <div className="mt-2 ml-1 border-l-2 border-purple-500/20 pl-3 text-xs text-slate-400 space-y-1.5 leading-relaxed">
-        {thinking.split('\n').filter(l => l.trim()).map((line, idx) => (
-          <div key={idx} className="flex items-start gap-1.5">
-            <span className="text-purple-500 select-none mt-0.5">•</span>
-            <span>{line.trim()}</span>
+      <div className="mt-2 ml-1 border-l-2 border-purple-500/20 pl-3 text-xs text-slate-400 space-y-2.5 leading-relaxed">
+        {/* Real Backend Processing Steps (Timeline style) */}
+        {processingSteps && processingSteps.length > 0 && (
+          <div className="space-y-1.5 mb-2.5 pb-2.5 border-b border-slate-700/30">
+            {processingSteps.map((step, idx) => (
+              <div key={`step-${idx}`} className="flex items-start gap-1.5 animate-in fade-in slide-in-from-left-2 duration-300">
+                <span className="text-blue-400 select-none font-bold mt-0.5">✓</span>
+                <span className="text-slate-300 font-medium">{step}</span>
+              </div>
+            ))}
           </div>
-        ))}
+        )}
+        
+        {/* CoT Reasoning Paragraphs */}
+        {thinking && (
+          <div className="space-y-1.5 italic text-slate-400">
+            {thinking.split('\n').filter(l => l.trim()).map((line, idx) => (
+              <div key={`thinking-${idx}`} className="flex items-start gap-1.5">
+                <span className="text-purple-500 select-none mt-0.5">•</span>
+                <span>{line.trim()}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </details>
   );
@@ -979,6 +996,7 @@ export default function AIAgent() {
           toolExecution: meta.toolExecution || null,
           subagentRuns: meta.subagentRuns || [],
           thinkingLogs: [...logs],
+          processingSteps: meta.processingSteps || [],
           thinkingDuration: thinkingDuration,
           timestamp: new Date(),
           isStreaming: true
@@ -1065,6 +1083,7 @@ export default function AIAgent() {
           toolExecution: data.toolExecution || null,
           subagentRuns: data.subagentRuns || [],
           thinkingLogs: [...logs],
+          processingSteps: data.processingSteps || [],
           thinkingDuration: thinkingDuration,
           timestamp: new Date(data.timestamp || Date.now()),
         };
@@ -1601,10 +1620,16 @@ export default function AIAgent() {
                           : 'bg-slate-800/50 backdrop-blur rounded-2xl rounded-tl-sm border border-purple-500/30 pb-10'
                       } px-3 md:px-5 py-2.5 md:py-3.5`}
                     >
-                      {/* DeepSeek-style Chain-of-Thought (parsed from <think> tags) */}
+                      {/* DeepSeek-style Chain-of-Thought (parsed from <think> tags + real backend steps) */}
                       {message.type === 'agent' && (() => {
                         const { thinking } = parseThinkingContent(message.content);
-                        return thinking ? <ThinkingBlock thinking={thinking} duration={message.thinkingDuration} /> : null;
+                        return (thinking || (message.processingSteps && message.processingSteps.length > 0)) ? (
+                          <ThinkingBlock 
+                            thinking={thinking} 
+                            processingSteps={message.processingSteps} 
+                            duration={message.thinkingDuration} 
+                          />
+                        ) : null;
                       })()}
 
                       {message.type === 'agent' && currentlyTypingId === message.id && !message.isStreaming

@@ -509,6 +509,7 @@ serve(async (req) => {
     let groundingSources: any[] = [];
     let toolExecution = null;
     let subagentRuns: any[] = [];
+    let processingSteps: string[] = [];
 
     const streamGeminiResponse = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], metaData: any = {}) => {
       try {
@@ -713,18 +714,24 @@ DILARANG KERAS MENGGUNAKAN PYTHON ATAU "TOOL_CODE". JANGAN PERNAH MENULISKAN KOD
       // --- INTENT ROUTER (Pemotong Kompas Cerdas) ---
       let isChatBiasa = false;
       const lowerMessage = finalMessage.toLowerCase();
+      processingSteps.push('🔍 Menganalisis permintaan user...');
       
       // Deteksi instan (Hardcoded) untuk fitur yang sangat spesifik
       if (lowerMessage.includes("jadwal") || lowerMessage.includes("cron") || lowerMessage.includes("otomatis")) {
         isChatBiasa = false;
+        processingSteps.push('🎯 Intent Router: Mendeteksi kata kunci Cron/Jadwal → Butuh Sub-Agent');
         console.log("Intent Router: Mendeteksi kata kunci Cron/Jadwal. Bypass LLM check -> BUTUH_AGENT");
       } else {
         try {
+          processingSteps.push('🧠 Intent Router: Mengklasifikasi jenis permintaan...');
           const intentCheckPrompt = `Apakah pesan berikut adalah obrolan santai, sapaan, ucapan terima kasih, atau obrolan ringan yang TIDAK memerlukan penggunaan fitur tambahan (seperti pencarian internet/koding/analisis/penjadwalan)? Pesan: "${finalMessage}". \n\nPENTING: Jika pesan mengandung permintaan untuk membuat jadwal, cron, atau tugas otomatis, WAJIB jawab "BUTUH_AGENT".\nJawab HANYA dengan kata "CHAT_BIASA" jika murni obrolan, atau "BUTUH_AGENT" jika butuh aksi/tool.`;
           const intentResult = await runCoordinatorLLM(intentCheckPrompt, "Anda adalah router intent super ringan. Jawab singkat padat.");
           if (intentResult.toUpperCase().includes("CHAT_BIASA")) {
              isChatBiasa = true;
+             processingSteps.push('💬 Keputusan: Obrolan biasa → Jawab langsung tanpa sub-agent');
              console.log("Intent Router: Ini chat biasa. Bypass logika Sub-Agent untuk menghemat waktu dan kuota.");
+          } else {
+             processingSteps.push('⚡ Keputusan: Butuh aksi → Mempersiapkan sub-agent...');
           }
         } catch (err) {
           console.warn("Intent router error, mengabaikan intent check:", err);
@@ -732,8 +739,9 @@ DILARANG KERAS MENGGUNAKAN PYTHON ATAU "TOOL_CODE". JANGAN PERNAH MENULISKAN KOD
       }
 
       if (isChatBiasa) {
+        processingSteps.push('✍️ Menghubungi Model AI untuk menjawab langsung...');
         if (stream && !extractedImage) {
-          const streamRes = getStreamResponse(finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns });
+          const streamRes = getStreamResponse(finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps });
           if (streamRes) return streamRes;
         }
         replyMessage = await runLLM(finalMessage, fullSystemContext, history);
@@ -747,9 +755,15 @@ Contoh Output Wajib: [{"subagent": "cron_manager", "task": "Buat jadwal riset sa
       let planText = '[]';
       let plan: any[] = [];
       try {
+        processingSteps.push('🤖 Kepala Agent (Coordinator): Merencanakan strategi...');
         planText = await runCoordinatorLLM(`Permintaan User: "${finalMessage}"`, coordinatorSystemPrompt);
         planText = planText.replace(/```json/g, '').replace(/```/g, '').trim();
         plan = JSON.parse(planText);
+        if (plan.length > 0) {
+          processingSteps.push(`📋 Rencana: ${plan.length} sub-agent akan ditugaskan → ${plan.map((p: any) => p.subagent).join(', ')}`);
+        } else {
+          processingSteps.push('📋 Coordinator memutuskan tidak ada sub-agent yang diperlukan');
+        }
       } catch (err) {
         console.error("Mamet Healer: Mendeteksi format JSON rusak. Memperbaiki...");
         // --- MAMET HEALER (DOKTER BEDAH LOGIKA) ---
@@ -791,6 +805,7 @@ Contoh Output Wajib: [{"subagent": "cron_manager", "task": "Buat jadwal riset sa
 
           const plugin = getPluginByName(subagent);
           if (plugin) {
+            processingSteps.push(`🚀 Menjalankan Sub-Agent "${subagent}": ${task}`);
             const env = { GEMINI_API_KEY, GROQ_API_KEY };
             const fullTask = `Tugas Spesifik Anda: ${task}\n\nPermintaan Asli User: "${finalMessage}"\n\nKonteks Tambahan:\n${accumulatedContext}`;
             
@@ -800,12 +815,16 @@ Contoh Output Wajib: [{"subagent": "cron_manager", "task": "Buat jadwal riset sa
               subagentResText = result.output;
               subagentSources = result.sources || [];
               subagentToolExec = result.toolExecution || null;
+              const outputPreview = (subagentResText || '').substring(0, 80).replace(/\n/g, ' ');
+              processingSteps.push(`✅ Sub-Agent "${subagent}" selesai${subagentSources.length > 0 ? ` → ${subagentSources.length} sumber referensi` : ''} → "${outputPreview}..."`);
             } catch (err: any) {
               console.error(`Mamet Healer: Menangkap Error mematikan dari Sub-Agent [${subagent}]!`, err);
               subagentResText = `[SISTEM DILINDUNGI OLEH MAMET HEALER]: Sub-agent gagal beroperasi karena error teknis (${err.message || 'Unknown'}). Tolong sampaikan ke user dengan ramah bahwa fitur ini sedang terkendala.`;
+              processingSteps.push(`❌ Sub-Agent "${subagent}" gagal: ${err.message || 'Unknown error'}`);
             }
           } else {
              subagentResText = `Sub-agent '${subagent}' tidak ditemukan di sistem plugin.`;
+             processingSteps.push(`⚠️ Sub-Agent "${subagent}" tidak ditemukan`);
           }
 
           subagentRuns.push({
@@ -819,14 +838,15 @@ Contoh Output Wajib: [{"subagent": "cron_manager", "task": "Buat jadwal riset sa
 
         const synthesisPrompt = `Anda telah menugaskan beberapa sub-agent.${fullSystemContext}\n\nPermintaan Awal User: "${finalMessage}"\n\nRiwayat pekerjaan sub-agent:\n${accumulatedContext}\n\nJAWABLAH pesan/pertanyaan user dengan ramah dan natural berdasarkan informasi dari sub-agent di atas. \n\nPENTING: \n- JANGAN gunakan format kaku seperti "Laporan Hasil Kerja". Bersikaplah seperti manusia biasa (asisten yang ramah bernama Mamet).\n- Langsung berikan jawaban, sapaan balik, atau solusi tanpa perlu panjang lebar menjelaskan proses sub-agent (kecuali user secara spesifik bertanya tentang prosesnya).\n- Jika Sub-Agent mengembalikan pesan ERROR atau GAGAL, sampaikan kepada user dengan sopan bahwa tugas tersebut gagal. Jangan pernah mengarang data palsu!\n- Gunakan format Tabel Markdown HANYA jika menyajikan data terstruktur, statistik, harga, atau perbandingan.\n- DILARANG KERAS menggunakan blok \`\`\`mermaid\`\`\` KECUALI user secara tertulis meminta "buatkan diagram" atau "gambarkan flowchart". Jika user tidak meminta diagram, JANGAN pernah memakainya!`;
         
+        processingSteps.push('📝 Merangkum dan menyintesis jawaban akhir...');
         if (stream && !extractedImage) {
-          const streamRes = getStreamResponse(synthesisPrompt, '', history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns });
+          const streamRes = getStreamResponse(synthesisPrompt, '', history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps });
           if (streamRes) return streamRes;
         }
         replyMessage = await runLLM(synthesisPrompt, '', history);
       } else {
         if (stream && !extractedImage) {
-          const streamRes = getStreamResponse(finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns });
+          const streamRes = getStreamResponse(finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps });
           if (streamRes) return streamRes;
         }
         replyMessage = await runLLM(finalMessage, fullSystemContext, history);
@@ -834,7 +854,8 @@ Contoh Output Wajib: [{"subagent": "cron_manager", "task": "Buat jadwal riset sa
       }
     } else {
       if (stream && !extractedImage) {
-        const streamRes = getStreamResponse(finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns });
+        processingSteps.push('✍️ Menjawab langsung (tanpa tools)...');
+        const streamRes = getStreamResponse(finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps });
         if (streamRes) return streamRes;
       }
       replyMessage = await runLLM(finalMessage, fullSystemContext, history);
@@ -846,6 +867,7 @@ Contoh Output Wajib: [{"subagent": "cron_manager", "task": "Buat jadwal riset sa
       groundingSources,
       toolExecution,
       subagentRuns,
+      processingSteps,
       timestamp: new Date(),
       userId
     };
