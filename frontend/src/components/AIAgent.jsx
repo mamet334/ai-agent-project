@@ -1533,6 +1533,16 @@ export default function AIAgent() {
                 <option value="groq-llama-3.1">Llama 3.1 8B (Groq - Instan & Cepat)</option>
                 <option value="openrouter-llama-3">Llama 3 8B (Free via OpenRouter)</option>
                 <option value="openrouter-deepseek-r1">DeepSeek R1 (Free via OpenRouter)</option>
+                
+                {/* 
+                  === CARA TAMBAH MODEL BARU SECARA SIMPEL ===
+                  Gunakan format prefix di bawah ini agar otomatis di-routing oleh backend:
+                  - OpenRouter: openrouter/author/model-name (Contoh: openrouter/google/gemini-2.5-pro)
+                  - Groq: groq/model-name (Contoh: groq/mixtral-8x7b-32768)
+                  - OpenAI: model-name (Contoh: gpt-3.5-turbo)
+                */}
+                <option value="openrouter/deepseek/deepseek-chat">DeepSeek V3 (OpenRouter - Kencang & Murah)</option>
+                <option value="groq/mixtral-8x7b-32768">Mixtral 8x7B MoE (Groq - Cepat)</option>
               </select>
             </div>
           </div>
