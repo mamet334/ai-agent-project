@@ -12,6 +12,11 @@
 8. Autonomous Agent (Cron) 100% Operational & Realtime Push (Bypass Kong JWT)
 9. 5-Layer Anti-Limit (Multi-Key Rotation, Backoff, Cascade Fallback)
 10. YouTube Anti-Bot Bypass (Bypass CAPTCHA fallback via Apify Scraper)
+11. Web Resilience Fallback (DuckDuckGo Lite search fallback if Gemini API limits exhausted)
+12. Jina Reader Scraper (Bypasses Cloudflare & scrapes clean markdown for deep_research)
+13. Strict Coordinator Routing (Enforced sub-agent selection to prevent logic sub-agent for factual queries)
+14. Real-time Image Search (Fetches Yahoo/Bing images via Jina and renders them dynamically in markdown)
 
 ## 🚀 ROADMAP TERSISA
 1. Voice Interaction (Suara AI)
+
