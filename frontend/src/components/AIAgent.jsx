@@ -465,19 +465,28 @@ export default function AIAgent() {
     const localMemory = localStorage.getItem(`ai_agent_global_memory_${userKey}`);
     const localCurrentChat = localStorage.getItem(`ai_agent_current_chat_${userKey}`);
 
-    if (localMemory) setGlobalMemory(localMemory);
-    else if (user?.user_metadata?.global_memory) setGlobalMemory(user.user_metadata.global_memory);
-    else setGlobalMemory('');
+    // Prioritize DB metadata over localStorage for logged-in user to prevent race conditions on multi-browser syncing
+    if (user && user.user_metadata?.global_memory !== undefined) {
+      setGlobalMemory(user.user_metadata.global_memory);
+    } else if (localMemory) {
+      setGlobalMemory(localMemory);
+    } else {
+      setGlobalMemory('');
+    }
 
-    const localCustom = localStorage.getItem('ai_agent_custom_models');
-    if (localCustom) {
-      try {
-        setCustomModels(JSON.parse(localCustom));
-      } catch (e) {}
-    } else if (user?.user_metadata?.custom_models) {
+    if (user && user.user_metadata?.custom_models !== undefined) {
       setCustomModels(user.user_metadata.custom_models);
     } else {
-      setCustomModels([]);
+      const localCustom = localStorage.getItem('ai_agent_custom_models');
+      if (localCustom) {
+        try {
+          setCustomModels(JSON.parse(localCustom));
+        } catch (e) {
+          setCustomModels([]);
+        }
+      } else {
+        setCustomModels([]);
+      }
     }
 
     if (localChats) {
