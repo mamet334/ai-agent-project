@@ -160,6 +160,15 @@ serve(async (req) => {
       }
       messages.push({ role: 'user', content: promptText });
       
+      let groqModel = 'llama-3.1-8b-instant';
+      if (model && model.startsWith('groq/')) {
+        groqModel = model.replace('groq/', '');
+      } else if (model === 'groq-llama-3.3') {
+        groqModel = 'llama-3.3-70b-versatile';
+      } else if (model === 'groq-llama-3.1') {
+        groqModel = 'llama-3.1-8b-instant';
+      }
+
       const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -167,7 +176,7 @@ serve(async (req) => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'llama-3.1-8b-instant',
+          model: groqModel,
           messages: messages,
           temperature: 0.1,
           stream: true
@@ -188,11 +197,14 @@ serve(async (req) => {
         return new Response(stream, { headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' } });
       }
 
+      const safeMeta = { ...metaData };
+      if (safeMeta.subagentRuns) safeMeta.subagentRuns = safeMeta.subagentRuns.map((r: any) => ({ ...r, output: '[Omitted]' }));
+
       return new Response(res.body, {
         headers: {
           ...corsHeaders,
           'Content-Type': 'text/event-stream',
-          'X-Agent-Metadata': JSON.stringify(metaData)
+          'X-Agent-Metadata': btoa(encodeURIComponent(JSON.stringify(safeMeta)))
         }
       });
     };
@@ -212,6 +224,15 @@ serve(async (req) => {
       
       messages.push({ role: 'user', content: promptText });
       
+      let groqModel = 'llama-3.1-8b-instant';
+      if (model && model.startsWith('groq/')) {
+        groqModel = model.replace('groq/', '');
+      } else if (model === 'groq-llama-3.3') {
+        groqModel = 'llama-3.3-70b-versatile';
+      } else if (model === 'groq-llama-3.1') {
+        groqModel = 'llama-3.1-8b-instant';
+      }
+
       const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -219,7 +240,7 @@ serve(async (req) => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'llama-3.1-8b-instant',
+          model: groqModel,
           messages: messages,
           temperature: 0.1
         })
@@ -326,8 +347,13 @@ serve(async (req) => {
       messages.push({ role: 'user', content: promptText });
       
       let openRouterModel = 'deepseek/deepseek-r1:free';
-      if (model === 'openrouter-llama-3') openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
-      else if (model === 'openrouter-deepseek-r1') openRouterModel = 'deepseek/deepseek-r1:free';
+      if (model && model.startsWith('openrouter/')) {
+        openRouterModel = model.replace('openrouter/', '');
+      } else if (model === 'openrouter-llama-3') {
+        openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
+      } else if (model === 'openrouter-deepseek-r1') {
+        openRouterModel = 'deepseek/deepseek-r1:free';
+      }
       
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
@@ -366,11 +392,14 @@ serve(async (req) => {
         return new Response(stream, { headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' } });
       }
 
+      const safeMeta = { ...metaData };
+      if (safeMeta.subagentRuns) safeMeta.subagentRuns = safeMeta.subagentRuns.map((r: any) => ({ ...r, output: '[Omitted]' }));
+
       return new Response(res.body, {
         headers: {
           ...corsHeaders,
           'Content-Type': 'text/event-stream',
-          'X-Agent-Metadata': JSON.stringify(metaData)
+          'X-Agent-Metadata': btoa(encodeURIComponent(JSON.stringify(safeMeta)))
         }
       });
     };
@@ -386,8 +415,13 @@ serve(async (req) => {
       messages.push({ role: 'user', content: promptText });
       
       let openRouterModel = 'deepseek/deepseek-r1:free';
-      if (model === 'openrouter-llama-3') openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
-      else if (model === 'openrouter-deepseek-r1') openRouterModel = 'deepseek/deepseek-r1:free';
+      if (model && model.startsWith('openrouter/')) {
+        openRouterModel = model.replace('openrouter/', '');
+      } else if (model === 'openrouter-llama-3') {
+        openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
+      } else if (model === 'openrouter-deepseek-r1') {
+        openRouterModel = 'deepseek/deepseek-r1:free';
+      }
       
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
@@ -416,8 +450,10 @@ serve(async (req) => {
       if (!extractedImage) {
         if (model && model.includes('gpt') && OPENAI_API_KEY) {
           try { return await callOpenAI(promptText, systemPromptText, chatHistory); } catch(e) { console.warn('OpenAI failed:', e); }
-        } else if (model && model.includes('openrouter') && OPENROUTER_API_KEY) {
+        } else if (model && (model.includes('openrouter') || model.startsWith('openrouter/')) && OPENROUTER_API_KEY) {
           try { return await callOpenRouter(promptText, systemPromptText, chatHistory); } catch(e) { console.warn('OpenRouter failed:', e); }
+        } else if (model && model.startsWith('groq/') && GROQ_API_KEY) {
+          try { return await callGroq(promptText, systemPromptText, chatHistory); } catch(e) { console.warn('Groq failed:', e); }
         }
       }
       
@@ -629,10 +665,12 @@ serve(async (req) => {
     const getStreamResponse = (prompt: string, sysPrompt: string, hist: any[], meta: any) => {
       if (model && model.includes('gpt') && OPENAI_API_KEY) {
         return streamOpenAIResponse(prompt, sysPrompt, hist, meta);
-      } else if (model && model.includes('openrouter') && OPENROUTER_API_KEY) {
+      } else if (model && (model.includes('openrouter') || model.startsWith('openrouter/')) && OPENROUTER_API_KEY) {
         return streamOpenRouterResponse(prompt, sysPrompt, hist, meta);
       } else if (model && model.includes('gemini') && GEMINI_API_KEY) {
         return streamGeminiResponse(prompt, sysPrompt, hist, meta);
+      } else if (model && model.startsWith('groq/') && GROQ_API_KEY) {
+        return streamGroqResponse(prompt, sysPrompt, hist, meta);
       } else if (GROQ_API_KEY) {
         return streamGroqResponse(prompt, sysPrompt, hist, meta);
       }
