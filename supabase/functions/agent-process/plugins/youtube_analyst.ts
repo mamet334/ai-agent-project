@@ -30,9 +30,40 @@ export default {
           const transcript = await YoutubeTranscript.fetchTranscript(videoId);
           transcriptText = transcript.map(t => t.text).join(' ');
         } catch (err) {
-          return { 
-            output: `Gagal mengekstrak teks dari YouTube. Kemungkinan IP diblokir (CAPTCHA) atau video diproteksi. Error: ${err.message}\nSARAN: Silakan copy-paste transkrip video secara manual ke obrolan ini, dan saya akan menganalisisnya!` 
-          };
+          console.log("youtube-transcript failed, trying Apify fallback...");
+          const apifyToken = Deno.env.get("APIFY_API_TOKEN");
+          
+          if (apifyToken) {
+            try {
+              // Menggunakan Actor "YouTube Transcript Scraper" di Apify
+              // API memanggil Endpoint Sync yang akan menjalankan task dan langsung mengembalikan hasilnya
+              const apifyRes = await fetch(`https://api.apify.com/v2/acts/h7vHXaVv4925Xq9c8/run-sync-get-dataset-items?token=${apifyToken}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ videoUrls: [videoUrl] })
+              });
+              
+              if (!apifyRes.ok) {
+                 throw new Error("Apify API error: " + await apifyRes.text());
+              }
+              const apifyData = await apifyRes.json();
+              
+              if (apifyData && apifyData.length > 0) {
+                 // Mengambil teks dari respon Apify (bervariasi tergantung actor, biasanya ada di text/transcript/captions)
+                 transcriptText = apifyData[0].text || apifyData[0].transcript || JSON.stringify(apifyData[0].captions || apifyData[0]);
+              } else {
+                 throw new Error("Apify mengembalikan hasil kosong.");
+              }
+            } catch(apifyErr) {
+               return { 
+                  output: `Gagal mengekstrak teks dari YouTube. Kedua metode (Gratis & Apify) diblokir.\nError Awal: ${err.message}\nError Apify: ${apifyErr.message}\n\nSARAN: Silakan copy-paste transkrip video secara manual ke obrolan ini.` 
+               };
+            }
+          } else {
+            return { 
+              output: `Gagal mengekstrak teks dari YouTube. Kemungkinan IP diblokir (CAPTCHA) atau video diproteksi.\nError: ${err.message}\n\n⚠️ SISTEM MENDETEKSI APIFY_API_TOKEN BELUM DISET. Tambahkan token untuk mengaktifkan Bypass Anti-Bot.\nSARAN: Silakan copy-paste transkrip manual atau tambahkan token Apify.` 
+            };
+          }
         }
 
         if (!transcriptText || transcriptText.trim().length === 0) {
