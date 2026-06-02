@@ -80,37 +80,64 @@ const CodeCopyButton = ({ text }) => {
 
 // Utility: Parse <think>...</think> tags from AI response
 const parseThinkingContent = (text) => {
-  if (!text) return { thinking: '', answer: text || '' };
-  const thinkRegex = /<think>([\s\S]*?)<\/think>/i;
-  const match = text.match(thinkRegex);
-  if (match) {
-    const thinking = match[1].trim();
-    const answer = text.replace(thinkRegex, '').trim();
-    return { thinking, answer };
+  if (!text) return { thinking: '', answer: '', isThinkingComplete: false };
+  const thinkStartRegex = /<think>([\s\S]*?)$/i;
+  const thinkCompleteRegex = /<think>([\s\S]*?)<\/think>/i;
+  
+  const completeMatch = text.match(thinkCompleteRegex);
+  if (completeMatch) {
+    const thinking = completeMatch[1].trim();
+    const answer = text.replace(thinkCompleteRegex, '').trim();
+    return { thinking, answer, isThinkingComplete: true };
   }
-  return { thinking: '', answer: text };
+  
+  const startMatch = text.match(thinkStartRegex);
+  if (startMatch) {
+    const thinking = startMatch[1].trim();
+    return { thinking, answer: '', isThinkingComplete: false };
+  }
+  
+  return { thinking: '', answer: text, isThinkingComplete: true };
 };
 
 // DeepSeek-style Thinking Block component
-const ThinkingBlock = ({ thinking, processingSteps, duration }) => {
+const ThinkingBlock = ({ thinking, processingSteps, duration, isThinkingComplete }) => {
   if (!thinking && (!processingSteps || processingSteps.length === 0)) return null;
+
+  const [liveDuration, setLiveDuration] = useState(duration || 0);
+
+  useEffect(() => {
+    if (isThinkingComplete) {
+      if (duration) {
+        setLiveDuration(duration);
+      }
+      return;
+    }
+    const timer = setInterval(() => {
+      setLiveDuration(prev => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isThinkingComplete, duration]);
+
   return (
-    <details className="mb-3 group" open={true}>
-      <summary className="text-xs font-medium text-slate-500 hover:text-purple-400 flex items-center gap-1.5 cursor-pointer list-none transition-colors select-none">
-        <BrainCircuit className="w-3.5 h-3.5 text-purple-400" />
-        <span>Berpikir{duration ? ` selama ${duration} detik` : ''}</span>
+    <details className="mb-4 group border-l border-slate-600/30 pl-3 ml-1" open={true}>
+      <summary className="text-xs font-semibold text-slate-500 hover:text-purple-400 flex items-center gap-1.5 cursor-pointer list-none transition-colors select-none">
+        <BrainCircuit className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
+        <span>
+          {!isThinkingComplete && !duration ? 'Berpikir...' : `Berpikir selama ${liveDuration || duration || 1} detik`}
+        </span>
         <svg className="w-3 h-3 text-slate-500 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </summary>
-      <div className="mt-2 ml-1 border-l-2 border-purple-500/20 pl-3 text-xs text-slate-400 space-y-2.5 leading-relaxed">
+      <div className="mt-2.5 text-xs text-slate-400/90 space-y-2.5 leading-relaxed">
         {/* Real Backend Processing Steps (Timeline style) */}
         {processingSteps && processingSteps.length > 0 && (
-          <div className="space-y-1.5 mb-2.5 pb-2.5 border-b border-slate-700/30">
+          <div className="space-y-1.5 pb-2.5 border-b border-slate-700/30 font-mono text-[10px] text-slate-500">
             {processingSteps.map((step, idx) => (
-              <div key={`step-${idx}`} className="flex items-start gap-1.5 animate-in fade-in slide-in-from-left-2 duration-300">
-                <span className="text-blue-400 select-none font-bold mt-0.5">✓</span>
-                <span className="text-slate-300 font-medium">{step}</span>
+              <div key={`step-${idx}`} className="flex items-start gap-1.5">
+                <span className="text-blue-500 select-none">✓</span>
+                <span>{step}</span>
               </div>
             ))}
           </div>
@@ -118,12 +145,11 @@ const ThinkingBlock = ({ thinking, processingSteps, duration }) => {
         
         {/* CoT Reasoning Paragraphs */}
         {thinking && (
-          <div className="space-y-1.5 italic text-slate-400">
+          <div className="space-y-2 text-slate-400/80">
             {thinking.split('\n').filter(l => l.trim()).map((line, idx) => (
-              <div key={`thinking-${idx}`} className="flex items-start gap-1.5">
-                <span className="text-purple-500 select-none mt-0.5">•</span>
-                <span>{line.trim()}</span>
-              </div>
+              <p key={`thinking-${idx}`} className="m-0 leading-relaxed">
+                {line.trim()}
+              </p>
             ))}
           </div>
         )}
@@ -1012,6 +1038,9 @@ export default function AIAgent() {
           return c;
         }));
 
+        // Hide the generic loading indicator because the message is now streaming
+        setLoading(false);
+
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8");
         let done = false;
@@ -1622,12 +1651,13 @@ export default function AIAgent() {
                     >
                       {/* DeepSeek-style Chain-of-Thought (parsed from <think> tags + real backend steps) */}
                       {message.type === 'agent' && (() => {
-                        const { thinking } = parseThinkingContent(message.content);
+                        const { thinking, isThinkingComplete } = parseThinkingContent(message.content);
                         return (thinking || (message.processingSteps && message.processingSteps.length > 0)) ? (
                           <ThinkingBlock 
                             thinking={thinking} 
                             processingSteps={message.processingSteps} 
-                            duration={message.thinkingDuration} 
+                            duration={message.thinkingDuration}
+                            isThinkingComplete={!message.isStreaming || isThinkingComplete}
                           />
                         ) : null;
                       })()}
@@ -1635,7 +1665,14 @@ export default function AIAgent() {
                       {message.type === 'agent' && currentlyTypingId === message.id && !message.isStreaming
                         ? <TypewriterText text={parseThinkingContent(message.content).answer} onComplete={() => setCurrentlyTypingId(null)} workspaceHandle={workspaceHandle} />
                         : message.type === 'agent'
-                          ? <MessageContent text={parseThinkingContent(message.content || (message.isStreaming ? ' ▍' : '')).answer} workspaceHandle={workspaceHandle} />
+                          ? (() => {
+                              const parsed = parseThinkingContent(message.content);
+                              let answerText = parsed.answer;
+                              if (message.isStreaming && parsed.isThinkingComplete) {
+                                answerText += ' ▍';
+                              }
+                              return <MessageContent text={answerText} workspaceHandle={workspaceHandle} />;
+                            })()
                           : <MessageContent text={message.content || ''} workspaceHandle={workspaceHandle} />
                       }
                       
