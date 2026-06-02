@@ -11,7 +11,7 @@
 7. True Code Sandbox (Eksekusi kode via Piston Coder Plugin)
 8. Autonomous Agent (Cron) 100% Operational & Realtime Push (Bypass Kong JWT)
 9. 5-Layer Anti-Limit (Multi-Key Rotation, Backoff, Cascade Fallback)
+10. YouTube Anti-Bot Bypass (Bypass CAPTCHA fallback via Apify Scraper)
 
 ## 🚀 ROADMAP TERSISA
 1. Voice Interaction (Suara AI)
-2. Anti-Bot YouTube (Bypass Captcha via VPS/Apify)
