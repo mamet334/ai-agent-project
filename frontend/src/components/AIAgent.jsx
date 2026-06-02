@@ -1707,21 +1707,30 @@ export default function AIAgent() {
                 ))}
                 {loading && (
                   <div className="flex justify-start animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="bg-slate-800/50 backdrop-blur rounded-3xl rounded-tl-lg border border-purple-500/30 px-5 py-4 max-w-sm w-full">
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"></div>
-                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce delay-100"></div>
-                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce delay-200"></div>
-                        <span className="text-xs text-slate-400 ml-1">Agent is processing...</span>
-                      </div>
-                      <div className="font-mono text-[10px] text-purple-300 space-y-1 bg-slate-950/70 p-3 rounded-lg border border-purple-500/10 max-h-32 overflow-y-auto">
-                        {logs.map((log, index) => (
-                          <div key={index} className="flex items-center gap-1.5">
-                            <span className="text-green-500 select-none">&gt;</span>
-                            <span className="animate-in fade-in slide-in-from-left-2 duration-300">{log}</span>
+                    <div className="bg-slate-800/50 backdrop-blur rounded-3xl rounded-tl-lg border border-purple-500/30 px-4 py-3 max-w-md w-full">
+                      <details className="group" open>
+                        <summary className="text-xs font-semibold text-slate-400 hover:text-purple-400 flex items-center gap-2 cursor-pointer list-none transition-colors select-none">
+                          <div className="flex items-center gap-1">
+                            <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce"></div>
+                            <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce delay-100"></div>
+                            <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce delay-200"></div>
+                            <span className="ml-1 text-purple-400 italic font-mono">Berpikir dan Orkestrasi...</span>
+                            <svg className="w-3.5 h-3.5 text-slate-500 group-open:rotate-180 transition-transform ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
                           </div>
-                        ))}
-                      </div>
+                        </summary>
+                        <div className="mt-3 ml-2 border-l-2 border-purple-500/20 pl-3">
+                          <div className="font-mono text-[10px] text-purple-300 space-y-1 bg-slate-950/70 p-3 rounded-lg border border-purple-500/10 max-h-40 overflow-y-auto w-full">
+                            {logs.map((log, index) => (
+                              <div key={index} className="flex items-start gap-1.5 animate-in fade-in slide-in-from-left-2 duration-300">
+                                <span className="text-green-500 select-none mt-0.5">&gt;</span>
+                                <span className="leading-relaxed">{log}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </details>
                     </div>
                   </div>
                 )}
