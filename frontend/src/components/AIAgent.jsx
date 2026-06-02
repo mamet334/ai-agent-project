@@ -78,6 +78,43 @@ const CodeCopyButton = ({ text }) => {
   );
 };
 
+// Utility: Parse <think>...</think> tags from AI response
+const parseThinkingContent = (text) => {
+  if (!text) return { thinking: '', answer: text || '' };
+  const thinkRegex = /<think>([\s\S]*?)<\/think>/i;
+  const match = text.match(thinkRegex);
+  if (match) {
+    const thinking = match[1].trim();
+    const answer = text.replace(thinkRegex, '').trim();
+    return { thinking, answer };
+  }
+  return { thinking: '', answer: text };
+};
+
+// DeepSeek-style Thinking Block component
+const ThinkingBlock = ({ thinking, duration }) => {
+  if (!thinking) return null;
+  return (
+    <details className="mb-3 group">
+      <summary className="text-xs font-medium text-slate-500 hover:text-purple-400 flex items-center gap-1.5 cursor-pointer list-none transition-colors select-none">
+        <BrainCircuit className="w-3.5 h-3.5 text-purple-400" />
+        <span>Berpikir{duration ? ` selama ${duration} detik` : ''}</span>
+        <svg className="w-3 h-3 text-slate-500 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </summary>
+      <div className="mt-2 ml-1 border-l-2 border-purple-500/20 pl-3 text-xs text-slate-400 space-y-1.5 leading-relaxed">
+        {thinking.split('\n').filter(l => l.trim()).map((line, idx) => (
+          <div key={idx} className="flex items-start gap-1.5">
+            <span className="text-purple-500 select-none mt-0.5">•</span>
+            <span>{line.trim()}</span>
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+};
+
 const MessageContent = ({ text, workspaceHandle }) => {
   if (!text) return null;
   return (
@@ -1564,34 +1601,21 @@ export default function AIAgent() {
                           : 'bg-slate-800/50 backdrop-blur rounded-2xl rounded-tl-sm border border-purple-500/30 pb-10'
                       } px-3 md:px-5 py-2.5 md:py-3.5`}
                     >
-                      {/* DeepSeek-style permanent thinking logs */}
-                      {message.type === 'agent' && message.thinkingLogs && message.thinkingLogs.length > 0 && (
-                        <details className="mb-3 group">
-                          <summary className="text-xs font-medium text-slate-500 hover:text-purple-400 flex items-center gap-1.5 cursor-pointer list-none transition-colors select-none">
-                            <BrainCircuit className="w-3.5 h-3.5 text-purple-400" />
-                            <span>Berpikir selama {message.thinkingDuration || 0} detik</span>
-                            <svg className="w-3 h-3 text-slate-500 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                            </svg>
-                          </summary>
-                          <div className="mt-2 ml-1 border-l-2 border-purple-500/20 pl-3 text-xs text-slate-400 space-y-1.5 leading-relaxed">
-                            {message.thinkingLogs.map((log, idx) => (
-                              <div key={idx} className="flex items-start gap-1.5">
-                                <span className="text-purple-500 select-none mt-0.5">•</span>
-                                <span>{log}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </details>
-                      )}
+                      {/* DeepSeek-style Chain-of-Thought (parsed from <think> tags) */}
+                      {message.type === 'agent' && (() => {
+                        const { thinking } = parseThinkingContent(message.content);
+                        return thinking ? <ThinkingBlock thinking={thinking} duration={message.thinkingDuration} /> : null;
+                      })()}
 
                       {message.type === 'agent' && currentlyTypingId === message.id && !message.isStreaming
-                        ? <TypewriterText text={message.content} onComplete={() => setCurrentlyTypingId(null)} workspaceHandle={workspaceHandle} />
-                        : <MessageContent text={message.content || (message.isStreaming ? ' ▍' : '')} workspaceHandle={workspaceHandle} />
+                        ? <TypewriterText text={parseThinkingContent(message.content).answer} onComplete={() => setCurrentlyTypingId(null)} workspaceHandle={workspaceHandle} />
+                        : message.type === 'agent'
+                          ? <MessageContent text={parseThinkingContent(message.content || (message.isStreaming ? ' ▍' : '')).answer} workspaceHandle={workspaceHandle} />
+                          : <MessageContent text={message.content || ''} workspaceHandle={workspaceHandle} />
                       }
                       
                       {message.type === 'agent' && !message.isStreaming && message.content && (
-                        <CopyButton text={message.content} />
+                        <CopyButton text={parseThinkingContent(message.content).answer} />
                       )}
 
                       {message.response && (
