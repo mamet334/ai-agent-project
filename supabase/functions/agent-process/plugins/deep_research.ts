@@ -10,13 +10,40 @@ export default {
         tools: [{ googleSearch: {} }]
       };
       
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(searchPayload)
-      });
-      
-      const searchData = await res.json();
+      const keys = env.allGeminiKeys && env.allGeminiKeys.length > 0
+        ? env.allGeminiKeys
+        : [env.GEMINI_API_KEY];
+
+      let searchData: any = null;
+      let lastError: any = null;
+      for (const key of keys) {
+        try {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(searchPayload)
+          });
+          const data = await res.json();
+          if (data.error) {
+            lastError = data.error;
+            console.warn(`Deep Research key rotation warning: ${data.error.message}, trying next key...`);
+            continue;
+          }
+          searchData = data;
+          break;
+        } catch (e: any) {
+          lastError = e;
+          console.warn(`Deep Research key rotation network error:`, e);
+        }
+      }
+
+      if (!searchData) {
+        return {
+          output: `Deep Research gagal: Semua Gemini API key habis kuota atau error. (${lastError?.message || lastError})`,
+          sources: []
+        };
+      }
+
       const candidate = searchData.candidates?.[0];
       
       let sources = [];

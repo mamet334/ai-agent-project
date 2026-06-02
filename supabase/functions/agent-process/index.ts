@@ -767,16 +767,36 @@ DILARANG KERAS MENGGUNAKAN PYTHON ATAU "TOOL_CODE". JANGAN PERNAH MENULISKAN KOD
       const lowerMessage = finalMessage.toLowerCase();
       processingSteps.push('🔍 Menganalisis permintaan user...');
       
-      // Deteksi instan (Hardcoded) untuk fitur yang sangat spesifik
-      if (lowerMessage.includes("jadwal") || lowerMessage.includes("cron") || lowerMessage.includes("otomatis")) {
+      // Deteksi instan (Hardcoded) untuk fitur yang membutuhkan sub-agent/tools
+      const actionKeywords = [
+        "jadwal", "cron", "otomatis", "remind", "ingatkan",
+        "cari", "temukan", "search", "google", "internet", "web",
+        "siapa", "mengapa", "bagaimana", "kapan", "dimana", "apakah",
+        "berita", "motogp", "cuaca", "saham", "info", "terkini", "terbaru", "prediksi",
+        "kurs", "harga", "nilai", "hitung", "matematika", "jumlah",
+        "kode", "coding", "program", "javascript", "python", "html", "css", "buatkan", "tuliskan",
+        "excel", "pdf", "file", "dokumen", "baca", "ringkas", "rangkum",
+        "youtube", "yt", "video", "transkrip", "link", "url", "http",
+        "slack", "discord", "telegram", "api", "webhook", "post", "send", "kirim"
+      ];
+      const containsActionKeyword = actionKeywords.some(kw => lowerMessage.includes(kw));
+
+      if (containsActionKeyword) {
         isChatBiasa = false;
-        processingSteps.push('🎯 Intent Router: Mendeteksi kata kunci Cron/Jadwal → Butuh Sub-Agent');
-        console.log("Intent Router: Mendeteksi kata kunci Cron/Jadwal. Bypass LLM check -> BUTUH_AGENT");
+        processingSteps.push('🎯 Intent Router: Mendeteksi kata kunci aksi → Butuh Sub-Agent');
+        console.log("Intent Router: Mendeteksi kata kunci aksi. Bypass LLM check -> BUTUH_AGENT");
       } else {
         try {
           processingSteps.push('🧠 Intent Router: Mengklasifikasi jenis permintaan...');
-          const intentCheckPrompt = `Apakah pesan berikut adalah obrolan santai, sapaan, ucapan terima kasih, atau obrolan ringan yang TIDAK memerlukan penggunaan fitur tambahan (seperti pencarian internet/koding/analisis/penjadwalan)? Pesan: "${finalMessage}". \n\nPENTING: Jika pesan mengandung permintaan untuk membuat jadwal, cron, atau tugas otomatis, WAJIB jawab "BUTUH_AGENT".\nJawab HANYA dengan kata "CHAT_BIASA" jika murni obrolan, atau "BUTUH_AGENT" jika butuh aksi/tool.`;
-          const intentResult = await runCoordinatorLLM(intentCheckPrompt, "Anda adalah router intent super ringan. Jawab singkat padat.");
+          const intentCheckPrompt = `Analisis apakah input user berikut membutuhkan pencarian internet (web search), kunjungan website, analisis mendalam, penulisan/eksekusi kode, pemanggilan API, atau pembuatan jadwal/cron.
+Pesan user: "${finalMessage}"
+
+Kriteria:
+- Jawab "CHAT_BIASA" jika pesan HANYA berupa sapaan (halo, pagi), obrolan santai (apa kabar, kamu siapa), ucapan terima kasih, atau pernyataan/pertanyaan umum yang bisa dijawab tanpa info luar/terkini/koding.
+- Jawab "BUTUH_AGENT" jika pesan memerlukan informasi terkini, pencarian Google, pengerjaan kode, atau otomatisasi/cron.
+
+Jawab HANYA dengan satu kata: "CHAT_BIASA" atau "BUTUH_AGENT".`;
+          const intentResult = await runCoordinatorLLM(intentCheckPrompt, "Anda adalah router intent super ringan. Jawab HANYA satu kata.");
           if (intentResult.toUpperCase().includes("CHAT_BIASA")) {
              isChatBiasa = true;
              processingSteps.push('💬 Keputusan: Obrolan biasa → Jawab langsung tanpa sub-agent');
@@ -797,7 +817,10 @@ DILARANG KERAS MENGGUNAKAN PYTHON ATAU "TOOL_CODE". JANGAN PERNAH MENULISKAN KOD
         }
         replyMessage = await runLLM(finalMessage, fullSystemContext, history);
       } else {
-        const coordinatorSystemPrompt = `Tugas Anda adalah menganalisis permintaan user dan memilih sub-agent yang tepat.${fullSystemContext}
+        const coordinatorSystemPrompt = `Tugas Anda adalah menganalisis permintaan user dan memilih sub-agent yang tepat.
+Anda memiliki tim Sub-Agent nyata berikut ini:
+${getPluginPromptList()}
+
 PENTING: Anda adalah mesin parsing JSON. Anda DILARANG KERAS merespons dengan kalimat atau teks biasa. 
 Anda WAJIB mengembalikan HANYA sebuah Array JSON murni. Jika tidak butuh sub-agent, kembalikan []. DILARANG KERAS BERKOMUNIKASI BIASA. DILARANG KERAS MENGGUNAKAN "TOOL_CODE" ATAU PYTHON. HANYA KELUARKAN JSON ARRAY!
 Jika user meminta penjadwalan, tugas berulang, atau otomatisasi, Anda WAJIB memanggil sub-agent "cron_manager". DILARANG MENGARANG JADWAL SENDIRI.
@@ -857,7 +880,14 @@ Contoh Output Wajib: [{"subagent": "cron_manager", "task": "Buat jadwal riset sa
           const plugin = getPluginByName(subagent);
           if (plugin) {
             processingSteps.push(`🚀 Menjalankan Sub-Agent "${subagent}": ${task}`);
-            const env = { GEMINI_API_KEY, GROQ_API_KEY };
+            const env = { 
+              GEMINI_API_KEY, 
+              GROQ_API_KEY, 
+              OPENAI_API_KEY, 
+              OPENROUTER_API_KEY, 
+              APIFY_API_TOKEN: Deno.env.get('APIFY_API_TOKEN') || '',
+              allGeminiKeys 
+            };
             const fullTask = `Tugas Spesifik Anda: ${task}\n\nPermintaan Asli User: "${finalMessage}"\n\nKonteks Tambahan:\n${accumulatedContext}`;
             
             // --- MAMET HEALER (PENAWAR RACUN / ERROR SHIELD) ---
