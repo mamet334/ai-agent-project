@@ -1697,15 +1697,29 @@ export default function AIAgent() {
                   }}
                   className="bg-transparent text-purple-200 text-xs focus:outline-none transition-all font-medium cursor-pointer max-w-[180px] sm:max-w-xs"
                 >
-                  <option value="coordinator-agent" className="bg-slate-900 text-white">Kepala Agent (Multi-Agent Orchestrator)</option>
-                  <option value="gpt-4o" className="bg-slate-900 text-white">ChatGPT-4o (OpenAI - Sangat Pintar)</option>
-                  <option value="gpt-4o-mini" className="bg-slate-900 text-white">ChatGPT-4o Mini (OpenAI - Cepat)</option>
-                  <option value="gemini-2.5-flash" className="bg-slate-900 text-white">Gemini 2.5 Flash (Gratis & Cepat)</option>
-                  <option value="gemini-2.5-pro" className="bg-slate-900 text-white">Gemini 2.5 Pro (Sangat Pintar - Gratis)</option>
-                  <option value="groq-llama-3.3" className="bg-slate-900 text-white">Llama 3.3 70B (Groq - Gratis & Cepat)</option>
-                  <option value="groq-llama-3.1" className="bg-slate-900 text-white">Llama 3.1 8B (Groq - Instan & Cepat)</option>
-                  <option value="openrouter-llama-3" className="bg-slate-900 text-white">Llama 3 8B (Free via OpenRouter)</option>
-                  <option value="openrouter-deepseek-r1" className="bg-slate-900 text-white">DeepSeek R1 (Free via OpenRouter)</option>
+                  <optgroup label="🤖 KEPALA AGENT (AUTO-ROUTER)" className="bg-slate-800 text-purple-300 font-bold">
+                    <option value="coordinator-agent" className="bg-slate-900 text-white font-normal">Kepala Agent (Multi-Agent Orchestrator)</option>
+                  </optgroup>
+
+                  <optgroup label="🟢 GRATIS - KUOTA LONGGAR (Aman untuk File Besar)" className="bg-slate-800 text-emerald-400 font-bold">
+                    <option value="gemini-2.5-flash" className="bg-slate-900 text-white font-normal">Gemini 2.5 Flash (Gratis & Cepat)</option>
+                    <option value="gemini-2.5-pro" className="bg-slate-900 text-white font-normal">Gemini 2.5 Pro (Sangat Pintar - Gratis)</option>
+                  </optgroup>
+
+                  <optgroup label="🟡 GRATIS - KUOTA MENENGAH (OpenRouter Free)" className="bg-slate-800 text-yellow-400 font-bold">
+                    <option value="openrouter-deepseek-r1" className="bg-slate-900 text-white font-normal">DeepSeek R1 (Free via OpenRouter)</option>
+                    <option value="openrouter-llama-3" className="bg-slate-900 text-white font-normal">Llama 3 8B (Free via OpenRouter)</option>
+                  </optgroup>
+
+                  <optgroup label="🔴 GRATIS - KUOTA PELIT (Hindari File Besar)" className="bg-slate-800 text-rose-400 font-bold">
+                    <option value="groq-llama-3.1" className="bg-slate-900 text-white font-normal">Llama 3.1 8B (Groq - Instan & Cepat)</option>
+                    <option value="groq-llama-3.3" className="bg-slate-900 text-white font-normal">Llama 3.3 70B (Groq - Gratis & Cepat)</option>
+                  </optgroup>
+
+                  <optgroup label="💎 BERBAYAR / PREMIUM (Memotong Saldo)" className="bg-slate-800 text-blue-400 font-bold">
+                    <option value="gpt-4o" className="bg-slate-900 text-white font-normal">ChatGPT-4o (OpenAI - Sangat Pintar)</option>
+                    <option value="gpt-4o-mini" className="bg-slate-900 text-white font-normal">ChatGPT-4o Mini (OpenAI - Cepat)</option>
+                  </optgroup>
                   
                   {/* Custom User Models dynamically loaded from customModels state */}
                   {customModels.map((m) => {
