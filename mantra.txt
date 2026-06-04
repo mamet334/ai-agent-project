@@ -21,7 +21,7 @@
 ## 🚀 ROADMAP TERSISA (PHASE 2: SUPER UPGRADES)
 1. ~~**Workspace Editor (Upgrade `file_analyzer`)**~~ ✅ SELESAI (Agen kini memiliki hak akses tulis untuk membuat, mengedit, dan menyimpan file ke lokal)
 2. ~~**Infinite Long-Term Memory (Upgrade `memory_manager`)**~~ ✅ SELESAI (Router Intent telah dikalibrasi untuk menyuntikkan ingatan RAG secara otonom saat user menyebutkan fakta penting).
-3. **Auto-Notifier (Upgrade `cron_manager`)**: Integrasi API Email/WhatsApp agar Mamet bisa mengirimkan laporan hasil kerja otomatis (cron) langsung ke HP/Email user.
+3. ~~**Auto-Notifier (Upgrade `cron_manager`)**~~ ✅ SELESAI (Integrasi Resend API untuk mengirim laporan cron otomatis via Email HTML ke pengguna terdaftar).
 4. **Board of Directors Simulator (Upgrade `debate`)**: Memanggil 3 LLM berbeda secara bersamaan untuk saling berdebat dan memberikan keputusan bisnis terbaik.
 
 ## 🚀 ROADMAP JANGKA PANJANG (PHASE 3: DESKTOP EDITION - "The Missing 25%")
@@ -36,7 +36,7 @@
 2. **researcher:** Pencarian web cepat dengan DuckDuckGo fallback + Pencari Gambar Yahoo/Bing (Status: Aktif).
 3. **youtube_analyst:** Ekstraksi transkrip video 5-Ahli (Status: ✅ Upgraded, Anti-Captcha aktif via Apify).
 4. **file_analyzer:** Ekstraksi dan analisis file lokal Workspace (Status: ✅ Upgraded ke Workspace Editor, bisa tulis/simpan file).
-5. **cron_manager:** Penjadwalan & otomatisasi task dengan realtime push (Status: Aktif & Stabil).
+5. **cron_manager:** Penjadwalan & otomatisasi task dengan realtime push (Status: ✅ Upgraded dengan Auto-Notifier Email via Resend).
 6. **memory_manager:** Mengingat preferensi global user (Status: ✅ Upgraded ke Infinite RAG Memory).
 7. **coder:** Eksekusi kode Python/JS di Docker sandbox dengan Self-Repair debugger & inline data parsing (Status: ✅ Upgraded).
 8. **scraper:** Pengambilan data web lanjutan dengan Login, Multi-URL, Table Extraction & Fallback 3-lapis (Status: ✅ Upgraded).
