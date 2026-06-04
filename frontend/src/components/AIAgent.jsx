@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe, Clock, Copy, Check, BrainCircuit, Trash2, Edit2, Download, FolderOpen } from 'lucide-react';
+import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe, Clock, Copy, Check, BrainCircuit, Trash2, Edit2, Download, FolderOpen, AlertTriangle } from 'lucide-react';
 import { supabase } from '../supabase';
 // Lazy loaded imports for heavy libraries
 
@@ -445,6 +445,31 @@ export default function AIAgent() {
     if (!user) return;
     const { data } = await supabase.from('documents').select('*').order('created_at', { ascending: false });
     if (data) setKnowledgeBase(data);
+  };
+
+  const handleKillSwitch = async () => {
+    if (!user) return;
+    if (!window.confirm('⚠️ PERINGATAN! Ini akan menghentikan secara paksa semua jadwal otomatis (Cron Jobs) Anda. Anda yakin?')) return;
+    try {
+      const { error } = await supabase.from('scheduled_tasks').update({ is_active: false }).eq('user_id', user.id);
+      if (error) throw error;
+      alert('✅ KILL SWITCH DIAKTIFKAN! Semua tugas otomatis telah dihentikan secara darurat.');
+    } catch (err) {
+      alert(`Gagal: ${err.message}`);
+    }
+  };
+
+  const handleClearMemory = async () => {
+    if (!user) return;
+    if (!window.confirm('⚠️ PERINGATAN! Mamet akan melupakan semua fakta penting tentang Anda. Ingatan RAG yang dihapus tidak bisa dikembalikan. Lanjutkan?')) return;
+    try {
+      const { error } = await supabase.from('documents').delete().eq('user_id', user.id);
+      if (error) throw error;
+      alert('✅ AMNESIA BERHASIL! Semua ingatan jangka panjang telah dibakar.');
+      fetchKnowledgeBase();
+    } catch (err) {
+      alert(`Gagal: ${err.message}`);
+    }
   };
 
   // Check auth & listen to changes
@@ -2288,6 +2313,22 @@ export default function AIAgent() {
                   placeholder="AIzaSy..."
                   className="w-full bg-slate-950 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
                 />
+              </div>
+
+              <div className="pt-4 border-t border-slate-700/50 space-y-3">
+                <h4 className="text-xs font-semibold text-rose-400 mb-2">Pusat Keamanan Darurat</h4>
+                <button
+                  onClick={handleKillSwitch}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-rose-600/10 text-rose-400 border border-rose-600/30 hover:bg-rose-600 hover:text-white transition-all text-sm font-medium"
+                >
+                  <AlertTriangle className="w-4 h-4" /> KILL SWITCH (Matikan Cron)
+                </button>
+                <button
+                  onClick={handleClearMemory}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-600/10 text-amber-400 border border-amber-600/30 hover:bg-amber-600 hover:text-white transition-all text-sm font-medium"
+                >
+                  <BrainCircuit className="w-4 h-4" /> Bakar Semua Ingatan RAG
+                </button>
               </div>
 
               <div className="pt-4 flex gap-3">
