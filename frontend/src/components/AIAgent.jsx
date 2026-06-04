@@ -215,20 +215,38 @@ const MessageContent = ({ text, workspaceHandle }) => {
 
                 const handleSaveToWorkspace = async () => {
                   try {
-                    if (!workspaceHandle) return alert('Workspace belum dipilih! Klik ikon Folder di kotak chat bawah.');
-                    for (const f of config.files) {
-                      const parts = f.name.split('/');
-                      const fileName = parts.pop();
-                      let currentHandle = workspaceHandle;
-                      for (const part of parts) {
-                        currentHandle = await currentHandle.getDirectoryHandle(part, { create: true });
+                    if (window.electronAPI) {
+                      // PHASE 3: Desktop Mode - Surgical File Editing
+                      if (!desktopWorkspacePath) return alert('Folder kerja belum dipilih! Klik ikon Folder di kotak chat bawah.');
+                      
+                      for (const f of config.files) {
+                        const sep = window.electronAPI.pathSeparator;
+                        // Build path and replace relative slashes with OS native separators
+                        const absolutePath = `${desktopWorkspacePath}${sep}${f.name.replace(/\//g, sep)}`;
+                        const res = await window.electronAPI.editFileSurgical(absolutePath, f.content);
+                        if (!res.success) {
+                          alert(`Surgical Edit digagalkan pada file ${f.name}: ${res.error || res.message}`);
+                          return;
+                        }
                       }
-                      const fileHandle = await currentHandle.getFileHandle(fileName, { create: true });
-                      const writable = await fileHandle.createWritable();
-                      await writable.write(f.content);
-                      await writable.close();
+                      alert(`Phase 3 Surgical Edit Berhasil! ${config.files.length} file telah ditanamkan paksa ke Hardisk Anda.`);
+                    } else {
+                      // Web Mode (File System Access API)
+                      if (!workspaceHandle) return alert('Workspace belum dipilih! Klik ikon Folder di kotak chat bawah.');
+                      for (const f of config.files) {
+                        const parts = f.name.split('/');
+                        const fileName = parts.pop();
+                        let currentHandle = workspaceHandle;
+                        for (const part of parts) {
+                          currentHandle = await currentHandle.getDirectoryHandle(part, { create: true });
+                        }
+                        const fileHandle = await currentHandle.getFileHandle(fileName, { create: true });
+                        const writable = await fileHandle.createWritable();
+                        await writable.write(f.content);
+                        await writable.close();
+                      }
+                      alert(`Sukses menyimpan ${config.files.length} file langsung ke folder kerja Anda!`);
                     }
-                    alert(`Sukses menyimpan ${config.files.length} file langsung ke folder kerja Anda!`);
                   } catch(e) {
                     alert('Gagal menyimpan ke workspace: ' + e.message);
                   }
@@ -375,14 +393,22 @@ export default function AIAgent() {
   const [logs, setLogs] = useState([]);
   const [attachedFile, setAttachedFile] = useState(null);
   const [workspaceHandle, setWorkspaceHandle] = useState(null);
+  const [desktopWorkspacePath, setDesktopWorkspacePath] = useState(null);
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const thinkingStartRef = useRef(null);
 
   const handleSelectWorkspace = async () => {
     try {
-      const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
-      setWorkspaceHandle(handle);
+      if (window.electronAPI) {
+        const folderPath = await window.electronAPI.selectFolder();
+        if (folderPath) {
+          setDesktopWorkspacePath(folderPath);
+        }
+      } else {
+        const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+        setWorkspaceHandle(handle);
+      }
     } catch(e) {
       console.log('Batal memilih workspace atau tidak didukung browser.', e);
     }
@@ -2150,8 +2176,8 @@ export default function AIAgent() {
               <button
                 onClick={handleSelectWorkspace}
                 disabled={loading}
-                className={`p-3.5 border rounded-xl transition-all focus:outline-none disabled:opacity-50 h-[50px] flex items-center justify-center ${workspaceHandle ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/50 text-emerald-400' : 'bg-slate-800/50 hover:bg-slate-700 border-emerald-500/30 text-slate-400 hover:text-emerald-400'}`}
-                title={workspaceHandle ? "Workspace Terhubung: Siap Menyimpan File!" : "Pilih Folder Kerja (Workspace) Sementara"}
+                className={`p-3.5 border rounded-xl transition-all focus:outline-none disabled:opacity-50 h-[50px] flex items-center justify-center ${(workspaceHandle || desktopWorkspacePath) ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/50 text-emerald-400' : 'bg-slate-800/50 hover:bg-slate-700 border-emerald-500/30 text-slate-400 hover:text-emerald-400'}`}
+                title={(workspaceHandle || desktopWorkspacePath) ? "Workspace Terhubung: Siap Menyimpan File!" : "Pilih Folder Kerja (Workspace) Sementara"}
               >
                 <FolderOpen className="w-5 h-5" />
               </button>
