@@ -2256,8 +2256,8 @@ export default function AIAgent() {
       {/* Settings Modal (BYOK) */}
       {isSettingsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border border-purple-500/30 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl shadow-purple-500/20">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-purple-500/20 bg-slate-800/50">
+          <div className="bg-slate-900 border border-purple-500/30 rounded-2xl w-full max-w-md shadow-2xl shadow-purple-500/20 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-purple-500/20 bg-slate-800/50 flex-shrink-0">
               <h3 className="font-semibold text-slate-100 flex items-center gap-2">
                 <Lock className="w-4 h-4 text-purple-400" />
                 Bring Your Own Key (BYOK)
@@ -2266,7 +2266,7 @@ export default function AIAgent() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 overflow-y-auto">
               <p className="text-xs text-slate-400 mb-4">
                 Masukkan API Key milik Anda sendiri untuk menggunakan model tanpa memotong kuota pusat. Key disimpan secara aman di browser Anda.
               </p>
