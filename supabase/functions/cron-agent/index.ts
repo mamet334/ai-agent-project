@@ -92,13 +92,65 @@ serve(async (req) => {
         // Update waktu terakhir jalan
         await supabase.from('scheduled_tasks').update({ last_run_at: now.toISOString() }).eq('id', task.id);
         
+        // --- AUTO-NOTIFIER (EMAIL VIA RESEND) ---
+        const resendKey = Deno.env.get('RESEND_API_KEY');
+        if (resendKey) {
+          try {
+            // Ambil email user menggunakan Service Role
+            const { data: userData, error: userError } = await supabase.auth.admin.getUserById(task.user_id);
+            if (!userError && userData?.user?.email) {
+              const userEmail = userData.user.email;
+              const emailHtml = `
+                <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px;">
+                  <h2 style="color: #8b5cf6; margin-top: 0;">🤖 Laporan Mamet AI - Tugas Selesai</h2>
+                  <p>Halo! Tugas otomatis Anda <strong>"${task.title}"</strong> baru saja selesai dieksekusi.</p>
+                  <div style="background: #1e293b; color: #f8fafc; padding: 15px; border-radius: 8px; border-left: 4px solid #8b5cf6; margin: 20px 0; font-size: 14px; white-space: pre-wrap;">
+${aiMessageText.substring(0, 1000)}${aiMessageText.length > 1000 ? '\n\n... (Terpotong, silakan buka aplikasi untuk melihat selengkapnya)' : ''}
+                  </div>
+                  <p>Buka dashboard aplikasi Mamet Anda untuk melihat riwayat percakapan lengkapnya.</p>
+                  <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+                  <p style="font-size: 12px; color: #94a3b8;">Email ini dikirim otomatis oleh Mamet AI Cron Manager.</p>
+                </div>
+              `;
+              
+              await fetch('https://api.resend.com/emails', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${resendKey}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  from: 'Mamet AI <onboarding@resend.dev>',
+                  to: userEmail,
+                  subject: `[Mamet] Tugas Selesai: ${task.title}`,
+                  html: emailHtml
+                })
+              });
+              console.log(`Auto-Notifier: Email laporan terkirim ke ${userEmail}`);
+            }
+          } catch (emailErr) {
+            console.error('Auto-Notifier Error:', emailErr);
+          }
+        }
+
         results.push({ taskId: task.id, status: 'success' });
 
         // Jeda 3 detik antar task untuk menghindari Rate Limit
         await new Promise(r => setTimeout(r, 3000));
       } catch (err) {
         console.error(`Task ${task.id} failed:`, err);
-        results.push({ taskId: task.id, status: 'error', error: err.message });
+        
+        // --- FITUR HARAKIRI (AUTO-KILL SWITCH) ---
+        // Jika tugas gagal (misal API Limit tercapai, kunci salah), langsung nonaktifkan tugas tersebut
+        // untuk mencegah bom tagihan atau loop error tanpa henti.
+        await supabase.from('scheduled_tasks').update({ 
+          is_active: false,
+          last_run_at: new Date().toISOString() // Simpan waktu gagal
+        }).eq('id', task.id);
+        
+        console.warn(`HARAKIRI: Tugas ${task.id} dinonaktifkan otomatis karena terjadi error.`);
+
+        results.push({ taskId: task.id, status: 'error', error: err.message, action: 'auto_disabled' });
       }
     }
 
