@@ -24,6 +24,12 @@
 3. ~~**Auto-Notifier (Upgrade `cron_manager`)**~~ ✅ SELESAI (Integrasi Resend API untuk mengirim laporan cron otomatis via Email HTML ke pengguna terdaftar).
 4. ~~**Board of Directors Simulator (Upgrade `debate`)**~~ ✅ SELESAI (Memanggil 3 LLM paralel: CEO, CFO, CTO untuk berdebat, lalu dirangkum oleh Chairman).
 
+## 🛡️ SECURITY & SAFE-GUARDS (Mitigasi "Sisi Gelap" AI)
+1. **Pusat Keamanan Darurat (Kill Switch):** UI Frontend untuk mematikan semua tugas Cron aktif secara paksa (`is_active = false`).
+2. **Amnesia Memori (RAG Wipe):** UI Frontend untuk membakar seluruh Vector Memory user guna menghindari "Racun Ingatan".
+3. **Delimiter Shield (Anti-Prompt Injection):** Ekstraksi data `scraper` dibungkus `<EXTERNAL_DATA>` untuk mencegah instruksi gaib peretas tereksekusi.
+4. **Harakiri Cron-Agent:** Skrip otomatis menonaktifkan dirinya sendiri saat terjadi kegagalan pemanggilan API 1x untuk mencegah Bom Tagihan.
+
 ## 🚀 ROADMAP JANGKA PANJANG (PHASE 3: DESKTOP EDITION - "The Missing 25%")
 *Fase ini membutuhkan perombakan dari wujud Website menjadi Aplikasi Desktop Asli (.exe) menggunakan Electron/Tauri untuk melepaskan belenggu Browser Sandbox.*
 1. **Otonomi Terminal Penuh**: Mamet dapat mengeksekusi perintah command-line (NPM, Git, dll) langsung di sistem operasi lokal.
