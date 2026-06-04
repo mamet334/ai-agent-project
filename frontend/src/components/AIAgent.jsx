@@ -871,23 +871,23 @@ export default function AIAgent() {
     debate: 'Mode Diskusi Agent (Logika vs Kritikus)'
   };
 
-  // Helper: Scan workspace files recursively using File System Access API
-  const scanWorkspaceFiles = async (dirHandle, basePath = '', maxDepth = 3, maxFiles = 30) => {
+  // Helper: Scan workspace files recursively menggunakan batas Ukuran Total (3MB) agar muat jutaan token Gemini
+  const scanWorkspaceFiles = async (dirHandle, basePath = '', maxDepth = 5, stats = { count: 0, totalSize: 0, maxSize: 3000000 }) => {
     const results = [];
     const validExts = ['.js', '.jsx', '.ts', '.tsx', '.html', '.css', '.json', '.md', '.txt', '.py', '.sql', '.csv', '.env', '.yaml', '.yml', '.toml', '.xml', '.sh', '.bat', '.cfg', '.ini', '.log'];
     const skipDirs = ['node_modules', '.git', 'dist', 'build', '.next', '.cache', '__pycache__', '.svelte-kit', 'coverage', '.turbo'];
     
-    if (maxDepth <= 0) return results;
+    if (maxDepth <= 0 || stats.totalSize >= stats.maxSize) return results;
     
     try {
       for await (const [name, handle] of dirHandle.entries()) {
-        if (results.length >= maxFiles) break;
+        if (stats.totalSize >= stats.maxSize) break;
         
         const fullPath = basePath ? `${basePath}/${name}` : name;
         
         if (handle.kind === 'directory') {
           if (skipDirs.includes(name)) continue;
-          const subResults = await scanWorkspaceFiles(handle, fullPath, maxDepth - 1, maxFiles - results.length);
+          const subResults = await scanWorkspaceFiles(handle, fullPath, maxDepth - 1, stats);
           results.push(...subResults);
         } else if (handle.kind === 'file') {
           const isValid = validExts.some(ext => name.toLowerCase().endsWith(ext));
@@ -895,12 +895,14 @@ export default function AIAgent() {
           
           try {
             const file = await handle.getFile();
-            // Skip files larger than 100KB to avoid bloating the payload
-            if (file.size > 100 * 1024) {
+            // Lewati file biner atau file raksasa di atas 500KB per file
+            if (file.size > 500 * 1024) {
               results.push({ path: fullPath, content: `[FILE TERLALU BESAR: ${(file.size / 1024).toFixed(1)}KB - Dilewati]`, size: file.size });
               continue;
             }
             const text = await file.text();
+            stats.totalSize += text.length;
+            stats.count += 1;
             results.push({ path: fullPath, content: text, size: file.size });
           } catch (e) {
             results.push({ path: fullPath, content: `[GAGAL MEMBACA: ${e.message}]`, size: 0 });
@@ -908,7 +910,7 @@ export default function AIAgent() {
         }
       }
     } catch (e) {
-      console.error('Workspace scan error:', e);
+      console.warn("Folder permission error:", e);
     }
     return results;
   };
