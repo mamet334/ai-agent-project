@@ -778,6 +778,7 @@ DILARANG KERAS MENGGUNAKAN PYTHON ATAU "TOOL_CODE". JANGAN PERNAH MENULISKAN KOD
         "excel", "pdf", "file", "dokumen", "baca", "ringkas", "rangkum",
         "youtube", "yt", "video", "transkrip", "link", "url", "http",
         "slack", "discord", "telegram", "api", "webhook", "post", "send", "kirim",
+        "login", "masuk", "sign in", "scrape", "credential", "username", "password", "sesi",
         "workspace", "folder", "analisis file", "periksa file", "scan folder", "baca file", "isi folder", "struktur folder", "WORKSPACE FILES CONTENT"
       ];
       const containsActionKeyword = actionKeywords.some(kw => lowerMessage.includes(kw));
