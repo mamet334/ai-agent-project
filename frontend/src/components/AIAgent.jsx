@@ -695,8 +695,16 @@ export default function AIAgent() {
             emailRedirectTo: window.location.origin
           }
         });
-    if (error) setAuthError(error.message);
-    else { setAuthEmail(''); setAuthPassword(''); }
+    if (error) {
+      setAuthError(error.message);
+    } else { 
+      setAuthEmail(''); 
+      setAuthPassword(''); 
+      if (!isLoginMode) {
+        alert('Pendaftaran Berhasil! Silakan cek kotak masuk (atau folder spam) Email Anda untuk mengklik link aktivasi sebelum melakukan login.');
+        setIsLoginMode(true); // Switch to login view
+      }
+    }
     setAuthLoading(false);
   };
 
