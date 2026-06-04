@@ -446,10 +446,13 @@ export default function AIAgent() {
     const { data } = await supabase.from('documents').select('*').order('created_at', { ascending: false });
     if (data) setKnowledgeBase(data);
   };
-
   const handleKillSwitch = async () => {
     if (!user) return;
-    if (!window.confirm('⚠️ PERINGATAN! Ini akan menghentikan secara paksa semua jadwal otomatis (Cron Jobs) Anda. Anda yakin?')) return;
+    const confirmation = window.prompt('⚠️ PERINGATAN DARURAT!\n\nIni akan menghentikan secara paksa semua jadwal otomatis (Cron Jobs) Anda.\n\nKetik "MATIKAN" (huruf besar) untuk mengonfirmasi:');
+    if (confirmation !== 'MATIKAN') {
+      if (confirmation !== null) alert('❌ Aksi dibatalkan. Kata kunci salah.');
+      return;
+    }
     try {
       const { error } = await supabase.from('scheduled_tasks').update({ is_active: false }).eq('user_id', user.id);
       if (error) throw error;
@@ -461,7 +464,11 @@ export default function AIAgent() {
 
   const handleClearMemory = async () => {
     if (!user) return;
-    if (!window.confirm('⚠️ PERINGATAN! Mamet akan melupakan semua fakta penting tentang Anda. Ingatan RAG yang dihapus tidak bisa dikembalikan. Lanjutkan?')) return;
+    const confirmation = window.prompt('⚠️ PERINGATAN AMNESIA!\n\nMamet akan melupakan semua fakta penting tentang Anda. Ingatan RAG yang dihapus tidak bisa dikembalikan.\n\nKetik "BAKAR" (huruf besar) untuk mengonfirmasi penghapusan:');
+    if (confirmation !== 'BAKAR') {
+      if (confirmation !== null) alert('❌ Aksi dibatalkan. Kata kunci salah.');
+      return;
+    }
     try {
       const { error } = await supabase.from('documents').delete().eq('user_id', user.id);
       if (error) throw error;
