@@ -33,6 +33,7 @@ function App() {
 
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [documents, setDocuments] = useState([]);
   const [activeModes, setActiveModes] = useState({ rag: true, websearch: false, research: false });
 
@@ -145,7 +146,7 @@ function App() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    alert(`Memproses file ${file.name}... Mohon tunggu sebentar.`);
+    setIsUploading(true);
     try {
       let extractedText = '';
       if (file.name.endsWith('.txt')) {
@@ -161,11 +162,13 @@ function App() {
       if (error) throw new Error(error.message);
       
       setDocuments(prev => [{ id: Date.now(), title: file.name }, ...prev]); // Optimistic update, exact ID doesn't matter much until refresh
-      alert('Dokumen berhasil masuk ke RAG Database!');
       fetchDocuments(session.user.id); // Refresh to get real ID
 
     } catch (err) {
       alert(`Gagal mengunggah: ${err.message}`);
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -299,8 +302,16 @@ function App() {
         </div>
 
         <input type="file" ref={fileInputRef} onChange={handleUpload} className="hidden" accept=".pdf,.txt,.docx" />
-        <button onClick={handleUploadClick} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md shrink-0">
-          <Upload className="w-5 h-5" /> Unggah Dokumen (RAG)
+        <button 
+          onClick={handleUploadClick} 
+          disabled={isUploading}
+          className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md shrink-0"
+        >
+          {isUploading ? (
+            <><Loader2 className="w-5 h-5 animate-spin" /> Memproses AI...</>
+          ) : (
+            <><Upload className="w-5 h-5" /> Unggah Dokumen (RAG)</>
+          )}
         </button>
 
         {/* RAG Documents List */}
