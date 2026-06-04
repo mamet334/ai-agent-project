@@ -777,7 +777,8 @@ DILARANG KERAS MENGGUNAKAN PYTHON ATAU "TOOL_CODE". JANGAN PERNAH MENULISKAN KOD
         "kode", "coding", "program", "javascript", "python", "html", "css", "buatkan", "tuliskan",
         "excel", "pdf", "file", "dokumen", "baca", "ringkas", "rangkum",
         "youtube", "yt", "video", "transkrip", "link", "url", "http",
-        "slack", "discord", "telegram", "api", "webhook", "post", "send", "kirim"
+        "slack", "discord", "telegram", "api", "webhook", "post", "send", "kirim",
+        "workspace", "folder", "analisis file", "periksa file", "scan folder", "baca file", "isi folder", "struktur folder", "WORKSPACE FILES CONTENT"
       ];
       const containsActionKeyword = actionKeywords.some(kw => lowerMessage.includes(kw));
 

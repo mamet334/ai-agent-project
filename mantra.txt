@@ -16,7 +16,7 @@
 12. Jina Reader Scraper (Bypasses Cloudflare & scrapes clean markdown for deep_research)
 13. Strict Coordinator Routing (Enforced sub-agent selection to prevent logic sub-agent for factual queries)
 14. Real-time Image Search (Fetches Yahoo/Bing images via Jina and renders them dynamically in markdown)
+15. Workspace File Analyzer (Membaca, menganalisis, dan memeriksa file/folder lokal user via File System Access API + file_analyzer sub-agent)
 
 ## 🚀 ROADMAP TERSISA
 1. Voice Interaction (Suara AI)
-

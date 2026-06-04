@@ -9,6 +9,7 @@ import deepResearch from './deep_research.ts';
 import youtubeAnalyst from './youtube_analyst.ts';
 import memoryManager from './memory_manager.ts';
 import cronManager from './cron_manager.ts';
+import fileAnalyzer from './file_analyzer.ts';
 
 // Daftarkan semua plugin di sini
 export const plugins = [
@@ -22,7 +23,8 @@ export const plugins = [
   deepResearch,
   youtubeAnalyst,
   memoryManager,
-  cronManager
+  cronManager,
+  fileAnalyzer
 ];
 
 // Fungsi helper untuk membangun daftar tool otomatis bagi LLM

@@ -863,6 +863,73 @@ export default function AIAgent() {
     debate: 'Mode Diskusi Agent (Logika vs Kritikus)'
   };
 
+  // Helper: Scan workspace files recursively using File System Access API
+  const scanWorkspaceFiles = async (dirHandle, basePath = '', maxDepth = 3, maxFiles = 30) => {
+    const results = [];
+    const validExts = ['.js', '.jsx', '.ts', '.tsx', '.html', '.css', '.json', '.md', '.txt', '.py', '.sql', '.csv', '.env', '.yaml', '.yml', '.toml', '.xml', '.sh', '.bat', '.cfg', '.ini', '.log'];
+    const skipDirs = ['node_modules', '.git', 'dist', 'build', '.next', '.cache', '__pycache__', '.svelte-kit', 'coverage', '.turbo'];
+    
+    if (maxDepth <= 0) return results;
+    
+    try {
+      for await (const [name, handle] of dirHandle.entries()) {
+        if (results.length >= maxFiles) break;
+        
+        const fullPath = basePath ? `${basePath}/${name}` : name;
+        
+        if (handle.kind === 'directory') {
+          if (skipDirs.includes(name)) continue;
+          const subResults = await scanWorkspaceFiles(handle, fullPath, maxDepth - 1, maxFiles - results.length);
+          results.push(...subResults);
+        } else if (handle.kind === 'file') {
+          const isValid = validExts.some(ext => name.toLowerCase().endsWith(ext));
+          if (!isValid) continue;
+          
+          try {
+            const file = await handle.getFile();
+            // Skip files larger than 100KB to avoid bloating the payload
+            if (file.size > 100 * 1024) {
+              results.push({ path: fullPath, content: `[FILE TERLALU BESAR: ${(file.size / 1024).toFixed(1)}KB - Dilewati]`, size: file.size });
+              continue;
+            }
+            const text = await file.text();
+            results.push({ path: fullPath, content: text, size: file.size });
+          } catch (e) {
+            results.push({ path: fullPath, content: `[GAGAL MEMBACA: ${e.message}]`, size: 0 });
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Workspace scan error:', e);
+    }
+    return results;
+  };
+
+  // Helper: Build workspace tree listing (tanpa konten, hanya daftar file/folder)
+  const buildWorkspaceTree = async (dirHandle, basePath = '', maxDepth = 4) => {
+    const items = [];
+    const skipDirs = ['node_modules', '.git', 'dist', 'build', '.next', '.cache', '__pycache__', '.svelte-kit', 'coverage', '.turbo'];
+    
+    if (maxDepth <= 0) return items;
+    
+    try {
+      for await (const [name, handle] of dirHandle.entries()) {
+        const fullPath = basePath ? `${basePath}/${name}` : name;
+        if (handle.kind === 'directory') {
+          if (skipDirs.includes(name)) continue;
+          items.push({ type: 'dir', path: fullPath });
+          const subItems = await buildWorkspaceTree(handle, fullPath, maxDepth - 1);
+          items.push(...subItems);
+        } else {
+          items.push({ type: 'file', path: fullPath });
+        }
+      }
+    } catch (e) {
+      console.error('Workspace tree error:', e);
+    }
+    return items;
+  };
+
   const handleSendMessage = async () => {
     if ((!input.trim() && !attachedFile) || loading) return;
 
@@ -982,10 +1049,36 @@ export default function AIAgent() {
       }
     }
 
+    // === WORKSPACE FILE INJECTION ===
+    // Jika user sudah memilih workspace folder, scan dan inject konten file ke dalam pesan
+    if (workspaceHandle) {
+      try {
+        setLogs(prev => [...prev, `📂 Memindai folder kerja (Workspace)...`]);
+        const workspaceFiles = await scanWorkspaceFiles(workspaceHandle);
+        
+        if (workspaceFiles.length > 0) {
+          let workspaceContent = '';
+          for (const f of workspaceFiles) {
+            workspaceContent += `\n=== FILE: ${f.path} (${(f.size / 1024).toFixed(1)}KB) ===\n${f.content}\n=== END FILE ===\n`;
+          }
+          
+          // Inject workspace content yang akan dibaca oleh file_analyzer plugin
+          apiInput += `\n\n[WORKSPACE FILES CONTENT]${workspaceContent}[/WORKSPACE FILES CONTENT]`;
+          
+          setLogs(prev => [...prev, `✅ ${workspaceFiles.length} file workspace berhasil dimuat`]);
+        } else {
+          apiInput += `\n\n[WORKSPACE FILES CONTENT]EMPTY[/WORKSPACE FILES CONTENT]`;
+        }
+      } catch (wsErr) {
+        console.error('Workspace injection error:', wsErr);
+        setLogs(prev => [...prev, `⚠️ Gagal memindai workspace: ${wsErr.message}`]);
+      }
+    }
+
     const userMessage = {
       id: Date.now(),
       type: 'user',
-      content: currentFileName ? `${displayInput}\n\n*(File/Gambar Terlampir: ${currentFileName})*` : displayInput,
+      content: currentFileName ? `${displayInput}\n\n*(File/Gambar Terlampir: ${currentFileName})*` : (workspaceHandle ? `${displayInput}\n\n*(📂 Workspace Terhubung)*` : displayInput),
       timestamp: new Date(),
     };
 
@@ -1025,7 +1118,7 @@ export default function AIAgent() {
       // Jika model adalah Kepala Agent (coordinator), otomatis inject semua tools
       // agar logika sub-agent routing di backend tidak pernah ter-bypass
       const effectiveTools = selectedModel === 'coordinator-agent'
-        ? ['web_search', 'deep_research', 'youtube_analyst', 'code_executor', 'api_caller', 'logika', 'bahasa', 'debate', 'cron_manager']
+        ? ['web_search', 'deep_research', 'youtube_analyst', 'code_executor', 'api_caller', 'logika', 'bahasa', 'debate', 'cron_manager', 'file_analyzer']
         : selectedTools;
 
       const payload = {
