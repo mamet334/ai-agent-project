@@ -19,7 +19,7 @@
 15. Workspace File Analyzer (Membaca, menganalisis, dan memeriksa file/folder lokal user via File System Access API + file_analyzer sub-agent)
 
 ## 🚀 ROADMAP TERSISA (PENGUATAN SUB-AGENT)
-1. Sub-Agent Web Scraper Lanjutan (Mampu menembus website yang membutuhkan proses login)
+1. ~~Sub-Agent Web Scraper Lanjutan~~ ✅ SELESAI (Login, Multi-URL, Table Extraction, Fallback Jina→DirectFetch→Cheerio)
 2. Sub-Agent Eksekutor Kode / Coder (Mampu mengeksekusi script Python secara real-time di backend untuk otomatisasi pengolahan data CSV/Excel)
 3. Sub-Agent YouTube Analyst Pro (Memindahkan/mengembangkan crawler ke VPS atau integrasi Anti-Captcha penuh agar terbebas dari blokir YouTube)
 
@@ -31,7 +31,7 @@
 5. **cron_manager:** Penjadwalan & otomatisasi task dengan realtime push (Status: Aktif & Stabil).
 6. **memory_manager:** Mengingat preferensi global user (Status: Aktif).
 7. **coder:** Asisten penulisan & analisis koding murni (Status: Aktif, belum bisa eksekusi script Python di backend).
-8. **scraper:** Pengambilan data web sederhana (Status: Aktif, belum bisa login).
+8. **scraper:** Pengambilan data web lanjutan dengan Login, Multi-URL, Table Extraction & Fallback 3-lapis (Status: ✅ Upgraded).
 9. **debate:** Menganalisis pro/kontra suatu argumen (Status: Aktif).
 10. **communicator:** Menerjemahkan bahasa dan format teks (Status: Aktif).
 11. **logic & language:** Sub-agent ringan untuk penalaran logika dan teks biasa (Status: Aktif).
