@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Upload, Send, User, Bot, Loader2, LogOut, Globe, BookOpen, Lock, Plus, MessageSquare, Trash2 } from 'lucide-react';
+import { Search, Upload, Send, User, Bot, Loader2, LogOut, Globe, BookOpen, Lock, Plus, MessageSquare, Trash2, Copy, Check } from 'lucide-react';
 import { supabase } from './lib/supabase';
 
 // Custom lightweight Markdown parser to avoid React 19 crashes with react-markdown
@@ -23,6 +23,21 @@ const parseMarkdown = (text) => {
     .replace(/\n/g, '<br/>');
     
   return { __html: html };
+};
+
+const CopyButton = ({ text }) => {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    const cleanText = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    navigator.clipboard.writeText(cleanText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button onClick={handleCopy} className="text-slate-400 hover:text-emerald-400 transition-colors p-1.5 rounded hover:bg-slate-700/80 cursor-pointer flex items-center justify-center" title="Salin Jawaban AI">
+      {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+    </button>
+  );
 };
 
 function App() {
@@ -415,8 +430,13 @@ function App() {
               <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${msg.role === 'user' ? 'bg-indigo-500' : 'bg-emerald-600'}`}>
                 {msg.role === 'user' ? <User className="w-5 h-5 text-white" /> : <Bot className="w-5 h-5 text-white" />}
               </div>
-              <div className={`p-4 rounded-2xl max-w-[80%] overflow-x-auto ${msg.role === 'user' ? 'bg-indigo-600/20 text-indigo-100 rounded-tr-none border border-indigo-500/30' : 'bg-slate-800 rounded-tl-none border border-slate-700'}`}>
-                <div className="text-sm leading-relaxed" dangerouslySetInnerHTML={parseMarkdown(msg.content)} />
+              <div className={`p-4 rounded-2xl max-w-[80%] overflow-x-auto relative group ${msg.role === 'user' ? 'bg-indigo-600/20 text-indigo-100 rounded-tr-none border border-indigo-500/30' : 'bg-slate-800 rounded-tl-none border border-slate-700'}`}>
+                {msg.role === 'assistant' && (
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 rounded border border-slate-600 shadow-sm z-10">
+                    <CopyButton text={msg.content} />
+                  </div>
+                )}
+                <div className={`text-sm leading-relaxed ${msg.role === 'assistant' ? 'mt-4' : ''}`} dangerouslySetInnerHTML={parseMarkdown(msg.content)} />
               </div>
             </div>
           ))}
