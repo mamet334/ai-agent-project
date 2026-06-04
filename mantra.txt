@@ -24,6 +24,13 @@
 3. **Auto-Notifier (Upgrade `cron_manager`)**: Integrasi API Email/WhatsApp agar Mamet bisa mengirimkan laporan hasil kerja otomatis (cron) langsung ke HP/Email user.
 4. **Board of Directors Simulator (Upgrade `debate`)**: Memanggil 3 LLM berbeda secara bersamaan untuk saling berdebat dan memberikan keputusan bisnis terbaik.
 
+## 🚀 ROADMAP JANGKA PANJANG (PHASE 3: DESKTOP EDITION - "The Missing 25%")
+*Fase ini membutuhkan perombakan dari wujud Website menjadi Aplikasi Desktop Asli (.exe) menggunakan Electron/Tauri untuk melepaskan belenggu Browser Sandbox.*
+1. **Otonomi Terminal Penuh**: Mamet dapat mengeksekusi perintah command-line (NPM, Git, dll) langsung di sistem operasi lokal.
+2. **Surgical File Editing**: Kemampuan untuk mengedit baris kode secara presisi (diff-patching) tanpa harus menulis ulang seluruh isi file.
+3. **Iterative Agentic Loops**: Kemampuan untuk berpikir dan menjalankan aksi (Tool Calling) secara berulang dan otonom di latar belakang sebelum membalas pesan.
+4. **Dynamic Global Search**: Penelusuran file dan direktori lokal secara dinamis melintasi seluruh partisi hardisk (C:/D:) secara real-time.
+
 ## 🧩 DAFTAR SUB-AGENT AKTIF (STATUS SAAT INI)
 1. **deep_research:** Pencarian web mendalam multi-query via Jina Reader (Status: Sangat kuat & stabil).
 2. **researcher:** Pencarian web cepat dengan DuckDuckGo fallback + Pencari Gambar Yahoo/Bing (Status: Aktif).
