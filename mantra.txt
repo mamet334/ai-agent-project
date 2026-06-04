@@ -18,10 +18,11 @@
 14. Real-time Image Search (Fetches Yahoo/Bing images via Jina and renders them dynamically in markdown)
 15. Workspace File Analyzer (Membaca, menganalisis, dan memeriksa file/folder lokal user via File System Access API + file_analyzer sub-agent)
 
-## 🚀 ROADMAP TERSISA (PENGUATAN SUB-AGENT)
-1. ~~Sub-Agent Web Scraper Lanjutan~~ ✅ SELESAI (Login, Multi-URL, Table Extraction, Fallback Jina→DirectFetch→Cheerio)
-2. ~~Sub-Agent Eksekutor Kode / Coder~~ ✅ SELESAI (Eksekusi kode Python/JS di Docker sandbox, Self-Repair Debugger otomatis, & inline CSV/data parsing)
-3. ~~Sub-Agent YouTube Analyst Pro~~ ✅ SELESAI (Integrasi Anti-Captcha penuh via Apify Actor 'supreme_coder/youtube-transcript-scraper' sudah aktif 100%)
+## 🚀 ROADMAP TERSISA (PHASE 2: SUPER UPGRADES)
+1. **Workspace Editor (Upgrade `file_analyzer`)**: Memberikan hak akses tulis agar agen bisa membuat, memodifikasi, dan menyimpan file baru langsung ke folder lokal user.
+2. **Infinite Long-Term Memory (Upgrade `memory_manager`)**: Integrasi dengan Vector DB (RAG) agar Mamet memiliki ingatan permanen seumur hidup tentang semua obrolan dan kebiasaan user.
+3. **Auto-Notifier (Upgrade `cron_manager`)**: Integrasi API Email/WhatsApp agar Mamet bisa mengirimkan laporan hasil kerja otomatis (cron) langsung ke HP/Email user.
+4. **Board of Directors Simulator (Upgrade `debate`)**: Memanggil 3 LLM berbeda secara bersamaan untuk saling berdebat dan memberikan keputusan bisnis terbaik.
 
 ## 🧩 DAFTAR SUB-AGENT AKTIF (STATUS SAAT INI)
 1. **deep_research:** Pencarian web mendalam multi-query via Jina Reader (Status: Sangat kuat & stabil).
