@@ -486,20 +486,20 @@ serve(async (req) => {
         console.warn('Mamet Anti-Limit: Semua Gemini keys habis kuota! Cascading ke fallback...');
       }
 
-      // === JURUS 3: Groq sebagai fallback gratis ===
-      if (GROQ_API_KEY) {
-        try {
-          console.log('Mamet Anti-Limit: Beralih ke Groq (fallback gratis)...');
-          return await callGroq(promptText, systemPromptText, chatHistory);
-        } catch(e) { console.warn('Groq fallback also failed:', e); }
-      }
-
-      // === JURUS 4: OpenRouter free models sebagai fallback terakhir ===
+      // === JURUS 3: OpenRouter free models sebagai fallback ===
       if (OPENROUTER_API_KEY) {
         try {
-          console.log('Mamet Anti-Limit: Beralih ke OpenRouter (fallback terakhir)...');
+          console.log('Mamet Anti-Limit: Beralih ke OpenRouter (fallback 1)...');
           return await callOpenRouter(promptText, systemPromptText, chatHistory);
         } catch(e) { console.warn('OpenRouter fallback also failed:', e); }
+      }
+
+      // === JURUS 4: Groq sebagai fallback terakhir (rentan token limit) ===
+      if (GROQ_API_KEY) {
+        try {
+          console.log('Mamet Anti-Limit: Beralih ke Groq (fallback terakhir)...');
+          return await callGroq(promptText, systemPromptText, chatHistory);
+        } catch(e) { console.warn('Groq fallback also failed:', e); }
       }
 
       throw new Error('Semua provider AI sedang limit/gangguan. Coba lagi dalam beberapa menit.');
@@ -522,20 +522,20 @@ serve(async (req) => {
         } catch(e) { console.warn('Coordinator Gemini failed:', e); }
       }
       
-      // JURUS 2: Groq (Llama) - gratis & cepat
-      if (GROQ_API_KEY) {
-        try {
-          console.log("Mamet Coordinator: Beralih ke Groq...");
-          return await callGroq(promptText, systemPromptText, []); 
-        } catch(e) { console.warn('Coordinator Groq failed:', e); }
-      }
-
-      // JURUS 3: OpenRouter free models
+      // JURUS 2: OpenRouter free models
       if (OPENROUTER_API_KEY) {
         try {
           console.log("Mamet Coordinator: Beralih ke OpenRouter free...");
           return await callOpenRouter(promptText, systemPromptText, []);
         } catch(e) { console.warn('Coordinator OpenRouter failed:', e); }
+      }
+
+      // JURUS 3: Groq (Llama) - rentan token limit
+      if (GROQ_API_KEY) {
+        try {
+          console.log("Mamet Coordinator: Beralih ke Groq...");
+          return await callGroq(promptText, systemPromptText, []); 
+        } catch(e) { console.warn('Coordinator Groq failed:', e); }
       }
 
       throw new Error('Semua otak coordinator sedang limit. Coba lagi nanti.');
@@ -592,13 +592,13 @@ serve(async (req) => {
         }
 
         if (!res || !res.ok) {
-          // === FALLBACK STREAMING: Groq atau OpenRouter ===
+          // === FALLBACK STREAMING: OpenRouter lalu Groq ===
           console.log('Mamet Anti-Limit Stream: Semua Gemini keys limit, falling back...');
-          if (GROQ_API_KEY) {
-            return streamGroqResponse(promptText, systemPromptText, chatHistory, metaData, 'Gemini-429');
-          }
           if (OPENROUTER_API_KEY) {
             return streamOpenRouterResponse(promptText, systemPromptText, chatHistory, metaData);
+          }
+          if (GROQ_API_KEY) {
+            return streamGroqResponse(promptText, systemPromptText, chatHistory, metaData, 'Gemini-429');
           }
           const errStream = new ReadableStream({
             start(controller) {
