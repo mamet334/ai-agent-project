@@ -93,13 +93,35 @@ function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      if (session) fetchDocuments(session.user.id);
       setAuthLoading(false);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      if (session) fetchDocuments(session.user.id);
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  const fetchDocuments = async (userId) => {
+    const { data, error } = await supabase.from('documents').select('id, title').eq('user_id', userId).order('created_at', { ascending: false });
+    if (!error && data) {
+      setDocuments(data);
+    }
+  };
+
+  const handleDeleteDocument = async (id) => {
+    const confirmDelete = window.confirm('Apakah Anda yakin ingin menghapus dokumen RAG ini? Otak AI akan melupakan isinya.');
+    if (!confirmDelete) return;
+
+    try {
+      const { error } = await supabase.from('documents').delete().eq('id', id);
+      if (error) throw error;
+      setDocuments(prev => prev.filter(doc => doc.id !== id));
+    } catch (err) {
+      alert(`Gagal menghapus: ${err.message}`);
+    }
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -138,8 +160,10 @@ function App() {
 
       if (error) throw new Error(error.message);
       
-      setDocuments(prev => [...prev, file.name]);
+      setDocuments(prev => [{ id: Date.now(), title: file.name }, ...prev]); // Optimistic update, exact ID doesn't matter much until refresh
       alert('Dokumen berhasil masuk ke RAG Database!');
+      fetchDocuments(session.user.id); // Refresh to get real ID
+
     } catch (err) {
       alert(`Gagal mengunggah: ${err.message}`);
     }
@@ -278,6 +302,26 @@ function App() {
         <button onClick={handleUploadClick} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md shrink-0">
           <Upload className="w-5 h-5" /> Unggah Dokumen (RAG)
         </button>
+
+        {/* RAG Documents List */}
+        {documents.length > 0 && (
+          <div className="mt-4 shrink-0">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Dokumen Aktif</h3>
+            <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
+              {documents.map((doc) => (
+                <div key={doc.id} className="group text-[11px] text-slate-300 bg-slate-700/50 px-2 py-1.5 rounded flex items-center justify-between border border-slate-600/50 hover:bg-slate-700 transition-colors">
+                  <div className="flex items-center gap-2 truncate">
+                    <BookOpen className="w-3 h-3 text-indigo-400 shrink-0" />
+                    <span className="truncate">{doc.title}</span>
+                  </div>
+                  <button onClick={() => handleDeleteDocument(doc.id)} className="opacity-0 group-hover:opacity-100 hover:text-red-400 p-1 transition-opacity shrink-0">
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="mt-6 flex-1 flex flex-col min-h-0">
           <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 shrink-0">Riwayat Percakapan</h3>
