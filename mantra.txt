@@ -18,5 +18,7 @@
 14. Real-time Image Search (Fetches Yahoo/Bing images via Jina and renders them dynamically in markdown)
 15. Workspace File Analyzer (Membaca, menganalisis, dan memeriksa file/folder lokal user via File System Access API + file_analyzer sub-agent)
 
-## 🚀 ROADMAP TERSISA
-1. Voice Interaction (Suara AI)
+## 🚀 ROADMAP TERSISA (PENGUATAN SUB-AGENT)
+1. Sub-Agent Web Scraper Lanjutan (Mampu menembus website yang membutuhkan proses login)
+2. Sub-Agent Eksekutor Kode / Coder (Mampu mengeksekusi script Python secara real-time di backend untuk otomatisasi pengolahan data CSV/Excel)
+3. Sub-Agent YouTube Analyst Pro (Memindahkan/mengembangkan crawler ke VPS atau integrasi Anti-Captcha penuh agar terbebas dari blokir YouTube)
