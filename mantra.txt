@@ -20,7 +20,7 @@
 
 ## 🚀 ROADMAP TERSISA (PENGUATAN SUB-AGENT)
 1. ~~Sub-Agent Web Scraper Lanjutan~~ ✅ SELESAI (Login, Multi-URL, Table Extraction, Fallback Jina→DirectFetch→Cheerio)
-2. Sub-Agent Eksekutor Kode / Coder (Mampu mengeksekusi script Python secara real-time di backend untuk otomatisasi pengolahan data CSV/Excel)
+2. ~~Sub-Agent Eksekutor Kode / Coder~~ ✅ SELESAI (Eksekusi kode Python/JS di Docker sandbox, Self-Repair Debugger otomatis, & inline CSV/data parsing)
 3. Sub-Agent YouTube Analyst Pro (Memindahkan/mengembangkan crawler ke VPS atau integrasi Anti-Captcha penuh agar terbebas dari blokir YouTube)
 
 ## 🧩 DAFTAR SUB-AGENT AKTIF (STATUS SAAT INI)
@@ -30,7 +30,7 @@
 4. **file_analyzer:** Ekstraksi dan analisis file lokal Workspace (Status: Aktif, baru rilis).
 5. **cron_manager:** Penjadwalan & otomatisasi task dengan realtime push (Status: Aktif & Stabil).
 6. **memory_manager:** Mengingat preferensi global user (Status: Aktif).
-7. **coder:** Asisten penulisan & analisis koding murni (Status: Aktif, belum bisa eksekusi script Python di backend).
+7. **coder:** Eksekusi kode Python/JS di Docker sandbox dengan Self-Repair debugger & inline data parsing (Status: ✅ Upgraded).
 8. **scraper:** Pengambilan data web lanjutan dengan Login, Multi-URL, Table Extraction & Fallback 3-lapis (Status: ✅ Upgraded).
 9. **debate:** Menganalisis pro/kontra suatu argumen (Status: Aktif).
 10. **communicator:** Menerjemahkan bahasa dan format teks (Status: Aktif).
