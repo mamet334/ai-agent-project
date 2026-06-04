@@ -146,6 +146,19 @@ function App() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Filter dokumen ganda / Update dokumen
+    const existingDoc = documents.find(doc => doc.title === file.name);
+    if (existingDoc) {
+      const confirmUpdate = window.confirm(`Dokumen bernama "${file.name}" sudah ada. Apakah Anda ingin menimpanya (memperbarui data)?`);
+      if (!confirmUpdate) {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+      // Jika setuju menimpa, hapus diam-diam dari Supabase dulu
+      await supabase.from('documents').delete().eq('id', existingDoc.id);
+      setDocuments(prev => prev.filter(doc => doc.id !== existingDoc.id));
+    }
+
     setIsUploading(true);
     
     // Memberikan waktu singkat agar browser (React) merender animasi putaran (spinner) sebelum memproses file berat
