@@ -37,6 +37,7 @@
 2. ~~**Surgical File Editing**~~ 🚧 *(Sebagian Selesai)*: Jembatan keamanan OS (Pop-up Dialog) dan fungsi simpan paksa telah aktif di UI. Sisa menyambungkan kesadaran AI agar bisa mengeksekusinya secara otonom.
 3. **Iterative Agentic Loops**: Kemampuan untuk berpikir dan menjalankan aksi (Tool Calling) secara berulang dan otonom di latar belakang sebelum membalas pesan.
 4. **Dynamic Global Search**: Penelusuran file dan direktori lokal secara dinamis melintasi seluruh partisi hardisk (C:/D:) secara real-time.
+5. **Production Build & Auto-Updater**: Mengemas aplikasi menjadi file `.exe` mandiri (Strategi 1 - True Offline) dengan sistem *Delta Update (OTA Patching)* cerdas menggunakan `electron-builder`.
 
 ## 🧩 DAFTAR SUB-AGENT AKTIF (STATUS SAAT INI)
 1. **deep_research:** Pencarian web mendalam multi-query via Jina Reader (Status: Sangat kuat & stabil).
