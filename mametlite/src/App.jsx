@@ -147,6 +147,10 @@ function App() {
     if (!file) return;
 
     setIsUploading(true);
+    
+    // Memberikan waktu singkat agar browser (React) merender animasi putaran (spinner) sebelum memproses file berat
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     try {
       let extractedText = '';
       if (file.name.endsWith('.txt')) {
