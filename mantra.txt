@@ -17,6 +17,8 @@
 13. Strict Coordinator Routing (Enforced sub-agent selection to prevent logic sub-agent for factual queries)
 14. Real-time Image Search (Fetches Yahoo/Bing images via Jina and renders them dynamically in markdown)
 15. Workspace File Analyzer (Membaca, menganalisis, dan memeriksa file/folder lokal user via File System Access API + file_analyzer sub-agent)
+16. Sakelar RAG (Knowledge Base) ON/OFF (Tombol switch di sidebar utama & mametlite untuk mengaktifkan/menonaktifkan pencarian RAG di backend guna menghemat token/biaya database secara efisien)
+
 
 ## 🚀 ROADMAP TERSISA (PHASE 2: SUPER UPGRADES)
 1. ~~**Workspace Editor (Upgrade `file_analyzer`)**~~ ✅ SELESAI (Agen kini memiliki hak akses tulis untuk membuat, mengedit, dan menyimpan file ke lokal)
