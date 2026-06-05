@@ -65,3 +65,11 @@
 4. **Auto-Updater & Distribusi:** Mengelola infrastruktur pembaruan otomatis (OTA) via GitHub Releases/S3 dengan modul `electron-updater` agar patch baru terinstal otomatis di latar belakang (*silent updates*).
 5. **Skalabilitas API & Manajemen Memori:** Mengatasi limitasi API client dengan membangun *Backend Proxy* untuk mengamankan API Keys, menyembunyikan logika rahasia, serta merotasi API keys secara aman di sisi server.
 6. **Sandbox Coder & Keamanan Data:** Mengisolasi eksekusi kode sub-agent *Coder* ke lingkungan cloud virtual terisolasi (*containerized sandbox* seperti E2B atau Docker) agar tidak membahayakan sistem operasi lokal pengguna, serta menerapkan Supabase RLS (Row Level Security) ketat untuk memproteksi database.
+
+
+## 🔭 ROADMAP JANGKA PANJANG (PHASE 4: OBSERVABILITY & COST OPTIMIZATION)
+*Merangkum dari rencana integrasi "Better Stack" & efisiensi operasional:*
+1. **Sistem Monitoring Infrastruktur:** Membangun Endpoint Health-Checker paralel serta menyimpan log waktu respons dan status insiden ke Supabase (`monitors`, `checks`, `incidents`) secara terjadwal via cron.
+2. **Sistem Notifikasi Insiden (Alerting):** Setup integrasi Bot Telegram yang mengirim peringatan otomatis apabila terdeteksi anomali pada webhook atau downtime server.
+3. **Sistem Router AI Berlapis (Traffic Light):** Mengalokasikan load balancing secara cerdas: Groq (Llama 3) untuk parsing sederhana, Gemini 1.5 Flash untuk orkestrasi utama, dan DeepSeek untuk debugging kompleks/pengambilan keputusan kritis.
+4. **Optimasi Hemat Token (RAG & Usage):** Menyempurnakan pembersihan ingatan dokumen yang jarang diakses, mengubah teks boros menjadi format poin, membatasi similarity search (top-k), dan membuat dashboard pemantauan konsumsi token harian.
