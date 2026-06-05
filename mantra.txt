@@ -1,5 +1,7 @@
 # MANTRA MAMET AI 🔮
 [Tech: React/Vite (PWA) & Supabase Edge (Deno)]
+[Vercel Production URL: https://ai-agent-project-2a9h.vercel.app/]
+
 
 ## ✅ SELESAI (100% MEDVI RAG & KODING)
 1. Multi-Agent & Orchestrator (DeepSeek, Llama, Gemini)
