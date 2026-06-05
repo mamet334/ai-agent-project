@@ -1,32 +1,55 @@
 export default {
   name: 'debate',
-  description: 'Sub-agent khusus untuk Mode Diskusi. Memicu perdebatan 2 putaran antara "Agent Logika" dan "Agent Bahasa/Kritikus" untuk mencari solusi paling mutakhir dari masalah yang sangat rumit.',
+  description: 'BOARD OF DIRECTORS SIMULATOR: Memanggil 3 persona AI (CEO, CFO, CTO) secara serentak untuk berdebat dan membedah suatu ide/masalah bisnis dari berbagai sudut pandang (Visi, Risiko Keuangan, dan Inovasi Teknologi), lalu memberikan Keputusan Bisnis Final.',
   execute: async ({ task, accumulatedContext, runLLM }) => {
     try {
-      let debateLog = '';
+      const topic = `Topik Diskusi: ${task}\nKonteks Tambahan: ${accumulatedContext}`;
+      
+      // 3 Persona dipanggil secara PARALEL untuk menghemat waktu
+      const [ceoResponse, cfoResponse, ctoResponse] = await Promise.all([
+        runLLM(
+          `Bahas topik berikut dari sudut pandang seorang CEO (Chief Executive Officer) yang visioner.\nFokus pada ekspansi, strategi pasar, kepemimpinan, dan gambaran besar.\n\n${topic}`, 
+          "Anda adalah CEO yang ambisius dan visioner."
+        ),
+        runLLM(
+          `Bahas topik berikut dari sudut pandang seorang CFO (Chief Financial Officer) & Risk Manager yang pesimis dan sangat hati-hati.\nFokus pada risiko finansial, efisiensi biaya, potensi kerugian, dan ancaman regulasi.\n\n${topic}`, 
+          "Anda adalah CFO yang sangat pelit, analitis, dan selalu waspada akan risiko."
+        ),
+        runLLM(
+          `Bahas topik berikut dari sudut pandang seorang CTO (Chief Technology Officer) yang gila inovasi.\nFokus pada implementasi teknologi terbaru, efisiensi sistem, AI, dan skalabilitas.\n\n${topic}`, 
+          "Anda adalah CTO jenius yang terobsesi dengan teknologi modern."
+        )
+      ]);
 
-      // Putaran 1: Logika menyusun solusi
-      const logikaPrompt = `Anda adalah Ahli Logika. Berdasarkan masalah berikut, susun solusi awal yang sangat rasional, langkah demi langkah.\nMasalah: ${task}\nKonteks: ${accumulatedContext}`;
-      const logikaRound1 = await runLLM(logikaPrompt, '');
-      debateLog += `🗣️ **Ahli Logika (Putaran 1):**\n${logikaRound1}\n\n`;
+      const debateLog = `
+👔 **CEO (Visi & Strategi):**
+${ceoResponse}
 
-      // Putaran 2: Bahasa mengkritik
-      const bahasaPrompt = `Anda adalah Kritikus Kritis (Ahli Bahasa & Logika Terbalik). Kritik solusi dari Ahli Logika berikut ini. Cari celah, kelemahan, asumsi yang salah, atau ketidakjelasan.\nSolusi Ahli Logika: ${logikaRound1}`;
-      const bahasaRound1 = await runLLM(bahasaPrompt, '');
-      debateLog += `🕵️ **Kritikus (Putaran 1):**\n${bahasaRound1}\n\n`;
+💼 **CFO (Risiko & Keuangan):**
+${cfoResponse}
 
-      // Putaran 3: Logika memperbaiki
-      const logikaRefinePrompt = `Anda adalah Ahli Logika. Anda baru saja dikritik oleh Kritikus. Perbaiki solusi awal Anda untuk menyempurnakannya berdasarkan kritik berikut.\nKritik: ${bahasaRound1}\nSolusi Lama Anda: ${logikaRound1}`;
-      const logikaRound2 = await runLLM(logikaRefinePrompt, '');
-      debateLog += `🗣️ **Ahli Logika (Final):**\n${logikaRound2}\n\n`;
+💻 **CTO (Teknologi & Inovasi):**
+${ctoResponse}
+`;
 
-      // Putaran 4: Kesimpulan
+      // Chairman (Penyimpul) dipanggil setelah ketiganya selesai
+      const chairmanPrompt = `Anda adalah "Chairman of the Board". Berikut adalah pendapat dari 3 direktur Anda (CEO, CFO, CTO) mengenai ide/masalah yang diajukan:
+
+${debateLog}
+
+TUGAS ANDA:
+1. Rangkum perdebatan ini.
+2. Cari titik temu atau kompromi dari ketiga sudut pandang tersebut.
+3. Berikan KEPUTUSAN FINAL (GO / NO-GO) beserta langkah konkret yang harus diambil.`;
+
+      const chairmanResponse = await runLLM(chairmanPrompt, "Anda adalah Chairman yang bijaksana dan tegas pembuat keputusan.");
+
       return {
-        output: `Perdebatan Selesai.\n\n${debateLog}`,
-        toolExecution: { name: 'agent_debate_loop', args: { rounds: 2 } }
+        output: `## 🏛️ Rapat Dewan Direksi (Board of Directors)\n${debateLog}\n\n---\n## ⚖️ **KEPUTUSAN FINAL (CHAIRMAN)**\n${chairmanResponse}`,
+        toolExecution: { name: 'board_of_directors_simulation', args: { personas: ['CEO', 'CFO', 'CTO'] } }
       };
     } catch (err) {
-      return { output: `Debat gagal: ${err}` };
+      return { output: `Rapat Direksi gagal: ${err}` };
     }
   }
 };

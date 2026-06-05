@@ -1,9 +1,25 @@
-import { defineConfig } from 'vite'
+import { defineConfig, splitVendorChunkPlugin } from 'vite'
 import react from '@vitejs/plugin-react'
+import { obfuscator } from 'rollup-obfuscator'
 
 export default defineConfig({
+  base: './',
   plugins: [
-    react()
+    react(),
+    splitVendorChunkPlugin(),
+    // Run obfuscator only on our custom source code to avoid breaking third-party libraries
+    obfuscator({
+      include: ['src/**/*.js', 'src/**/*.jsx', 'src/**/*.ts', 'src/**/*.tsx'],
+      exclude: ['node_modules/**', '**/node_modules/**'],
+      compact: true,
+      controlFlowFlattening: false,
+      deadCodeInjection: false,
+      identifierNamesGenerator: 'hexadecimal',
+      minify: true,
+      sourceMap: false,
+      stringArray: true,
+      stringArrayThreshold: 0.75
+    })
   ],
   server: {
     port: 5173,
@@ -13,5 +29,8 @@ export default defineConfig({
         changeOrigin: true,
       }
     }
+  },
+  build: {
+    chunkSizeWarningLimit: 2000 // Raise limit since we use a single vendor chunk
   }
 })

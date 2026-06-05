@@ -6,8 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-byok-gemini',
 };
 
-// Fungsi pemotong teks (Chunker) yang lebih aman
-function chunkText(text: string, maxLength: number = 1500): string[] {
+// Fungsi pemotong teks (Chunker) yang lebih aman dan kapasitas besar untuk tabel
+function chunkText(text: string, maxLength: number = 4500): string[] {
   const chunks: string[] = [];
   let i = 0;
   while (i < text.length) {
@@ -83,7 +83,7 @@ serve(async (req) => {
     const documentId = docData.id;
 
     // 2. Potong teks (Chunking)
-    const chunks = chunkText(text, 1500); // 1500 karakter per chunk
+    const chunks = chunkText(text, 4500); // 4500 karakter per chunk (Pisau Pemotong Raksasa)
 
     if (chunks.length === 0) {
       // Rollback document creation

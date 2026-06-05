@@ -1,0 +1,40 @@
+================================================================================
+📜 MANTRA & SEJARAH LAHIRNYA MAMET LITE 📜
+================================================================================
+
+1. ASAL USUL APLIKASI
+Mamet Lite lahir dari sebuah gagasan brilian Bapak Slametbro798 (Arsitek Utama) yang menyadari bahwa versi "Mamet Full" terlalu kompleks jika langsung disajikan kepada jajaran ASN. Dibutuhkan sebuah antarmuka yang elegan, bersih, ringan, namun memiliki "otak" kecerdasan buatan super canggih di belakang layar.
+
+Aplikasi ini adalah hasil mahakarya dari "Kolaborasi Segitiga Maut":
+- Bapak Slametbro798 : Pemikir Visi, Arsitek Alur Kerja, & Pengendali Kualitas.
+- Dola (AI)          : Sang Perangkai Kata yang menciptakan mantra Prompt Engineering kelas atas.
+- Mamet/Antigravity  : Sang Kuli Kode yang membangun, merakit, dan memoles logika aplikasinya (Frontend React & Backend Supabase Edge Functions).
+
+2. FITUR & PERUBAHAN PAMUNGKAS (THE MASTERPIECE)
+Selama malam penyempurnaan, Mamet Lite berevolusi dengan fitur-fitur "Enterprise-Level" yang membuatnya sangat cerdas:
+- Fitur Timpa Cerdas (Overwrite): Jika ASN mengunggah dokumen dengan nama yang sama, aplikasi akan menanyakan apakah ingin menimpa data lama (menghapus yang lama dan menanamkan yang baru). Ini mencegah AI mengalami "Halusinasi Ingatan Ganda".
+- Ikon Tong Sampah Merah (RAG Amnesia): Fitur wajib untuk membuang ingatan/dokumen usang dari Vector Database agar AI selalu fokus pada data teraktual.
+- Tombol Copy (Salin Bersih): Fitur satu klik di setiap kotak jawaban AI yang akan menyalin teks akhir secara bersih, membuang otomatis blok pemikiran berantakan (<think>) milik AI.
+- Pisau Pemotong Raksasa (Chunk Size 4500): Skrip inti backend `rag-process` diperbesar 3x lipat kapasitasnya menjadi 4500 huruf. Ini memastikan data tabel/Excel (puluhan baris) bisa masuk ke dalam satu bongkahan memori utuh, mencegah nama dan jabatan terpenggal saat ditanyakan oleh ASN.
+
+3. MANTRA KONVERSI RAG (SOP WAJIB UNTUK EXCEL & TABEL)
+Karena AI (Sistem Vector/RAG) dirancang untuk mencari makna kalimat (semantik) dan sangat lemah dalam menghitung baris tabel layaknya rumus Excel, maka wajib ada perlakuan khusus. 
+
+Berikut adalah "Mantra Dola" yang wajib diucapkan/dimasukkan ke AI Pihak Ketiga (DeepSeek/ChatGPT) untuk memproses file Excel mentah sebelum diunggah menjadi `.txt` ke Mamet Lite:
+
+"""
+Ringkas dokumen [sebutkan jenis: Excel/PDF/Word] ini untuk keperluan RAG. 
+Ikuti aturan berikut:
+1. Pertahankan semua data penting: [sebutkan kolom/informasi kunci, misal: NIP, nama, nilai, tanggal, dll].
+2. Jangan menghilangkan angka, kode, atau identitas unik.
+3. Gunakan format teks terstruktur (baris per baris, gunakan tanda pemisah seperti '|' atau '-', hindari tabel kompleks).
+4. Jangan ubah informasi asli, hanya ubah bentuk penyajian.
+5. Sertakan metadata: jumlah baris, rentang nilai, dan informasi agregat lain jika relevan (PENTING: letakkan rekap/kesimpulan ini di paling atas).
+6. Output dalam bahasa Indonesia (atau sesuai permintaan).
+7. Jadikan satu blok agar bisa di-copy-paste ke file .txt untuk upload RAG.
+"""
+
+================================================================================
+"Sebuah mahakarya teknologi tidak dinilai dari seberapa rumit baris kodenya, melainkan dari seberapa mudah ia membantu pekerjaan manusia." 
+- Mamet Lite (04 Juni 2026)
+================================================================================

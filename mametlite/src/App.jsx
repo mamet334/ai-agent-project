@@ -6,7 +6,33 @@ import { supabase } from './lib/supabase';
 const parseMarkdown = (text) => {
   if (!text) return { __html: '' };
   
-  let html = text
+  // Normalize HTML-escaped tags
+  let normalizedText = text
+    .replace(/(?:&lt;|<)think(?:&gt;|>)/gi, '<think>')
+    .replace(/(?:&lt;|<)\/think(?:&gt;|>)/gi, '</think>');
+  
+  // Handle case where text starts with "think " or "think\n" without angle brackets
+  if (normalizedText.trim().toLowerCase().startsWith('think ') || normalizedText.trim().toLowerCase().startsWith('think\n')) {
+    const idx = normalizedText.toLowerCase().indexOf('think');
+    normalizedText = normalizedText.slice(0, idx) + '<think>' + normalizedText.slice(idx + 5);
+  }
+  
+  // If think tag is opened but never closed, try to find a natural split point
+  if (normalizedText.includes('<think>') && !normalizedText.includes('</think>')) {
+    let splitIdx = normalizedText.indexOf('\n\n');
+    if (splitIdx === -1) {
+      const greetingMatch = normalizedText.match(/(?:\bhalo\b|\bhai\b|\bhi\b|selamat pagi|selamat siang|selamat sore|selamat malam|assalamualaikum)/i);
+      if (greetingMatch && greetingMatch.index > 10) {
+        splitIdx = greetingMatch.index;
+      }
+    }
+    
+    if (splitIdx !== -1) {
+      normalizedText = normalizedText.slice(0, splitIdx) + '</think>\n\n' + normalizedText.slice(splitIdx);
+    }
+  }
+  
+  let html = normalizedText
     // Parse <think> tags first (even if unclosed during streaming)
     .replace(/<think>([\s\S]*?)(?:<\/think>|$)/g, '<div class="text-xs text-slate-500 italic border-l-2 border-slate-700 pl-3 my-2 py-1">$1</div>')
     // Escape remaining HTML to prevent XSS (but don't escape our injected divs)

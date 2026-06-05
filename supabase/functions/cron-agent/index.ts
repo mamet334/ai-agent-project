@@ -51,15 +51,15 @@ serve(async (req) => {
         console.log(`Executing task ${task.id} for user ${task.user_id}`);
         
         // Panggil agent-process
-        // Panggil agent-process menggunakan ANON KEY yang di-hardcode untuk menghindari Invalid JWT dari Kong Gateway
-        const FALLBACK_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV1eXpkamlmaGRmeXl2cHhzb2Z1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2NjMyODUsImV4cCI6MjA5NTIzOTI4NX0.atDqwfpg_uwFI0nZuKQNxebCYh1KC7tdkSooC52m4YQ';
-        const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || FALLBACK_ANON;
+        // Panggil agent-process menggunakan ANON KEY dari env variable
+        const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
+        if (!SUPABASE_ANON_KEY) throw new Error('Missing SUPABASE_ANON_KEY env variable');
         
         const agentResponse = await fetch(`${SUPABASE_URL}/functions/v1/agent-process`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${FALLBACK_ANON}`
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
           },
           body: JSON.stringify({
             message: `[AUTOMATED TASK: ${task.title}]\n${task.prompt}`,

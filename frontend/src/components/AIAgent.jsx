@@ -81,23 +81,51 @@ const CodeCopyButton = ({ text }) => {
 // Utility: Parse <think>...</think> tags from AI response
 const parseThinkingContent = (text) => {
   if (!text) return { thinking: '', answer: '', isThinkingComplete: false };
+  
+  // Normalize HTML-escaped tags
+  let normalizedText = text
+    .replace(/(?:&lt;|<)think(?:&gt;|>)/gi, '<think>')
+    .replace(/(?:&lt;|<)\/think(?:&gt;|>)/gi, '</think>');
+  
+  // Handle case where text starts with "think " or "think\n" without angle brackets
+  if (normalizedText.trim().toLowerCase().startsWith('think ') || normalizedText.trim().toLowerCase().startsWith('think\n')) {
+    // Find index of "think" (ignoring case)
+    const idx = normalizedText.toLowerCase().indexOf('think');
+    normalizedText = normalizedText.slice(0, idx) + '<think>' + normalizedText.slice(idx + 5);
+  }
+  
+  // If think tag is opened but never closed, try to find a natural split point
+  if (normalizedText.includes('<think>') && !normalizedText.includes('</think>')) {
+    let splitIdx = normalizedText.indexOf('\n\n');
+    if (splitIdx === -1) {
+      const greetingMatch = normalizedText.match(/(?:\bhalo\b|\bhai\b|\bhi\b|selamat pagi|selamat siang|selamat sore|selamat malam|assalamualaikum)/i);
+      if (greetingMatch && greetingMatch.index > 10) {
+        splitIdx = greetingMatch.index;
+      }
+    }
+    
+    if (splitIdx !== -1) {
+      normalizedText = normalizedText.slice(0, splitIdx) + '</think>\n\n' + normalizedText.slice(splitIdx);
+    }
+  }
+  
   const thinkStartRegex = /<think>([\s\S]*?)$/i;
   const thinkCompleteRegex = /<think>([\s\S]*?)<\/think>/i;
   
-  const completeMatch = text.match(thinkCompleteRegex);
+  const completeMatch = normalizedText.match(thinkCompleteRegex);
   if (completeMatch) {
     const thinking = completeMatch[1].trim();
-    const answer = text.replace(thinkCompleteRegex, '').trim();
+    const answer = normalizedText.replace(thinkCompleteRegex, '').trim();
     return { thinking, answer, isThinkingComplete: true };
   }
   
-  const startMatch = text.match(thinkStartRegex);
+  const startMatch = normalizedText.match(thinkStartRegex);
   if (startMatch) {
     const thinking = startMatch[1].trim();
     return { thinking, answer: '', isThinkingComplete: false };
   }
   
-  return { thinking: '', answer: text, isThinkingComplete: true };
+  return { thinking: '', answer: normalizedText, isThinkingComplete: true };
 };
 
 // DeepSeek-style Thinking Block component
@@ -385,6 +413,25 @@ const TypewriterText = ({ text, onComplete, workspaceHandle }) => {
 };
 
 export default function AIAgent() {
+  const generateUUID = () => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
+  const sortConversations = (list) => {
+    return [...list].sort((a, b) => {
+      const timeA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+      const timeB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+      return timeB - timeA;
+    });
+  };
+
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [tools, setTools] = useState(['web_search', 'code_executor', 'api_caller']);
@@ -397,8 +444,14 @@ export default function AIAgent() {
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const thinkingStartRef = useRef(null);
+  const prevUserIdRef = useRef(null);
 
   const handleSelectWorkspace = async () => {
+    if (workspaceHandle || desktopWorkspacePath) {
+      setWorkspaceHandle(null);
+      setDesktopWorkspacePath(null);
+      return;
+    }
     try {
       if (window.electronAPI) {
         const folderPath = await window.electronAPI.selectFolder();
@@ -414,7 +467,7 @@ export default function AIAgent() {
     }
   };
 
-  const [conversations, setConversations] = useState([{ id: 'default', title: 'Percakapan Baru', messages: [] }]);
+  const [conversations, setConversations] = useState([{ id: 'default', title: 'Percakapan Baru', messages: [], updated_at: new Date().toISOString() }]);
   const [currentConversationId, setCurrentConversationId] = useState('default');
   const [currentlyTypingId, setCurrentlyTypingId] = useState(null);
   const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('ai_agent_selected_model') || 'gemini-2.5-flash');
@@ -539,6 +592,10 @@ export default function AIAgent() {
 
   // Fetch chats when user changes
   useEffect(() => {
+    const currentUserId = user ? user.id : null;
+    const isSameUser = prevUserIdRef.current === currentUserId;
+    prevUserIdRef.current = currentUserId;
+
     const userKey = user ? user.id : 'anon';
     const localChats = localStorage.getItem(`ai_agent_conversations_${userKey}`);
     const localMemory = localStorage.getItem(`ai_agent_global_memory_${userKey}`);
@@ -568,21 +625,37 @@ export default function AIAgent() {
       }
     }
 
+    if (isSameUser && user) {
+      return;
+    }
+
     if (localChats) {
       try {
         const parsed = JSON.parse(localChats);
-        const restored = parsed.map(c => ({
-          ...c,
-          messages: (c.messages || []).map(m => ({ ...m, timestamp: new Date(m.timestamp) }))
-        }));
+        const restored = parsed.map(c => {
+          const isLegacyId = c.id === 'default' || String(c.id).startsWith('temp-');
+          return {
+            ...c,
+            id: isLegacyId ? generateUUID() : c.id,
+            messages: (c.messages || []).map(m => ({ ...m, timestamp: new Date(m.timestamp) })),
+            updated_at: c.updated_at || new Date().toISOString()
+          };
+        });
         setConversations(restored);
-        if (localCurrentChat) setCurrentConversationId(localCurrentChat);
+        if (localCurrentChat) {
+          const oldActiveIdx = parsed.findIndex(c => c.id === localCurrentChat);
+          if (oldActiveIdx !== -1) {
+            setCurrentConversationId(restored[oldActiveIdx].id);
+          } else {
+            setCurrentConversationId(restored[0]?.id || 'default');
+          }
+        }
       } catch (e) {
-        setConversations([{ id: 'default', title: 'Percakapan Baru', messages: [] }]);
+        setConversations([{ id: 'default', title: 'Percakapan Baru', messages: [], updated_at: new Date().toISOString() }]);
         setCurrentConversationId('default');
       }
     } else {
-      setConversations([{ id: 'default', title: 'Percakapan Baru', messages: [] }]);
+      setConversations([{ id: 'default', title: 'Percakapan Baru', messages: [], updated_at: new Date().toISOString() }]);
       setCurrentConversationId('default');
     }
 
@@ -598,7 +671,7 @@ export default function AIAgent() {
             }))
           }));
           
-          setConversations(parsedChats);
+          setConversations(sortConversations(parsedChats));
           if (!parsedChats.find(c => c.id === localCurrentChat)) {
             setCurrentConversationId(parsedChats[0].id);
           }
@@ -629,7 +702,18 @@ export default function AIAgent() {
             };
             setConversations(prev => {
               if (prev.some(c => c.id === newChat.id)) return prev;
-              return [newChat, ...prev].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+              
+              // Cek apakah ada chat temporary lokal dengan pesan pertama yang sama
+              const matchingTemp = prev.find(c => String(c.id).startsWith('temp-') || c.id === 'default');
+              if (matchingTemp && matchingTemp.messages.length > 0 && newChat.messages.length > 0) {
+                const tempFirstMsg = matchingTemp.messages[0]?.content;
+                const newFirstMsg = newChat.messages[0]?.content;
+                if (tempFirstMsg === newFirstMsg) {
+                  return prev.map(c => c.id === matchingTemp.id ? { ...newChat, messages: matchingTemp.messages } : c);
+                }
+              }
+              
+              return sortConversations([newChat, ...prev]);
             });
           }
         )
@@ -685,23 +769,18 @@ export default function AIAgent() {
   // Supabase Sync Helper
   const syncConversationToDB = async (conv) => {
     if (!user) return conv;
+    if (!conv.messages || conv.messages.length === 0) return conv;
     try {
-      if (conv.id === 'default' || String(conv.id).startsWith('temp-')) {
-        const { data, error } = await supabase.from('chats')
-          .insert({ user_id: user.id, title: conv.title, messages: conv.messages })
-          .select().single();
-        if (data) {
-          const syncedConv = { ...data, messages: (data.messages || []).map(m => ({...m, timestamp: new Date(m.timestamp)})) };
-          
-          // Update the local state with the real UUID from Supabase
-          setConversations(prev => prev.map(c => c.id === conv.id ? syncedConv : c));
-          setCurrentConversationId(syncedConv.id);
-          
-          return syncedConv;
-        }
-      } else {
-        await supabase.from('chats').update({ title: conv.title, messages: conv.messages, updated_at: new Date() }).eq('id', conv.id);
-      }
+      if (conv.id === 'default') return conv;
+      const { error } = await supabase.from('chats')
+        .upsert({
+          id: conv.id,
+          user_id: user.id,
+          title: conv.title,
+          messages: conv.messages,
+          updated_at: new Date().toISOString()
+        });
+      if (error) throw error;
     } catch (e) {
       console.error('Error syncing to DB:', e);
     }
@@ -720,21 +799,21 @@ export default function AIAgent() {
   }, [messages]);
 
   const handleNewChat = () => {
-    const newId = `temp-${Date.now()}`;
-    const newConv = { id: newId, title: 'Percakapan Baru', messages: [] };
-    setConversations(prev => [newConv, ...prev]);
+    const newId = generateUUID();
+    const newConv = { id: newId, title: 'Percakapan Baru', messages: [], updated_at: new Date().toISOString() };
+    setConversations(prev => sortConversations([newConv, ...prev]));
     setCurrentConversationId(newId);
     setSidebarOpen(false);
     setActiveView('chat');
   };
 
   const handleDeleteConversation = async (id) => {
-    if (user && id !== 'default' && !String(id).startsWith('temp-')) {
+    if (user && id !== 'default') {
       await supabase.from('chats').delete().eq('id', id);
     }
     setConversations(prev => {
       const filtered = prev.filter(c => c.id !== id);
-      if (filtered.length === 0) return [{ id: 'default', title: 'Percakapan Baru', messages: [] }];
+      if (filtered.length === 0) return [{ id: 'default', title: 'Percakapan Baru', messages: [], updated_at: new Date().toISOString() }];
       return filtered;
     });
     if (currentConversationId === id) setCurrentConversationId('default');
@@ -998,10 +1077,18 @@ export default function AIAgent() {
     return items;
   };
 
-  const handleSendMessage = async () => {
-    if ((!input.trim() && !attachedFile) || loading) return;
+  const handleSendMessage = async (eOrOverride = null, overrideConvId = null) => {
+    if (eOrOverride && eOrOverride.preventDefault) eOrOverride.preventDefault();
+    const isStringOverride = typeof eOrOverride === 'string';
+    const displayInput = isStringOverride ? eOrOverride : (input || 'Tolong pelajari dokumen ini.');
+    if ((!displayInput.trim() && !attachedFile) && !loading) return;
+    
+    let effectiveConvId = overrideConvId || currentConversationId;
 
-    const displayInput = input || 'Tolong pelajari dokumen ini.';
+    if (!isStringOverride) {
+      setInput('');
+      setAttachedFile(null); // Clear early only for actual user inputs
+    }
     let apiInput = displayInput;
     const currentFile = attachedFile;
     const currentFileName = currentFile ? currentFile.name : null;
@@ -1117,6 +1204,55 @@ export default function AIAgent() {
       }
     }
 
+    // === DESKTOP OS AWARENESS INJECTION (Dipindah ke systemPrompt via payload) ===
+    const isDesktopMode = !!window.electronAPI;
+
+    // === DESKTOP PRE-EXECUTION (STRATEGI BARU: Eksekusi Duluan, AI Interpretasi Kemudian) ===
+    // Alih-alih memohon AI mengeluarkan tag <terminal> (yang selalu ditolak oleh RLHF safety),
+    // Frontend langsung mendeteksi permintaan lokal dan mengeksekusi perintah yang relevan.
+    // Hasilnya di-inject ke pesan agar AI tinggal menyajikan/menganalisis.
+    let preExecHandled = false; // Flag agar interceptor tidak re-eksekusi jika Pre-Exec sudah jalan
+    if (isDesktopMode) {
+      const lowerInput = displayInput.toLowerCase();
+      let matchedCmd = null;
+
+      // Pencocokan fleksibel berbasis kata kunci
+      const actionWords = ['cek', 'lihat', 'daftar', 'tampilkan', 'buka', 'isi', 'file', 'folder', 'list', 'scan', 'periksa', 'tulis'];
+      
+      if (lowerInput.includes('desktop') && actionWords.some(w => lowerInput.includes(w))) {
+        matchedCmd = 'dir %USERPROFILE%\\Desktop';
+      } else if ((lowerInput.includes('dokumen') || lowerInput.includes('document')) && actionWords.some(w => lowerInput.includes(w))) {
+        matchedCmd = 'dir %USERPROFILE%\\Documents';
+      } else if ((lowerInput.includes('download') || lowerInput.includes('unduh')) && actionWords.some(w => lowerInput.includes(w))) {
+        matchedCmd = 'dir %USERPROFILE%\\Downloads';
+      } else if (['informasi sistem', 'info komputer', 'spesifikasi', 'spek komputer', 'spec komputer', 'tentang pc'].some(kw => lowerInput.includes(kw))) {
+        matchedCmd = 'systeminfo';
+      } else if (['ip address', 'alamat ip', 'ip saya', 'koneksi internet', 'jaringan', 'ipconfig'].some(kw => lowerInput.includes(kw))) {
+        matchedCmd = 'ipconfig';
+      } else if (['proses berjalan', 'task manager', 'daftar proses', 'aplikasi berjalan', 'tasklist'].some(kw => lowerInput.includes(kw))) {
+        matchedCmd = 'tasklist /FO TABLE | findstr /V "svchost conhost csrss"';
+      } else if (['ruang disk', 'kapasitas hardisk', 'storage', 'disk space', 'sisa hardisk', 'sisa memori'].some(kw => lowerInput.includes(kw))) {
+        matchedCmd = 'wmic logicaldisk get size,freespace,caption';
+      } else if (['daftar file', 'isi folder', 'lihat folder', 'cek folder', 'tampilkan file', 'tampilkan folder'].some(kw => lowerInput.includes(kw))) {
+        matchedCmd = 'dir';
+      }
+
+      if (matchedCmd) {
+        try {
+          setLogs(prev => [...prev, `🖥️ Desktop Pre-Exec: Mengeksekusi "${matchedCmd}"...`]);
+          const preResult = await window.electronAPI.runTerminalCommand(matchedCmd);
+          if (preResult && preResult.output) {
+            apiInput += `\n\n[HASIL EKSEKUSI TERMINAL LANGSUNG DARI KOMPUTER USER - DATA INI NYATA, BUKAN HALUSINASI]\nPerintah yang dijalankan: ${matchedCmd}\nOutput:\n${preResult.output}\n[/HASIL EKSEKUSI TERMINAL]\n\nBerdasarkan data NYATA di atas, jawab permintaan user dengan merangkum dan menyajikan hasilnya secara rapi. DILARANG KERAS mengarang data lain. Gunakan HANYA data yang tertera di atas.`;
+            preExecHandled = true;
+            setLogs(prev => [...prev, `✅ Desktop Pre-Exec berhasil! Data real injected.`]);
+          }
+        } catch (preErr) {
+          console.error('Desktop Pre-Exec error:', preErr);
+          setLogs(prev => [...prev, `⚠️ Desktop Pre-Exec gagal: ${preErr.message}`]);
+        }
+      }
+    } // close if(isDesktopMode) Desktop Pre-Exec
+
     // === WORKSPACE FILE INJECTION ===
     // Jika user sudah memilih workspace folder, scan dan inject konten file ke dalam pesan
     if (workspaceHandle) {
@@ -1143,6 +1279,10 @@ export default function AIAgent() {
       }
     }
 
+    if (desktopWorkspacePath) {
+      apiInput += `\n\n[DESKTOP WORKSPACE ABSOLUTE PATH]${desktopWorkspacePath}[/DESKTOP WORKSPACE ABSOLUTE PATH]\nInformasi Tambahan: Folder kerja (workspace) aktif Anda saat ini berada di direktori lokal: "${desktopWorkspacePath}". Jika Anda perlu mengakses file, mencari file, atau menjalankan perintah di workspace ini, lakukan perintah terminal (seperti cd "${desktopWorkspacePath}" diikuti perintah lainnya) terlebih dahulu.`;
+    }
+
     const userMessage = {
       id: Date.now(),
       type: 'user',
@@ -1150,26 +1290,30 @@ export default function AIAgent() {
       timestamp: new Date(),
     };
 
-    // Update active conversation's messages
-    let syncedConvId = currentConversationId;
-    setConversations(prev => prev.map(c => {
-      if (c.id === currentConversationId) {
-        const updatedMessages = [...c.messages, userMessage];
-        const title = c.title === 'Percakapan Baru' && c.messages.length === 0
-          ? (displayInput.length > 25 ? displayInput.substring(0, 25) + '...' : displayInput)
-          : c.title;
-        const newC = { ...c, title, messages: updatedMessages };
-        syncConversationToDB(newC).then(synced => {
-          if (synced.id !== c.id) {
-            setConversations(curr => curr.map(cc => cc.id === c.id ? synced : cc));
-            setCurrentConversationId(synced.id);
-            syncedConvId = synced.id;
-          }
-        });
-        return newC;
-      }
-      return c;
-    }));
+    // Update active conversation's messages atomically
+    let syncedConvId = effectiveConvId;
+    let targetId = effectiveConvId;
+    if (effectiveConvId === 'default') {
+      targetId = generateUUID();
+      syncedConvId = targetId;
+    }
+
+    setConversations(prev => {
+      const updatedList = prev.map(c => {
+        if (c.id === effectiveConvId) {
+          const updatedMessages = [...c.messages, userMessage];
+          const title = c.title === 'Percakapan Baru' && c.messages.length === 0
+            ? (displayInput.length > 25 ? displayInput.substring(0, 25) + '...' : displayInput)
+            : c.title;
+          const newC = { ...c, id: targetId, title, messages: updatedMessages, updated_at: new Date().toISOString() };
+          syncConversationToDB(newC);
+          return newC;
+        }
+        return c;
+      });
+      return sortConversations(updatedList);
+    });
+    setCurrentConversationId(targetId);
 
     setLogs(prev => [...prev, 
       '🔍 Menganalisis permintaan...',
@@ -1197,8 +1341,16 @@ export default function AIAgent() {
         userId: user?.id || 'anonymous',
         userName: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Teman',
         globalMemory: globalMemory,
+        desktopOSMode: isDesktopMode,
         stream: true,
-        history: messages.map(m => ({ role: m.type === 'user' ? 'user' : 'model', content: m.content })).slice(-10)
+        history: messages.map(m => {
+          let content = m.content;
+          if (m.type === 'user') {
+            // Strip workspace files content from history to prevent huge token accumulation
+            content = content.replace(/\[WORKSPACE FILES CONTENT\][\s\S]*?\[\/WORKSPACE FILES CONTENT\]/g, '').trim();
+          }
+          return { role: m.type === 'user' ? 'user' : 'model', content };
+        }).slice(-10)
       };
 
       // Hardcode ke Supabase Edge Function agar tidak terganggu oleh konfigurasi Vercel yang salah
@@ -1256,7 +1408,7 @@ export default function AIAgent() {
         
         // Push initial empty message
         setConversations(prev => prev.map(c => {
-          if (c.id === currentConversationId || c.id === syncedConvId) {
+          if (c.id === effectiveConvId || c.id === syncedConvId) {
             return { ...c, messages: [...c.messages, agentMessage] };
           }
           return c;
@@ -1290,7 +1442,7 @@ export default function AIAgent() {
                     
                     // Update state with new chunk
                     setConversations(prev => prev.map(c => {
-                      if (c.id === currentConversationId || c.id === syncedConvId) {
+                      if (c.id === effectiveConvId || c.id === syncedConvId) {
                         const updatedMessages = c.messages.map(m => 
                           m.id === agentMessage.id ? { ...m, content: streamedContent } : m
                         );
@@ -1311,18 +1463,77 @@ export default function AIAgent() {
         setCurrentlyTypingId(null);
         setConversations(prev => {
           const updatedPrev = prev.map(c => {
-            if (c.id === currentConversationId || c.id === syncedConvId) {
+            if (c.id === effectiveConvId || c.id === syncedConvId) {
               const updatedMessages = c.messages.map(m => 
                 m.id === agentMessage.id ? { ...m, isStreaming: false } : m
               );
-              const newC = { ...c, messages: updatedMessages };
+              const newC = { ...c, messages: updatedMessages, updated_at: new Date().toISOString() };
               syncConversationToDB(newC);
               return newC;
             }
             return c;
           });
-          return updatedPrev;
+          return sortConversations(updatedPrev);
         });
+
+        // PHASE 3: INTERCEPTOR (ITERATIVE LOOP)
+        // PHASE 3: INTERCEPTOR (ITERATIVE LOOP) - Hanya aktif jika Pre-Exec TIDAK menangani
+        if (window.electronAPI && !preExecHandled) {
+          let interceptHit = false;
+          let autoReply = '';
+
+          // 1. Otonomi Terminal (RADAR SAPU JAGAT - menangkap SEMUA format output terminal)
+          // Prioritas 1: Tag XML khusus <terminal>
+          const termMatch = streamedContent.match(/<terminal>([\s\S]*?)<\/terminal>/i);
+          // Prioritas 2: Blok kode Markdown dengan label terminal-like (BUKAN json/python/html/mermaid dll)
+          const nonTerminalLangs = ['json', 'json_chart', 'json_zip', 'xml_zip', 'xml', 'mermaid', 'python', 'py', 'javascript', 'js', 'jsx', 'tsx', 'typescript', 'ts', 'html', 'css', 'sql', 'yaml', 'toml', 'markdown', 'md', 'diff', 'plaintext'];
+          const mdTermMatch = streamedContent.match(/```([a-zA-Z_]*)[^\n]*\n([\s\S]*?)```/i);
+          let mdCmd = null;
+          if (mdTermMatch) {
+            const lang = (mdTermMatch[1] || '').toLowerCase();
+            if (!nonTerminalLangs.includes(lang)) {
+              mdCmd = mdTermMatch[2];
+            }
+          }
+          
+          if (termMatch || mdCmd) {
+             interceptHit = true;
+             let rawCmd = termMatch ? termMatch[1].trim() : mdCmd.trim();
+             // Bersihkan perintah: hapus prompt symbols dan komentar shell
+             rawCmd = rawCmd.split('\n').map(line => line.replace(/^\$\s*/, '').replace(/^>\s*/, '').trim()).filter(l => l && !l.startsWith('#')).join(' && ');
+             if (rawCmd) {
+               const res = await window.electronAPI.runTerminalCommand(rawCmd);
+               autoReply += `\n[SYSTEM: TERMINAL RESULT for "${rawCmd}"]\n${res.output || 'Sukses (Tidak ada output)'}\n`;
+             }
+          }
+
+          // 2. Surgical File Editing
+          const fileMatch = streamedContent.match(/<edit_file\s+path=["']([^"']+)["'][^>]*>([\s\S]*?)<\/edit_file>/i);
+          if (fileMatch) {
+             interceptHit = true;
+             const filePath = fileMatch[1].trim();
+             const fileContent = fileMatch[2].trim();
+             const res = await window.electronAPI.editFileSurgical(filePath, fileContent);
+             autoReply += `\n[SYSTEM: FILE EDIT RESULT for "${filePath}"]\n${res.success ? 'Berhasil disimpan' : 'Gagal: ' + (res.error || res.message)}\n`;
+          }
+
+          // 3. Dynamic Global Search (Menggunakan PowerShell Bridge)
+          const searchMatch = streamedContent.match(/<search_disk>([\s\S]*?)<\/search_disk>/i);
+          if (searchMatch) {
+             interceptHit = true;
+             const query = searchMatch[1].trim();
+             const cmd = `powershell -Command "Get-ChildItem -Path C:\\,D:\\ -Recurse -Filter '*${query}*' -ErrorAction SilentlyContinue | Select-Object -First 20 FullName"`;
+             const res = await window.electronAPI.runTerminalCommand(cmd);
+             autoReply += `\n[SYSTEM: GLOBAL SEARCH RESULT for "${query}"]\n${res.output || 'Tidak ditemukan file dengan nama tersebut.'}\n`;
+          }
+
+          if (interceptHit) {
+             const capturedConvId = syncedConvId;
+             setTimeout(() => {
+                handleSendMessage(`[OS EXECUTION REPORT]\nBerikut adalah hasil eksekusi dari tindakan otomatis Anda di sistem operasi. Silakan analisis dan lanjutkan eksekusi jika tugas belum selesai, atau berikan kesimpulan akhir jika sudah rampung.\n${autoReply}`, capturedConvId);
+             }, 1000);
+          }
+        }
 
       } else {
         const data = await response.json();
@@ -1343,14 +1554,17 @@ export default function AIAgent() {
 
         setCurrentlyTypingId(agentMessage.id);
 
-        setConversations(prev => prev.map(c => {
-          if (c.id === currentConversationId || c.id === syncedConvId) {
-            const newC = { ...c, messages: [...c.messages, agentMessage] };
-            syncConversationToDB(newC);
-            return newC;
-          }
-          return c;
-        }));
+        setConversations(prev => {
+          const updated = prev.map(c => {
+            if (c.id === effectiveConvId || c.id === syncedConvId) {
+              const newC = { ...c, messages: [...c.messages, agentMessage], updated_at: new Date().toISOString() };
+              syncConversationToDB(newC);
+              return newC;
+            }
+            return c;
+          });
+          return sortConversations(updated);
+        });
       }
     } catch (error) {
       console.error('Error contacting backend:', error);
@@ -1363,12 +1577,15 @@ export default function AIAgent() {
         content: `Error: Gagal memproses permintaan. ${error.message}. Pastikan server backend Anda berjalan.`,
         timestamp: new Date(),
       };
-      setConversations(prev => prev.map(c => {
-        if (c.id === currentConversationId) {
-          return { ...c, messages: [...c.messages, errorMessage] };
-        }
-        return c;
-      }));
+      setConversations(prev => {
+        const updated = prev.map(c => {
+          if (c.id === effectiveConvId || c.id === syncedConvId) {
+            return { ...c, messages: [...c.messages, errorMessage], updated_at: new Date().toISOString() };
+          }
+          return c;
+        });
+        return sortConversations(updated);
+      });
     } finally {
       setLoading(false);
       setLogs([]);
@@ -2177,7 +2394,7 @@ export default function AIAgent() {
                 onClick={handleSelectWorkspace}
                 disabled={loading}
                 className={`p-3.5 border rounded-xl transition-all focus:outline-none disabled:opacity-50 h-[50px] flex items-center justify-center ${(workspaceHandle || desktopWorkspacePath) ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/50 text-emerald-400' : 'bg-slate-800/50 hover:bg-slate-700 border-emerald-500/30 text-slate-400 hover:text-emerald-400'}`}
-                title={(workspaceHandle || desktopWorkspacePath) ? "Workspace Terhubung: Siap Menyimpan File!" : "Pilih Folder Kerja (Workspace) Sementara"}
+                title={(workspaceHandle || desktopWorkspacePath) ? "Workspace Terhubung! Klik untuk memutuskan sambungan (hemat token)" : "Hubungkan Folder Kerja (Workspace) Sementara"}
               >
                 <FolderOpen className="w-5 h-5" />
               </button>

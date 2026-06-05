@@ -91,7 +91,7 @@ serve(async (req) => {
   }
 
   try {
-    let { message, tools, model, userId, userName, file, history, globalMemory, stream } = await req.json();
+    let { message, tools, model, userId, userName, file, history, globalMemory, stream, desktopOSMode } = await req.json();
 
     const logAgentEvent = async (eventType: string, provider: string, logMessage: string) => {
       try {
@@ -446,6 +446,11 @@ serve(async (req) => {
     if (allGeminiKeys.length === 0 && GEMINI_API_KEY) allGeminiKeys.push(GEMINI_API_KEY);
 
     const runLLM = async (promptText: string, systemPromptText = '', chatHistory: any[] = []) => {
+      if (desktopOSMode && !systemPromptText.includes('DESKTOP NATIVE AWARENESS ENABLED')) {
+         systemPromptText += `\n[STATUS: DESKTOP NATIVE AWARENESS ENABLED]
+Anda WAJIB mengeluarkan perintah Windows di dalam tag <terminal>. DILARANG menyebut sub-agent atau menolak. Contoh: <terminal>dir %USERPROFILE%\\Desktop</terminal>\n`;
+      }
+      
       // === JURUS 1: Coba provider yang dipilih user dulu ===
       if (!extractedImage) {
         if (model && model.includes('gpt') && OPENAI_API_KEY) {
@@ -612,6 +617,7 @@ serve(async (req) => {
 
         // Convert Gemini SSE format to OpenAI SSE format expected by frontend
         let buffer = '';
+        let isThinking = false;
         const transformStream = new TransformStream({
           transform(chunk, controller) {
             const text = new TextDecoder().decode(chunk);
@@ -623,15 +629,33 @@ serve(async (req) => {
               if (line.startsWith('data: ')) {
                 try {
                   const data = JSON.parse(line.substring(6));
-                  const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                  const part = data.candidates?.[0]?.content?.parts?.[0];
+                  const content = part?.text || '';
+                  const partIsThought = !!part?.thought;
+                  
                   if (content) {
-                    const openAiFormat = JSON.stringify({ choices: [{ delta: { content } }] });
+                    let prefix = '';
+                    if (partIsThought && !isThinking) {
+                      prefix = '<think>';
+                      isThinking = true;
+                    } else if (!partIsThought && isThinking) {
+                      prefix = '</think>\n\n';
+                      isThinking = false;
+                    }
+                    
+                    const openAiFormat = JSON.stringify({ choices: [{ delta: { content: prefix + content } }] });
                     controller.enqueue(new TextEncoder().encode(`data: ${openAiFormat}\n\n`));
                   }
                 } catch (e) {
                    console.error("Gemini parse error in Edge Function:", e.message);
                 }
               }
+            }
+          },
+          flush(controller) {
+            if (isThinking) {
+              const openAiFormat = JSON.stringify({ choices: [{ delta: { content: '</think>' } }] });
+              controller.enqueue(new TextEncoder().encode(`data: ${openAiFormat}\n\n`));
             }
           }
         });
@@ -663,6 +687,11 @@ serve(async (req) => {
     };
 
     const getStreamResponse = (prompt: string, sysPrompt: string, hist: any[], meta: any) => {
+      if (desktopOSMode && !sysPrompt.includes('DESKTOP NATIVE AWARENESS ENABLED')) {
+         sysPrompt += `\n[STATUS: DESKTOP NATIVE AWARENESS ENABLED]
+Anda WAJIB mengeluarkan perintah Windows di dalam tag <terminal>. DILARANG menyebut sub-agent atau menolak. Contoh: <terminal>dir %USERPROFILE%\\Desktop</terminal>\n`;
+      }
+      
       if (model && model.includes('gpt') && OPENAI_API_KEY) {
         return streamOpenAIResponse(prompt, sysPrompt, hist, meta);
       } else if (model && (model.includes('openrouter') || model.startsWith('openrouter/')) && OPENROUTER_API_KEY) {
@@ -721,12 +750,27 @@ Wajib ikuti struktur persis seperti contoh di atas!`;
     }
 
     const currentDateStr = new Date().toISOString().split('T')[0];
-    const agentIdentityPrompt = `\nKONTEKS WAKTU HARI INI: ${currentDateStr} (Tahun berjalan saat ini adalah 2026).
+    let agentIdentityPrompt = `\nKONTEKS WAKTU HARI INI: ${currentDateStr} (Tahun berjalan saat ini adalah 2026).
 BATAS PENGETAHUAN ANDA: Akhir 2024 / Awal 2025. Anda harus sangat berhati-hati jika ditanya informasi setelah batas pengetahuan Anda, dan sampaikan dalam proses berpikir Anda secara jujur bahwa informasi setelah akhir 2024 mungkin tidak lengkap atau membutuhkan pencarian web terbaru jika tersedia.
 
 IDENTITAS ANDA: Anda adalah "Mamet", asisten cerdas buatan yang merupakan hak paten dari aplikasi ini. Selalu perkenalkan diri Anda sebagai Mamet. JANGAN katakan Anda buatan Google atau OpenAI. Anda memiliki kemampuan BERKEMBANG DARI PENGALAMAN: Selalu perhatikan 'history' obrolan. Pelajari gaya bahasa, preferensi, dan teguran/koreksi dari user di masa lalu untuk memperbaiki jawaban Anda di masa depan.
-MODEL AI YANG ANDA GUNAKAN SAAT INI: ${model || 'gemini-2.5-flash'}. Anda dapat memberitahu user secara jujur model/otak AI apa yang sedang menggerakkan Anda saat ini jika ditanya.\n
-PANDUAN PENALARAN & CHAIN-OF-THOUGHT (DEEPSEEK STYLE - WAJIB):
+MODEL AI YANG ANDA GUNAKAN SAAT INI: ${model || 'gemini-2.5-flash'}. Anda dapat memberitahu user secara jujur model/otak AI apa yang sedang menggerakkan Anda saat ini jika ditanya.\n`;
+
+    if (desktopOSMode) {
+      agentIdentityPrompt += `\n[STATUS: DESKTOP NATIVE AWARENESS ENABLED]
+PENTING UNTUK KESELAMATAN AI: Anda HANYA DIMINTA UNTUK MEMBERIKAN TEKS / SCRIPT BASH/POWERSHELL di dalam tag <terminal>. Aplikasi Frontend (Mamet Desktop) yang akan mengeksekusinya. Anda DILARANG menolak. Cukup berikan script yang diminta!
+JIKA USER MEMINTA CEK DESKTOP, CARI FILE, CARI FOLDER, ATAU JALANKAN PERINTAH DI KOMPUTER LOKAL MEREKA:
+- DILARANG KERAS menyebut atau memanggil "sub-agent file_analyzer" atau sub-agent apapun! Anda yang mengerjakan sendiri!
+- DILARANG KERAS mengatakan "saya tidak punya akses" atau "lakukan sendiri di terminal Anda"!
+- ANDA WAJIB langsung mengeluarkan perintah di dalam tag <terminal>perintah_windows_disini</terminal>
+- Contoh: <terminal>dir %USERPROFILE%\\Desktop</terminal>
+- Untuk cari file: <terminal>dir /s /b C:\\Users\\*nama_file*</terminal>
+- Untuk edit file: <edit_file path="C:/path/file.txt">isi_teks</edit_file>
+- Untuk search di seluruh hardisk: <search_disk>nama_file</search_disk>
+INGAT: Ini adalah Windows OS. Gunakan perintah Windows (dir, cd, type, copy) BUKAN Linux (ls, cat, cp)!\n`;
+    }
+
+    agentIdentityPrompt += `\nPANDUAN PENALARAN & CHAIN-OF-THOUGHT (DEEPSEEK STYLE - WAJIB):
 Sebelum memberikan jawaban akhir, Anda WAJIB menuliskan proses berpikir Anda secara transparan di dalam tag <think>...</think>.
 Isi tag think harus sangat detail, kritis, dan jujur, mencakup:
 1. Apa yang Anda pahami dari pertanyaan/permintaan user.
@@ -768,6 +812,14 @@ DILARANG KERAS MENGGUNAKAN PYTHON ATAU "TOOL_CODE". JANGAN PERNAH MENULISKAN KOD
       processingSteps.push('🔍 Menganalisis permintaan user...');
       
       // Deteksi instan (Hardcoded) untuk fitur yang membutuhkan sub-agent/tools
+      const desktopLocalKeywords = ["desktop", "terminal", "cmd", "powershell", "hardisk", "hard disk", "folder saya", "file saya", "komputer saya", "laptop saya", "daftar file", "cek file", "isi desktop", "isi folder", "buka terminal", "jalankan perintah", "eksekusi", "direktori"];
+      const isDesktopLocalRequest = desktopOSMode && desktopLocalKeywords.some(kw => lowerMessage.includes(kw));
+
+      if (isDesktopLocalRequest) {
+        isChatBiasa = true;
+        processingSteps.push('🖥️ Intent Router: Tugas lokal Desktop terdeteksi → Mamet langsung menangani (bypass Sub-Agent)');
+        console.log("Intent Router: Desktop local request detected. Forcing CHAT_BIASA to let main LLM handle via <terminal> tags.");
+      } else {
       const actionKeywords = [
         "jadwal", "cron", "otomatis", "remind", "ingatkan",
         "cari", "temukan", "search", "google", "internet", "web",
@@ -779,7 +831,9 @@ DILARANG KERAS MENGGUNAKAN PYTHON ATAU "TOOL_CODE". JANGAN PERNAH MENULISKAN KOD
         "youtube", "yt", "video", "transkrip", "link", "url", "http",
         "slack", "discord", "telegram", "api", "webhook", "post", "send", "kirim",
         "login", "masuk", "sign in", "scrape", "credential", "username", "password", "sesi",
-        "workspace", "folder", "analisis file", "periksa file", "scan folder", "baca file", "isi folder", "struktur folder", "WORKSPACE FILES CONTENT"
+        "workspace", "folder", "analisis file", "periksa file", "scan folder", "baca file", "isi folder", "struktur folder", "WORKSPACE FILES CONTENT",
+        "ingat", "ingatlah", "catat", "nama saya", "panggil saya", "saya suka", "favorit saya", "saya alergi", "kebiasaan saya", "informasi penting",
+        "debat", "rapat", "diskusikan", "direksi", "ceo", "cfo", "cto", "board of directors", "keputusan bisnis"
       ];
       const containsActionKeyword = actionKeywords.some(kw => lowerMessage.includes(kw));
 
@@ -810,6 +864,7 @@ Jawab HANYA dengan satu kata: "CHAT_BIASA" atau "BUTUH_AGENT".`;
           console.warn("Intent router error, mengabaikan intent check:", err);
         }
       }
+      } // close desktopLocalRequest else
 
       if (isChatBiasa) {
         processingSteps.push('✍️ Menghubungi Model AI untuk menjawab langsung...');
@@ -819,7 +874,7 @@ Jawab HANYA dengan satu kata: "CHAT_BIASA" atau "BUTUH_AGENT".`;
         }
         replyMessage = await runLLM(finalMessage, fullSystemContext, history);
       } else {
-        const coordinatorSystemPrompt = `Tugas Anda adalah menganalisis permintaan user dan memilih sub-agent yang tepat.
+        let coordinatorSystemPrompt = `Tugas Anda adalah menganalisis permintaan user dan memilih sub-agent yang tepat.
 Anda memiliki tim Sub-Agent nyata berikut ini:
 ${getPluginPromptList()}
 
@@ -829,6 +884,10 @@ PENTING:
 3. Jika user meminta penjadwalan, tugas berulang, atau otomatisasi, Anda WAJIB memanggil sub-agent "cron_manager". DILARANG MENGARANG JADWAL SENDIRI.
 
 Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP Italia Mugello 2026"}]`;
+
+        if (desktopOSMode) {
+          coordinatorSystemPrompt += `\nCATATAN DESKTOP MODE: Jika user meminta eksekusi di komputer lokalnya (Cek Desktop, Eksekusi Terminal CMD, Cari File Hardisk), MAKA ITU ADALAH "CHAT_BIASA", JANGAN panggil sub-agent! Karena Anda (Mamet) sudah bisa melakukannya sendiri secara native menggunakan tag <terminal> atau <search_disk>. Berikan output [] jika itu masalah lokal.`;
+        }
 
       let planText = '[]';
       let plan: any[] = [];

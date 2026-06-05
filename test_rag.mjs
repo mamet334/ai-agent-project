@@ -13,7 +13,7 @@ async function testRag() {
       userId: '00000000-0000-0000-0000-000000000000'
     })
   });
-  
+
   const text = await res.text();
   console.log("Status:", res.status);
   console.log("Response:", text);
