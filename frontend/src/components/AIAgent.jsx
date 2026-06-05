@@ -502,6 +502,15 @@ export default function AIAgent() {
   const [ragLoading, setRagLoading] = useState(false);
   const [ragStatus, setRagStatus] = useState('');
   const [knowledgeBase, setKnowledgeBase] = useState([]);
+  const [ragEnabled, setRagEnabled] = useState(() => {
+    const stored = localStorage.getItem('ai_agent_rag_enabled');
+    return stored !== null ? stored === 'true' : true;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('ai_agent_rag_enabled', String(ragEnabled));
+  }, [ragEnabled]);
+
 
   // BYOK Settings State
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -1342,6 +1351,7 @@ export default function AIAgent() {
         userName: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Teman',
         globalMemory: globalMemory,
         desktopOSMode: isDesktopMode,
+        ragEnabled: ragEnabled,
         stream: true,
         history: messages.map(m => {
           let content = m.content;
@@ -1719,13 +1729,28 @@ export default function AIAgent() {
               <Plus className="w-4 h-4" />
               Percakapan Baru
             </button>
-            <button 
-              onClick={() => setIsRagModalOpen(true)}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600/20 border border-emerald-500/30 hover:bg-emerald-600/30 text-emerald-400 font-semibold transition-all text-sm"
-            >
-              <BrainCircuit className="w-4 h-4" />
-              Knowledge Base (RAG)
-            </button>
+            <div className="flex items-center gap-2 w-full">
+              <button 
+                onClick={() => setIsRagModalOpen(true)}
+                className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-600/10 border border-emerald-500/20 hover:bg-emerald-600/20 text-emerald-400 font-semibold transition-all text-sm truncate"
+              >
+                <BrainCircuit className="w-4 h-4 shrink-0" />
+                Knowledge Base
+              </button>
+              <button
+                type="button"
+                onClick={() => setRagEnabled(!ragEnabled)}
+                className={`px-3 py-2.5 rounded-xl border transition-all text-sm font-semibold flex items-center gap-1.5 ${
+                  ragEnabled 
+                    ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-400 shadow-lg shadow-emerald-500/5' 
+                    : 'bg-slate-800/40 border-slate-700/50 text-slate-500 hover:text-slate-400'
+                }`}
+                title={ragEnabled ? "RAG Aktif (Klik untuk menonaktifkan)" : "RAG Non-aktif (Klik untuk mengaktifkan)"}
+              >
+                <span className={`w-2.5 h-2.5 rounded-full ${ragEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+                {ragEnabled ? 'ON' : 'OFF'}
+              </button>
+            </div>
           </div>
 
           {/* Conversations list & Tools Selection */}

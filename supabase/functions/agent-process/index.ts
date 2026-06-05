@@ -91,7 +91,9 @@ serve(async (req) => {
   }
 
   try {
-    let { message, tools, model, userId, userName, file, history, globalMemory, stream, desktopOSMode } = await req.json();
+    let { message, tools, model, userId, userName, file, history, globalMemory, stream, desktopOSMode, ragEnabled } = await req.json();
+
+    const isRagEnabled = ragEnabled !== false;
 
     const logAgentEvent = async (eventType: string, provider: string, logMessage: string) => {
       try {
@@ -708,7 +710,7 @@ Anda WAJIB mengeluarkan perintah Windows di dalam tag <terminal>. DILARANG menye
     
     // --- RAG KNOWLEDGE BASE SEARCH ---
     let ragContext = '';
-    if (userId) {
+    if (userId && isRagEnabled) {
       try {
         const queryEmbedding = await getGeminiEmbedding(message, GEMINI_API_KEY);
         if (queryEmbedding.length > 0) {

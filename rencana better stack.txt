@@ -1,0 +1,153 @@
+📋 CHECKLIST OPTIMASI MAMET AI AGENT
+FASE 1: MONITORING INFRASTRUKTUR (Prioritas Tinggi)
+A. Setup Custom Better Stack
+
+    Database Supabase
+        Buat tabel monitors (id, name, url, interval_sec, active, created_at)
+        Buat tabel checks (id, monitor_id, status_code, response_time_ms, error, checked_at)
+        Buat tabel incidents (id, monitor_id, status, started_at, resolved_at, webhook_sent)
+        Tambahkan index pada checks(monitor_id, checked_at)
+    API Health Checker (Next.js)
+        Buat endpoint /api/health-check
+        Implementasi validasi secret token
+        Loop semua monitor aktif dari Supabase
+        Gunakan Promise.all untuk parallel checking (hindari timeout Vercel)
+        Set timeout 5 detik per request (AbortSignal.timeout(5000))
+        Simpan hasil ke tabel checks
+        Logika alert: trigger webhook hanya jika error 2x berturut-turut
+    Scheduler (Cron)
+        Daftar di cron-job.org (gratis, unlimited)
+        Setup cron setiap 2-5 menit untuk trigger /api/health-check
+        Simpan CRON_SECRET di Environment Variables Vercel
+        Test webhook dari cron-job.org ke endpoint Mamet
+    Auto-Cleanup Database
+        Buat cron job mingguan di cron-job.org
+        Query: DELETE FROM checks WHERE checked_at < NOW() - INTERVAL '30 days'
+        Query: DELETE FROM incidents WHERE resolved_at < NOW() - INTERVAL '90 days'
+
+B. Integrasi API Vercel & Supabase
+
+    Generate API Keys
+        Vercel API Token (Settings → Tokens)
+        Supabase Management API Token (Organization Settings → Access Tokens)
+        GitHub Personal Access Token (Settings → Developer Settings)
+    Environment Variables di Vercel
+        VERCEL_API_TOKEN
+        SUPABASE_API_TOKEN
+        GITHUB_TOKEN
+        MAMET_WEBHOOK_URL (endpoint penerima alert di Mamet)
+    Custom Tools di API Caller Mamet
+        Tool check_vercel_status(project_id) - hit Vercel API
+        Tool check_supabase_health(project_ref) - hit Supabase API
+        Tool pause_supabase_project(project_ref) - pause project (jika Pro tier)
+        Tool disable_github_workflow(repo, workflow_id) - stop GitHub Actions
+
+FASE 2: OPTIMASI TOKEN AI (Prioritas Kritis)
+B. Implementasi AI Routing (Traffic Light System)
+
+    Setup Dynamic Router di Next.js
+
+javascript
+
+async function routeAgent(taskType, input) {
+  switch(taskType) {
+    case 'parse_webhook':
+    case 'translate':
+    case 'simple_format':
+      return await callGroq(input, 'llama-3.1-8b-instant'); // JALUR CEPAT
+      
+    case 'analyze_logs':
+    case 'write_code':
+    case 'deep_research':
+    case 'orchestrate':
+      return await callGemini(input, 'gemini-1.5-flash'); // JALUR UTAMA
+      
+    case 'critical_decision':
+    case 'complex_debugging':
+      return await callDeepSeek(input, 'deepseek-chat'); // JALUR KHUSUS
+      
+    default:
+      return await callGemini(input, 'gemini-1.5-flash');
+  }
+}
+
+
+    Assign Sub-Agent ke Model
+        Groq (Llama 3 8B): API Caller parser, Bahasa/Translator, Traffic Cop
+        Gemini Flash: Kepala Agent, Code Executor, Logika, Deep Research
+        DeepSeek: Debate (keputusan kritis), Complex Debugging
+    Optimasi Webhook Handler
+        Gunakan kode biasa (deterministic) untuk parse JSON webhook
+        Panggil AI HANYA jika butuh analisis/solusi
+        Contoh: if (webhook.status >= 400) { await callAI(...) }
+
+C. Optimasi RAG (Knowledge Base)
+
+    Format Ulang Dokumen Ringkasan
+        Ubah paragraf → poin-poin Q&A
+        Contoh boros: "Pengujian dilakukan dengan..." (50 token)
+        Contoh hemat: "Security Testing: 1) Nmap, 2) Nessus, 3) Metasploit" (20 token)
+    Database Optimization
+        Tambahkan kolom tags text[] di tabel knowledge_docs
+        Tambahkan kolom token_count int untuk tracking
+        Tambahkan kolom last_accessed timestamptz
+    Retrieval Logic
+        Filter by tags sebelum similarity search
+        Batasi Top-K = 1-2 dokumen (bukan 5-10)
+        Query: SELECT * FROM knowledge_docs WHERE tags @> ARRAY['security'] ORDER BY similarity LIMIT 2
+    Auto-Cleanup RAG
+        Cron mingguan: hapus dokumen yang tidak diakses >90 hari
+        Atau arsipkan ke tabel knowledge_docs_archive
+
+FASE 3: INTEGRASI & NOTIFIKASI (Prioritas Menengah)
+A. Webhook Receiver di Mamet
+
+    Buat endpoint /api/mamet/alert
+    Validasi secret token dari Better Stack
+    Parse payload JSON (deterministic, tanpa AI)
+    Jika error kritis → panggil Kepala Agent (Gemini Flash)
+    Simpan alert ke tabel incidents di Supabase
+
+B. Notifikasi ke User
+
+    Setup Telegram Bot
+        Buat bot via @BotFather
+        Dapatkan TELEGRAM_BOT_TOKEN
+        Dapatkan TELEGRAM_CHAT_ID
+        Simpan di Environment Variables
+    Notifikasi Logic
+        Saat incident baru → kirim Telegram
+        Format: "🚨 ALERT: {monitor_name} down\nStatus: {status}\nError: {error}\nTime: {timestamp}"
+        Saat incident resolved → kirim Telegram
+        Format: "✅ RESOLVED: {monitor_name} sudah normal"
+
+C. Dashboard Monitoring di Mamet
+
+    Buat halaman /dashboard/monitoring
+    Query Supabase:
+SELECT 
+  m.name,
+  m.url,
+  c.status_code,
+  c.response_time_ms,
+  c.checked_at
+FROM monitors m
+LEFT JOIN checks c ON m.id = c.monitor_id
+WHERE c.checked_at > NOW() - INTERVAL '1 hour'
+ORDER BY c.checked_at DESC
+
+B. Token Usage Monitoring
+
+    Tambahkan logging token usage di setiap AI call
+    Simpan ke tabel token_usage (date, model, input_tokens, output_tokens, total_tokens)
+    Buat dashboard untuk monitoring token harian/mingguan
+    Set alert jika token usage >80% dari limit harian
+
+C. Failover Testing
+
+    Test jika Groq down → fallback ke Gemini
+    Test jika Gemini down → fallback ke DeepSeek
+    Test jika semua AI down → return error message ke user
+
+
+

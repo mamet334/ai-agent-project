@@ -261,6 +261,7 @@ function App() {
           model: 'gemini-2.5-flash',
           userId: session.user.id,
           userName: session.user.email.split('@')[0],
+          ragEnabled: activeModes.rag,
           stream: true,
           history: messages.map(m => ({ role: m.role, content: m.content })).slice(-5)
         })
