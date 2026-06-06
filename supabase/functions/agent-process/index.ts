@@ -513,7 +513,15 @@ Anda WAJIB mengeluarkan perintah Windows di dalam tag <terminal>. DILARANG menye
     };
 
     // --- OTAK KHUSUS KEPALA AGENT (HEMAT KUOTA) + ANTI-LIMIT ---
-    const runCoordinatorLLM = async (promptText: string, systemPromptText = '') => {
+    const runCoordinatorLLM = async (promptText: string, systemPromptText = '', preferFast = false) => {
+      // === TRAFFIC LIGHT ROUTER: TUGAS RINGAN (INTENT) ===
+      if (preferFast && GROQ_API_KEY) {
+        try {
+          console.log("Mamet Traffic Light: Memutar tugas ringan (Intent Router) ke Groq...");
+          return await callGroq(promptText, systemPromptText, []);
+        } catch(e) { console.warn('Traffic Light Groq failed, cascading to Gemini...', e); }
+      }
+
       // JURUS 1: Gemini Flash dengan multi-key rotation
       if (allGeminiKeys.length > 0) {
         try {
@@ -854,7 +862,7 @@ Kriteria:
 - Jawab "BUTUH_AGENT" jika pesan memerlukan informasi terkini, pencarian Google, pengerjaan kode, atau otomatisasi/cron.
 
 Jawab HANYA dengan satu kata: "CHAT_BIASA" atau "BUTUH_AGENT".`;
-          const intentResult = await runCoordinatorLLM(intentCheckPrompt, "Anda adalah router intent super ringan. Jawab HANYA satu kata.");
+          const intentResult = await runCoordinatorLLM(intentCheckPrompt, "Anda adalah router intent super ringan. Jawab HANYA satu kata.", true);
           if (intentResult.toUpperCase().includes("CHAT_BIASA")) {
              isChatBiasa = true;
              processingSteps.push('💬 Keputusan: Obrolan biasa → Jawab langsung tanpa sub-agent');
@@ -955,9 +963,29 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
             };
             const fullTask = `Tugas Spesifik Anda: ${task}\n\nPermintaan Asli User: "${finalMessage}"\n\nKonteks Tambahan:\n${accumulatedContext}`;
             
+            // --- TRAFFIC LIGHT ROUTER (AI BERLAPIS) ---
+            const customRunLLM = async (prompt: string, sys: string, hist: any[]) => {
+              const originalModel = model;
+              try {
+                if (subagent === 'coder' || subagent === 'debate') {
+                   console.log(`🚥 Traffic Light: Sub-agent [${subagent}] dialihkan ke DEEPSEEK (Tugas Berat)`);
+                   model = 'openrouter-deepseek-r1';
+                } else if (subagent === 'scraper' || subagent === 'memory_manager' || subagent === 'communicator' || subagent === 'youtube_analyst' || subagent === 'file_analyzer') {
+                   console.log(`🚥 Traffic Light: Sub-agent [${subagent}] dialihkan ke GROQ (Tugas Ringan)`);
+                   model = 'groq-llama-3.1';
+                } else {
+                   console.log(`🚥 Traffic Light: Sub-agent [${subagent}] menggunakan GEMINI (Tugas Utama)`);
+                   model = 'gemini-2.5-flash';
+                }
+                return await runLLM(prompt, sys, hist);
+              } finally {
+                model = originalModel; // Restore original model ke setelan awal
+              }
+            };
+
             // --- MAMET HEALER (PENAWAR RACUN / ERROR SHIELD) ---
             try {
-              const result = await plugin.execute({ task: fullTask, cleanTask: task, accumulatedContext, env, runLLM, userId });
+              const result = await plugin.execute({ task: fullTask, cleanTask: task, accumulatedContext, env, runLLM: customRunLLM, userId });
               subagentResText = result.output;
               subagentSources = result.sources || [];
               subagentToolExec = result.toolExecution || null;
