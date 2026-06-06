@@ -4,23 +4,23 @@
 *Fokus: Membangun sistem yang bisa mendeteksi error sebelum pengguna menyadarinya.*
 
 ### **A. Database Setup (Supabase)**
-- [ ] Buat tabel `monitors` (id, name, url, interval_sec, active, created_at)
-- [ ] Buat tabel `checks` (id, monitor_id, status_code, response_time_ms, error, checked_at)
-- [ ] Buat tabel `incidents` (id, monitor_id, status, started_at, resolved_at, webhook_sent)
-- [ ] Tambahkan index pada `checks(monitor_id, checked_at)` untuk performa *query*.
+- [x] Buat tabel `monitors` (id, name, url, interval_sec, active, created_at)
+- [x] Buat tabel `checks` (id, monitor_id, status_code, response_time_ms, error, checked_at)
+- [x] Buat tabel `incidents` (id, monitor_id, status, started_at, resolved_at, webhook_sent)
+- [x] Tambahkan index pada `checks(monitor_id, checked_at)` untuk performa *query*.
 
 ### **B. Edge Function Health Checker**
-- [ ] Buat Edge Function baru di `supabase/functions/health-check` (pengganti Next.js).
-- [ ] Implementasi validasi secret token (Authentication).
-- [ ] Ambil semua monitor aktif dari Supabase.
-- [ ] Gunakan `Promise.all` untuk *parallel checking* agar eksekusi cepat.
-- [ ] Set timeout 5 detik per request (`AbortSignal.timeout(5000)`).
-- [ ] Simpan hasil *ping* ke tabel `checks`.
+- [x] Buat Edge Function baru di `supabase/functions/health-check` (pengganti Next.js).
+- [x] Implementasi validasi secret token (Authentication).
+- [x] Ambil semua monitor aktif dari Supabase.
+- [x] Gunakan `Promise.all` untuk *parallel checking* agar eksekusi cepat.
+- [x] Set timeout 5 detik per request (`AbortSignal.timeout(5000)`).
+- [x] Simpan hasil *ping* ke tabel `checks`.
 
 ### **C. Scheduler & Auto-Cleanup (pg_cron)**
-- [ ] Manfaatkan Supabase `pg_cron` untuk trigger `/functions/health-check` setiap 5 menit.
-- [ ] Buat job `pg_cron` mingguan: `DELETE FROM checks WHERE checked_at < NOW() - INTERVAL '30 days'`
-- [ ] Buat job `pg_cron` bulanan: `DELETE FROM incidents WHERE resolved_at < NOW() - INTERVAL '90 days'`
+- [x] Manfaatkan Supabase `pg_cron` untuk trigger `/functions/health-check` setiap 15 menit.
+- [x] Buat job `pg_cron` mingguan: `DELETE FROM checks WHERE checked_at < NOW() - INTERVAL '30 days'`
+- [x] Buat job `pg_cron` bulanan: `DELETE FROM incidents WHERE resolved_at < NOW() - INTERVAL '90 days'`
 
 ---
 
@@ -32,10 +32,10 @@
 - [ ] Hapus duplikasi antara memori jangka pendek & panjang.
 
 ### **B. Traffic Light Router & Fallback System (Di agent-process)**
-- [ ] **Tugas Ringan/Cepat** (Parse JSON, Terjemahan, Summarize): Arahkan ke **Groq (Llama 3)**.
-- [ ] **Tugas Utama** (Riset, Orkestrasi, Koding): Arahkan ke **Gemini 1.5 Flash**.
-- [ ] **Tugas Kritis/Logika Berat** (Debugging kompleks): Arahkan ke **DeepSeek**.
-- [ ] **Logika Self-Healing (Fallback):** Jika Gemini mengalami limit/error, tangkap error tersebut (Try-Catch) dan otomatis oper *prompt* ke model cadangan (DeepSeek/Groq) tanpa memberitahu *user* ada *crash*.
+- [x] **Tugas Ringan/Cepat** (Parse JSON, Terjemahan, Summarize): Arahkan ke **Groq (Llama 3)**.
+- [x] **Tugas Utama** (Riset, Orkestrasi, Koding): Arahkan ke **Gemini 1.5 Flash**.
+- [x] **Tugas Kritis/Logika Berat** (Debugging kompleks): Arahkan ke **DeepSeek**.
+- [x] **Logika Self-Healing (Fallback):** Jika Gemini mengalami limit/error, tangkap error tersebut (Try-Catch) dan otomatis oper *prompt* ke model cadangan (DeepSeek/Groq) tanpa memberitahu *user* ada *crash*.
 
 ### **C. Optimasi RAG (Knowledge Base Token Saver)**
 - [ ] Ubah ringkasan di RAG dari paragraf panjang menjadi format poin-poin singkat.
