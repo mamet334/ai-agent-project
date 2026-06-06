@@ -1537,6 +1537,40 @@ export default function AIAgent() {
              autoReply += `\n[SYSTEM: GLOBAL SEARCH RESULT for "${query}"]\n${res.output || 'Tidak ditemukan file dengan nama tersebut.'}\n`;
           }
 
+          // 4. Docker Sandbox Interceptor (Eksekusi Kode Terisolasi)
+          // Deteksi blok kode Python/JS dari respons AI dan eksekusi ulang via Docker lokal
+          if (window.electronAPI.runDockerSandbox) {
+            const codeBlockMatch = streamedContent.match(/```(python|py|javascript|js)\n([\s\S]*?)```/i);
+            if (codeBlockMatch && !interceptHit) {
+              try {
+                const dockerStatus = await window.electronAPI.checkDockerStatus();
+                if (dockerStatus.available) {
+                  const codeLang = codeBlockMatch[1].toLowerCase();
+                  const codeContent = codeBlockMatch[2].trim();
+                  const language = (codeLang === 'py' || codeLang === 'python') ? 'python' : 'javascript';
+                  
+                  // Hanya eksekusi jika kode cukup pendek dan bukan contoh/template
+                  if (codeContent.length > 10 && codeContent.length < 50000 && 
+                      (codeContent.includes('print(') || codeContent.includes('console.log'))) {
+                    console.log(`[Docker Sandbox] Mengeksekusi ulang kode ${language} via Docker...`);
+                    const dockerResult = await window.electronAPI.runDockerSandbox(codeContent, language);
+                    
+                    if (dockerResult.success) {
+                      interceptHit = true;
+                      autoReply += `\n[SYSTEM: DOCKER SANDBOX EXECUTION (${language.toUpperCase()})]\nStatus: ✅ Berhasil\nOutput:\n${dockerResult.output}\n`;
+                    } else if (dockerResult.error && !dockerResult.error.includes('DOCKER_NOT_AVAILABLE') && !dockerResult.error.includes('DITOLAK')) {
+                      interceptHit = true;
+                      autoReply += `\n[SYSTEM: DOCKER SANDBOX EXECUTION (${language.toUpperCase()})]\nStatus: ❌ Gagal\nError:\n${dockerResult.error}\n`;
+                    }
+                    // Jika Docker tidak tersedia atau kode ditolak, diam saja (Piston sudah handle)
+                  }
+                }
+              } catch (dockerErr) {
+                console.warn('[Docker Sandbox] Interceptor error:', dockerErr.message);
+              }
+            }
+          }
+
           if (interceptHit) {
              const capturedConvId = syncedConvId;
              setTimeout(() => {

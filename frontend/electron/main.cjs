@@ -8,7 +8,7 @@ app.commandLine.appendSwitch('disable-gpu-sandbox');
 
 const path = require('path');
 const fs = require('fs');
-const { exec } = require('child_process');
+const { exec, execSync } = require('child_process');
 const { pathToFileURL } = require('url');
 const os = require('os');
 
@@ -333,4 +333,133 @@ ipcMain.handle('check-for-updates', async () => {
 // 5. Mendapatkan versi aplikasi saat ini
 ipcMain.handle('get-app-version', () => {
   return app.getVersion();
+});
+
+// --- DOCKER LOCAL SANDBOX (Eksekusi Kode Terisolasi) ---
+
+// 6. Cek apakah Docker Desktop terinstal & berjalan
+ipcMain.handle('check-docker-status', async () => {
+  try {
+    execSync('docker info', { timeout: 5000, stdio: 'pipe' });
+    return { available: true, message: 'Docker Desktop aktif dan siap digunakan.' };
+  } catch (error) {
+    return { available: false, message: 'Docker tidak terdeteksi. Sandbox akan menggunakan Piston API sebagai fallback.' };
+  }
+});
+
+// 7. Eksekusi kode di Docker Container yang terisolasi
+ipcMain.handle('run-docker-sandbox', async (event, { code, language }) => {
+  try {
+    // === KEAMANAN: Validasi input dasar ===
+    if (!code || typeof code !== 'string' || code.trim().length < 5) {
+      return { success: false, output: '', error: 'Kode terlalu pendek atau tidak valid.' };
+    }
+
+    if (!['python', 'javascript'].includes(language)) {
+      return { success: false, output: '', error: `Bahasa "${language}" tidak didukung. Gunakan python atau javascript.` };
+    }
+
+    // === KEAMANAN: Blocklist kode berbahaya ===
+    const dangerousPatterns = [
+      /import\s+subprocess/i,
+      /import\s+socket/i,
+      /import\s+http\.server/i,
+      /require\s*\(\s*['"]child_process['"]/i,
+      /require\s*\(\s*['"]net['"]/i,
+      /require\s*\(\s*['"]fs['"]/i,
+      /process\.exit/i,
+      /os\.system\s*\(/i,
+      /exec\s*\(/i,
+      /__import__\s*\(/i,
+      /eval\s*\(/i,
+    ];
+
+    const isCodeDangerous = dangerousPatterns.some(pattern => pattern.test(code));
+    if (isCodeDangerous) {
+      return { success: false, output: '', error: 'DITOLAK: Kode mengandung pola berbahaya (akses sistem/jaringan) yang diblokir oleh sandbox.' };
+    }
+
+    // Cek Docker tersedia
+    try {
+      execSync('docker info', { timeout: 5000, stdio: 'pipe' });
+    } catch (e) {
+      return { success: false, output: '', error: 'DOCKER_NOT_AVAILABLE: Docker Desktop tidak terdeteksi atau belum berjalan.' };
+    }
+
+    // Tentukan image & perintah berdasarkan bahasa
+    const config = language === 'python'
+      ? { image: 'python:3.12-slim', cmd: 'python', ext: '.py' }
+      : { image: 'node:20-slim', cmd: 'node', ext: '.js' };
+
+    // Tulis kode ke file temporary di workspace
+    const tmpDir = path.join(app.getPath('temp'), 'mamet-sandbox');
+    if (!fs.existsSync(tmpDir)) {
+      fs.mkdirSync(tmpDir, { recursive: true });
+    }
+    const tmpFile = path.join(tmpDir, `sandbox_code${config.ext}`);
+    fs.writeFileSync(tmpFile, code, 'utf8');
+
+    // === EKSEKUSI DOCKER DENGAN FLAG KEAMANAN KETAT ===
+    // --rm              : Hapus kontainer otomatis setelah selesai
+    // --network=none    : Blokir semua akses internet
+    // --memory=128m     : Batasi RAM 128MB
+    // --cpus=0.5        : Batasi CPU 50%
+    // --read-only       : Filesystem read-only
+    // --tmpfs /tmp      : Hanya /tmp yang writable (max 64MB)
+    // --no-new-privileges: Cegah eskalasi privilege
+    // -v (bind mount)   : Mount file kode ke /app (read-only)
+    const dockerCmd = [
+      'docker', 'run',
+      '--rm',
+      '--network=none',
+      '--memory=128m',
+      '--cpus=0.5',
+      '--read-only',
+      '--tmpfs', '/tmp:size=64m',
+      '--no-new-privileges',
+      '--user', '1000:1000',
+      '-v', `"${tmpFile.replace(/\\/g, '/')}:/app/code${config.ext}:ro"`,
+      '-w', '/app',
+      config.image,
+      config.cmd, `/app/code${config.ext}`
+    ].join(' ');
+
+    console.log(`[Docker Sandbox] Menjalankan: ${config.image} (${language})`);
+
+    return new Promise((resolve) => {
+      const childProcess = exec(dockerCmd, {
+        timeout: 30000,  // Kill setelah 30 detik
+        maxBuffer: 1024 * 1024, // Max output 1MB
+        windowsHide: true
+      }, (error, stdout, stderr) => {
+        // Bersihkan file temporary
+        try { fs.unlinkSync(tmpFile); } catch (e) {}
+
+        if (error) {
+          // Cek apakah timeout
+          if (error.killed) {
+            resolve({
+              success: false,
+              output: stdout || '',
+              error: 'TIMEOUT: Eksekusi kode melebihi batas waktu 30 detik dan telah dihentikan paksa.'
+            });
+          } else {
+            resolve({
+              success: false,
+              output: stdout || '',
+              error: stderr || error.message || 'Eksekusi gagal tanpa pesan error spesifik.'
+            });
+          }
+        } else {
+          resolve({
+            success: true,
+            output: (stdout || '').trim(),
+            error: (stderr || '').trim()
+          });
+        }
+      });
+    });
+  } catch (err) {
+    return { success: false, output: '', error: `Docker Sandbox error: ${err.message}` };
+  }
 });

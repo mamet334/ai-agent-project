@@ -14,5 +14,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   onUpdateStatus: (callback) => {
     ipcRenderer.on('update-status', (event, data) => callback(data));
-  }
+  },
+
+  // Docker Sandbox API (Eksekusi kode terisolasi)
+  checkDockerStatus: () => ipcRenderer.invoke('check-docker-status'),
+  runDockerSandbox: (code, language) => ipcRenderer.invoke('run-docker-sandbox', { code, language })
 });
