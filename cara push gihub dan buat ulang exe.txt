@@ -1,0 +1,16 @@
+Setiap kali Anda menekan "Enter" pada perintah git push origin main, Vercel langsung menarik kodenya saat itu juga dan merakit ulang website Anda tanpa perlu disuruh lagi.
+
+Jadi, Anda TIDAK PERLU repot-repot mengetik perintah vercel atau vercel --prod. Cukup gunakan workflow ini sampai selamanya:
+
+powershell
+git add .
+git commit -m "update fitur baru"
+git push origin main
+Luar biasa! Karena website Anda sudah pasti ter-update otomatis, sekarang Anda tinggal menjalankan satu perintah ini saja di terminal VS Code untuk membungkus versi terbarunya menjadi aplikasi Desktop (.exe):
+
+powershell
+cd frontend
+npm run dist
+
+untuk building di supa base 
+npx supabase functions deploy agent-process

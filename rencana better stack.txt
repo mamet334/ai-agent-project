@@ -47,21 +47,21 @@
 ## **FASE 3: INTEGRASI NOTIFIKASI & DASHBOARD PWA**
 *Fokus: Visibilitas langsung ke sistem Mamet.*
 
-### **A. Webhook Receiver Khusus**
-- [ ] Buat Edge Function `/functions/alert-receiver` untuk menangkap peringatan error.
-- [ ] Simpan riwayat *alert* ke tabel `incidents`.
+### **A. Webhook Receiver Khusus (Disatukan ke health-check untuk efisiensi)**
+- [x] Buat Edge Function `/functions/alert-receiver` untuk menangkap peringatan error (Dihapus: langsung di health-check).
+- [x] Simpan riwayat *alert* ke tabel `incidents`.
 
-### **B. Notifikasi Insiden (Telegram & Resend)**
-- [ ] Setup Telegram Bot via @BotFather.
-- [ ] Jika ada server down/error kritis: Kirim pesan Telegram instan & Email via Resend:
+### **B. Notifikasi Insiden (Telegram)**
+- [x] Setup Telegram Bot via @BotFather.
+- [x] Jika ada server down/error kritis: Kirim pesan Telegram instan:
       *"🚨 ALERT: {monitor} down | Status: {status} | Waktu: {time}"*
-- [ ] Jika server kembali normal: Kirim pesan pemulihan:
+- [x] Jika server kembali normal: Kirim pesan pemulihan:
       *"✅ RESOLVED: {monitor} sudah kembali online."*
 
 ### **C. Dashboard Monitoring di Frontend (React/Vite)**
-- [ ] Tambahkan halaman menu `/monitoring` di antarmuka utama Mamet PWA.
-- [ ] Tampilkan tabel hijau/merah (*Uptime*).
-- [ ] Tampilkan grafik *response time* menggunakan komponen Recharts.
+- [x] Tambahkan halaman menu `Dashboard Monitoring` di antarmuka utama Mamet PWA.
+- [x] Tampilkan tabel hijau/merah (*Uptime*).
+- [x] Tampilkan grafik *response time* menggunakan komponen Recharts.
 
 ---
 

@@ -95,6 +95,64 @@ serve(async (req) => {
 
     const isRagEnabled = ragEnabled !== false;
 
+    // === CIRCUIT BREAKER (FASE 4B) ===
+    // Mengecek apakah user sudah melewati batas harian token sebelum AI merespons.
+    if (userId) {
+      try {
+        const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+        const { data: currentCost, error: quotaError } = await supClient.rpc('check_daily_quota', { target_user_id: userId });
+        
+        if (!quotaError && currentCost !== null) {
+          const DAILY_LIMIT = 0.50; // $0.50 per hari (setara ~Rp8.000)
+          if (Number(currentCost) >= DAILY_LIMIT) {
+             console.warn(`[CIRCUIT BREAKER] User ${userId} exceeded daily quota: $${currentCost}`);
+             
+             // Tolak request jika sudah mencapai limit (mode teks)
+             if (!stream) {
+               return new Response(JSON.stringify({ 
+                  message: `[CIRCUIT BREAKER AKTIF] Limit harian AI Anda telah habis ($${Number(currentCost).toFixed(2)} / $${DAILY_LIMIT}). Arus API telah diputus otomatis untuk mencegah tagihan bengkak. Silakan coba lagi besok hari!` 
+               }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+             } else {
+               // Tolak via Stream
+               const streamRes = new ReadableStream({
+                 start(controller) {
+                   const data = JSON.stringify({ choices: [{ delta: { content: `\n\n**[CIRCUIT BREAKER AKTIF]** Limit harian AI Anda telah habis ($${Number(currentCost).toFixed(2)} / $${DAILY_LIMIT}). Arus API telah diputus otomatis untuk mencegah tagihan bengkak. Silakan coba lagi besok hari!` } }] });
+                   controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
+                   controller.close();
+                 }
+               });
+               return new Response(streamRes, { headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' } });
+             }
+          }
+        }
+      } catch (quotaCheckError) {
+        console.error("Quota check failed, bypassing...", quotaCheckError);
+      }
+    }
+
+    // === TOKEN TRACKER ESTIMATOR (FASE 4A) ===
+    const logApiUsage = async (provider: string, modelName: string, inputText: string, outputText: string) => {
+      if (!userId) return;
+      try {
+        // Estimasi kasar: 1 token = 4 karakter
+        const inputTokens = Math.ceil(inputText.length / 4);
+        const outputTokens = Math.ceil(outputText.length / 4);
+        
+        // Asumsi biaya (Cost per 1k token)
+        let costIn = 0.0001; let costOut = 0.0002; // Default (Gemini/DeepSeek)
+        if (modelName.includes('gpt-4o')) { costIn = 0.005; costOut = 0.015; }
+        else if (modelName.includes('llama')) { costIn = 0.00005; costOut = 0.00008; }
+
+        const totalCost = ((inputTokens / 1000) * costIn) + ((outputTokens / 1000) * costOut);
+        
+        const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+        await supClient.from('api_usage').insert([{ 
+           user_id: userId, provider, model: modelName,
+           input_tokens: inputTokens, output_tokens: outputTokens, cost_usd: totalCost
+        }]);
+      } catch (e) { console.error("Logging token failed", e); }
+    };
+
     const logAgentEvent = async (eventType: string, provider: string, logMessage: string) => {
       try {
         const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
@@ -251,7 +309,12 @@ serve(async (req) => {
         throw new Error(`Groq API Error: ${res.status}`);
       }
       const data = await res.json();
-      return data.choices?.[0]?.message?.content || '';
+      const answer = data.choices?.[0]?.message?.content || '';
+      
+      // Catat pemakaian
+      if (!stream) logApiUsage('groq', groqModel, promptText + systemPromptText, answer);
+      
+      return answer;
     };
 
     const streamOpenAIResponse = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], metaData: any = {}) => {
@@ -335,7 +398,10 @@ serve(async (req) => {
       });
       if (!res.ok) throw new Error(`OpenAI API Error: ${res.status}`);
       const data = await res.json();
-      return data.choices?.[0]?.message?.content || '';
+      const answer = data.choices?.[0]?.message?.content || '';
+      
+      if (!stream) logApiUsage('openai', model || 'gpt-4o-mini', promptText + systemPromptText, answer);
+      return answer;
     };
 
     const streamOpenRouterResponse = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], metaData: any = {}) => {
@@ -441,7 +507,10 @@ serve(async (req) => {
       });
       if (!res.ok) throw new Error(`OpenRouter API Error: ${res.status}`);
       const data = await res.json();
-      return data.choices?.[0]?.message?.content || '';
+      const answer = data.choices?.[0]?.message?.content || '';
+      
+      if (!stream) logApiUsage('openrouter', openRouterModel, promptText + systemPromptText, answer);
+      return answer;
     };
 
     const allGeminiKeys = getAllKeys('GEMINI_API_KEY');
@@ -488,7 +557,9 @@ Anda WAJIB mengeluarkan perintah Windows di dalam tag <terminal>. DILARANG menye
       if (allGeminiKeys.length > 0) {
         const data = await callGeminiWithRetry(payload, geminiModel, allGeminiKeys);
         if (data) {
-          return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const answer = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          if (!stream) logApiUsage('gemini', geminiModel, promptText + systemPromptText, answer);
+          return answer;
         }
         console.warn('Mamet Anti-Limit: Semua Gemini keys habis kuota! Cascading ke fallback...');
       }
