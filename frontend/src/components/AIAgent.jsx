@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe, Clock, Copy, Check, BrainCircuit, Trash2, Edit2, Download, FolderOpen, AlertTriangle, Activity, DollarSign } from 'lucide-react';
+import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe, Clock, Copy, Check, BrainCircuit, Trash2, Edit2, Download, FolderOpen, AlertTriangle, Activity, DollarSign, ShoppingBag } from 'lucide-react';
 import { supabase } from '../supabase';
 import MonitoringDashboard from './MonitoringDashboard';
 import BillingDashboard from './BillingDashboard';
+import ShopeeDashboard from './ShopeeDashboard';
 // Lazy loaded imports for heavy libraries
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -1994,6 +1995,23 @@ export default function AIAgent() {
             </div>
 
             <div className="border-t border-purple-500/20 pt-4">
+              <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
+                🛍️ Shopee Affiliate
+              </h3>
+              <p className="text-[10px] text-slate-400 mb-3 leading-tight">
+                Antrean & Auto-Post promosi Shopee.
+              </p>
+              <div className="flex flex-col gap-2">
+                <button 
+                  onClick={() => setActiveView('shopee')}
+                  className={`w-full py-2 border rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${activeView === 'shopee' ? 'bg-orange-500/20 text-orange-300 border-orange-500/50' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-600 hover:text-white'}`}
+                >
+                  <ShoppingBag className="w-3.5 h-3.5" /> Shopee Ninja
+                </button>
+              </div>
+            </div>
+
+            <div className="border-t border-purple-500/20 pt-4">
               <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">
                 Examples
               </h3>
@@ -2139,6 +2157,8 @@ export default function AIAgent() {
             <MonitoringDashboard />
           ) : activeView === 'billing' ? (
             <BillingDashboard user={user} />
+          ) : activeView === 'shopee' ? (
+            <ShopeeDashboard />
           ) : activeView === 'cron' ? (
             <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-900/50">
               <div className="max-w-4xl mx-auto">

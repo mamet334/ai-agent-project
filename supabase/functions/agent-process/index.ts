@@ -914,7 +914,8 @@ DILARANG KERAS MENGGUNAKAN PYTHON ATAU "TOOL_CODE". JANGAN PERNAH MENULISKAN KOD
         "login", "masuk", "sign in", "scrape", "credential", "username", "password", "sesi",
         "workspace", "folder", "analisis file", "periksa file", "scan folder", "baca file", "isi folder", "struktur folder", "WORKSPACE FILES CONTENT",
         "ingat", "ingatlah", "catat", "nama saya", "panggil saya", "saya suka", "favorit saya", "saya alergi", "kebiasaan saya", "informasi penting",
-        "debat", "rapat", "diskusikan", "direksi", "ceo", "cfo", "cto", "board of directors", "keputusan bisnis"
+        "debat", "rapat", "diskusikan", "direksi", "ceo", "cfo", "cto", "board of directors", "keputusan bisnis",
+        "shopee", "affiliate", "afiliate", "promosi", "produk", "jual", "komisi"
       ];
       const containsActionKeyword = actionKeywords.some(kw => lowerMessage.includes(kw));
 

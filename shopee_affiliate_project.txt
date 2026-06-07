@@ -1,0 +1,95 @@
+====================================================
+PROYEK MAMET AI - SHOPEE AFFILIATE NINJA (AUTONOMOUS)
+====================================================
+Tanggal Pembaruan: 7 Juni 2026
+Tujuan: Membangun sistem agen otonom penghasil pasif income melalui Shopee Affiliate, terinspirasi dari model bisnis Matthew Gallagher (Medvi).
+
+--- FILOSOFI UTAMA (SAFETY FIRST) ---
+"Jangan mengejar uang dulu, yang terpenting adalah berjalan senyap tanpa terdeteksi."
+Sistem ini secara sadar DIBATASI kemampuannya agar tidak terdeteksi sebagai Bot Spam oleh Shopee maupun Sosial Media (X, Facebook, Telegram). Prioritas utama adalah menjaga keamanan satu-satunya akun affiliate yang dimiliki user.
+
+--- ARSITEKTUR YANG SUDAH SELESAI ---
+
+1. DATABASE (Supabase)
+   - Tabel: `shopee_queue`
+   - Fungsi: Menyimpan antrean URL produk Shopee, nama produk, status ('pending' atau 'posted'), dan waktu posting.
+   - Keamanan: RLS (Row Level Security) dikonfigurasi untuk hanya bisa diakses oleh backend (Service Role/Anon Key dari fungsi Edge).
+
+2. ANTARMUKA PENGGUNA (Frontend)
+   - File: `frontend/src/components/ShopeeDashboard.jsx` (Diintegrasikan di `AIAgent.jsx` sidebar)
+   - Fungsi: 
+     - Kolom UI tersendiri "Shopee Affiliate" di aplikasi Mamet.
+     - Memungkinkan user menempelkan (copy-paste) banyak link sekaligus ke dalam antrean (queue) tanpa harus nge-chat bot.
+     - Menampilkan riwayat link mana yang masih pending dan yang sudah sukses diposting.
+
+3. KECERDASAN BUATAN (Agent Process)
+   - File: `supabase/functions/agent-process/plugins/shopee_ninja.ts` & `index.ts`
+   - Fungsi: Sub-agent khusus yang di-prompt untuk membuat copywriting/caption promosi yang persuasif, natural, kekinian, dan berisi "Call to Action" (ajakan membeli).
+
+4. MESIN OTOMATISASI (Cron Agent)
+   - File: `supabase/functions/cron-agent/index.ts`
+   - Mode: SAFE & STEALTH (Anti-Banned)
+   - Cara Kerja:
+     - Berjalan sesuai jadwal Cron (misal setiap 15/30 menit).
+     - Mengambil MAKSIMAL HANYA 1 (satu) link dari tabel `shopee_queue` per siklus, agar postingan terlihat natural seperti manusia dan tidak dianggap spam oleh Shopee atau medsos.
+     - 40% probabilitas SKIP setiap siklus (jeda acak agar tidak terpola seperti robot).
+     - Meminta AI meracik kata-kata promosi bergaya netizen biasa (bukan bahasa jualan).
+     - Otomatis memposting ke berbagai platform sosial media (Multi-Channel Routing).
+     - Menandai link sebagai 'posted'.
+
+5. AUTO-DISCOVERY (Pencari Produk Laris Otonom) ✅ BARU!
+   - File: `supabase/functions/cron-agent/index.ts` (Step 4 di dalam kode)
+   - Fungsi: SEPENUHNYA OTONOM. Bot mencari sendiri produk terlaris Shopee tanpa campur tangan manusia.
+   - Cara Kerja:
+     - Hanya aktif jika stok antrean (shopee_queue) menipis (< 3 link pending).
+     - Hanya berjalan MAKSIMAL 1x per hari (anti-spam).
+     - Menggunakan Jina Reader untuk men-scrape hasil pencarian Google (BUKAN langsung ke Shopee, jadi aman dari deteksi bot Shopee).
+     - Query pencarian dipilih secara ACAK dari daftar ("produk terlaris", "flash sale", "best seller") agar tidak terpola.
+     - AI mengekstrak URL produk dari hasil pencarian, lalu memasukkannya ke tabel shopee_queue.
+     - Produk ditandai dengan label [AUTO-DISCOVERY] di nama produk.
+     - Duplikasi otomatis dicegah (URL yang sudah pernah masuk tidak akan dimasukkan ulang).
+     - Maksimal 3 produk per hari (sangat konservatif dan aman).
+
+--- INFRASTRUKTUR SOSIAL MEDIA (AUTO-POST) ---
+Sistem sudah siap mengirim data (API Fetch telah ditulis di cron-agent), tinggal menunggu Token API diisi di Supabase Environment Variables:
+1. TELEGRAM
+   - Env Vars: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
+2. TWITTER / X
+   - Env Vars: `TWITTER_BEARER_TOKEN`
+   - Catatan: Caption otomatis dipotong maksimal 280 karakter agar tidak error.
+3. FACEBOOK PAGE
+   - Env Vars: `FACEBOOK_PAGE_TOKEN`, `FACEBOOK_PAGE_ID`
+
+--- PEKERJAAN RUMAH SELANJUTNYA (TO-DO LIST) ---
+
+[ ] SETUP API KEYS: Masukkan API Key dari masing-masing platform (Telegram, X, FB) ke Environment Variables di Supabase Dashboard.
+    - Page ID Facebook: 61590864952068 (SUDAH DIDAPAT ✅)
+    - Page Token Facebook: (Belum - Terkendala verifikasi developer Meta)
+[ ] KONVERSI LINK AFFILIATE: Pastikan link yang di-input ke Dashboard sudah berupa link Affiliate (misal: shope.ee/xxx) agar komisi masuk.
+[✅] AUTO-SCRAPER: SELESAI! Mesin Auto-Discovery sudah tertanam di cron-agent. Bot akan mencari produk laris Shopee sendiri 1x per hari jika antrean menipis.
+[ ] DEPLOY: Push perubahan ke GitHub lalu deploy ulang Supabase Edge Functions agar kode terbaru aktif di server.
+
+--- ALUR KERJA LENGKAP (FULL AUTONOMOUS FLOW) ---
+
+  [CRON BERJALAN]
+       |
+       v
+  [Step 1] Jalankan Scheduled Tasks biasa
+       |
+       v
+  [Step 2] Cek shopee_queue -> ada yang 'pending'?
+       |--- YA --> 40% chance SKIP (stealth) --> Proses 1 link --> AI buat caption --> Post ke Telegram/X/FB
+       |--- TIDAK --> lanjut
+       |
+       v
+  [Step 3] Auto-Discovery: Antrean menipis (< 3)?
+       |--- YA --> Sudah discovery hari ini?
+       |    |--- TIDAK --> Scrape Google via Jina --> AI ekstrak URL Shopee --> Masukkan ke shopee_queue
+       |    |--- YA --> Skip
+       |--- TIDAK --> Skip
+       |
+       v
+  [SELESAI - Tidur sampai Cron berikutnya]
+
+====================================================
+"Sistem ini dirancang untuk bekerja pelan-pelan (alon-alon asal kelakon) agar aman, elegan, dan menghasilkan dalam jangka panjang."

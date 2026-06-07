@@ -10,6 +10,7 @@ import youtubeAnalyst from './youtube_analyst.ts';
 import memoryManager from './memory_manager.ts';
 import cronManager from './cron_manager.ts';
 import fileAnalyzer from './file_analyzer.ts';
+import shopeeNinja from './shopee_ninja.ts';
 
 // Daftarkan semua plugin di sini
 export const plugins = [
@@ -24,7 +25,8 @@ export const plugins = [
   youtubeAnalyst,
   memoryManager,
   cronManager,
-  fileAnalyzer
+  fileAnalyzer,
+  shopeeNinja
 ];
 
 // Fungsi helper untuk membangun daftar tool otomatis bagi LLM

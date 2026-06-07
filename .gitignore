@@ -37,3 +37,4 @@ Thumbs.db
 
 # Electron build output
 frontend/release/
+token github.txt
