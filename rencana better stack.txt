@@ -68,13 +68,42 @@
 ## **FASE 4: TRACKING KUOTA & CIRCUIT BREAKER**
 *Fokus: Melindungi finansial dari perulangan error AI (infinite loop).*
 
-### **A. Token Usage Tracker**
-- [ ] Tambahkan *logging* otomatis setiap selesai pemanggilan AI.
-- [ ] Simpan ke tabel `token_usage` (tanggal, nama model, jumlah input/output token).
+### **A. Token Usage Tracker & Database**
+- [x] Buat tabel `api_usage` (id, user_id, provider, tokens_used, cost_usd).
+- [x] Tambahkan fungsi Supabase RPC `check_daily_quota` untuk menghitung cepat batas harian.
+- [x] Tambahkan *logging* otomatis setiap selesai pemanggilan AI (estimator token di Edge Function).
 
 ### **B. Circuit Breaker (Rem Darurat)**
-- [ ] Set batas aman pemakaian harian.
-- [ ] Jika token melampaui 80% dari batas harian, putuskan akses ke *tools* yang memakan banyak token (seperti *deep_research*) dan aktifkan mode teks-sederhana (hemat).
+- [x] Set batas aman pemakaian harian (saat ini $0.50 per hari).
+- [x] Cegah Edge Function memproses prompt baru jika limit melebihi 100% dan keluarkan pesan penolakan yang bersahabat untuk memutus tagihan.
+
+### **C. UI Keuangan di PWA (Dashboard)**
+- [x] Tambahkan menu "Billing & Quota" di Sidebar PWA.
+- [x] Buat komponen Visual Progress Bar batas limit harian.
+- [x] Tampilkan riwayat 50 transaksi penggunaan token terakhir beserta estimasi harga spesifiknya ($ USD).
 
 ---
-*Roadmap ini sepenuhnya selaras dengan struktur teknologi Mamet saat ini (Vite + Supabase Edge) dan dirancang untuk menciptakan ketahanan sistem tingkat tinggi.*
+
+## **FASE 5: MAMET SEBAGAI ASISTEN TEKNISI ANDROID (ADB INTEGRATION)**
+*Fokus: Memberikan Mamet kemampuan untuk memodifikasi, mendiagnosis, dan membackup HP Android melalui protokol ADB/Fastboot.*
+
+### **A. Persiapan Infrastruktur Lokal (OS)**
+- [ ] Unduh dan ekstrak `Android Platform Tools` (ADB & Fastboot) ke komputer Windows.
+- [ ] Daftarkan path folder ADB ke dalam *Environment Variables* (System PATH) Windows agar perintah `adb` bisa dipanggil secara global.
+
+### **B. Pembuatan Tool/Plugin Khusus (`adb_manager`)**
+- [ ] Buat file `supabase/functions/agent-process/plugins/adb_manager.ts`.
+- [ ] Program fungsi untuk mendeteksi HP: `adb devices` (Mamet bisa tahu HP apa yang sedang dicolok).
+- [ ] Program fungsi diagnostik: `adb shell dumpsys battery` (Cek kesehatan baterai) & `adb shell getprop` (Cek spesifikasi HP).
+
+### **C. Injeksi Pengetahuan (System Prompt & Skill)**
+- [ ] Ajarkan Mamet perintah *bloatware removal*: `adb shell pm uninstall -k --user 0 [nama.paket]`.
+- [ ] Ajarkan Mamet perintah *backup*: `adb pull /sdcard/ [folder_tujuan]`.
+- [ ] Ajarkan Mamet perintah *sideloading*: `adb install [path_apk]`.
+- [ ] Ajarkan Mamet perintah *screen mirroring* opsional (misal via `scrcpy` jika terinstal).
+
+### **D. Antarmuka (UI) Asisten Teknisi (Opsional)**
+- [ ] Buat indikator di Desktop App (AIAgent.jsx) yang menyala hijau 📱 jika ada HP Android yang terdeteksi via USB.
+
+---
+*Roadmap ini sepenuhnya selaras dengan struktur teknologi Mamet saat ini (Vite + Supabase Edge) dan dirancang untuk menciptakan ketahanan sistem tingkat tinggi serta ekspansi ke ranah perangkat keras lokal.*
