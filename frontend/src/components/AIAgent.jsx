@@ -4,6 +4,7 @@ import { supabase } from '../supabase';
 import MonitoringDashboard from './MonitoringDashboard';
 import BillingDashboard from './BillingDashboard';
 import ShopeeDashboard from './ShopeeDashboard';
+import MainOrchestrator from '../lib/mainOrchestrator';
 // Lazy loaded imports for heavy libraries
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -448,6 +449,10 @@ export default function AIAgent() {
   const messagesEndRef = useRef(null);
   const thinkingStartRef = useRef(null);
   const prevUserIdRef = useRef(null);
+  
+  // Token optimization integration
+  const [orchestrator] = useState(() => new MainOrchestrator());
+  const [tokenStats, setTokenStats] = useState(null);
 
   const handleSelectWorkspace = async () => {
     if (workspaceHandle || desktopWorkspacePath) {
@@ -1345,42 +1350,66 @@ export default function AIAgent() {
         ? ['web_search', 'deep_research', 'youtube_analyst', 'code_executor', 'api_caller', 'logika', 'bahasa', 'debate', 'cron_manager', 'file_analyzer']
         : selectedTools;
 
-      const payload = {
-        message: apiInput,
-        file: filePayload,
-        tools: effectiveTools,
-        model: selectedModel,
-        userId: user?.id || 'anonymous',
-        userName: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Teman',
-        globalMemory: globalMemory,
-        desktopOSMode: isDesktopMode,
-        ragEnabled: ragEnabled,
-        stream: true,
-        history: messages.map(m => {
+      // Use orchestrator to optimize the request
+      const task = {
+        prompt: apiInput,
+        context: messages.map(m => {
           let content = m.content;
           if (m.type === 'user') {
-            // Strip workspace files content from history to prevent huge token accumulation
             content = content.replace(/\[WORKSPACE FILES CONTENT\][\s\S]*?\[\/WORKSPACE FILES CONTENT\]/g, '').trim();
           }
           return { role: m.type === 'user' ? 'user' : 'model', content };
-        }).slice(-10)
+        }).slice(-10),
+        repeatable: false,
+        estimatedTokens: apiInput.length + 1000
       };
 
-      // Hardcode ke Supabase Edge Function agar tidak terganggu oleh konfigurasi Vercel yang salah
-      const endpoint = 'https://uuyzdjifhdfyyvpxsofu.supabase.co/functions/v1/agent-process';
+      const apiCall = async (optimizedTask, strategy) => {
+        const payload = {
+          message: optimizedTask.prompt,
+          file: filePayload,
+          tools: effectiveTools,
+          model: selectedModel,
+          userId: user?.id || 'anonymous',
+          userName: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Teman',
+          globalMemory: globalMemory,
+          desktopOSMode: isDesktopMode,
+          ragEnabled: ragEnabled,
+          stream: true,
+          history: optimizedTask.context
+        };
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          'x-byok-gemini': (localStorage.getItem('x-byok-gemini') || '').trim(),
-          'x-byok-groq': (localStorage.getItem('x-byok-groq') || '').trim(),
-          'x-byok-openai': (localStorage.getItem('x-byok-openai') || '').trim(),
-          'x-byok-openrouter': (localStorage.getItem('x-byok-openrouter') || '').trim()
-        },
-        body: JSON.stringify(payload)
-      });
+        // Hardcode ke Supabase Edge Function agar tidak terganggu oleh konfigurasi Vercel yang salah
+        const endpoint = 'https://uuyzdjifhdfyyvpxsofu.supabase.co/functions/v1/agent-process';
+
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'x-byok-gemini': (localStorage.getItem('x-byok-gemini') || '').trim(),
+            'x-byok-groq': (localStorage.getItem('x-byok-groq') || '').trim(),
+            'x-byok-openai': (localStorage.getItem('x-byok-openai') || '').trim(),
+            'x-byok-openrouter': (localStorage.getItem('x-byok-openrouter') || '').trim()
+          },
+          body: JSON.stringify(payload)
+        });
+        
+        return response;
+      };
+
+      const result = await orchestrator.executeTask(task, apiCall);
+      
+      // Update token stats
+      setTokenStats(result.stats);
+
+      if (result.status === 'budget_exceeded') {
+        setLogs(prev => [...prev, '⚠️ Token budget exceeded']);
+        setLoading(false);
+        return;
+      }
+
+      const response = result;
 
       // Clear pending mock logs timeouts
       logIntervals.forEach(clearTimeout);
@@ -1870,6 +1899,48 @@ export default function AIAgent() {
                       )}
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* Token Stats Display */}
+            {tokenStats && (
+              <div className="border-t border-purple-500/20 pt-4 mb-4">
+                <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5 text-emerald-400" />
+                  Token Usage
+                </h3>
+                <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-700/80">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] text-slate-400">Used</span>
+                    <span className="text-xs font-semibold text-emerald-400">{tokenStats.used}</span>
+                  </div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] text-slate-400">Budget</span>
+                    <span className="text-xs font-semibold text-slate-300">{tokenStats.budget}</span>
+                  </div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] text-slate-400">Remaining</span>
+                    <span className="text-xs font-semibold text-indigo-400">{tokenStats.remaining}</span>
+                  </div>
+                  <div className="mt-2">
+                    <div className="w-full bg-slate-700 rounded-full h-2">
+                      <div 
+                        className="bg-gradient-to-r from-emerald-500 to-blue-500 h-2 rounded-full transition-all" 
+                        style={{ width: `${tokenStats.percentage}%` }}
+                      />
+                    </div>
+                    <div className="text-right text-[10px] text-slate-400 mt-1">{tokenStats.percentage}%</div>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      orchestrator.resetUsage();
+                      setTokenStats(orchestrator.getStats());
+                    }}
+                    className="mt-2 w-full text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 py-1.5 rounded transition-all"
+                  >
+                    Reset Usage
+                  </button>
                 </div>
               </div>
             )}

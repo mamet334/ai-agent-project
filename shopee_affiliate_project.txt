@@ -43,7 +43,7 @@ Sistem ini secara sadar DIBATASI kemampuannya agar tidak terdeteksi sebagai Bot 
    - Cara Kerja:
      - Hanya aktif jika stok antrean (shopee_queue) menipis (< 3 link pending).
      - Hanya berjalan MAKSIMAL 1x per hari (anti-spam).
-     - Menggunakan Jina Reader untuk men-scrape hasil pencarian Google (BUKAN langsung ke Shopee, jadi aman dari deteksi bot Shopee).
+     - Menggunakan Jina Reader untuk men-scrape hasil pencarian DuckDuckGo (BUKAN langsung ke Shopee/Google, jadi aman dari blokir Captcha & deteksi bot).
      - Query pencarian dipilih secara ACAK dari daftar ("produk terlaris", "flash sale", "best seller") agar tidak terpola.
      - AI mengekstrak URL produk dari hasil pencarian, lalu memasukkannya ke tabel shopee_queue.
      - Produk ditandai dengan label [AUTO-DISCOVERY] di nama produk.
@@ -66,8 +66,9 @@ Sistem sudah siap mengirim data (API Fetch telah ditulis di cron-agent), tinggal
     - Page ID Facebook: 61590864952068 (SUDAH DIDAPAT ✅)
     - Page Token Facebook: (Belum - Terkendala verifikasi developer Meta)
 [ ] KONVERSI LINK AFFILIATE: Pastikan link yang di-input ke Dashboard sudah berupa link Affiliate (misal: shope.ee/xxx) agar komisi masuk.
-[✅] AUTO-SCRAPER: SELESAI! Mesin Auto-Discovery sudah tertanam di cron-agent. Bot akan mencari produk laris Shopee sendiri 1x per hari jika antrean menipis.
-[ ] DEPLOY: Push perubahan ke GitHub lalu deploy ulang Supabase Edge Functions agar kode terbaru aktif di server.
+[✅] REPACKAGING (BUNGKUS ULANG): SELESAI! AI kini membaca detail produk dari Shopee sebelum memposting (bukan menebak buta) agar caption terkesan seperti pengalaman asli pengguna.
+[✅] AUTO-SCRAPER (ANTI-BOT): SELESAI! Menggunakan DuckDuckGo HTML Lite untuk melewati pemblokiran Captcha.
+[✅] DEPLOY KE CLOUD: SELESAI! Kode telah di-push ke GitHub dan Edge Functions telah di-deploy ulang. Token Github yang bocor juga telah diamankan. Sistem berjalan sepenuhnya di latar belakang.
 
 --- ALUR KERJA LENGKAP (FULL AUTONOMOUS FLOW) ---
 

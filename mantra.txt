@@ -2,6 +2,25 @@
 [Tech: React/Vite (PWA) & Supabase Edge (Deno)]
 [Vercel Production URL: https://ai-agent-project-2a9h.vercel.app/]
 
+## 📝 INTEGRASI TOKEN OPTIMIZATION (JUNI 2026)
+**File yang ditambahkan:**
+- `frontend/src/lib/tokenSaverAgent.js` - Class untuk optimasi penggunaan token API
+- `frontend/src/lib/mainOrchestrator.js` - Class orkestrator untuk mengelola task dengan optimasi token
+- `mametlite/src/lib/tokenSaverAgent.js` - Versi lite untuk mametlite
+- `mametlite/src/lib/mainOrchestrator.js` - Versi lite untuk mametlite
+
+**Integrasi di Frontend:**
+- `frontend/src/components/AIAgent.jsx` - Import MainOrchestrator, inisialisasi state, integrasi di handleSendMessage, UI token stats di sidebar
+- `mametlite/src/App.jsx` - Import MainOrchestrator, inisialisasi state, integrasi di handleSend, UI token stats di sidebar
+
+**Fitur yang ditambahkan:**
+- Prompt compression (penghapusan redundansi, singkatan, kompresi contoh)
+- Budget checking sebelum eksekusi API
+- Complexity analysis untuk menentukan strategi penghematan
+- Real-time token tracking dengan progress bar di sidebar
+- Tombol reset untuk mereset penggunaan token
+- Estimasi token optimal berdasarkan kompleksitas task
+
 
 ## ✅ SELESAI (100% MEDVI RAG & KODING)
 1. Multi-Agent & Orchestrator (DeepSeek, Llama, Gemini)
@@ -20,6 +39,7 @@
 14. Real-time Image Search (Fetches Yahoo/Bing images via Jina and renders them dynamically in markdown)
 15. Workspace File Analyzer (Membaca, menganalisis, dan memeriksa file/folder lokal user via File System Access API + file_analyzer sub-agent)
 16. Sakelar RAG (Knowledge Base) ON/OFF (Tombol switch di sidebar utama & mametlite untuk mengaktifkan/menonaktifkan pencarian RAG di backend guna menghemat token/biaya database secara efisien)
+17. **Token Optimization System** (Integrasi MainOrchestrator & TokenSaverAgent dari python.py/python1.py ke JavaScript untuk optimasi penggunaan token API dengan fitur: prompt compression, budget checking, complexity analysis, dan real-time token tracking UI di sidebar)
 
 
 ## 🚀 ROADMAP TERSISA (PHASE 2: SUPER UPGRADES)
@@ -72,4 +92,4 @@
 1. **Sistem Monitoring Infrastruktur:** Membangun Endpoint Health-Checker paralel serta menyimpan log waktu respons dan status insiden ke Supabase (`monitors`, `checks`, `incidents`) secara terjadwal via cron.
 2. **Sistem Notifikasi Insiden (Alerting):** Setup integrasi Bot Telegram yang mengirim peringatan otomatis apabila terdeteksi anomali pada webhook atau downtime server.
 3. ~~**Sistem Router AI Berlapis (Traffic Light):**~~ ✅ SELESAI (Mengalokasikan load balancing secara cerdas: Groq (Llama 3) untuk parsing sederhana, Gemini 1.5 Flash untuk orkestrasi utama, dan DeepSeek untuk debugging kompleks/pengambilan keputusan kritis).
-4. **Optimasi Hemat Token (RAG & Usage):** Menyempurnakan pembersihan ingatan dokumen yang jarang diakses, mengubah teks boros menjadi format poin, membatasi similarity search (top-k), dan membuat dashboard pemantauan konsumsi token harian.
+4. ~~**Optimasi Hemat Token (RAG & Usage):**~~ ✅ SELESAI (Integrasi TokenSaverAgent & MainOrchestrator dari python.py/python1.py ke JavaScript dengan fitur: prompt compression, budget checking, complexity analysis, dan real-time token tracking UI di sidebar untuk ai-agent-project & mametlite)
