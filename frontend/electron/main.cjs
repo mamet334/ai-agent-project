@@ -25,7 +25,7 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // Daftarkan skema protokol kustom sebagai hak istimewa
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'mamet', privileges: { standard: true, secure: true, supportFetchAPI: true } }
+  { scheme: 'mamet', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }
 ]);
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -127,15 +127,23 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
+      webSecurity: false,
+      allowRunningInsecureContent: false,
       preload: path.join(__dirname, 'preload.cjs')
     }
   });
 
-  const startUrl = isDev 
-    ? 'http://localhost:5173' 
-    : 'mamet://app/index.html';
-
-  mainWindow.loadURL(startUrl);
+  if (isDev) {
+    mainWindow.loadURL('http://localhost:5173');
+  } else {
+    // loadFile() adalah cara paling reliable di Electron — tidak butuh custom protocol
+    const indexPath = path.join(__dirname, '../dist/index.html');
+    mainWindow.loadFile(indexPath).catch(err => {
+      const logMsg = `[FATAL] loadFile gagal: ${err.message}\n`;
+      console.error(logMsg);
+      fs.appendFileSync(path.join(os.tmpdir(), 'mamet-renderer.log'), logMsg);
+    });
+  }
 
   // Log console renderer ke terminal untuk debugging
   mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
