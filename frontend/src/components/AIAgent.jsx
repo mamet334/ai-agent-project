@@ -2177,7 +2177,7 @@ export default function AIAgent() {
                   </optgroup>
 
                   <optgroup label="🟡 GRATIS - KUOTA MENENGAH (OpenRouter Free)" className="bg-slate-800 text-yellow-400 font-bold">
-                    <option value="openrouter-deepseek-r1" className="bg-slate-900 text-white font-normal">DeepSeek R1 (Free via OpenRouter)</option>
+                    <option value="openrouter-google-gemini-2.0-flash-exp" className="bg-slate-900 text-white font-normal">Gemini 2.0 Flash Exp (Free via OpenRouter)</option>
                     <option value="openrouter-llama-3" className="bg-slate-900 text-white font-normal">Llama 3 8B (Free via OpenRouter)</option>
                   </optgroup>
 

@@ -334,3 +334,80 @@ Replacing 35 lines with 41 lines in [](file:///d%3A/SLAMET/other/ai-agent-projec
 ✅ **Selesai** — Error "(e.context || "").split is not a function" seharusnya resolved.
 
 Made changes.
+
+>>>---4.hasil otak mamet
+
+Menemukan semua logika model selection dan fallback di edge function dan plugin terkait.
+
+Searched for regex `model|fallback|openrouter|groq|gemini|priority|rotat|key|BYOK|fallback|error|retry` (`**/supabase/functions/agent-process/**`), 200 results
+
+Memeriksa logika pemilihan model dan fallback di index.ts sekarang.
+
+Searched for regex `if \(model|model ===|model.startsWith|fallback|Fallback|openrouter|groq|gemini|callGeminiWithRetry|callGroq|OPENROUTER|GROQ_API_KEY|OPENAI_API_KEY` (`**/supabase/functions/agent-process/index.ts`), 200 results
+
+Menelusuri implementasi pemilihan model dan fallback di `agent-process`.
+
+Read [](file:///d%3A/SLAMET/other/ai-agent-project/supabase/functions/agent-process/index.ts#320-320), lines 320 to 575
+
+Read [](file:///d%3A/SLAMET/other/ai-agent-project/supabase/functions/agent-process/index.ts#575-575), lines 575 to 760
+
+Sedang memeriksa apakah ada konfigurasi router model di file config atau plugin.Compacted conversation
+
+Searched for regex `MODEL|PRIORITY|priority|FALLBACK|fallback|openrouter|groq|gemini|rotat|ROTATE|BYOK|x-byok|api key|key rotation` (`**/*.{ts,tsx,js,jsx,env,md}`), 200 results
+
+Read [](file:///d%3A/SLAMET/other/ai-agent-project/supabase/functions/agent-process/index.ts#1-1), lines 1 to 220
+
+Searched for regex `coordinator-agent|preferFast|runCoordinatorLLM|traffic light|Traffic Light|Mamet Traffic Light|router|route ke|fallback` (`**/supabase/functions/agent-process/**/*.ts`), 138 results
+
+Read [](file:///d%3A/SLAMET/other/ai-agent-project/supabase/functions/agent-process/index.ts#900-900), lines 900 to 1085
+
+## Kesimpulan
+
+✅ Ya — proyek ini sudah memiliki implementasi `router cerdas` di index.ts.
+
+### Apa yang sudah ada
+
+1. `runLLM()`
+   - Memilih provider pertama berdasarkan `model` user:
+     - `gpt*` → OpenAI
+     - `openrouter*` → OpenRouter
+     - `groq/*` → Groq
+   - Jika tidak ada model khusus, memakai:
+     - Gemini multi-key + retry
+     - lalu fallback ke OpenRouter
+     - lalu fallback ke Groq
+
+2. `runCoordinatorLLM()`
+   - Router lapis ringan / traffic-light:
+     - `preferFast && GROQ_API_KEY` → Groq untuk tugas cepat
+     - Gemini utama
+     - OpenRouter jika Gemini gagal
+     - Groq jika masih perlu
+
+3. `Intent Router` di request utama
+   - Menganalisis pesan user untuk memilih antara:
+     - `CHAT_BIASA` → jawab langsung tanpa sub-agent
+     - `BUTUH_AGENT` → panggil sub-agent
+   - Menggunakan prompt `runCoordinatorLLM(..., true)` untuk klasifikasi intent
+
+4. `Traffic Light Router` untuk sub-agent
+   - Jika sub-agent adalah `coder` / `debate` → pakai `openrouter-deepseek-r1`
+   - Jika sub-agent ringan seperti `scraper`, `memory_manager`, `communicator`, `youtube_analyst`, `file_analyzer` → pakai Groq
+   - Lainnya → Gemini
+
+5. Fallback otomatis
+   - OpenAI streaming error → fallback ke Groq
+   - OpenRouter stream error → fallback ke Groq
+   - Gemini stream 429 → fallback ke OpenRouter / Groq
+
+### Jadi, ringkasnya
+
+- `agent-process` memang punya routing cerdas
+- routing berbasis:
+  - `model` yang diminta
+  - jenis request / intent
+  - tipe sub-agent
+  - ketersediaan dan error provider
+- bukan hanya satu mekanisme tunggal, tetapi beberapa lapis router + fallback
+
+> Jika yang Anda maksud adalah “otomatis memilih model berdasarkan kompleksitas prompt secara adaptif”, saat ini sudah ada bentuk itu lewat rule-based intent/sub-agent routing dan fallback, bukan lewat scoring model kompleksitas yang terpisah.

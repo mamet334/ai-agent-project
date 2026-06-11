@@ -547,8 +547,8 @@ JANGAN ragu menggunakan gambar/diagram jika itu mempermudah penjelasan!`;
       }
 
       let openRouterModel = 'meta-llama/llama-3-8b-instruct:free';
-      if (model === 'openrouter-deepseek-r1') {
-        openRouterModel = 'deepseek/deepseek-r1:free';
+      if (model === 'openrouter-google-gemini-2.0-flash-exp') {
+        openRouterModel = 'google/gemini-2.0-flash-exp:free';
       }
 
       console.log(`Calling OpenRouter API using model: ${openRouterModel}`);

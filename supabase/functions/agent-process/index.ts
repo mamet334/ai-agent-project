@@ -52,6 +52,7 @@ const getAllKeys = (envVarName: string): string[] => {
 
 // Retry dengan exponential backoff + multi-key rotation
 const callGeminiWithRetry = async (payload: any, geminiModel: string, allGeminiKeys: string[], maxRetries = 3): Promise<any> => {
+  let seenRateLimit = false;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     for (let ki = 0; ki < allGeminiKeys.length; ki++) {
       const key = allGeminiKeys[(geminiKeyIndex + ki) % allGeminiKeys.length];
@@ -66,6 +67,7 @@ const callGeminiWithRetry = async (payload: any, geminiModel: string, allGeminiK
           return await res.json();
         }
         if (res.status === 429) {
+          seenRateLimit = true;
           console.warn(`Gemini key #${ki} got 429, trying next key...`);
           continue; // Try next key
         }
@@ -82,7 +84,47 @@ const callGeminiWithRetry = async (payload: any, geminiModel: string, allGeminiK
       await new Promise(r => setTimeout(r, waitMs));
     }
   }
+  if (seenRateLimit) lockProvider('gemini');
   return null; // All retries failed
+};
+
+// === COOLDOWN CONFIGURATION ===
+const PROVIDER_COOLDOWN_DURATIONS: Record<string, number> = {
+  'gemini': 60000,        // 60 seconds for Gemini
+  'openrouter': 60000,    // 60 seconds for OpenRouter
+  'groq': 3600000         // 1 hour for Groq (rentan rate limit)
+};
+
+const providerCooldowns = new Map<string, number>();
+
+const isProviderLocked = (provider: string): boolean => {
+  const expires = providerCooldowns.get(provider);
+  if (!expires) return false;
+  if (Date.now() > expires) {
+    providerCooldowns.delete(provider);
+    return false;
+  }
+  return true;
+};
+
+const lockProvider = (provider: string, durationMs?: number) => {
+  const duration = durationMs ?? PROVIDER_COOLDOWN_DURATIONS[provider] ?? 60000;
+  providerCooldowns.set(provider, Date.now() + duration);
+  console.log(`🔒 Provider cooldown set for ${provider} (${duration}ms)`);
+};
+
+const getAvailableProviders = (providers: Array<'gemini' | 'openrouter' | 'groq'>): Array<'gemini' | 'openrouter' | 'groq'> => {
+  return providers.filter(p => !isProviderLocked(p));
+};
+
+const clearExpiredCooldowns = () => {
+  const now = Date.now();
+  for (const [provider, expires] of providerCooldowns.entries()) {
+    if (now > expires) {
+      providerCooldowns.delete(provider);
+      console.log(`🔓 Provider cooldown expired for ${provider}`);
+    }
+  }
 };
 
 serve(async (req) => {
@@ -317,6 +359,35 @@ serve(async (req) => {
       return answer;
     };
 
+    const getComplexityScore = async (userMessage: string): Promise<number> => {
+      const text = String(userMessage || '').trim();
+      if (!text) return 1;
+
+      const words = text.split(/\s+/).filter(Boolean);
+      const normalized = text.toLowerCase();
+      const baseScore = Math.min(4, Math.floor(words.length / 20));
+
+      const heavyKeywords = [
+        'analyze','analysis','explain','debug','optimize','optimization','architect','architecture',
+        'compare','evaluate','reasoning','research','summarize','translate','implement','build',
+        'design','planning','strategy','system','complex','mathematics','formula','algorithm','proof',
+        'logic','code','script','database','query','performance','scaling','security','cryptography',
+        'artificial intelligence','machine learning','neural network','deep learning'
+      ];
+
+      let keywordScore = 0;
+      for (const keyword of heavyKeywords) {
+        if (normalized.includes(keyword)) keywordScore += 1;
+      }
+      keywordScore = Math.min(4, keywordScore);
+
+      let score = 1 + baseScore + keywordScore;
+      if (words.length > 80) score += 1;
+      if (normalized.includes('how to') || normalized.includes('how do i') || normalized.includes('what is the best') || normalized.includes('why')) score += 1;
+      if (/```|<code>|function|class|sql|select|update|delete|insert|aggregate|regex|regexp|javascript|python/.test(normalized)) score += 1;
+      return Math.min(10, Math.max(1, score));
+    };
+
     const streamOpenAIResponse = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], metaData: any = {}) => {
       const messages = [];
       if (systemPromptText) messages.push({ role: 'system', content: systemPromptText });
@@ -374,7 +445,7 @@ serve(async (req) => {
       });
     };
 
-    const callOpenAI = async (promptText: string, systemPromptText = '', chatHistory: any[] = []) => {
+    const callOpenAI = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], overrideModel?: string) => {
       const messages = [];
       if (systemPromptText) messages.push({ role: 'system', content: systemPromptText });
       if (chatHistory && chatHistory.length > 0) {
@@ -384,6 +455,7 @@ serve(async (req) => {
       }
       messages.push({ role: 'user', content: promptText });
       
+      const selectedModel = overrideModel || model || 'gpt-4o-mini';
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -391,7 +463,7 @@ serve(async (req) => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: model || 'gpt-4o-mini',
+          model: selectedModel,
           messages: messages,
           temperature: 0.1
         })
@@ -400,7 +472,7 @@ serve(async (req) => {
       const data = await res.json();
       const answer = data.choices?.[0]?.message?.content || '';
       
-      if (!stream) logApiUsage('openai', model || 'gpt-4o-mini', promptText + systemPromptText, answer);
+      if (!stream) logApiUsage('openai', selectedModel, promptText + systemPromptText, answer);
       return answer;
     };
 
@@ -422,13 +494,13 @@ serve(async (req) => {
         }
         messages.push({ role: 'user', content: promptText });
         
-        let openRouterModel = 'deepseek/deepseek-r1:free';
+        let openRouterModel = 'google/gemini-2.0-flash-exp:free';
         if (model && model.startsWith('openrouter/')) {
           openRouterModel = model.replace('openrouter/', '');
         } else if (model === 'openrouter-llama-3') {
           openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
-        } else if (model === 'openrouter-deepseek-r1') {
-          openRouterModel = 'deepseek/deepseek-r1:free';
+        } else if (model === 'openrouter-google-gemini-2.0-flash-exp') {
+          openRouterModel = 'google/gemini-2.0-flash-exp:free';
         }
         
         console.log(`🔵 [OpenRouter] Memanggil model: ${openRouterModel}, Key: ${OPENROUTER_API_KEY.substring(0,6)}...`);
@@ -514,13 +586,13 @@ serve(async (req) => {
       }
       messages.push({ role: 'user', content: promptText });
       
-      let openRouterModel = 'deepseek/deepseek-r1:free';
+      let openRouterModel = 'google/gemini-2.0-flash-exp:free';
       if (model && model.startsWith('openrouter/')) {
         openRouterModel = model.replace('openrouter/', '');
       } else if (model === 'openrouter-llama-3') {
         openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
-      } else if (model === 'openrouter-deepseek-r1') {
-        openRouterModel = 'deepseek/deepseek-r1:free';
+      } else if (model === 'openrouter-google-gemini-2.0-flash-exp') {
+        openRouterModel = 'google/gemini-2.0-flash-exp:free';
       }
       
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -546,117 +618,153 @@ serve(async (req) => {
     };
 
     const allGeminiKeys = getAllKeys('GEMINI_API_KEY');
-    if (allGeminiKeys.length === 0 && GEMINI_API_KEY) allGeminiKeys.push(GEMINI_API_KEY);
 
-    const runLLM = async (promptText: string, systemPromptText = '', chatHistory: any[] = []) => {
-      if (desktopOSMode && !systemPromptText.includes('DESKTOP NATIVE AWARENESS ENABLED')) {
-         systemPromptText += `\n[STATUS: DESKTOP NATIVE AWARENESS ENABLED]
-Anda WAJIB mengeluarkan perintah Windows di dalam tag <terminal>. DILARANG menyebut sub-agent atau menolak. Contoh: <terminal>dir %USERPROFILE%\\Desktop</terminal>\n`;
-      }
-      
-      // === JURUS 1: Coba provider yang dipilih user dulu ===
-      if (!extractedImage) {
-        if (model && model.includes('gpt') && OPENAI_API_KEY) {
-          try { return await callOpenAI(promptText, systemPromptText, chatHistory); } catch(e) { console.warn('OpenAI failed:', e); }
-        } else if (model && (model.includes('openrouter') || model.startsWith('openrouter/')) && OPENROUTER_API_KEY) {
-          try { return await callOpenRouter(promptText, systemPromptText, chatHistory); } catch(e) { console.warn('OpenRouter failed:', e); }
-        } else if (model && model.startsWith('groq/') && GROQ_API_KEY) {
-          try { return await callGroq(promptText, systemPromptText, chatHistory); } catch(e) { console.warn('Groq failed:', e); }
-        }
-      }
-      
-      // === JURUS 2: Gemini dengan multi-key rotation + retry ===
-      const payload: any = { contents: [] };
-      if (systemPromptText) {
-        payload.systemInstruction = { parts: [{ text: systemPromptText }] };
-      }
-      if (chatHistory && chatHistory.length > 0) {
-        for (const msg of chatHistory) {
-          payload.contents.push({
-            role: msg.role === 'model' ? 'model' : 'user',
-            parts: [{ text: msg.content }]
-          });
-        }
-      }
-      const userParts: any[] = [{ text: promptText }];
-      if (extractedImage) {
-        userParts.push({ inlineData: { mimeType: extractedImage.mimeType, data: extractedImage.data } });
-      }
-      payload.contents.push({ role: 'user', parts: userParts });
-      
-      const geminiModel = model && model.includes('gemini') ? model : 'gemini-2.5-flash';
-      
-      if (allGeminiKeys.length > 0) {
-        const data = await callGeminiWithRetry(payload, geminiModel, allGeminiKeys);
-        if (data) {
-          const answer = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          if (!stream) logApiUsage('gemini', geminiModel, promptText + systemPromptText, answer);
-          return answer;
-        }
-        console.warn('Mamet Anti-Limit: Semua Gemini keys habis kuota! Cascading ke fallback...');
-      }
+    const callLLMWithCascade = async (
+      promptText: string,
+      systemPromptText = '',
+      chatHistory: any[] = [],
+      preferredProvider: 'gemini' | 'groq' = 'gemini',
+      extractedImage: { mimeType: string; data: string } | null = null
+    ): Promise<string> => {
+      clearExpiredCooldowns();
 
-      // === JURUS 3: OpenRouter free models sebagai fallback ===
-      if (OPENROUTER_API_KEY) {
+      const buildPayload = () => {
+        const payload: any = { contents: [] };
+        if (systemPromptText) payload.systemInstruction = { parts: [{ text: systemPromptText }] };
+        if (chatHistory && chatHistory.length > 0) {
+          for (const msg of chatHistory) {
+            payload.contents.push({
+              role: msg.role === 'model' ? 'model' : 'user',
+              parts: [{ text: msg.content }]
+            });
+          }
+        }
+        const userParts: any[] = [{ text: promptText }];
+        if (extractedImage) {
+          userParts.push({ inlineData: { mimeType: extractedImage.mimeType, data: extractedImage.data } });
+        }
+        payload.contents.push({ role: 'user', parts: userParts });
+        return payload;
+      };
+
+      // === DEFAULT CASCADE ORDER: Gemini -> OpenRouter -> Groq ===
+      // Only prioritize Groq if user explicitly requests it
+      const cascadeOrder: Array<'gemini' | 'openrouter' | 'groq'> =
+        preferredProvider === 'groq'
+          ? ['groq', 'gemini', 'openrouter']
+          : ['gemini', 'openrouter', 'groq'];
+
+      const availableProviders = getAvailableProviders(cascadeOrder);
+      console.log(`🎯 Cascade order: ${availableProviders.join(' -> ')} (locked: ${cascadeOrder.filter(p => isProviderLocked(p)).join(', ') || 'none'})`);
+
+      const payload = buildPayload();
+      for (const provider of availableProviders) {
+        console.log(`📍 Trying provider: ${provider}`);
+        
         try {
-          console.log('Mamet Anti-Limit: Beralih ke OpenRouter (fallback 1)...');
-          return await callOpenRouter(promptText, systemPromptText, chatHistory);
-        } catch(e) { console.warn('OpenRouter fallback also failed:', e); }
-      }
+          if (provider === 'gemini') {
+            if (allGeminiKeys.length === 0) {
+              console.log('⏭️  Gemini: No keys available, skipping');
+              continue;
+            }
+            console.log('🔷 Calling Gemini...');
+            const data = await callGeminiWithRetry(payload, 'gemini-2.5-flash', allGeminiKeys);
+            if (data) {
+              const answer = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+              if (!stream) logApiUsage('gemini', 'gemini-2.5-flash', promptText + systemPromptText, answer);
+              console.log('✅ Gemini succeeded');
+              return answer;
+            }
+            console.log('⚠️  Gemini returned null, falling back...');
+            continue;
+          }
 
-      // === JURUS 4: Groq sebagai fallback terakhir (rentan token limit) ===
-      if (GROQ_API_KEY) {
-        try {
-          console.log('Mamet Anti-Limit: Beralih ke Groq (fallback terakhir)...');
-          return await callGroq(promptText, systemPromptText, chatHistory);
-        } catch(e) { console.warn('Groq fallback also failed:', e); }
+          if (provider === 'openrouter') {
+            if (!OPENROUTER_API_KEY) {
+              console.log('⏭️  OpenRouter: No API key available, skipping');
+              continue;
+            }
+            console.log('🟠 Calling OpenRouter...');
+            const answer = await callOpenRouter(promptText, systemPromptText, chatHistory);
+            if (answer) {
+              if (!stream) logApiUsage('openrouter', 'google/gemini-2.0-flash-exp:free', promptText + systemPromptText, answer);
+              console.log('✅ OpenRouter succeeded');
+              return answer;
+            }
+            console.log('⚠️  OpenRouter returned empty, falling back...');
+            continue;
+          }
+
+          // === SEMENTARA NONAKTIFKAN GROQ ===
+          if (provider === 'groq') {
+            console.log('⏭️  Groq temporarily disabled, skipping');
+            // if (!GROQ_API_KEY) {
+            //   console.log('⏭️  Groq: No API key available, skipping');
+            //   continue;
+            // }
+            // console.log('🟣 Calling Groq...');
+            // const answer = await callGroq(promptText, systemPromptText, chatHistory);
+            // if (answer) {
+            //   if (!stream) logApiUsage('groq', 'llama-3.1-8b-instant', promptText + systemPromptText, answer);
+            //   console.log('✅ Groq succeeded');
+            //   return answer;
+            // }
+            // console.log('⚠️  Groq returned empty, falling back...');
+            continue;
+          }
+        } catch (err: any) {
+          const message = String(err.message || err);
+          const isRateLimit = message.includes('429') || message.includes('rate limit') || message.includes('quota');
+          
+          if (isRateLimit) {
+            console.log(`🚫 Provider ${provider} hit rate limit (429), locking for ${PROVIDER_COOLDOWN_DURATIONS[provider]}ms`);
+            lockProvider(provider);
+            await logAgentEvent('RATE_LIMIT_HIT', provider, `429 Error: ${message.substring(0, 200)}`);
+          } else {
+            await logAgentEvent('FALLBACK_TRIGGERED', provider, `Error: ${message.substring(0, 200)}`);
+          }
+          console.warn(`❌ Provider ${provider} failed: ${message}`);
+        }
       }
 
       throw new Error('Semua provider AI sedang limit/gangguan. Coba lagi dalam beberapa menit.');
     };
+    if (allGeminiKeys.length === 0 && GEMINI_API_KEY) allGeminiKeys.push(GEMINI_API_KEY);
+
+    const runLLM = async (promptText: string, systemPromptText = '', chatHistory: any[] = []) => {
+      if (desktopOSMode && !systemPromptText.includes('DESKTOP NATIVE AWARENESS ENABLED')) {
+         systemPromptText += `\n[STATUS: DESKTOP NATIVE AWARENESS ENABLED]\nAnda WAJIB mengeluarkan perintah Windows di dalam tag <terminal>. DILARANG menyebut sub-agent atau menolak. Contoh: <terminal>dir %USERPROFILE%\\Desktop</terminal>\n`;
+      }
+
+      // === PRIORITAS USER-EXPLICIT MODEL SELECTION ===
+      if (!extractedImage) {
+        if (model && model.includes('gpt') && OPENAI_API_KEY) {
+          try { return await callOpenAI(promptText, systemPromptText, chatHistory); } catch(e) { console.warn('OpenAI failed, cascading to default providers:', e); }
+        } else if (model && (model.includes('openrouter') || model.startsWith('openrouter/')) && OPENROUTER_API_KEY) {
+          try { return await callOpenRouter(promptText, systemPromptText, chatHistory); } catch(e) { console.warn('OpenRouter failed, cascading to default providers:', e); }
+        } else if (model && model.startsWith('groq/') && GROQ_API_KEY) {
+          try { return await callGroq(promptText, systemPromptText, chatHistory); } catch(e) { console.warn('Groq failed, cascading to default providers:', e); }
+        }
+      }
+
+      // === DEFAULT CASCADE: Gemini -> OpenRouter -> Groq ===
+      // Ignore complexity score, use default provider order
+      console.log(`🔄 Using default cascade: Gemini -> OpenRouter -> Groq`);
+      return await callLLMWithCascade(promptText, systemPromptText, chatHistory, 'gemini', extractedImage);
+    };
 
     // --- OTAK KHUSUS KEPALA AGENT (HEMAT KUOTA) + ANTI-LIMIT ---
     const runCoordinatorLLM = async (promptText: string, systemPromptText = '', preferFast = false) => {
-      // === TRAFFIC LIGHT ROUTER: TUGAS RINGAN (INTENT) ===
-      if (preferFast && GROQ_API_KEY) {
-        try {
-          console.log("Mamet Traffic Light: Memutar tugas ringan (Intent Router) ke Groq...");
-          return await callGroq(promptText, systemPromptText, []);
-        } catch(e) { console.warn('Traffic Light Groq failed, cascading to Gemini...', e); }
-      }
+      // === NOTE: Groq is temporarily disabled, so preferFast will use default cascade ===
+      // if (preferFast && GROQ_API_KEY && !isProviderLocked('groq')) {
+      //   try {
+      //     console.log("Mamet Traffic Light: Memutar tugas ringan (Intent Router) ke Groq...");
+      //     return await callGroq(promptText, systemPromptText, []);
+      //   } catch(e) { console.warn('Traffic Light Groq failed, cascading to Gemini...', e); }
+      // }
 
-      // JURUS 1: Gemini Flash dengan multi-key rotation
-      if (allGeminiKeys.length > 0) {
-        try {
-          console.log("Mamet Coordinator: Berpikir via Gemini Flash (multi-key)...");
-          const payload: any = { contents: [{ role: 'user', parts: [{ text: promptText }] }] };
-          if (systemPromptText) payload.systemInstruction = { parts: [{ text: systemPromptText }] };
-          
-          const data = await callGeminiWithRetry(payload, 'gemini-2.5-flash', allGeminiKeys, 2);
-          if (data) {
-            return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          }
-          console.warn('Coordinator: Semua Gemini keys limit, cascading...');
-        } catch(e) { console.warn('Coordinator Gemini failed:', e); }
-      }
-      
-      // JURUS 2: OpenRouter free models
-      if (OPENROUTER_API_KEY) {
-        try {
-          console.log("Mamet Coordinator: Beralih ke OpenRouter free...");
-          return await callOpenRouter(promptText, systemPromptText, []);
-        } catch(e) { console.warn('Coordinator OpenRouter failed:', e); }
-      }
-
-      // JURUS 3: Groq (Llama) - rentan token limit
-      if (GROQ_API_KEY) {
-        try {
-          console.log("Mamet Coordinator: Beralih ke Groq...");
-          return await callGroq(promptText, systemPromptText, []); 
-        } catch(e) { console.warn('Coordinator Groq failed:', e); }
-      }
-
-      throw new Error('Semua otak coordinator sedang limit. Coba lagi nanti.');
+      // Always use default cascade: Gemini -> OpenRouter
+      return await callLLMWithCascade(promptText, systemPromptText, [], 'gemini');
     };
 
     let replyMessage = 'Gagal memproses jawaban dari AI.';
@@ -1072,8 +1180,8 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
               const originalModel = model;
               try {
                 if (subagent === 'coder' || subagent === 'debate') {
-                   console.log(`🚥 Traffic Light: Sub-agent [${subagent}] dialihkan ke DEEPSEEK (Tugas Berat)`);
-                   model = 'openrouter-deepseek-r1';
+                   console.log(`🚥 Traffic Light: Sub-agent [${subagent}] dialihkan ke OpenRouter Gemini (Tugas Berat)`);
+                   model = 'openrouter-google-gemini-2.0-flash-exp';
                 } else if (subagent === 'scraper' || subagent === 'memory_manager' || subagent === 'communicator' || subagent === 'youtube_analyst' || subagent === 'file_analyzer') {
                    console.log(`🚥 Traffic Light: Sub-agent [${subagent}] dialihkan ke GROQ (Tugas Ringan)`);
                    model = 'groq-llama-3.1';
