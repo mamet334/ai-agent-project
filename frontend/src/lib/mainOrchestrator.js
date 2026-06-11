@@ -5,14 +5,28 @@ class MainOrchestrator {
     this.tokenSaver = new TokenSaverAgent();
   }
 
-  /**
-   * Eksekusi task dengan optimasi token
-   * @param {Object} task - Task object dengan prompt dan context
-   * @param {Function} apiCall - Fungsi untuk memanggil API
-   * @returns {Promise<Object>} Result dari eksekusi task
-   */
   async executeTask(task, apiCall) {
-    // Cek budget terlebih dahulu
+    // ✅ VALIDASI: Pastikan task dan prompt ada
+    if (!task || typeof task.prompt !== 'string') {
+      console.warn('[Orchestrator] Task/prompt tidak valid, pakai fallback', task);
+      try {
+        const response = await apiCall(task || { prompt: '' }, {});
+        return {
+          status: 'ok',
+          response: response,
+          stats: this.tokenSaver.getStats(),
+          strategy: { complexity: 'low', action: 'direct' }
+        };
+      } catch (err) {
+        return {
+          status: 'error',
+          error: err.message,
+          stats: this.tokenSaver.getStats()
+        };
+      }
+    }
+
+    // Cek budget
     const estimatedTokens = task.estimatedTokens || 1000;
     if (!this.tokenSaver.checkBudget(estimatedTokens)) {
       return {
@@ -22,18 +36,29 @@ class MainOrchestrator {
       };
     }
 
-    // Optimasi task
-    const strategy = this.tokenSaver.analyzeTask(task);
-    task.prompt = this.tokenSaver.optimizePrompt(task.prompt);
+    // ✅ AMANKAN panggilan ke tokenSaver (error dari analyzeTask/optimizePrompt tidak akan crash)
+    let strategy = { complexity: 'low', action: 'direct' };
+    let optimizedPrompt = task.prompt;
 
-    // Eksekusi dengan batasan token
     try {
-      const result = await apiCall(task, strategy);
-      
-      // Catat penggunaan
-      const tokensUsed = result.tokens_used || estimatedTokens;
-      this.tokenSaver.logUsage(tokensUsed);
+      strategy = this.tokenSaver.analyzeTask(task);
+      optimizedPrompt = this.tokenSaver.optimizePrompt(task.prompt);
+    } catch (err) {
+      console.warn('[Orchestrator] TokenSaver error, pakai default', err);
+      // tetap pakai prompt asli dan strategy default
+    }
 
+    // Buat task baru dengan prompt yang sudah dioptimasi (atau asli jika error)
+    const safeTask = { ...task, prompt: optimizedPrompt };
+
+    // Eksekusi API
+    try {
+      const result = await apiCall(safeTask, strategy);
+      // Catat penggunaan token (diamankan)
+      try {
+        const tokensUsed = result.tokens_used || estimatedTokens;
+        this.tokenSaver.logUsage(tokensUsed);
+      } catch (e) {}
       return {
         ...result,
         strategy: strategy,
@@ -48,54 +73,27 @@ class MainOrchestrator {
     }
   }
 
-  /**
-   * Eksekusi multiple task dengan batching
-   * @param {Array<Object>} tasks - Array of task objects
-   * @param {Function} apiCall - Fungsi untuk memanggil API
-   * @returns {Promise<Array<Object>>} Results dari eksekusi tasks
-   */
   async executeBatchTasks(tasks, apiCall) {
     const results = [];
-    
     for (const task of tasks) {
       const result = await this.executeTask(task, apiCall);
       results.push(result);
-      
-      // Stop jika budget exceeded
-      if (result.status === 'budget_exceeded') {
-        break;
-      }
+      if (result.status === 'budget_exceeded') break;
     }
-
     return results;
   }
 
-  /**
-   * Get current token statistics
-   * @returns {Object} Current stats
-   */
   getStats() {
     return this.tokenSaver.getStats();
   }
 
-  /**
-   * Reset token usage
-   */
   resetUsage() {
     this.tokenSaver.resetUsage();
   }
 
-  /**
-   * Configure token saver with custom settings
-   * @param {Object} config - Configuration object
-   */
   configure(config) {
-    if (config.maxTokensPerTask) {
-      this.tokenSaver.maxTokensPerTask = config.maxTokensPerTask;
-    }
-    if (config.budgetPerHour) {
-      this.tokenSaver.budgetPerHour = config.budgetPerHour;
-    }
+    if (config.maxTokensPerTask) this.tokenSaver.maxTokensPerTask = config.maxTokensPerTask;
+    if (config.budgetPerHour) this.tokenSaver.budgetPerHour = config.budgetPerHour;
   }
 }
 
