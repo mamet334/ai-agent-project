@@ -140,7 +140,9 @@ function createWindow() {
   // Log console renderer ke terminal untuk debugging
   mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
     const levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR'];
-    console.log(`[Renderer ${levels[level] || 'LOG'}]: ${message} (at ${sourceId}:${line})`);
+    const logLine = `[Renderer ${levels[level] || 'LOG'}]: ${message} (at ${sourceId}:${line})\n`;
+    console.log(logLine);
+    fs.appendFileSync(path.join(os.tmpdir(), 'mamet-renderer.log'), logLine);
   });
 }
 
