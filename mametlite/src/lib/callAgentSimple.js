@@ -112,7 +112,9 @@ export async function parseSSEStream(response, onChunk = null) {
 
     const chunk = decoder.decode(value);
     buffer += chunk;
-    const lines = buffer.split('\n');
+    // Pastikan buffer adalah string sebelum split
+    const bufferStr = String(buffer || '');
+    const lines = bufferStr.split('\n');
 
     // Simpan baris terakhir yang belum lengkap
     buffer = lines.pop() || '';

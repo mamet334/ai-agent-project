@@ -61,7 +61,9 @@ class TokenSaverAgent {
    * @returns {number} Complexity score
    */
   _estimateComplexity(task) {
-    const factors = (task.context || '').split(' ').length;
+    // Pastikan context adalah string sebelum split
+    const contextStr = typeof task.context === 'string' ? task.context : String(task.context || '');
+    const factors = contextStr.split(' ').length;
     return Math.min(factors / 1000, 1.0);
   }
 
@@ -81,7 +83,9 @@ class TokenSaverAgent {
    * @returns {string} Text without redundancy
    */
   _removeRedundancy(text) {
-    const words = text.split(' ');
+    // Pastikan text adalah string sebelum split
+    const textStr = String(text || '');
+    const words = textStr.split(' ');
     const uniqueWords = [...new Set(words)];
     return uniqueWords.join(' ');
   }

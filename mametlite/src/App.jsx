@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Upload, Send, User, Bot, Loader2, LogOut, Globe, BookOpen, Lock, Plus, MessageSquare, Trash2, Copy, Check } from 'lucide-react';
 import { supabase } from './lib/supabase';
-import MainOrchestrator from './lib/mainOrchestrator';
+import { callAgentSimple, parseSSEStream } from './lib/callAgentSimple';
 
 // Custom lightweight Markdown parser to avoid React 19 crashes with react-markdown
 const parseMarkdown = (text) => {
@@ -78,10 +78,6 @@ function App() {
   const [isUploading, setIsUploading] = useState(false);
   const [documents, setDocuments] = useState([]);
   const [activeModes, setActiveModes] = useState({ rag: true, websearch: false, research: false });
-  
-  // Token optimization integration
-  const [orchestrator] = useState(() => new MainOrchestrator());
-  const [tokenStats, setTokenStats] = useState(null);
 
   // Chat History State
   const [conversations, setConversations] = useState(() => {
@@ -244,107 +240,69 @@ function App() {
     setLoading(true);
 
     try {
-      const endpoint = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/agent-process`;
-      
+      // Build tools array sesuai mode yang aktif
       let tools = [];
-      if (activeModes.websearch) tools.push('researcher');
+      if (activeModes.rag) tools.push('rag_search');
+      if (activeModes.websearch) tools.push('web_search');
       if (activeModes.research) tools.push('deep_research');
 
-      // Use orchestrator to optimize the request
-      const task = {
-        prompt: currentInput,
-        context: messages.map(m => ({ role: m.role, content: m.content })).slice(-5),
-        repeatable: false,
-        estimatedTokens: currentInput.length + 500
+      // Jika tidak ada tools aktif, gunakan default
+      if (tools.length === 0) tools = ['rag_search', 'web_search'];
+
+      // Build chat history untuk context
+      const chatHistory = messages.map(m => ({
+        role: m.role,
+        content: m.content
+      }));
+
+      // Kumpulkan BYOK keys dari localStorage
+      const byokKeys = {
+        'x-byok-gemini': localStorage.getItem('x-byok-gemini') || '',
+        'x-byok-groq': localStorage.getItem('x-byok-groq') || '',
+        'x-byok-openai': localStorage.getItem('x-byok-openai') || '',
+        'x-byok-openrouter': localStorage.getItem('x-byok-openrouter') || ''
       };
 
-      const apiCall = async (optimizedTask, strategy) => {
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-            'x-byok-gemini': (localStorage.getItem('x-byok-gemini') || '').trim(),
-            'x-byok-groq': (localStorage.getItem('x-byok-groq') || '').trim(),
-            'x-byok-openai': (localStorage.getItem('x-byok-openai') || '').trim(),
-            'x-byok-openrouter': (localStorage.getItem('x-byok-openrouter') || '').trim()
-          },
-          body: JSON.stringify({
-            message: optimizedTask.prompt,
-            tools: tools,
-            model: 'gemini-2.5-flash',
-            userId: session.user.id,
-            userName: session.user.email.split('@')[0],
-            ragEnabled: activeModes.rag,
-            stream: true,
-            history: optimizedTask.context
-          })
-        });
-        return response;
-      };
+      // Panggil agent backend dengan fungsi simple
+      const response = await callAgentSimple(
+        currentInput,
+        tools,
+        session.user.id,
+        (session?.user?.email || 'user').split('@')[0],
+        chatHistory,
+        activeModes.rag,
+        byokKeys
+      );
 
-      const result = await orchestrator.executeTask(task, apiCall);
-      
-      // Update token stats
-      setTokenStats(result.stats);
-
-      if (result.status === 'budget_exceeded') {
-        updateMessages(prev => [...prev, { role: 'assistant', content: `⚠️ Token budget exceeded. ${result.stats.used}/${result.stats.budget} tokens used.` }]);
-        setLoading(false);
-        return;
-      }
-
-      const response = result;
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Gagal menghubungi otak AI');
-      }
-
+      // Tambah placeholder untuk assistant message
       updateMessages(prev => [...prev, { role: 'assistant', content: '' }]);
 
+      // Parse SSE stream dan update message secara real-time
       const contentType = response.headers.get('Content-Type') || '';
       
-      if (contentType.includes('application/json')) {
+      if (contentType.includes('text/event-stream')) {
+        // Stream SSE
+        await parseSSEStream(response, (chunk, fullContent) => {
+          updateMessages(prev => {
+            const newArr = [...prev];
+            newArr[newArr.length - 1].content = fullContent;
+            return newArr;
+          });
+        });
+      } else if (contentType.includes('application/json')) {
+        // Fallback ke JSON response
         const data = await response.json();
-        const textContent = data.content || data.text || JSON.stringify(data);
+        const textContent = data.content || data.text || data.message || JSON.stringify(data);
         updateMessages(prev => {
           const newArr = [...prev];
           newArr[newArr.length - 1].content = textContent;
           return newArr;
         });
-        return;
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let assistantMsg = '';
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const dataStr = line.slice(6);
-            if (dataStr === '[DONE]') break;
-            try {
-              const data = JSON.parse(dataStr);
-              if (data.choices && data.choices[0].delta && data.choices[0].delta.content) {
-                assistantMsg += data.choices[0].delta.content;
-                updateMessages(prev => {
-                  const newArr = [...prev];
-                  newArr[newArr.length - 1].content = assistantMsg;
-                  return newArr;
-                });
-              }
-            } catch(e) {}
-          }
-        }
+      } else {
+        throw new Error('Unexpected response format');
       }
     } catch(err) {
-      updateMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}` }]);
+      updateMessages(prev => [...prev, { role: 'assistant', content: `❌ Error: ${err.message}` }]);
     } finally {
       setLoading(false);
     }
@@ -443,44 +401,7 @@ function App() {
           </div>
         </div>
 
-        {/* Token Stats Display */}
-        {tokenStats && (
-          <div className="mt-4 shrink-0">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Token Usage</h3>
-            <div className="bg-slate-700/50 p-3 rounded-lg border border-slate-600/50">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-slate-400">Used</span>
-                <span className="text-xs font-semibold text-emerald-400">{tokenStats.used}</span>
-              </div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-slate-400">Budget</span>
-                <span className="text-xs font-semibold text-slate-300">{tokenStats.budget}</span>
-              </div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-slate-400">Remaining</span>
-                <span className="text-xs font-semibold text-indigo-400">{tokenStats.remaining}</span>
-              </div>
-              <div className="mt-2">
-                <div className="w-full bg-slate-600 rounded-full h-2">
-                  <div 
-                    className="bg-emerald-500 h-2 rounded-full transition-all" 
-                    style={{ width: `${tokenStats.percentage}%` }}
-                  />
-                </div>
-                <div className="text-right text-[10px] text-slate-400 mt-1">{tokenStats.percentage}%</div>
-              </div>
-              <button 
-                onClick={() => {
-                  orchestrator.resetUsage();
-                  setTokenStats(orchestrator.getStats());
-                }}
-                className="mt-2 w-full text-xs bg-slate-600 hover:bg-slate-500 text-slate-300 py-1.5 rounded transition-all"
-              >
-                Reset Usage
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Token stats dihapus - menggunakan callAgentSimple tanpa optimization */}
 
         <div className="mt-4 pt-4 border-t border-slate-700 flex items-center justify-between shrink-0">
           <div className="text-xs text-slate-400 flex items-center gap-2 truncate">

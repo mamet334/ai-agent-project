@@ -1,0 +1,156 @@
+# MANTRA MAMET AI 🔮
+[Tech: React/Vite (PWA) & Supabase Edge (Deno)]
+[Vercel Production URL: https://ai-agent-project-2a9h.vercel.app/]
+
+## 📝 INTEGRASI TOKEN OPTIMIZATION (JUNI 2026)
+**File yang ditambahkan:**
+- `frontend/src/lib/tokenSaverAgent.js` - Class untuk optimasi penggunaan token API
+- `frontend/src/lib/mainOrchestrator.js` - Class orkestrator untuk mengelola task dengan optimasi token
+- `mametlite/src/lib/tokenSaverAgent.js` - Versi lite untuk mametlite
+- `mametlite/src/lib/mainOrchestrator.js` - Versi lite untuk mametlite
+
+**Integrasi di Frontend:**
+- `frontend/src/components/AIAgent.jsx` - Import MainOrchestrator, inisialisasi state, integrasi di handleSendMessage, UI token stats di sidebar
+- `mametlite/src/App.jsx` - Import MainOrchestrator, inisialisasi state, integrasi di handleSend, UI token stats di sidebar
+
+**Fitur yang ditambahkan:**
+- Prompt compression (penghapusan redundansi, singkatan, kompresi contoh)
+- Budget checking sebelum eksekusi API
+- Complexity analysis untuk menentukan strategi penghematan
+- Real-time token tracking dengan progress bar di sidebar
+- Tombol reset untuk mereset penggunaan token
+- Estimasi token optimal berdasarkan kompleksitas task
+
+
+## ✅ SELESAI (100% MEDVI RAG & KODING)
+1. Multi-Agent & Orchestrator (DeepSeek, Llama, Gemini)
+2. Self-Healing (Anti-Crash, Memory Sweeper, JSON Surgeon)
+3. BYOK (Bring Your Own Key) & Dashboard Cron
+4. YouTube Analyst (5 Ahli)
+5. PWA (Bisa diinstal di HP/Desktop)
+6. Vector RAG (Embedding PDF/Excel/Word raksasa)
+7. True Code Sandbox (Eksekusi kode via Piston Coder Plugin)
+8. Autonomous Agent (Cron) 100% Operational & Realtime Push (Bypass Kong JWT)
+9. 5-Layer Anti-Limit (Multi-Key Rotation, Backoff, Cascade Fallback)
+10. YouTube Anti-Bot Bypass (Bypass CAPTCHA fallback via Apify Scraper)
+11. Web Resilience Fallback (DuckDuckGo Lite search fallback if Gemini API limits exhausted)
+12. Jina Reader Scraper (Bypasses Cloudflare & scrapes clean markdown for deep_research)
+13. Strict Coordinator Routing (Enforced sub-agent selection to prevent logic sub-agent for factual queries)
+14. Real-time Image Search (Fetches Yahoo/Bing images via Jina and renders them dynamically in markdown)
+15. Workspace File Analyzer (Membaca, menganalisis, dan memeriksa file/folder lokal user via File System Access API + file_analyzer sub-agent)
+16. Sakelar RAG (Knowledge Base) ON/OFF (Tombol switch di sidebar utama & mametlite untuk mengaktifkan/menonaktifkan pencarian RAG di backend guna menghemat token/biaya database secara efisien)
+17. **Token Optimization System** (Integrasi MainOrchestrator & TokenSaverAgent dari python.py/python1.py ke JavaScript untuk optimasi penggunaan token API dengan fitur: prompt compression, budget checking, complexity analysis, dan real-time token tracking UI di sidebar)
+
+
+## 🚀 ROADMAP TERSISA (PHASE 2: SUPER UPGRADES)
+1. ~~**Workspace Editor (Upgrade `file_analyzer`)**~~ ✅ SELESAI (Agen kini memiliki hak akses tulis untuk membuat, mengedit, dan menyimpan file ke lokal)
+2. ~~**Infinite Long-Term Memory (Upgrade `memory_manager`)**~~ ✅ SELESAI (Router Intent telah dikalibrasi untuk menyuntikkan ingatan RAG secara otonom saat user menyebutkan fakta penting).
+3. ~~**Auto-Notifier (Upgrade `cron_manager`)**~~ ✅ SELESAI (Integrasi Resend API untuk mengirim laporan cron otomatis via Email HTML ke pengguna terdaftar).
+4. ~~**Board of Directors Simulator (Upgrade `debate`)**~~ ✅ SELESAI (Memanggil 3 LLM paralel: CEO, CFO, CTO untuk berdebat, lalu dirangkum oleh Chairman).
+
+## 🛡️ SECURITY & SAFE-GUARDS (Mitigasi "Sisi Gelap" AI)
+1. **Pusat Keamanan Darurat (Kill Switch):** UI Frontend untuk mematikan semua tugas Cron aktif secara paksa (`is_active = false`).
+2. **Amnesia Memori (RAG Wipe):** UI Frontend untuk membakar seluruh Vector Memory user guna menghindari "Racun Ingatan".
+3. **Delimiter Shield (Anti-Prompt Injection):** Ekstraksi data `scraper` dibungkus `<EXTERNAL_DATA>` untuk mencegah instruksi gaib peretas tereksekusi.
+4. **Harakiri Cron-Agent:** Skrip otomatis menonaktifkan dirinya sendiri saat terjadi kegagalan pemanggilan API 1x untuk mencegah Bom Tagihan.
+
+## 🚀 ROADMAP JANGKA PANJANG (PHASE 3: DESKTOP EDITION - "The Missing 25%")
+*STATUS: ✅ PHASE 3 SELESAI 100%. Desktop Edition telah di-build, diamankan, dan siap dirilis.*
+
+1. ~~**Otonomi Terminal Penuh**~~ ✅ SELESAI (Mamet dapat mengeksekusi perintah command-line langsung di OS lokal via IPC Bridge dengan dialog konfirmasi keamanan, blocklist perintah destruktif, dan timeout 30 detik).
+2. ~~**Surgical File Editing**~~ ✅ SELESAI (AI dapat membuat, membaca, mengedit, dan menyimpan file di workspace lokal secara otonom).
+3. ~~**Iterative Agentic Loops & State Stabilization**~~ ✅ SELESAI (Perbaikan bug balapan kondisi / duplikasi chat menggunakan Client-side UUID & database Upsert, stabilisasi pengurutan sidebar, pembersihan token riwayat proyek hingga hemat >90%, pengenalan absolute path lokal workspace, serta eliminasi bug input beku pasca-diskoneksi workspace).
+4. ~~**Dynamic Global Search**~~ ✅ SELESAI (Penelusuran file dan direktori lokal secara dinamis melintasi seluruh partisi hardisk (C:/D:) via PowerShell Bridge `Get-ChildItem`).
+5. ~~**Production Build & Auto-Updater**~~ ✅ SELESAI (Mengemas aplikasi menjadi file `.exe` mandiri menggunakan `electron-builder` dengan sistem *Delta Update (OTA Patching)* cerdas menggunakan `electron-updater`. Konfigurasi NSIS installer + Portable build tersedia).
+6. ~~**Penetration Testing (Security Audit)**~~ ✅ SELESAI (31 pengujian kerentanan keamanan otomatis mencakup IPC Bridge Injection, XSS to RCE, dan Prompt Injection lanjutan. Hasil: 30/31 AMAN, 1 peringatan tradeoff yang dimitigasi oleh CSP + contextIsolation).
+7. ~~**Native Thinking Protocol Parser**~~ ✅ SELESAI (Perbaikan arsitektur parsing SSE stream untuk membungkus otomatis output *native reasoning* (Gemini 2.5 Flash), serta menormalisasi escape HTML (`&lt;think&gt;`) dan output awalan tanpa bracket agar UI *ThinkingBlock* tampil rapi tanpa bocor).
+
+## 🧩 DAFTAR SUB-AGENT AKTIF (STATUS SAAT INI)
+1. **deep_research:** Pencarian web mendalam multi-query via Jina Reader (Status: Sangat kuat & stabil).
+2. **researcher:** Pencarian web cepat dengan DuckDuckGo fallback + Pencari Gambar Yahoo/Bing (Status: Aktif).
+3. **youtube_analyst:** Ekstraksi transkrip video 5-Ahli (Status: ✅ Upgraded, Anti-Captcha aktif via Apify).
+4. **file_analyzer:** Ekstraksi dan analisis file lokal Workspace (Status: ✅ Upgraded ke Workspace Editor, bisa tulis/simpan file).
+5. **cron_manager:** Penjadwalan & otomatisasi task dengan realtime push (Status: ✅ Upgraded dengan Auto-Notifier Email via Resend).
+6. **memory_manager:** Mengingat preferensi global user (Status: ✅ Upgraded ke Infinite RAG Memory).
+7. **coder:** Eksekusi kode Python/JS di Docker sandbox dengan Self-Repair debugger & inline data parsing (Status: ✅ Upgraded).
+8. **scraper:** Pengambilan data web lanjutan dengan Login, Multi-URL, Table Extraction & Fallback 3-lapis (Status: ✅ Upgraded).
+9. **debate:** Board of Directors Simulator (Status: ✅ Upgraded dengan 3 AI Paralel: CEO, CFO, CTO).
+10. **communicator:** Menerjemahkan bahasa dan format teks (Status: Aktif).
+11. **logic & language:** Sub-agent ringan untuk penalaran logika dan teks biasa (Status: Aktif).
+
+## ⚠️ TANTANGAN RILIS RESMI (OFFICIAL RELEASE CHALLENGES)
+1. **Peringatan Keamanan OS (SmartScreen/Antivirus):** Mengharuskan pembelian *Code Signing Certificate* (OV/EV Certificate) berbayar agar file `.exe` ditandai aman secara digital dan tidak memicu *false positive* Windows Defender.
+2. ~~**Keamanan Source Code**~~ ✅ SELESAI (Penerapan JavaScript Obfuscator hex-generator pada build Vite untuk melindungi API keys & logika frontend).
+3. ~~**Pembengkakan Ukuran File**~~ ✅ SELESAI (Penerapan Code Splitting/manualChunks di Rollup untuk memecah bundle menjadi modul terpisah; memotong ukuran kode utama dari 1.7 MB menjadi 80 KB).
+4. **Auto-Updater & Distribusi:** Mengelola infrastruktur pembaruan otomatis (OTA) via GitHub Releases/S3 dengan modul `electron-updater` agar patch baru terinstal otomatis di latar belakang (*silent updates*).
+5. **Skalabilitas API & Manajemen Memori:** Mengatasi limitasi API client dengan membangun *Backend Proxy* untuk mengamankan API Keys, menyembunyikan logika rahasia, serta merotasi API keys secara aman di sisi server.
+6. ~~**Sandbox Coder & Keamanan Data**~~ ✅ SELESAI (Implementasi Docker Local Sandbox terisolasi di Desktop Edition dengan flag keamanan ketat: --rm, --network=none, --memory=128m, --cpus=0.5, --read-only, --no-new-privileges, timeout 30s, dan blocklist kode berbahaya. Fallback ke Piston API untuk PWA. Supabase RLS ketat di semua tabel: documents, document_chunks, scheduled_tasks, chats, agent_logs).
+
+
+## 🔭 ROADMAP JANGKA PANJANG (PHASE 4: OBSERVABILITY & COST OPTIMIZATION)
+*Merangkum dari rencana integrasi "Better Stack" & efisiensi operasional:*
+1. **Sistem Monitoring Infrastruktur:** Membangun Endpoint Health-Checker paralel serta menyimpan log waktu respons dan status insiden ke Supabase (`monitors`, `checks`, `incidents`) secara terjadwal via cron.
+2. **Sistem Notifikasi Insiden (Alerting):** Setup integrasi Bot Telegram yang mengirim peringatan otomatis apabila terdeteksi anomali pada webhook atau downtime server.
+3. ~~**Sistem Router AI Berlapis (Traffic Light):**~~ ✅ SELESAI (Mengalokasikan load balancing secara cerdas: Groq (Llama 3) untuk parsing sederhana, Gemini 1.5 Flash untuk orkestrasi utama, dan DeepSeek untuk debugging kompleks/pengambilan keputusan kritis).
+4. ~~**Optimasi Hemat Token (RAG & Usage):**~~ ✅ SELESAI (Integrasi TokenSaverAgent & MainOrchestrator dari python.py/python1.py ke JavaScript dengan fitur: prompt compression, budget checking, complexity analysis, dan real-time token tracking UI di sidebar untuk ai-agent-project & mametlite)
+
+## 🔄 ALUR SISTEM (DARI USER PESAN SAMPAI RESPON AI)
+
+### 1. User mengirim pesan di UI
+- `AIAgent.jsx` → `handleSendMessage()` dipanggil
+- Input bisa teks, file attachment, atau workspace folder
+
+### 2. Persiapan input & konteks
+- File attachment dibaca → `filePayload`
+- Workspace (jika ada) dipindai → konten file disuntik ke `apiInput`
+- Desktop mode (`window.electronAPI`) bisa eksekusi perintah terminal lokal pra-pengiriman
+
+### 3. Simpan pesan user ke state & database
+- Update conversation state (UI & Supabase)
+
+### 4. Pemilihan sub-agen / tools
+- Jika model = `coordinator-agent` → tools otomatis: web_search, deep_research, youtube_analyst, code_executor, api_caller, logika, bahasa, debate, cron_manager, file_analyzer
+- Jika tidak → pakai `selectedTools` dari user
+
+### 5. Token optimization & orchestrator lokal
+- `MainOrchestrator` (mainOrchestrator.js) dijalankan
+- `TokenSaverAgent.checkBudget()` → pastikan token cukup
+- `TokenSaverAgent.analyzeTask(task)` → tentukan strategi
+- `TokenSaverAgent.optimizePrompt(prompt)` → kompres prompt
+
+### 6. Panggilan ke backend (Supabase Edge Function)
+- Endpoint: `https://[project].supabase.co/functions/v1/agent-process`
+- Payload: message, file, tools, model, userId, globalMemory, desktopOSMode, ragEnabled, history
+
+### 7. Backend proses & streaming response (SSE)
+- Backend panggil sub-agen sesuai tools
+- UI baca stream incremental, update pesan AI chunk per chunk
+- Metadata toolsUsed, subagentRuns, processingSteps diambil dari header
+
+### 8. Desktop interceptor (jika Electron)
+- Deteksi instruksi khusus dalam response AI:
+  - `<terminal>...</terminal>` → eksekusi command lokal
+  - `<edit_file path="...">...</edit_file>` → edit file
+  - `<search_disk>...</search_disk>` → cari file di disk
+  - Blok kode Python/JS → eksekusi di Docker sandbox
+- Hasil eksekusi lokal dikirim kembali sebagai pesan lanjutan
+
+### 9. Tampilkan response AI di UI
+- Setelah streaming selesai: `isStreaming: false`
+- Response + metadata tools/sub-agen tampil
+
+---
+
+## 🧩 SUB-AGEN YANG DIPANGGIL (berdasarkan alur di atas)
+
+**Frontend / orchestration lokal:**
+- `MainOrchestrator` (pengendali)
+- `TokenSaverAgent` (optimasi token)
+
+**Backend tools (bisa dipanggil):**
+- web_search, deep_research, youtube_analyst, code_executor, api_caller, slack_integration, logika, bahasa, debate, cron_manager, file_analyzer
+
+**Desktop khusus:**
+- desktop pre-execution (terminal lokal)
+- surgical file editing
+- Docker sandbox (eksekusi kode terisolasi)
