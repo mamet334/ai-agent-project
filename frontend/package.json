@@ -1,8 +1,6 @@
 {
   "name": "ai-agent-frontend",
-  "version": "1.0.4",
-  "type": "module",
-  "main": "electron/main.cjs",
+  "version": "1.0.5",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -60,9 +58,7 @@
       "target": [
         {
           "target": "nsis",
-          "arch": [
-            "x64"
-          ]
+          "arch": ["x64"]
         }
       ],
       "icon": "public/icon.png"
@@ -77,12 +73,10 @@
     "portable": {
       "artifactName": "MametAI-Portable-${version}.exe"
     },
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "mamet334",
-        "repo": "ai-agent-project"
-      }
-    ]
+    "publish": {
+      "provider": "github",
+      "owner": "mamet334",
+      "repo": "ai-agent-project"
+    }
   }
 }
