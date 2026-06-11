@@ -102,6 +102,12 @@
   - Semua ON → `['rag_search', 'web_search', 'deep_research']`
   - Semua OFF → default `['rag_search', 'web_search']`
 
+### CI/CD & Desktop Auto-Updater
+- ✅ Fixed bug `g[a(...)] is not a function` (JavaScript Obfuscator merusak `.json()` akibat *spread operator* pada objek `Response` di `mainOrchestrator.js`).
+- ✅ Menambahkan `"main": "electron/main.cjs"` pada `package.json` untuk memperbaiki target *entry-point* `electron-builder`.
+- ✅ Mengimplementasikan workflow **GitHub Actions** (`build.yml`) untuk CI/CD pipeline yang secara otomatis merakit dan mem-publish file instalasi `.exe` Desktop Edition ke GitHub Releases setiap kali ada versi baru yang di-push ke branch `main`.
+- ✅ Fixed *memory leak* pada event listener `update-status` auto-updater di `preload.cjs`.
+
 ## 🔍 ANALISIS SISTEM OTAK AI
 - Frontend full menyalakan `MainOrchestrator` + `TokenSaverAgent` untuk optimasi prompt dan pengecekan budget sebelum backend.
 - Mametlite Lite memanggil `callAgentSimple()` langsung ke Supabase Edge Function tanpa orchestrator, dengan tools terbatas.

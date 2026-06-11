@@ -1793,12 +1793,15 @@ export default function AIAgent() {
               </div>
               <div className="flex-1">
                 <h4 className="font-semibold text-sm mb-1">
+                  {updateStatus.status === 'checking' && 'Memeriksa Update'}
                   {updateStatus.status === 'available' && 'Update Tersedia'}
                   {updateStatus.status === 'downloading' && 'Mengunduh Update'}
                   {updateStatus.status === 'downloaded' && 'Update Siap Diinstal'}
                 </h4>
                 <p className="text-xs opacity-90 mb-2">
-                  {updateStatus.message || updateStatus.version ? `Versi ${updateStatus.version}` : ''}
+                  {updateStatus.status === 'checking' 
+                    ? updateStatus.message 
+                    : (updateStatus.message || (updateStatus.version ? `Versi ${updateStatus.version}` : ''))}
                 </p>
                 {updateStatus.status === 'downloading' && updateStatus.percent && (
                   <div className="w-full bg-black/30 rounded-full h-2 mb-2">

@@ -28,8 +28,8 @@
 *Fokus: Mencegah tagihan bengkak dan memastikan 99.9% Uptime dengan sistem Fallback.*
 
 ### **A. Kompres System Prompt**
-- [ ] **Ganti Memori Jangka Pendek** dengan versi kompres (tanpa kata sambung berlebih).
-- [ ] Hapus duplikasi antara memori jangka pendek & panjang.
+- [x] **Ganti Memori Jangka Pendek** dengan versi kompres (tanpa kata sambung berlebih).
+- [x] Hapus duplikasi antara memori jangka pendek & panjang.
 
 ### **B. Traffic Light Router & Fallback System (Di agent-process)**
 - [x] **Tugas Ringan/Cepat** (Parse JSON, Terjemahan, Summarize): Arahkan ke **Groq (Llama 3)**.

@@ -411,3 +411,114 @@ Read [](file:///d%3A/SLAMET/other/ai-agent-project/supabase/functions/agent-proc
 - bukan hanya satu mekanisme tunggal, tetapi beberapa lapis router + fallback
 
 > Jika yang Anda maksud adalah “otomatis memilih model berdasarkan kompleksitas prompt secara adaptif”, saat ini sudah ada bentuk itu lewat rule-based intent/sub-agent routing dan fallback, bukan lewat scoring model kompleksitas yang terpisah.
+
+>>>---5.auto update 
+
+Memeriksa seluruh project untuk tanda auto-update Electron dan konfigurasi pembaruan.
+
+Searched for regex `autoUpdater|electron-updater|checkForUpdates\(|setFeedURL\(|publish|electron-builder\.yml|forge\.config\.js|builder\.yaml|builder\.yml`, 200 results
+
+Menemukan implementasi auto-update di main.cjs dan pengaturan publish di package.json. Selanjutnya saya cek baris kodenya secara detail.
+
+Read [](file:///d%3A/SLAMET/other/ai-agent-project/frontend/electron/main.cjs#1-1), lines 1 to 240
+
+Read [](file:///d%3A/SLAMET/other/ai-agent-project/frontend/package.json)
+
+Read [](file:///d%3A/SLAMET/other/ai-agent-project/frontend/release/builder-effective-config.yaml)
+
+## ✅ Kesimpulan Auto-Update Mamet AI Desktop
+
+### Sudah ada auto-update
+Ya, project ini sudah memiliki implementasi auto-update di desktop Electron.
+
+---
+
+## 🔎 Temuan utama
+
+### 1. `autoUpdater` digunakan
+File: main.cjs
+
+Kata kunci:
+- `const { autoUpdater } = require('electron-updater');`
+- `autoUpdater.autoDownload = true;`
+- `autoUpdater.autoInstallOnAppQuit = true;`
+- `autoUpdater.on('checking-for-update' ...`
+- `autoUpdater.on('update-available' ...`
+- `autoUpdater.on('update-not-available' ...`
+- `autoUpdater.on('download-progress' ...`
+- `autoUpdater.on('update-downloaded' ...`
+- `autoUpdater.on('error' ...`
+- `autoUpdater.checkForUpdatesAndNotify()`
+
+Baris penting:
+- `line 42` — import `electron-updater`
+- `line 44` — `autoUpdater.autoDownload = true;`
+- `line 45` — `autoUpdater.autoInstallOnAppQuit = true;`
+- `line 101` — `autoUpdater.checkForUpdatesAndNotify().catch(...)`
+- `line 108` — interval `autoUpdater.checkForUpdatesAndNotify().catch(() => {});`
+- `line 201` — `setupAutoUpdater();`
+
+---
+
+### 2. Konfigurasi `publish` ada di package.json
+File: package.json
+
+Baris penting:
+- `line 80` — `publish` di konfigurasi `build`
+- `provider: "github"`
+- `owner: "mamet334"`
+- `repo: "ai-agent-project"`
+
+Jadi mekanisme publish targetnya adalah:
+- **GitHub Releases** via `electron-builder`
+
+---
+
+### 3. Kode `checkForUpdates()` / `setFeedURL()` ada
+- `autoUpdater.checkForUpdatesAndNotify()` ditemukan di main.cjs
+- `autoUpdater.setFeedURL()` tidak ditemukan
+
+Jadi mekanisme update berjalan dengan:
+- `electron-updater` otomatis check GitHub Releases
+- tanpa custom feed URL eksplisit
+
+---
+
+### 4. Ada file konfigurasi builder
+File:
+- builder-effective-config.yaml
+
+Baris penting:
+- `publish:`
+- `provider: github`
+- `owner: mamet334`
+- `repo: ai-agent-project`
+
+Selain itu:
+- package.json mengandung `electron-builder` dan `electron-updater`
+
+---
+
+## 📄 File relevan
+- main.cjs
+- package.json
+- builder-effective-config.yaml
+
+---
+
+## ✅ Mekanisme Update
+Mekanisme auto-update yang ada:
+- menggunakan package `electron-updater`
+- build via `electron-builder`
+- publish ke `GitHub Releases`
+- app memeriksa pembaruan otomatis di production setelah startup dan setiap 4 jam
+- mengunduh otomatis dan menginstal saat aplikasi ditutup
+
+---
+
+## ❗ Jika belum ada (tidak relevan di sini)
+Tidak perlu menambah auto-update karena sudah terimplementasi.
+
+Jika Anda ingin, saya bisa juga:
+- cek apakah ini bekerja pada runtime Electron v42
+- atau memperbaiki agar `update-status` juga bisa ditampilkan di UI renderer secara lebih rapi

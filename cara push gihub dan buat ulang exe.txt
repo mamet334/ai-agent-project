@@ -14,3 +14,20 @@ npm run dist
 
 untuk building di supa base 
 npx supabase functions deploy agent-process
+
+
+ini untuk auto update agar tau update terbaru:
+# 1. Masuk ke folder frontend
+cd frontend
+
+# 2. Naikkan versi (pilih salah satu)
+npm version patch   # 1.0.1 -> 1.0.2 (perbaikan kecil)
+# atau
+npm version minor   # 1.0.1 -> 1.1.0 (fitur baru)
+# atau
+npm version major   # 1.0.1 -> 2.0.0 (perubahan besar)
+
+# 3. Build aplikasi
+npm run dist
+
+# 4. Upload hasil build ke GitHub Releases dengan tag yang sama (v1.0.2, dll)
