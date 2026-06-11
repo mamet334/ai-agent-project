@@ -11,12 +11,9 @@ class MainOrchestrator {
       console.warn('[Orchestrator] Task/prompt tidak valid, pakai fallback', task);
       try {
         const response = await apiCall(task || { prompt: '' }, {});
-        return {
-          status: 'ok',
-          response: response,
-          stats: this.tokenSaver.getStats(),
-          strategy: { complexity: 'low', action: 'direct' }
-        };
+        response.strategy = { complexity: 'low', action: 'direct' };
+        response.stats = this.tokenSaver.getStats();
+        return response;
       } catch (err) {
         return {
           status: 'error',
@@ -59,11 +56,11 @@ class MainOrchestrator {
         const tokensUsed = result.tokens_used || estimatedTokens;
         this.tokenSaver.logUsage(tokensUsed);
       } catch (e) {}
-      return {
-        ...result,
-        strategy: strategy,
-        stats: this.tokenSaver.getStats()
-      };
+      
+      // Return Response object directly with attached metadata
+      result.strategy = strategy;
+      result.stats = this.tokenSaver.getStats();
+      return result;
     } catch (error) {
       return {
         status: 'error',

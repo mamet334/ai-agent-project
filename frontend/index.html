@@ -20,5 +20,15 @@
         } catch(e) {}
       }
     </script>
+    <div id="app-version" style="position: fixed; bottom: 8px; right: 12px; font-size: 11px; color: #aaa; background: rgba(0,0,0,0.5); padding: 2px 8px; border-radius: 12px; z-index: 9999; font-family: monospace;">
+      v<span id="version-number">...</span>
+    </div>
+    <script>
+      if (window.electronAPI && window.electronAPI.getAppVersion) {
+        window.electronAPI.getAppVersion().then(v => {
+          document.getElementById('version-number').innerText = v;
+        }).catch(() => {});
+      }
+    </script>
   </body>
 </html>

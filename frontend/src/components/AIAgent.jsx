@@ -453,6 +453,10 @@ export default function AIAgent() {
   // Token optimization integration
   const [orchestrator] = useState(() => new MainOrchestrator());
   const [tokenStats, setTokenStats] = useState(null);
+  
+  // Auto-updater integration
+  const [updateStatus, setUpdateStatus] = useState(null);
+  const [showUpdateNotification, setShowUpdateNotification] = useState(false);
 
   const handleSelectWorkspace = async () => {
     if (workspaceHandle || desktopWorkspacePath) {
@@ -605,6 +609,23 @@ export default function AIAgent() {
     });
 
     return () => subscription.unsubscribe();
+  }, []);
+
+  // Listen for auto-updater events (Electron only)
+  useEffect(() => {
+    if (window.electronAPI && window.electronAPI.onUpdateStatus) {
+      const unsubscribe = window.electronAPI.onUpdateStatus((data) => {
+        setUpdateStatus(data);
+        setShowUpdateNotification(true);
+        
+        // Auto-hide notification after 10 seconds if it's just downloading
+        if (data.status === 'downloading') {
+          setTimeout(() => setShowUpdateNotification(false), 10000);
+        }
+      });
+      
+      return unsubscribe;
+    }
   }, []);
 
   // Fetch chats when user changes
@@ -1748,6 +1769,71 @@ export default function AIAgent() {
         <div className="absolute bottom-40 right-20 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse delay-700"></div>
       </div>
 
+      {/* Auto-Update Notification Banner */}
+      {showUpdateNotification && updateStatus && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md w-full">
+          <div className={`mx-4 p-4 rounded-xl border shadow-2xl backdrop-blur-md ${
+            updateStatus.status === 'available' 
+              ? 'bg-emerald-900/90 border-emerald-500/50' 
+              : updateStatus.status === 'downloading'
+              ? 'bg-blue-900/90 border-blue-500/50'
+              : 'bg-purple-900/90 border-purple-500/50'
+          }`}>
+            <div className="flex items-start gap-3">
+              <div className={`p-2 rounded-lg ${
+                updateStatus.status === 'available' 
+                  ? 'bg-emerald-500/20' 
+                  : updateStatus.status === 'downloading'
+                  ? 'bg-blue-500/20'
+                  : 'bg-purple-500/20'
+              }`}>
+                {updateStatus.status === 'available' && <Download className="w-5 h-5 text-emerald-400" />}
+                {updateStatus.status === 'downloading' && <Activity className="w-5 h-5 text-blue-400 animate-spin" />}
+                {updateStatus.status === 'downloaded' && <Check className="w-5 h-5 text-purple-400" />}
+              </div>
+              <div className="flex-1">
+                <h4 className="font-semibold text-sm mb-1">
+                  {updateStatus.status === 'available' && 'Update Tersedia'}
+                  {updateStatus.status === 'downloading' && 'Mengunduh Update'}
+                  {updateStatus.status === 'downloaded' && 'Update Siap Diinstal'}
+                </h4>
+                <p className="text-xs opacity-90 mb-2">
+                  {updateStatus.message || updateStatus.version ? `Versi ${updateStatus.version}` : ''}
+                </p>
+                {updateStatus.status === 'downloading' && updateStatus.percent && (
+                  <div className="w-full bg-black/30 rounded-full h-2 mb-2">
+                    <div 
+                      className="bg-blue-500 h-2 rounded-full transition-all" 
+                      style={{ width: `${updateStatus.percent}%` }}
+                    />
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  {updateStatus.status === 'available' && (
+                    <button
+                      onClick={() => {
+                        if (window.electronAPI && window.electronAPI.checkForUpdates) {
+                          window.electronAPI.checkForUpdates();
+                        }
+                      }}
+                      className="text-xs bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      Unduh Sekarang
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setShowUpdateNotification(false)}
+                    className="text-xs bg-black/30 hover:bg-black/50 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    Tutup
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="relative flex h-screen overflow-hidden">
         {/* Sidebar Overlay (Mobile only) */}
         {sidebarOpen && (
@@ -1942,6 +2028,35 @@ export default function AIAgent() {
                     Reset Usage
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* Auto-Update Section (Electron only) */}
+            {window.electronAPI && (
+              <div className="border-t border-purple-500/20 pt-4 mb-4">
+                <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Download className="w-3.5 h-3.5 text-blue-400" />
+                  Auto-Update
+                </h3>
+                <button
+                  onClick={async () => {
+                    if (window.electronAPI && window.electronAPI.checkForUpdates) {
+                      const result = await window.electronAPI.checkForUpdates();
+                      if (result.status === 'error') {
+                        alert('Gagal memeriksa update: ' + result.message);
+                      } else if (result.status === 'dev-mode') {
+                        alert(result.message);
+                      } else {
+                        setUpdateStatus({ status: 'checking', message: 'Memeriksa pembaruan...' });
+                        setShowUpdateNotification(true);
+                      }
+                    }
+                  }}
+                  className="w-full text-[10px] bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 py-2 rounded-lg border border-blue-500/30 transition-all flex items-center justify-center gap-2"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Cek Update
+                </button>
               </div>
             )}
 

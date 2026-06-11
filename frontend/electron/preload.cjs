@@ -1,3 +1,4 @@
+// @ts-nocheck
 const { contextBridge, ipcRenderer } = require('electron');
 
 // Mengekspos API OS yang sangat dibatasi ke aplikasi React (AIAgent.jsx)
@@ -13,7 +14,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   onUpdateStatus: (callback) => {
-    ipcRenderer.on('update-status', (event, data) => callback(data));
+    const listener = (event, data) => callback(data);
+    ipcRenderer.on('update-status', listener);
+    return () => ipcRenderer.removeListener('update-status', listener);
   },
 
   // Docker Sandbox API (Eksekusi kode terisolasi)
