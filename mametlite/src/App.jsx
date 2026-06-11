@@ -240,14 +240,28 @@ function App() {
     setLoading(true);
 
     try {
-      // Build tools array sesuai mode yang aktif
+      // Build tools array HANYA berdasarkan tombol yang aktif
       let tools = [];
-      if (activeModes.rag) tools.push('rag_search');
-      if (activeModes.websearch) tools.push('web_search');
-      if (activeModes.research) tools.push('deep_research');
+      
+      // RAG Search - jika tombol RAG aktif
+      if (activeModes.rag) {
+        tools.push('rag_search');
+      }
+      
+      // Web Search - HANYA jika tombol Web Search aktif
+      if (activeModes.websearch) {
+        tools.push('web_search');
+      }
+      
+      // Deep Research - HANYA jika tombol Research aktif
+      if (activeModes.research) {
+        tools.push('deep_research');
+      }
 
-      // Jika tidak ada tools aktif, gunakan default
-      if (tools.length === 0) tools = ['rag_search', 'web_search'];
+      // Fallback: jika semua tombol OFF, gunakan default RAG + Web Search
+      if (tools.length === 0) {
+        tools = ['rag_search', 'web_search'];
+      }
 
       // Build chat history untuk context
       const chatHistory = messages.map(m => ({
