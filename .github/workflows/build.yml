@@ -33,5 +33,6 @@ jobs:
       - name: 🚀 Build and Publish .exe
         working-directory: ./frontend
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Pakai token rahasia bawaan GitHub secara otomatis!
+          GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }} # Pakai token PAT baru yang kita buat untuk akses lintas-repository
+          GITHUB_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }} # Paksa override GITHUB_TOKEN bawaan GitHub Actions
         run: npm run dist:publish
