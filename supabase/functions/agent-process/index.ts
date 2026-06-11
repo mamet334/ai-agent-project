@@ -404,73 +404,105 @@ serve(async (req) => {
       return answer;
     };
 
+    // ========== MODIFIKASI UTAMA: streamOpenRouterResponse dengan error handling yang lebih baik ==========
     const streamOpenRouterResponse = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], metaData: any = {}) => {
-      const messages = [];
-      if (systemPromptText) messages.push({ role: 'system', content: systemPromptText });
-      if (chatHistory && chatHistory.length > 0) {
-        for (const msg of chatHistory) {
-          messages.push({ role: msg.role === 'model' ? 'assistant' : 'user', content: msg.content });
+      try {
+        // Validasi API key
+        if (!OPENROUTER_API_KEY || OPENROUTER_API_KEY.trim() === '') {
+          console.error("❌ OPENROUTER_API_KEY kosong atau tidak valid");
+          throw new Error("OPENROUTER_API_KEY is missing");
         }
-      }
-      messages.push({ role: 'user', content: promptText });
-      
-      let openRouterModel = 'deepseek/deepseek-r1:free';
-      if (model && model.startsWith('openrouter/')) {
-        openRouterModel = model.replace('openrouter/', '');
-      } else if (model === 'openrouter-llama-3') {
-        openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
-      } else if (model === 'openrouter-deepseek-r1') {
-        openRouterModel = 'deepseek/deepseek-r1:free';
-      }
-      
-      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'HTTP-Referer': 'https://ai-agent-project.vercel.app',
-          'X-Title': 'Mamet AI Agent',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: openRouterModel,
-          messages: messages,
-          temperature: 0.1,
-          stream: true
-        })
-      });
 
-      if (!res.ok) {
-        const errText = await res.text();
-        console.error("OpenRouter Stream Error:", errText);
+        const messages = [];
+        if (systemPromptText) messages.push({ role: 'system', content: systemPromptText });
+        if (chatHistory && chatHistory.length > 0) {
+          for (const msg of chatHistory) {
+            messages.push({ role: msg.role === 'model' ? 'assistant' : 'user', content: msg.content });
+          }
+        }
+        messages.push({ role: 'user', content: promptText });
         
-        // --- MAMET HEALER (PENYEMBUH KOMA / AUTO-FALLBACK) ---
-        if (GROQ_API_KEY) {
-          console.log("Mamet Healer: Memutar rute ke Groq (Fallback)...");
-          await logAgentEvent('FALLBACK_TRIGGERED', 'OpenRouter', `Stream Error: ${errText.substring(0, 200)}`);
-          return streamGroqResponse(promptText, systemPromptText + "\n\n(Catatan: Anda sedang menggunakan otak cadangan Groq karena OpenRouter mengalami gangguan/limit)", chatHistory, metaData, 'OpenRouter');
+        let openRouterModel = 'deepseek/deepseek-r1:free';
+        if (model && model.startsWith('openrouter/')) {
+          openRouterModel = model.replace('openrouter/', '');
+        } else if (model === 'openrouter-llama-3') {
+          openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
+        } else if (model === 'openrouter-deepseek-r1') {
+          openRouterModel = 'deepseek/deepseek-r1:free';
+        }
+        
+        console.log(`🔵 [OpenRouter] Memanggil model: ${openRouterModel}, Key: ${OPENROUTER_API_KEY.substring(0,6)}...`);
+        
+        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+            'HTTP-Referer': 'https://ai-agent-project.vercel.app',
+            'X-Title': 'Mamet AI Agent',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: openRouterModel,
+            messages: messages,
+            temperature: 0.1,
+            stream: true
+          })
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          console.error(`🔴 [OpenRouter] HTTP ${res.status}: ${errText}`);
+          
+          // Coba fallback ke Groq jika tersedia
+          if (GROQ_API_KEY && GROQ_API_KEY.trim() !== '') {
+            console.log("🟡 Mamet Healer: Fallback ke Groq...");
+            await logAgentEvent('FALLBACK_TRIGGERED', 'OpenRouter', `HTTP ${res.status}: ${errText.substring(0, 200)}`);
+            return streamGroqResponse(promptText, systemPromptText + "\n\n(Catatan: Fallback ke Groq karena OpenRouter error)", chatHistory, metaData, 'OpenRouter');
+          }
+          
+          // Jika tidak ada fallback, kirim error sebagai stream
+          const errorStream = new ReadableStream({
+            start(controller) {
+              const data = JSON.stringify({ choices: [{ delta: { content: `\n\n**OpenRouter Error (${res.status})**: ${errText.substring(0, 300)}` } }] });
+              controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
+              controller.close();
+            }
+          });
+          return new Response(errorStream, { headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' } });
         }
 
-        const stream = new ReadableStream({
+        // Sukses
+        const safeMeta = { ...metaData };
+        if (safeMeta.subagentRuns) safeMeta.subagentRuns = safeMeta.subagentRuns.map((r: any) => ({ ...r, output: '[Omitted]' }));
+
+        return new Response(res.body, {
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'text/event-stream',
+            'X-Agent-Metadata': btoa(encodeURIComponent(JSON.stringify(safeMeta)))
+          }
+        });
+        
+      } catch (err: any) {
+        console.error("💥 [OpenRouter] Exception fatal:", err.message, err.stack);
+        
+        // Fallback ke Groq jika tersedia
+        if (GROQ_API_KEY && GROQ_API_KEY.trim() !== '') {
+          console.log("🟡 Mamet Healer: Exception, fallback ke Groq...");
+          return streamGroqResponse(promptText, systemPromptText + "\n\n(Catatan: Fallback ke Groq karena OpenRouter exception)", chatHistory, metaData, 'OpenRouter');
+        }
+        
+        const errorStream = new ReadableStream({
           start(controller) {
-            const data = JSON.stringify({ choices: [{ delta: { content: `\n\n**OpenRouter API Error**: ${errText}` } }] });
+            const data = JSON.stringify({ choices: [{ delta: { content: `\n\n**OpenRouter Fatal Error**: ${err.message}` } }] });
             controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
             controller.close();
           }
         });
-        return new Response(stream, { headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' } });
+        return new Response(errorStream, { headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' } });
       }
-
-      const safeMeta = { ...metaData };
-      if (safeMeta.subagentRuns) safeMeta.subagentRuns = safeMeta.subagentRuns.map((r: any) => ({ ...r, output: '[Omitted]' }));
-
-      return new Response(res.body, {
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'text/event-stream',
-          'X-Agent-Metadata': btoa(encodeURIComponent(JSON.stringify(safeMeta)))
-        }
-      });
     };
+    // ========== AKHIR MODIFIKASI ==========
 
     const callOpenRouter = async (promptText: string, systemPromptText = '', chatHistory: any[] = []) => {
       const messages = [];
