@@ -1,6 +1,6 @@
 {
   "name": "ai-agent-frontend",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
@@ -77,7 +77,7 @@
     "publish": {
       "provider": "github",
       "owner": "mamet334",
-      "repo": "ai-agent-project"
+      "repo": "mamet-ai-releases"
     }
   }
 }
