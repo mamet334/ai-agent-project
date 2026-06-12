@@ -107,7 +107,7 @@
 - ✅ Menambahkan `"main": "electron/main.cjs"` pada `package.json` untuk memperbaiki target *entry-point* `electron-builder`.
 - ✅ Mengimplementasikan workflow **GitHub Actions** (`build.yml`) untuk CI/CD pipeline yang secara otomatis merakit dan mem-publish file instalasi `.exe` Desktop Edition ke GitHub Releases setiap kali ada versi baru yang di-push ke branch `main`.
 - ✅ Fixed *memory leak* pada event listener `update-status` auto-updater di `preload.cjs`.
-
+- ✅ **CRITICAL FIX (Blank Screen):** Aplikasi Electron yang menggunakan Vite dengan output ES Modules (`type="module"`) **TIDAK BISA** dimuat menggunakan `mainWindow.loadFile('index.html')` (protokol `file://`) karena terblokir oleh aturan CORS browser/Chromium. Selalu gunakan custom protocol `mamet://` (`mainWindow.loadURL('mamet://app/index.html')`) yang sudah didaftarkan dengan *privilege* `standard: true, secure: true` agar mendapatkan origin seperti HTTP/HTTPS.
 ## 🔍 ANALISIS SISTEM OTAK AI
 - Frontend full menyalakan `MainOrchestrator` + `TokenSaverAgent` untuk optimasi prompt dan pengecekan budget sebelum backend.
 - Mametlite Lite memanggil `callAgentSimple()` langsung ke Supabase Edge Function tanpa orchestrator, dengan tools terbatas.
