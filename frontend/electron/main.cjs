@@ -66,6 +66,12 @@ function setupAutoUpdater() {
 
     autoUpdater.on('update-not-available', () => {
       console.log('[Auto-Updater] Aplikasi sudah versi terbaru.');
+      if (mainWindow) {
+        mainWindow.webContents.send('update-status', {
+          status: 'not-available',
+          message: 'Aplikasi Anda sudah di versi terbaru.'
+        });
+      }
     });
 
     autoUpdater.on('download-progress', (progress) => {

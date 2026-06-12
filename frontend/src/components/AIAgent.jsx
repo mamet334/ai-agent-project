@@ -619,8 +619,8 @@ export default function AIAgent() {
         setShowUpdateNotification(true);
         
         // Auto-hide notification after 10 seconds if it's just downloading
-        if (data.status === 'downloading') {
-          setTimeout(() => setShowUpdateNotification(false), 10000);
+        if (data.status === 'downloading' || data.status === 'not-available') {
+          setTimeout(() => setShowUpdateNotification(false), data.status === 'not-available' ? 5000 : 10000);
         }
       });
       
@@ -1777,6 +1777,8 @@ export default function AIAgent() {
               ? 'bg-emerald-900/90 border-emerald-500/50' 
               : updateStatus.status === 'downloading'
               ? 'bg-blue-900/90 border-blue-500/50'
+              : updateStatus.status === 'not-available'
+              ? 'bg-slate-900/90 border-slate-500/50'
               : 'bg-purple-900/90 border-purple-500/50'
           }`}>
             <div className="flex items-start gap-3">
@@ -1785,16 +1787,21 @@ export default function AIAgent() {
                   ? 'bg-emerald-500/20' 
                   : updateStatus.status === 'downloading'
                   ? 'bg-blue-500/20'
+                  : updateStatus.status === 'not-available'
+                  ? 'bg-slate-500/20'
                   : 'bg-purple-500/20'
               }`}>
                 {updateStatus.status === 'available' && <Download className="w-5 h-5 text-emerald-400" />}
                 {updateStatus.status === 'downloading' && <Activity className="w-5 h-5 text-blue-400 animate-spin" />}
                 {updateStatus.status === 'downloaded' && <Check className="w-5 h-5 text-purple-400" />}
+                {updateStatus.status === 'not-available' && <Check className="w-5 h-5 text-slate-400" />}
+                {updateStatus.status === 'checking' && <Activity className="w-5 h-5 text-purple-400 animate-spin" />}
               </div>
               <div className="flex-1">
                 <h4 className="font-semibold text-sm mb-1">
                   {updateStatus.status === 'checking' && 'Memeriksa Update'}
                   {updateStatus.status === 'available' && 'Update Tersedia'}
+                  {updateStatus.status === 'not-available' && 'Aplikasi Sudah Terbaru'}
                   {updateStatus.status === 'downloading' && 'Mengunduh Update'}
                   {updateStatus.status === 'downloaded' && 'Update Siap Diinstal'}
                 </h4>
