@@ -477,7 +477,7 @@ serve(async (req) => {
     };
 
     // ========== MODIFIKASI UTAMA: streamOpenRouterResponse dengan error handling yang lebih baik ==========
-    const streamOpenRouterResponse = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], metaData: any = {}) => {
+    const streamOpenRouterResponse = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], metaData: any = {}, forceDefaultModel = false) => {
       try {
         // Validasi API key
         if (!OPENROUTER_API_KEY || OPENROUTER_API_KEY.trim() === '') {
@@ -495,12 +495,14 @@ serve(async (req) => {
         messages.push({ role: 'user', content: promptText });
         
         let openRouterModel = 'google/gemini-2.0-flash-lite-preview-02-05:free';
-        if (model && model.startsWith('openrouter/')) {
-          openRouterModel = model.replace('openrouter/', '');
-        } else if (model === 'openrouter-llama-3') {
-          openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
-        } else if (model === 'openrouter-google-gemini-2.0-flash-exp') {
-          openRouterModel = 'google/gemini-2.0-flash-lite-preview-02-05:free';
+        if (!forceDefaultModel) {
+          if (model && model.startsWith('openrouter/')) {
+            openRouterModel = model.replace('openrouter/', '');
+          } else if (model === 'openrouter-llama-3') {
+            openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
+          } else if (model === 'openrouter-google-gemini-2.0-flash-exp') {
+            openRouterModel = 'google/gemini-2.0-flash-lite-preview-02-05:free';
+          }
         }
         
         console.log(`🔵 [OpenRouter] Memanggil model: ${openRouterModel}, Key: ${OPENROUTER_API_KEY.substring(0,6)}...`);
@@ -576,7 +578,7 @@ serve(async (req) => {
     };
     // ========== AKHIR MODIFIKASI ==========
 
-    const callOpenRouter = async (promptText: string, systemPromptText = '', chatHistory: any[] = []) => {
+    const callOpenRouter = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], forceDefaultModel = false) => {
       const messages = [];
       if (systemPromptText) messages.push({ role: 'system', content: systemPromptText });
       if (chatHistory && chatHistory.length > 0) {
@@ -587,12 +589,14 @@ serve(async (req) => {
       messages.push({ role: 'user', content: promptText });
       
       let openRouterModel = 'google/gemini-2.0-flash-lite-preview-02-05:free';
-      if (model && model.startsWith('openrouter/')) {
-        openRouterModel = model.replace('openrouter/', '');
-      } else if (model === 'openrouter-llama-3') {
-        openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
-      } else if (model === 'openrouter-google-gemini-2.0-flash-exp') {
-        openRouterModel = 'google/gemini-2.0-flash-lite-preview-02-05:free';
+      if (!forceDefaultModel) {
+        if (model && model.startsWith('openrouter/')) {
+          openRouterModel = model.replace('openrouter/', '');
+        } else if (model === 'openrouter-llama-3') {
+          openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
+        } else if (model === 'openrouter-google-gemini-2.0-flash-exp') {
+          openRouterModel = 'google/gemini-2.0-flash-lite-preview-02-05:free';
+        }
       }
       
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -685,9 +689,9 @@ serve(async (req) => {
               continue;
             }
             console.log('🟠 Calling OpenRouter...');
-            const answer = await callOpenRouter(promptText, systemPromptText, chatHistory);
+            const answer = await callOpenRouter(promptText, systemPromptText, chatHistory, true);
             if (answer) {
-              if (!stream) logApiUsage('openrouter', 'google/gemini-2.0-flash-exp:free', promptText + systemPromptText, answer);
+              if (!stream) logApiUsage('openrouter', 'google/gemini-2.0-flash-lite-preview-02-05:free', promptText + systemPromptText, answer);
               console.log('✅ OpenRouter succeeded');
               return answer;
             }
@@ -821,7 +825,7 @@ serve(async (req) => {
           // === FALLBACK STREAMING: OpenRouter lalu Groq ===
           console.log('Mamet Anti-Limit Stream: Semua Gemini keys limit, falling back...');
           if (OPENROUTER_API_KEY) {
-            return streamOpenRouterResponse(promptText, systemPromptText, chatHistory, metaData);
+            return streamOpenRouterResponse(promptText, systemPromptText, chatHistory, metaData, true);
           }
           if (GROQ_API_KEY) {
             return streamGroqResponse(promptText, systemPromptText, chatHistory, metaData, 'Gemini-429');
