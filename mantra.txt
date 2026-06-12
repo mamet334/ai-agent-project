@@ -1,5 +1,5 @@
 # MANTRA MAMET AI 🔮
-[Tech: React/Vite (PWA) & Supabase Edge (Deno)]
+[Tech: React/Vite & Supabase Edge (Deno)]
 [Vercel Production URL: https://ai-agent-project-2a9h.vercel.app/]
 
 ## 📝 INTEGRASI TOKEN OPTIMIZATION (JUNI 2026)
@@ -27,7 +27,7 @@
 2. Self-Healing (Anti-Crash, Memory Sweeper, JSON Surgeon)
 3. BYOK (Bring Your Own Key) & Dashboard Cron
 4. YouTube Analyst (5 Ahli)
-5. PWA (Bisa diinstal di HP/Desktop)
+5. Bisa diinstal di HP/Desktop
 6. Vector RAG (Embedding PDF/Excel/Word raksasa)
 7. True Code Sandbox (Eksekusi kode via Piston Coder Plugin)
 8. Autonomous Agent (Cron) 100% Operational & Realtime Push (Bypass Kong JWT)
@@ -84,7 +84,7 @@
 3. ~~**Pembengkakan Ukuran File**~~ ✅ SELESAI (Penerapan Code Splitting/manualChunks di Rollup untuk memecah bundle menjadi modul terpisah; memotong ukuran kode utama dari 1.7 MB menjadi 80 KB).
 4. ~~**Auto-Updater & Distribusi:**~~ ✅ SELESAI (Mengelola infrastruktur pembaruan otomatis (OTA) via GitHub Releases/S3 dengan modul `electron-updater` agar patch baru terinstal otomatis di latar belakang (*silent updates*). Telah disiapkan sistem CI/CD via GitHub Actions untuk publikasi rilis otomatis).
 5. **Skalabilitas API & Manajemen Memori:** Mengatasi limitasi API client dengan membangun *Backend Proxy* untuk mengamankan API Keys, menyembunyikan logika rahasia, serta merotasi API keys secara aman di sisi server.
-6. ~~**Sandbox Coder & Keamanan Data**~~ ✅ SELESAI (Implementasi Docker Local Sandbox terisolasi di Desktop Edition dengan flag keamanan ketat: --rm, --network=none, --memory=128m, --cpus=0.5, --read-only, --no-new-privileges, timeout 30s, dan blocklist kode berbahaya. Fallback ke Piston API untuk PWA. Supabase RLS ketat di semua tabel: documents, document_chunks, scheduled_tasks, chats, agent_logs).
+6. ~~**Sandbox Coder & Keamanan Data**~~ ✅ SELESAI (Implementasi Docker Local Sandbox terisolasi di Desktop Edition dengan flag keamanan ketat: --rm, --network=none, --memory=128m, --cpus=0.5, --read-only, --no-new-privileges, timeout 30s, dan blocklist kode berbahaya. Fallback ke Piston API. Supabase RLS ketat di semua tabel: documents, document_chunks, scheduled_tasks, chats, agent_logs).
 
 
 ## 🔭 ROADMAP JANGKA PANJANG (PHASE 4: OBSERVABILITY & COST OPTIMIZATION)

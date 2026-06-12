@@ -9,17 +9,7 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        try {
-          navigator.serviceWorker.getRegistrations().then(function(registrations) {
-            for(let registration of registrations) {
-              registration.unregister();
-            }
-          }).catch(function() {});
-        } catch(e) {}
-      }
-    </script>
+
     <div id="app-version" style="position: fixed; bottom: 8px; right: 12px; font-size: 11px; color: #aaa; background: rgba(0,0,0,0.5); padding: 2px 8px; border-radius: 12px; z-index: 9999; font-family: monospace;">
       v<span id="version-number">...</span>
     </div>
