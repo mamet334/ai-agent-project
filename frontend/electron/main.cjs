@@ -136,10 +136,10 @@ function createWindow() {
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
   } else {
-    // loadFile() adalah cara paling reliable di Electron — tidak butuh custom protocol
-    const indexPath = path.join(__dirname, '../dist/index.html');
-    mainWindow.loadFile(indexPath).catch(err => {
-      const logMsg = `[FATAL] loadFile gagal: ${err.message}\n`;
+    // ES Modules (type="module") TIDAK BISA diload via file:// protocol (CORS restriction).
+    // Gunakan custom protocol mamet:// yang sudah didaftarkan agar mendapat HTTP-like origin.
+    mainWindow.loadURL('mamet://app/index.html').catch(err => {
+      const logMsg = `[FATAL] loadURL mamet:// gagal: ${err.message}\n`;
       console.error(logMsg);
       fs.appendFileSync(path.join(os.tmpdir(), 'mamet-renderer.log'), logMsg);
     });
