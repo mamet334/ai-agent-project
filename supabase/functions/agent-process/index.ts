@@ -494,13 +494,13 @@ serve(async (req) => {
         }
         messages.push({ role: 'user', content: promptText });
         
-        let openRouterModel = 'google/gemini-2.0-flash-exp:free';
+        let openRouterModel = 'google/gemini-2.0-flash-lite-preview-02-05:free';
         if (model && model.startsWith('openrouter/')) {
           openRouterModel = model.replace('openrouter/', '');
         } else if (model === 'openrouter-llama-3') {
           openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
         } else if (model === 'openrouter-google-gemini-2.0-flash-exp') {
-          openRouterModel = 'google/gemini-2.0-flash-exp:free';
+          openRouterModel = 'google/gemini-2.0-flash-lite-preview-02-05:free';
         }
         
         console.log(`🔵 [OpenRouter] Memanggil model: ${openRouterModel}, Key: ${OPENROUTER_API_KEY.substring(0,6)}...`);
@@ -586,13 +586,13 @@ serve(async (req) => {
       }
       messages.push({ role: 'user', content: promptText });
       
-      let openRouterModel = 'google/gemini-2.0-flash-exp:free';
+      let openRouterModel = 'google/gemini-2.0-flash-lite-preview-02-05:free';
       if (model && model.startsWith('openrouter/')) {
         openRouterModel = model.replace('openrouter/', '');
       } else if (model === 'openrouter-llama-3') {
         openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
       } else if (model === 'openrouter-google-gemini-2.0-flash-exp') {
-        openRouterModel = 'google/gemini-2.0-flash-exp:free';
+        openRouterModel = 'google/gemini-2.0-flash-lite-preview-02-05:free';
       }
       
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
