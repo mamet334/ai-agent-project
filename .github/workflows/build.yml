@@ -30,6 +30,12 @@ jobs:
         working-directory: ./frontend
         run: npm ci
 
+      - name: ⚙️ Inject Environment Variables
+        working-directory: ./frontend
+        run: |
+          echo "VITE_SUPABASE_URL=https://uuyzdjifhdfyyvpxsofu.supabase.co" >> .env
+          echo "VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV1eXpkamlmaGRmeXl2cHhzb2Z1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2NjMyODUsImV4cCI6MjA5NTIzOTI4NX0.atDqwfpg_uwFI0nZuKQNxebCYh1KC7tdkSooC52m4YQ" >> .env
+
       - name: 🚀 Build and Publish .exe
         working-directory: ./frontend
         env:
