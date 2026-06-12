@@ -651,17 +651,18 @@ serve(async (req) => {
         return payload;
       };
 
-      // === DEFAULT CASCADE ORDER: Gemini -> OpenRouter -> Groq ===
-      // Only prioritize Groq if user explicitly requests it
+      // === CASCADE ORDER: Gemini -> Groq -> OpenRouter ===
+      // Groq is now the primary fallback (free, fast, reliable)
       const cascadeOrder: Array<'gemini' | 'openrouter' | 'groq'> =
         preferredProvider === 'groq'
           ? ['groq', 'gemini', 'openrouter']
-          : ['gemini', 'openrouter', 'groq'];
+          : ['gemini', 'groq', 'openrouter'];
 
       const availableProviders = getAvailableProviders(cascadeOrder);
       console.log(`🎯 Cascade order: ${availableProviders.join(' -> ')} (locked: ${cascadeOrder.filter(p => isProviderLocked(p)).join(', ') || 'none'})`);
 
       const payload = buildPayload();
+      let lastError = 'No providers attempted';
       for (const provider of availableProviders) {
         console.log(`📍 Trying provider: ${provider}`);
         
@@ -699,25 +700,24 @@ serve(async (req) => {
             continue;
           }
 
-          // === SEMENTARA NONAKTIFKAN GROQ ===
           if (provider === 'groq') {
-            console.log('⏭️  Groq temporarily disabled, skipping');
-            // if (!GROQ_API_KEY) {
-            //   console.log('⏭️  Groq: No API key available, skipping');
-            //   continue;
-            // }
-            // console.log('🟣 Calling Groq...');
-            // const answer = await callGroq(promptText, systemPromptText, chatHistory);
-            // if (answer) {
-            //   if (!stream) logApiUsage('groq', 'llama-3.1-8b-instant', promptText + systemPromptText, answer);
-            //   console.log('✅ Groq succeeded');
-            //   return answer;
-            // }
-            // console.log('⚠️  Groq returned empty, falling back...');
+            if (!GROQ_API_KEY) {
+              console.log('⏭️  Groq: No API key available, skipping');
+              continue;
+            }
+            console.log('🟣 Calling Groq (Fallback Utama)...');
+            const answer = await callGroq(promptText, systemPromptText, chatHistory);
+            if (answer) {
+              if (!stream) logApiUsage('groq', 'llama-3.1-8b-instant', promptText + systemPromptText, answer);
+              console.log('✅ Groq succeeded');
+              return answer;
+            }
+            console.log('⚠️  Groq returned empty, falling back to OpenRouter...');
             continue;
           }
         } catch (err: any) {
           const message = String(err.message || err);
+          lastError = message;
           const isRateLimit = message.includes('429') || message.includes('rate limit') || message.includes('quota');
           
           if (isRateLimit) {
@@ -731,7 +731,7 @@ serve(async (req) => {
         }
       }
 
-      throw new Error('Semua provider AI sedang limit/gangguan. Coba lagi dalam beberapa menit.');
+      throw new Error('Semua provider AI sedang limit/gangguan. Error terakhir: ' + lastError);
     };
     if (allGeminiKeys.length === 0 && GEMINI_API_KEY) allGeminiKeys.push(GEMINI_API_KEY);
 
@@ -822,13 +822,13 @@ serve(async (req) => {
         }
 
         if (!res || !res.ok) {
-          // === FALLBACK STREAMING: OpenRouter lalu Groq ===
-          console.log('Mamet Anti-Limit Stream: Semua Gemini keys limit, falling back...');
-          if (OPENROUTER_API_KEY) {
-            return streamOpenRouterResponse(promptText, systemPromptText, chatHistory, metaData, true);
-          }
+          // === FALLBACK STREAMING: Groq dulu (cepat & stabil), lalu OpenRouter ===
+          console.log('Mamet Anti-Limit Stream: Semua Gemini keys limit, falling back ke Groq...');
           if (GROQ_API_KEY) {
             return streamGroqResponse(promptText, systemPromptText, chatHistory, metaData, 'Gemini-429');
+          }
+          if (OPENROUTER_API_KEY) {
+            return streamOpenRouterResponse(promptText, systemPromptText, chatHistory, metaData, true);
           }
           const errStream = new ReadableStream({
             start(controller) {
@@ -921,14 +921,14 @@ Anda WAJIB mengeluarkan perintah Windows di dalam tag <terminal>. DILARANG menye
         return streamOpenAIResponse(prompt, sysPrompt, hist, meta);
       } else if (model && (model.includes('openrouter') || model.startsWith('openrouter/')) && OPENROUTER_API_KEY) {
         return streamOpenRouterResponse(prompt, sysPrompt, hist, meta);
-      } else if (model && model.includes('gemini') && GEMINI_API_KEY) {
-        return streamGeminiResponse(prompt, sysPrompt, hist, meta);
       } else if (model && model.startsWith('groq/') && GROQ_API_KEY) {
         return streamGroqResponse(prompt, sysPrompt, hist, meta);
-      } else if (GROQ_API_KEY) {
-        return streamGroqResponse(prompt, sysPrompt, hist, meta);
+      } else {
+        // DEFAULT: Gemini dengan Groq sebagai fallback streaming
+        // streamGeminiResponse sudah punya internal fallback ke OpenRouter
+        // Kita override agar fallback ke Groq dulu jika ada keynya
+        return streamGeminiResponse(prompt, sysPrompt, hist, meta);
       }
-      return null;
     };
     
     // --- RAG KNOWLEDGE BASE SEARCH ---
