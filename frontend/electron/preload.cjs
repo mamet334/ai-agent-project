@@ -21,5 +21,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Docker Sandbox API (Eksekusi kode terisolasi)
   checkDockerStatus: () => ipcRenderer.invoke('check-docker-status'),
-  runDockerSandbox: (code, language) => ipcRenderer.invoke('run-docker-sandbox', { code, language })
+  runDockerSandbox: (code, language) => ipcRenderer.invoke('run-docker-sandbox', { code, language }),
+
+  // Airdrop Stealth API
+  runAirdropStealth: (taskName, params) => ipcRenderer.invoke('run-airdrop-stealth', { taskName, params })
 });

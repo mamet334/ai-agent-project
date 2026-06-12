@@ -992,6 +992,9 @@ JIKA USER MEMINTA CEK DESKTOP, CARI FILE, CARI FOLDER, ATAU JALANKAN PERINTAH DI
 - Untuk cari file: <terminal>dir /s /b C:\\Users\\*nama_file*</terminal>
 - Untuk edit file: <edit_file path="C:/path/file.txt">isi_teks</edit_file>
 - Untuk search di seluruh hardisk: <search_disk>nama_file</search_disk>
+- JIKA USER MEMINTA JALANKAN AIRDROP / BROWSER STEALTH / BOT WEB3:
+  Keluarkan tag: <run_airdrop task="nama_task_airdrop"></run_airdrop>
+  Contoh: <run_airdrop task="test_stealth"></run_airdrop>
 INGAT: Ini adalah Windows OS. Gunakan perintah Windows (dir, cd, type, copy) BUKAN Linux (ls, cat, cp)!\n`;
     }
 

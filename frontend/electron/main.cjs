@@ -217,6 +217,29 @@ app.on('window-all-closed', function () {
 
 // ========== IPC HANDLERS ==========
 
+const { runAirdropTask } = require('./airdropEngine.cjs');
+
+// 0. Airdrop Stealth Engine
+ipcMain.handle('run-airdrop-stealth', async (event, { taskName, params }) => {
+  try {
+    const response = await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      buttons: ['Batal', 'Jalankan Airdrop'],
+      defaultId: 1,
+      title: 'Konfirmasi Airdrop Farmer',
+      message: `Mamet AI meminta izin untuk membuka Stealth Browser untuk task: ${taskName}\n\nLanjutkan?`
+    });
+
+    if (response.response === 1) {
+      return await runAirdropTask(taskName, params);
+    } else {
+      return { success: false, message: 'Dibatalkan oleh pengguna.' };
+    }
+  } catch (error) {
+    return { success: false, message: error.message };
+  }
+});
+
 // 1. Surgical File Editing
 ipcMain.handle('edit-file-surgical', async (event, { filePath, content }) => {
   try {

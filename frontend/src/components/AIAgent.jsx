@@ -1624,6 +1624,15 @@ export default function AIAgent() {
             }
           }
 
+          // 5. Web3 Airdrop Stealth Browser Interceptor
+          const airdropMatch = streamedContent.match(/<run_airdrop\s+task=["']([^"']+)["'][^>]*>[\s\S]*?(?:<\/run_airdrop>)?/i);
+          if (airdropMatch && window.electronAPI.runAirdropStealth) {
+             interceptHit = true;
+             const taskName = airdropMatch[1].trim();
+             const res = await window.electronAPI.runAirdropStealth(taskName, {});
+             autoReply += `\n[SYSTEM: STEALTH BROWSER (AIRDROP FARMER) RESULT for "${taskName}"]\n${res.success ? 'Berhasil: ' + res.message : 'Gagal: ' + res.message}\n`;
+          }
+
           if (interceptHit) {
              const capturedConvId = syncedConvId;
              setTimeout(() => {
