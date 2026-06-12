@@ -1625,11 +1625,19 @@ export default function AIAgent() {
           }
 
           // 5. Web3 Airdrop Stealth Browser Interceptor
-          const airdropMatch = streamedContent.match(/<run_airdrop\s+task=["']([^"']+)["'][^>]*>[\s\S]*?(?:<\/run_airdrop>)?/i);
+          const airdropMatch = streamedContent.match(/<run_airdrop\s+([^>]+)>[\s\S]*?(?:<\/run_airdrop>)?/i);
           if (airdropMatch && window.electronAPI.runAirdropStealth) {
              interceptHit = true;
-             const taskName = airdropMatch[1].trim();
-             const res = await window.electronAPI.runAirdropStealth(taskName, {});
+             const attrs = airdropMatch[1];
+             const taskMatch = attrs.match(/task=["']([^"']+)["']/i);
+             const keepOpenMatch = attrs.match(/keepOpen=["']([^"']+)["']/i);
+             const urlMatch = attrs.match(/url=["']([^"']+)["']/i);
+             
+             const taskName = taskMatch ? taskMatch[1].trim() : 'galxe_campaign';
+             const keepOpenVal = keepOpenMatch ? keepOpenMatch[1].trim() === 'true' : false;
+             const targetUrl = urlMatch ? urlMatch[1].trim() : null;
+
+             const res = await window.electronAPI.runAirdropStealth(taskName, { keepOpen: keepOpenVal, url: targetUrl });
              autoReply += `\n[SYSTEM: STEALTH BROWSER (AIRDROP FARMER) RESULT for "${taskName}"]\n${res.success ? 'Berhasil: ' + res.message : 'Gagal: ' + res.message}\n`;
           }
 

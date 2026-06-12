@@ -105,7 +105,22 @@ serve(async (req) => {
         // 2. Kirim Pesan ke Telegram
         if (telegramToken && telegramChatId) {
           try {
-            const message = `🚨 *MAMET SERVER ALERT* 🚨\n\n*Status:* DOWN\n*Error:* ${result.error}\n*Waktu:* ${new Date().toISOString()}`;
+            // Cari data monitor asli dari array yang sudah kita ambil di atas
+            const brokenMonitor = monitors.find(m => m.id === result.monitor_id);
+            const appName = brokenMonitor ? brokenMonitor.name : 'Unknown App';
+            const appUrl = brokenMonitor ? brokenMonitor.url : 'Unknown URL';
+            
+            // Format waktu ke Waktu Indonesia Barat (WIB)
+            const timeOptions = { timeZone: 'Asia/Jakarta', dateStyle: 'full', timeStyle: 'medium' };
+            const timeString = new Date().toLocaleString('id-ID', timeOptions);
+
+            const message = `🚨 *MAMET SERVER ALERT* 🚨\n\n` +
+                            `*Aplikasi:* ${appName}\n` +
+                            `*URL Target:* \`${appUrl}\`\n\n` +
+                            `*Status:* 🔴 DOWN\n` +
+                            `*Detail Error:* \`${result.error}\`\n\n` +
+                            `*Waktu (WIB):* ${timeString}`;
+                            
             const tgUrl = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
             
             await fetch(tgUrl, {

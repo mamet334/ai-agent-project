@@ -252,7 +252,7 @@ serve(async (req) => {
       throw new Error('GEMINI_API_KEY is not set');
     }
 
-    const streamGroqResponse = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], metaData: any = {}, fallbackSource = '') => {
+    const streamGroqResponse = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], metaData: any = {}, fallbackSource = '', throwOnError = false) => {
       const messages = [];
       if (systemPromptText) messages.push({ role: 'system', content: systemPromptText });
       if (chatHistory && chatHistory.length > 0) {
@@ -288,6 +288,11 @@ serve(async (req) => {
       if (!res.ok) {
         const errText = await res.text();
         console.error("Groq Stream Error:", errText);
+        
+        if (throwOnError) {
+           throw new Error(errText); // Lempar error agar caller bisa melanjutkan fallback
+        }
+
         const fallbackNote = fallbackSource ? `\n\n*(Catatan Mamet Healer: Groq ikut meledak saat mencoba menjadi otak cadangan untuk ${fallbackSource} yang sebelumnya gagal.)*` : '';
         const stream = new ReadableStream({
           start(controller) {
@@ -825,9 +830,16 @@ serve(async (req) => {
           // === FALLBACK STREAMING: Groq dulu (cepat & stabil), lalu OpenRouter ===
           console.log('Mamet Anti-Limit Stream: Semua Gemini keys limit, falling back ke Groq...');
           if (GROQ_API_KEY) {
-            return streamGroqResponse(promptText, systemPromptText, chatHistory, metaData, 'Gemini-429');
-          }
-          if (OPENROUTER_API_KEY) {
+            try {
+              // Panggil dengan throwOnError = true agar jika limit 6000 TPM habis, bisa dilempar ke OpenRouter
+              return await streamGroqResponse(promptText, systemPromptText, chatHistory, metaData, 'Gemini-429', true);
+            } catch (errGroq) {
+              console.log('Mamet Anti-Limit Stream: Groq juga meledak (Limit TPM). Falling back ke OpenRouter...');
+              if (OPENROUTER_API_KEY) {
+                return streamOpenRouterResponse(promptText, systemPromptText, chatHistory, metaData, true);
+              }
+            }
+          } else if (OPENROUTER_API_KEY) {
             return streamOpenRouterResponse(promptText, systemPromptText, chatHistory, metaData, true);
           }
           const errStream = new ReadableStream({

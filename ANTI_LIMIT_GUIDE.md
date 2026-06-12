@@ -60,7 +60,8 @@ Groq memberikan **~100 request/menit GRATIS** dengan Llama model.
 
 ### 4. (Bonus) Tambahkan OpenRouter Key
 Buka: https://openrouter.ai/settings/keys
-- Ada model gratis seperti `deepseek/deepseek-r1:free`
+- Daftarkan API Key Anda.
+- **Catatan Penting:** Di sistem Mamet AI, opsi OpenRouter bawaan pada dropdown menu (seperti `Gemini 2.0 Flash Exp` dan `Llama 3 8B`) sengaja dialihkan secara otomatis di backend ke model gratis **`meta-llama/llama-3.1-8b-instruct:free`**. Hal ini dilakukan untuk mematangkan kestabilan dan melindungi saldo OpenRouter Anda agar tidak terpotong (100% gratis). Saldo hanya akan terpotong jika Anda sengaja menambahkan model berbayar kustom di luar menu dropdown bawaan.
 ```
 OPENROUTER_API_KEY = sk-or-xxxxx
 ```
