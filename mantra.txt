@@ -93,3 +93,16 @@
 2. **Sistem Notifikasi Insiden (Alerting):** Setup integrasi Bot Telegram yang mengirim peringatan otomatis apabila terdeteksi anomali pada webhook atau downtime server.
 3. ~~**Sistem Router AI Berlapis (Traffic Light):**~~ ✅ SELESAI (Mengalokasikan load balancing secara cerdas: Groq (Llama 3) untuk parsing sederhana, Gemini 1.5 Flash untuk orkestrasi utama, dan DeepSeek untuk debugging kompleks/pengambilan keputusan kritis).
 4. ~~**Optimasi Hemat Token (RAG & Usage):**~~ ✅ SELESAI (Integrasi TokenSaverAgent & MainOrchestrator dari python.py/python1.py ke JavaScript dengan fitur: prompt compression, budget checking, complexity analysis, real-time token tracking UI, dan fix bug obfuscator `.json() is not a function` pada penyebaran object Response)
+
+## 💎 ROADMAP STRATEGIS (PHASE 5: PRIVATE MONETIZATION EMPIRE)
+*Fokus Baru: Mengembangkan alat/agen tingkat lanjut untuk mencetak pendapatan secara anonim di belakang layar (Lone Wolf).*
+
+**Core Tech Stack (Stealth Architecture):**
+- **Jubah Siluman:** `puppeteer-extra-plugin-stealth` / Undetected Playwright untuk menghapus sinyal webdriver & spoofing fingerprint.
+- **Topeng Rotasi:** Integrasi *Residential Proxies* untuk memalsukan IP rumahan dari berbagai negara secara dinamis.
+- **Pemecah Gembok:** Integrasi Solver API (Capsolver/2Captcha/Apify) untuk *bypass* tantangan reCAPTCHA & Cloudflare Turnstile secara otomatis.
+
+**Plugin Monetisasi Tertarget:**
+1. **Web3 "Airdrop" Farmer Agent:** Mengembangkan agen *Browser Automation* tersembunyi (Stealth) yang terintegrasi MetaMask untuk mengeksekusi puluhan transaksi airdrop *testnet* secara otonom.
+2. **Print-on-Demand (POD) Empire Builder:** Integrasi API Midjourney/DALL-E dan Printify/Etsy agar Mamet AI bisa menganalisis tren, men-generate desain produk massal, menulis SEO, dan menjual secara pasif.
+3. **Domain / Asset Flipper Agent:** Integrasi GoDaddy/Namecheap API dan Ahrefs SEO metrics untuk memindai, membeli, dan mendaftarkan ulang domain bernilai tinggi (Arbitrase Digital) ke platform pelelangan secara otonom.

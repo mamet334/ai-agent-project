@@ -1,6 +1,6 @@
 {
   "name": "ai-agent-frontend",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
@@ -8,9 +8,10 @@
     "preview": "vite preview",
     "electron:dev": "cross-env NODE_ENV=development electron .",
     "desktop": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && npm run electron:dev\"",
-    "dist": "vite build && node -e \"const fs=require('fs'); fs.writeFileSync('dist/index.html', fs.readFileSync('dist/index.html', 'utf8').replace(' crossorigin', ''))\" && electron-builder --win",
-    "dist:portable": "vite build && node -e \"const fs=require('fs'); fs.writeFileSync('dist/index.html', fs.readFileSync('dist/index.html', 'utf8').replace(' crossorigin', ''))\" && electron-builder --win portable",
-    "dist:publish": "vite build && node -e \"const fs=require('fs'); fs.writeFileSync('dist/index.html', fs.readFileSync('dist/index.html', 'utf8').replace(' crossorigin', ''))\" && electron-builder --win --publish always"
+    "postbuild": "node -e \"const fs=require('fs'); let h=fs.readFileSync('dist/index.html','utf8'); h=h.replaceAll(' crossorigin',''); h=h.replace(/<meta http-equiv=.Content-Security-Policy.[^>]*>/,''); fs.writeFileSync('dist/index.html',h); console.log('Post-build: crossorigin + CSP stripped from dist/index.html')\"",
+    "dist": "vite build && npm run postbuild && electron-builder --win",
+    "dist:portable": "vite build && npm run postbuild && electron-builder --win portable",
+    "dist:publish": "vite build && npm run postbuild && electron-builder --win --publish always"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",
