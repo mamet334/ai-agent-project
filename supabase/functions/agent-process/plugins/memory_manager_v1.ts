@@ -25,8 +25,8 @@ export const retrieveMemories = async (userPrompt: string, userId: string, supab
   const safeUserId = String(userId || '').toLowerCase().trim();
   if (!safeUserId || !userPrompt) return '';
   
-  // Mencegah pencarian untuk prompt pendek (contoh: "halo", "ok") yang tidak punya nilai semantik
-  if (userPrompt.trim().split(/\s+/).length <= 2) return '';
+  // Mencegah pencarian untuk prompt yang sangat pendek/kosong
+  if (userPrompt.trim().length < 4) return '';
   
   try {
     const embedding = await getEmbedding(userPrompt, geminiKey);
@@ -34,14 +34,11 @@ export const retrieveMemories = async (userPrompt: string, userId: string, supab
 
     const supabase = createClient(supabaseUrl, supabaseKey);
     
-    // Evaluasi threshold: Dinaikkan dari 0.75 ke 0.85.
-    // Alasan teknis: Semantic similarity text-embedding-004 cenderung mengelompok pada range 0.7 - 0.8 bahkan untuk topik yang kurang relevan.
-    // Threshold 0.85 memastikan hanya memori yang benar-benar berkaitan erat secara semantik yang terambil,
-    // meminimalisir 'context poisoning' pada LLM utama.
+    // Evaluasi threshold: Diturunkan ke 0.70 agar lebih mudah terpanggil.
     const { data, error } = await supabase.rpc('match_memories', {
       query_embedding: embedding,
-      match_threshold: 0.85, 
-      match_count: 3,        
+      match_threshold: 0.70, 
+      match_count: 5,        
       target_user_id: safeUserId
     });
 
