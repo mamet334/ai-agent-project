@@ -70,11 +70,25 @@ export const processAndSaveMemory = async (userPrompt: string, aiResponse: strin
   if (!safeUserId || !userPrompt || !aiResponse) return;
   if (!geminiKey) return; // Gemini is mandatory fallback
 
+  const logToDb = async (eventType: string, message: string) => {
+    try {
+      const client = createClient(supabaseUrl, supabaseKey);
+      await client.from('agent_logs').insert([{
+        user_id: safeUserId || null,
+        event_type: eventType,
+        provider: 'system',
+        message: `[Memory Manager V1] ${message}`
+      }]);
+    } catch (e: any) {
+      console.error("Failed to write log to DB:", e);
+    }
+  };
+
   try {
     const safePrompt = userPrompt.substring(0, 1000);
     const chatContext = `User: ${safePrompt}\nAI: ${aiResponse}`;
 
-    console.log(`[MEMORY SAVE START] userId=${safeUserId}, prompt_length=${safePrompt.length}`);
+    await logToDb('memory_save_start', `Starting process. userId=${safeUserId}, prompt_length=${safePrompt.length}`);
 
     // Helper for LLM generation (Groq -> fallback Gemini)
     const generateText = async (sys: string, user: string): Promise<string> => {
@@ -95,7 +109,9 @@ export const processAndSaveMemory = async (userPrompt: string, aiResponse: strin
             const text = data.choices?.[0]?.message?.content?.trim();
             if (text) return text;
           }
-        } catch (e) { console.error("Groq failed, falling back to Gemini"); }
+        } catch (e: any) { 
+          await logToDb('memory_warning', `Groq failed: ${e.message}. Falling back to Gemini.`);
+        }
       }
       // Fallback Gemini
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
@@ -113,55 +129,44 @@ export const processAndSaveMemory = async (userPrompt: string, aiResponse: strin
       return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
     };
 
-    console.log(`[MEMORY CLASSIFIER START]`);
-
     // 1. CLASSIFIER (WITH HEURISTIC BYPASS)
     let decision = 'TIDAK';
     const lowerPrompt = safePrompt.toLowerCase();
     
-    // Keyword bypass: Jika user secara eksplisit menyuruh ingat, langsung bypass classifier LLM!
     if (lowerPrompt.includes('ingat') || lowerPrompt.includes('catat') || lowerPrompt.includes('panggil saya') || lowerPrompt.includes('nama saya') || lowerPrompt.includes('saya suka')) {
        decision = 'YA';
-       console.log(`[MEMORY CLASSIFIER] Bypassed via Keyword Heuristic: YA`);
+       await logToDb('memory_classifier_bypass', `Bypassed classifier via heuristic: YA`);
     } else {
        const classPrompt = 'You are a Memory Classifier. Analyze ONLY the User message. Does the User mention explicit personal facts, identity details, long-term preferences, or commands to remember something? Reply ONLY with "YA" or "TIDAK". Do not explain.';
        const rawDecision = await generateText(classPrompt, chatContext);
        decision = rawDecision.toUpperCase() || 'TIDAK';
-       console.log(`[MEMORY CLASSIFIER RESULT] ${decision}`);
+       await logToDb('memory_classifier_result', `Classifier decision: ${decision}`);
     }
 
     if (!decision.includes('YA')) {
-      console.log(`[MEMORY SAVE END]`);
       return; 
     }
-
-    console.log(`[MEMORY SUMMARIZER START]`);
 
     // 2. SUMMARIZER
     const sumPrompt = 'Ekstrak dan rangkum FAKTA PERSONAL TENTANG USER dari teks berikut. Gunakan bahasa Indonesia. Maksimal 1 kalimat pendek dan padat (maksimal 15 kata). Gunakan sudut pandang orang ketiga (contoh: "User suka kopi hitam"). Abaikan sapaan atau percakapan basa-basi. Jangan merangkum jawaban AI, fokus murni pada fakta/identitas/kebutuhan User.';
     const summary = await generateText(sumPrompt, chatContext);
 
-    console.log(`[MEMORY SUMMARIZER RESULT] ${summary}`);
+    await logToDb('memory_summarizer_result', `Summary: ${summary}`);
 
     if (!summary || summary.length < 5) {
-      console.log(`[MEMORY SAVE END]`);
+      await logToDb('memory_save_abort', `Summary empty or too short. Aborting.`);
       return;
     }
-
-    console.log(`[MEMORY EMBEDDING START]`);
 
     // 3. STORAGE & DEDUPLICATION
     const embedding = await getEmbedding(summary, geminiKey);
     if (embedding.length === 0) {
-      console.log(`[MEMORY SAVE END]`);
+      await logToDb('memory_save_abort', `Embedding generation failed. Aborting.`);
       return;
     }
-    console.log(`[MEMORY EMBEDDING SUCCESS]`);
 
     const supabase = createClient(supabaseUrl, supabaseKey);
     
-    console.log(`[MEMORY DUPLICATE CHECK]`);
-
     // Cek duplikasi via similarity (>0.98 mirip = anggap duplikat)
     const { data: existingData, error: matchError } = await supabase.rpc('match_memories', {
       query_embedding: embedding, 
@@ -170,11 +175,13 @@ export const processAndSaveMemory = async (userPrompt: string, aiResponse: strin
       target_user_id: safeUserId
     });
 
-    if (matchError) throw matchError;
+    if (matchError) {
+      await logToDb('memory_error', `match_memories RPC failed: ${matchError.message}`);
+      throw matchError;
+    }
 
     if (existingData && existingData.length > 0) {
-      console.log(`[Memory Save] Skipped (Duplicate >0.98): "${summary}"`);
-      console.log(`[MEMORY SAVE END]`);
+      await logToDb('memory_duplicate_skipped', `Skipped duplicate: "${summary}"`);
       return;
     }
 
@@ -186,22 +193,22 @@ export const processAndSaveMemory = async (userPrompt: string, aiResponse: strin
     }]);
 
     if (insertError) {
-      console.log(`[MEMORY INSERT FAILED]`);
+      await logToDb('memory_insert_failed', `Insert failed: ${insertError.message}`);
       throw insertError;
     } else {
-      console.log(`[MEMORY INSERT SUCCESS]`);
-      console.log(`[Memory Save] Success: "${summary}"`);
+      await logToDb('memory_insert_success', `Saved memory: "${summary}"`);
     }
 
     // [Memory Cleanup] Trigger cleanup periodically in background (10% probability)
     if (Math.random() < 0.1) {
-      supabase.rpc('cleanup_memories').then(() => console.log(`[Memory Cleanup] Background cleanup triggered.`)).catch(e => console.error("[Memory Error] Cleanup failed:", e));
+      supabase.rpc('cleanup_memories').then(() => {
+        logToDb('memory_cleanup', 'Background cleanup triggered successfully.');
+      }).catch(e => {
+        logToDb('memory_error', `Cleanup failed: ${e.message}`);
+      });
     }
 
-    console.log(`[MEMORY SAVE END]`);
-
-  } catch (e) {
-    console.error("[Memory Error] Async Save Error:", e);
-    console.log(`[MEMORY SAVE END]`);
+  } catch (e: any) {
+    await logToDb('memory_error', `Exception: ${e.message}`);
   }
 };
