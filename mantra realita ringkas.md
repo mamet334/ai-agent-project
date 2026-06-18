@@ -113,6 +113,36 @@
 ### Backend Resilience & Fallback Logic (12 Juni 2026)
 - ✅ **CRITICAL FIX (Sticky 404 OpenRouter Bug):** Memperbaiki bug di Edge Function `agent-process` di mana `callLLMWithCascade` dan `streamGeminiResponse` secara tidak sengaja menggunakan nilai variabel `model` global dari prompt user (seperti model eksperimental yang sudah usang `ai21/jamba`) saat melakukan *fallback* ke OpenRouter akibat limit Gemini. **Solusi:** Menambahkan parameter `forceDefaultModel` pada `callOpenRouter` dan `streamOpenRouterResponse` untuk memaksa penggunaan model gratis yang 100% dijamin hidup (seperti `meta-llama/llama-3.1-8b-instruct:free`) ketika berada dalam mode *fallback/penyelamatan*.
 - ✅ **Groq Primary Fallback:** Mengaktifkan kembali `callGroq` dan `streamGroqResponse` di dalam Edge Function dan menginjeksi rahasia `GROQ_API_KEY` ke Supabase Secrets. Mengubah urutan rotasi/jatuh-bangun (*cascade order*) menjadi **Gemini → Groq (Llama 3.1) → OpenRouter**, sehingga ketika limit Gemini tercapai, sistem akan memprioritaskan Groq yang jauh lebih cepat dan stabil sebelum menyerahkan ke OpenRouter.
+
+## 🧠 MEMORY MANAGER V1 — STABILISASI (18 Juni 2026)
+
+### Status: ✅ PRODUCTION READY
+
+**Memory Manager V1** adalah sistem long-term memory berbasis vector embedding yang menyimpan fakta personal user ke tabel `user_memories` (Supabase, `VECTOR(768)`) dan menginjeksikannya ke prompt Claude setiap sesi baru.
+
+### Perbaikan yang Dilakukan:
+- ✅ **Multi-provider `generateText` cascade** di `memory_manager_v1.ts`: Groq (llama-3.1-8b-instant) → Gemini 2.0 Flash → **OpenRouter (anthropic/claude-sonnet-4.6)** → OpenAI (gpt-4o-mini). Sistem tidak lagi berhenti saat satu provider rate-limit.
+- ✅ **`getEmbedding` fallback**: Gemini Embedding 001 (768d) → **OpenAI text-embedding-3-small** (768d). Embedding tidak lagi bergantung 100% pada Gemini.
+- ✅ **SHA-256 hash** menggantikan MD5 di `getNormalizedHash` — MD5 tidak didukung Deno SubtleCrypto, menyebabkan error `Unrecognized algorithm name`.
+- ✅ **Summarizer prompt diperbaiki**: sekarang menyertakan teks user secara eksplisit di `sumUser`, bukan hanya sebagai `system` context — mencegah LLM menjawab "tidak ada informasi".
+- ✅ **SKIP guard**: jika summary kosong, terlalu pendek, atau diawali `SKIP`, proses dibatalkan sebelum embedding.
+- ✅ **Dihapus guard `if (!geminiKey) return`** — pipeline tidak lagi berhenti saat Gemini kuota habis.
+- ✅ **OpenRouter model** diubah dari `openrouter/free` (404) → `anthropic/claude-sonnet-4.6` (aktif & berbayar per token via saldo OpenRouter).
+
+### Hasil Test:
+| Query | Memory Terdeteksi | Status |
+|-------|------------------|--------|
+| "siapa nama panggilan saya?" | "Nama panggilan user adalah Pak Slamet." | ✅ PASS |
+| "saya dipanggil siapa?" | Same memory | ✅ PASS |
+| "nama saya siapa?" | Same memory | ✅ PASS |
+| "panggil saya bagaimana?" | Same memory | ✅ PASS |
+| **Concurrency (20 parallel)** | **1 row** (no duplication) | ✅ PASS |
+
+### Arsitektur:
+- **Save path**: `processAndSaveMemory()` (background async) → Rule filter → LLM Classifier → Summarizer → Gemini Embedding → Upsert `user_memories` (conflict: `user_id,normalized_memory_hash`)
+- **Retrieve path**: `retrieveMemories()` → `getEmbedding(query)` → `match_memories` RPC (Stage 1: ≥0.75, Stage 2: ≥0.65) → inject ke `dynamicMemory` → `fullSystemContext` → Claude
+- **Deduplication**: SHA-256 hash (upsert) + semantic similarity ≥0.85 (skip insert jika duplikat)
+
 ## 🔍 ANALISIS SISTEM OTAK AI
 - Frontend full menyalakan `MainOrchestrator` + `TokenSaverAgent` untuk optimasi prompt dan pengecekan budget sebelum backend.
 - Mametlite Lite memanggil `callAgentSimple()` langsung ke Supabase Edge Function tanpa orchestrator, dengan tools terbatas.
