@@ -1,3 +1,5 @@
+import { processAndSaveMemory } from './memory_manager_v1.ts';
+
 export default {
   name: 'memory_manager',
   description: 'Gunakan ini JIKA pengguna memberikan instruksi atau informasi pribadi yang penting untuk diingat (misal: "Nama saya Budi", "Saya alergi kacang", "Selalu panggil saya Bos"). Tugas Anda mengekstrak fakta tersebut.',
@@ -16,34 +18,17 @@ Tugas asli: ${task}`;
         return { output: "Tidak ada memori baru yang perlu disimpan." };
       }
 
-      // Kirim ke rag-process untuk dimasukkan ke otak Vektor
+      // Simpan langsung ke user_memories V1
       const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-      const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+      const geminiKey = env.GEMINI_API_KEY || '';
+      const groqKey = env.GROQ_API_KEY || '';
 
-      if (!supabaseUrl) return { output: "Gagal menyimpan memori: Supabase URL tidak ditemukan." };
-
-      const res = await fetch(`${supabaseUrl}/functions/v1/rag-process`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${anonKey}`,
-          'Content-Type': 'application/json',
-          'x-byok-gemini': env.GEMINI_API_KEY || ''
-        },
-        body: JSON.stringify({
-          title: 'Memori Obrolan Otomatis',
-          text: extractedFact,
-          userId: userId
-        })
-      });
-
-      if (!res.ok) {
-        const err = await res.text();
-        return { output: `Gagal menyimpan memori ke Vector DB. Status: ${res.status}. Error: ${err}` };
-      }
+      await processAndSaveMemory(extractedFact, "[SUB-AGENT EXPLICIT SAVE]", userId, supabaseUrl, supabaseKey, geminiKey, groqKey);
 
       return {
-        output: `Memori berhasil ditanamkan ke dalam otak Vektor: "${extractedFact}"`,
-        toolExecution: { name: 'auto_memory_extraction', args: { fact: extractedFact } }
+        output: `Memori berhasil ditanamkan ke dalam otak Vektor V1 (user_memories): "${extractedFact}"`,
+        toolExecution: { name: 'auto_memory_extraction_v1', args: { fact: extractedFact } }
       };
     } catch (err) {
       return { output: `Eksekusi memory_manager gagal: ${err}` };
