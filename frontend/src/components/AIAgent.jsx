@@ -1,7 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe, Clock, Copy, Check, BrainCircuit, Trash2, Edit2, Download, FolderOpen, AlertTriangle, Activity, DollarSign, ShoppingBag } from 'lucide-react';
+import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe, Clock, Copy, Check, BrainCircuit, Trash2, Edit2, Download, FolderOpen, AlertTriangle, Activity, DollarSign, ShoppingBag, Database, Briefcase } from 'lucide-react';
 import { supabase } from '../supabase';
 import MonitoringDashboard from './MonitoringDashboard';
+import ObservabilityDashboard from './ObservabilityDashboard';
+import MemoryHealthDashboard from './MemoryHealthDashboard';
+import WorkDashboard from './WorkDashboard';
 import BillingDashboard from './BillingDashboard';
 import ShopeeDashboard from './ShopeeDashboard';
 import MainOrchestrator from '../lib/mainOrchestrator';
@@ -1435,10 +1438,48 @@ export default function AIAgent() {
       // Clear pending mock logs timeouts
       logIntervals.forEach(clearTimeout);
 
+      console.log('[DEBUG_RESPONSE_TYPE]', typeof response);
+      console.log('[DEBUG_RESPONSE_KEYS]', Object.keys(response || {}));
+
+      // Defensive patch for Orchestrator responses
+      if (response && response.status === 'error') {
+        console.error('[ORCHESTRATOR_ERROR]', response.error);
+        setLogs(prev => [...prev, '⚠️ ' + response.error]);
+        
+        const agentMessage = {
+          id: Date.now() + 1,
+          type: 'agent',
+          content: 'Maaf, terjadi kesalahan saat menyambung ke server: ' + response.error,
+          timestamp: new Date().toISOString()
+        };
+        setConversations(prev => {
+          const updated = prev.map(c => {
+            if (c.id === effectiveConvId || c.id === syncedConvId) {
+              const newC = { ...c, messages: [...c.messages, agentMessage], updated_at: new Date().toISOString() };
+              syncConversationToDB(newC);
+              return newC;
+            }
+            return c;
+          });
+          return updated;
+        });
+        setLoading(false);
+        return;
+      }
+
+      if (!response || typeof response.json !== 'function') {
+        console.error('[INVALID_RESPONSE_OBJECT]', response);
+        setLogs(prev => [...prev, '⚠️ Sistem menerima respons tidak valid']);
+        setLoading(false);
+        return;
+      }
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || 'Server responded with an error');
       }
+      
+      console.log('[FETCH_RESPONSE_OK]');
 
       if (response.headers.get('Content-Type')?.includes('text/event-stream')) {
         const metadataHeader = response.headers.get('X-Agent-Metadata');
@@ -2221,6 +2262,25 @@ export default function AIAgent() {
                 >
                   <ShoppingBag className="w-3.5 h-3.5" /> Shopee Ninja
                 </button>
+                  <button
+                    onClick={() => setActiveView('observability')}
+                    className={`w-full py-2 border rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${activeView === 'observability' ? 'bg-purple-500/20 text-purple-300 border-purple-500/50' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-600 hover:text-white'}`}
+                  >
+                    <Activity className="w-4 h-4" /> Observability
+                  </button>
+                  <button
+                    onClick={() => setActiveView('memoryhealth')}
+                    className={`w-full py-2 border rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${activeView === 'memoryhealth' ? 'bg-blue-500/20 text-blue-300 border-blue-500/50' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-600 hover:text-white'}`}
+                  >
+                    <Database className="w-4 h-4" /> Mem Health
+                  </button>
+                  <button
+                    onClick={() => setActiveView('work')}
+                    className={`w-full py-2 border rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${activeView === 'work' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-600 hover:text-white'}`}
+                  >
+                    <Briefcase className="w-4 h-4" /> Work Track
+                  </button>
+
               </div>
             </div>
 
@@ -2372,6 +2432,12 @@ export default function AIAgent() {
             <BillingDashboard user={user} />
           ) : activeView === 'shopee' ? (
             <ShopeeDashboard />
+          ) : activeView === 'observability' ? (
+            <ObservabilityDashboard />
+          ) : activeView === 'memoryhealth' ? (
+            <MemoryHealthDashboard />
+          ) : activeView === 'work' ? (
+            <WorkDashboard />
           ) : activeView === 'cron' ? (
             <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-900/50">
               <div className="max-w-4xl mx-auto">

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingBag, Plus, Trash2, Check, ExternalLink, RefreshCw, Clock } from 'lucide-react';
+import { ShoppingBag, Plus, Trash2, Check, ExternalLink, RefreshCw, Clock, Power } from 'lucide-react';
 import { supabase } from '../supabase';
 
 export default function ShopeeDashboard() {
   const [queue, setQueue] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isSystemActive, setIsSystemActive] = useState(true);
+  const [toggleLoading, setToggleLoading] = useState(false);
   
   // Form State
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -21,6 +23,26 @@ export default function ShopeeDashboard() {
       
       if (error) throw error;
       setQueue(data || []);
+
+      // Get system toggle state
+      const { data: toggleData, error: toggleError } = await supabase
+        .from('scheduled_tasks')
+        .select('is_active')
+        .eq('title', 'SYSTEM_SHOPEE_NINJA_TOGGLE')
+        .limit(1)
+        .maybeSingle();
+
+      if (!toggleError && toggleData) {
+        setIsSystemActive(toggleData.is_active);
+      } else if (!toggleData) {
+        // Create it if it doesn't exist
+        await supabase.from('scheduled_tasks').insert({
+          title: 'SYSTEM_SHOPEE_NINJA_TOGGLE',
+          prompt: 'System toggle for Shopee Ninja',
+          is_active: true,
+          interval_hours: 9999
+        });
+      }
     } catch (error) {
       console.error('Error fetching shopee queue:', error);
     } finally {
@@ -33,6 +55,24 @@ export default function ShopeeDashboard() {
     const interval = setInterval(fetchData, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleToggleSystem = async () => {
+    setToggleLoading(true);
+    try {
+      const newState = !isSystemActive;
+      const { error } = await supabase
+        .from('scheduled_tasks')
+        .update({ is_active: newState })
+        .eq('title', 'SYSTEM_SHOPEE_NINJA_TOGGLE');
+      
+      if (error) throw error;
+      setIsSystemActive(newState);
+    } catch (error) {
+      alert('Gagal mengubah status: ' + error.message);
+    } finally {
+      setToggleLoading(false);
+    }
+  };
 
   const handleAddQueue = async (e) => {
     e.preventDefault();
@@ -82,6 +122,14 @@ export default function ShopeeDashboard() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <button 
+              onClick={handleToggleSystem}
+              disabled={toggleLoading}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg ${isSystemActive ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-500/20' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}
+              title={isSystemActive ? 'Matikan Auto-Post' : 'Hidupkan Auto-Post'}
+            >
+              <Power className={`w-4 h-4 ${toggleLoading ? 'animate-pulse' : ''}`} /> {isSystemActive ? 'Sistem ON' : 'Sistem OFF'}
+            </button>
             <button 
               onClick={fetchData}
               className="p-2 text-slate-400 hover:text-white bg-slate-800 rounded-lg hover:bg-slate-700 transition-colors"
