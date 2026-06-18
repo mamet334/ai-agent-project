@@ -77,6 +77,9 @@ export const processAndSaveMemory = async (userPrompt: string, aiResponse: strin
     const safePrompt = userPrompt.substring(0, 1000);
     const chatContext = `User: ${safePrompt}\nAI: ${aiResponse}`;
 
+    console.log(`[MEMORY SAVE START] userId=${safeUserId}, prompt_length=${safePrompt.length}`);
+    console.log(`[MEMORY CLASSIFIER START]`);
+
     // 1. CLASSIFIER
     const classRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -99,9 +102,14 @@ export const processAndSaveMemory = async (userPrompt: string, aiResponse: strin
     const classData = await classRes.json();
     const decision = classData.choices?.[0]?.message?.content?.trim().toUpperCase() || 'TIDAK';
 
+    console.log(`[MEMORY CLASSIFIER RESULT] ${decision}`);
+
     if (!decision.includes('YA')) {
+      console.log(`[MEMORY SAVE END]`);
       return; 
     }
+
+    console.log(`[MEMORY SUMMARIZER START]`);
 
     // 2. SUMMARIZER
     const sumRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -125,14 +133,27 @@ export const processAndSaveMemory = async (userPrompt: string, aiResponse: strin
     const sumData = await sumRes.json();
     const summary = sumData.choices?.[0]?.message?.content?.trim() || '';
 
-    if (!summary || summary.length < 5) return;
+    console.log(`[MEMORY SUMMARIZER RESULT] ${summary}`);
+
+    if (!summary || summary.length < 5) {
+      console.log(`[MEMORY SAVE END]`);
+      return;
+    }
+
+    console.log(`[MEMORY EMBEDDING START]`);
 
     // 3. STORAGE & DEDUPLICATION
     const embedding = await getEmbedding(summary, geminiKey);
-    if (embedding.length === 0) return;
+    if (embedding.length === 0) {
+      console.log(`[MEMORY SAVE END]`);
+      return;
+    }
+    console.log(`[MEMORY EMBEDDING SUCCESS]`);
 
     const supabase = createClient(supabaseUrl, supabaseKey);
     
+    console.log(`[MEMORY DUPLICATE CHECK]`);
+
     // Cek duplikasi via similarity (>0.98 mirip = anggap duplikat)
     const { data: existingData, error: matchError } = await supabase.rpc('match_memories', {
       query_embedding: embedding, 
@@ -145,6 +166,7 @@ export const processAndSaveMemory = async (userPrompt: string, aiResponse: strin
 
     if (existingData && existingData.length > 0) {
       console.log(`[Memory Save] Skipped (Duplicate >0.98): "${summary}"`);
+      console.log(`[MEMORY SAVE END]`);
       return;
     }
 
@@ -156,8 +178,10 @@ export const processAndSaveMemory = async (userPrompt: string, aiResponse: strin
     }]);
 
     if (insertError) {
+      console.log(`[MEMORY INSERT FAILED]`);
       throw insertError;
     } else {
+      console.log(`[MEMORY INSERT SUCCESS]`);
       console.log(`[Memory Save] Success: "${summary}"`);
     }
 
@@ -166,7 +190,10 @@ export const processAndSaveMemory = async (userPrompt: string, aiResponse: strin
       supabase.rpc('cleanup_memories').then(() => console.log(`[Memory Cleanup] Background cleanup triggered.`)).catch(e => console.error("[Memory Error] Cleanup failed:", e));
     }
 
+    console.log(`[MEMORY SAVE END]`);
+
   } catch (e) {
     console.error("[Memory Error] Async Save Error:", e);
+    console.log(`[MEMORY SAVE END]`);
   }
 };
