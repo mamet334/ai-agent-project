@@ -115,12 +115,20 @@ export const processAndSaveMemory = async (userPrompt: string, aiResponse: strin
 
     console.log(`[MEMORY CLASSIFIER START]`);
 
-    // 1. CLASSIFIER
-    const classPrompt = 'You are a Memory Classifier. Does the following conversation contain explicit personal facts, long-term preferences, user identity details, or important requirements that the AI should remember for future sessions? Reply ONLY with "YA" or "TIDAK". Do not explain.';
-    const rawDecision = await generateText(classPrompt, chatContext);
-    const decision = rawDecision.toUpperCase() || 'TIDAK';
-
-    console.log(`[MEMORY CLASSIFIER RESULT] ${decision}`);
+    // 1. CLASSIFIER (WITH HEURISTIC BYPASS)
+    let decision = 'TIDAK';
+    const lowerPrompt = safePrompt.toLowerCase();
+    
+    // Keyword bypass: Jika user secara eksplisit menyuruh ingat, langsung bypass classifier LLM!
+    if (lowerPrompt.includes('ingat') || lowerPrompt.includes('catat') || lowerPrompt.includes('panggil saya') || lowerPrompt.includes('nama saya') || lowerPrompt.includes('saya suka')) {
+       decision = 'YA';
+       console.log(`[MEMORY CLASSIFIER] Bypassed via Keyword Heuristic: YA`);
+    } else {
+       const classPrompt = 'You are a Memory Classifier. Analyze ONLY the User message. Does the User mention explicit personal facts, identity details, long-term preferences, or commands to remember something? Reply ONLY with "YA" or "TIDAK". Do not explain.';
+       const rawDecision = await generateText(classPrompt, chatContext);
+       decision = rawDecision.toUpperCase() || 'TIDAK';
+       console.log(`[MEMORY CLASSIFIER RESULT] ${decision}`);
+    }
 
     if (!decision.includes('YA')) {
       console.log(`[MEMORY SAVE END]`);
