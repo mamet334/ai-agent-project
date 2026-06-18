@@ -957,13 +957,13 @@ Anda WAJIB mengeluarkan perintah Windows di dalam tag <terminal>. DILARANG menye
           
           const { data: matchedDocs, error: matchError } = await supabaseClient.rpc('match_documents', {
             query_embedding: queryEmbedding,
-            match_threshold: 0.5,
+            match_threshold: 0.75,
             match_count: 5,
             p_user_id: userId
           });
 
           if (!matchError && matchedDocs && matchedDocs.length > 0) {
-            ragContext = `\n\n[DOKUMEN REFERENSI KNOWLEDGE BASE]:\nBerikan jawaban berdasarkan data relevan yang ditemukan dalam database dokumen milik user berikut ini:\n`;
+            ragContext = `\n\n[DOKUMEN REFERENSI KNOWLEDGE BASE]:\nBerikut adalah data dokumen milik user. JIKA RELEVAN dengan pertanyaan user, gunakan data ini. Jika tidak relevan, abaikan saja:\n`;
             for (const doc of matchedDocs) {
               ragContext += `- [Dari file "${doc.title}"]: "${doc.content}"\n`;
             }
