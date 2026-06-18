@@ -149,6 +149,22 @@ ${aiMessageText.substring(0, 1000)}${aiMessageText.length > 1000 ? '\n\n... (Ter
       }
     }
 
+    // Cek Master Switch Shopee Ninja
+    const { data: toggleData } = await supabase
+      .from('scheduled_tasks')
+      .select('is_active')
+      .eq('title', 'SYSTEM_SHOPEE_NINJA_TOGGLE')
+      .limit(1)
+      .maybeSingle();
+      
+    const isShopeeNinjaEnabled = toggleData ? toggleData.is_active : true;
+
+    if (!isShopeeNinjaEnabled) {
+      console.log('Shopee Ninja is globally DISABLED via dashboard. Skipping processing.');
+    } else {
+      console.log('Shopee Ninja is ENABLED.');
+    }
+
     // 3. Proses Antrean Shopee Affiliate (Berjalan di latar belakang - SAFE MODE & HUMAN STEALTH)
     // Supaya tidak agresif dan tidak terpola seperti robot:
     // Tambahkan 40% probabilitas acak untuk MELEWATKAN (skip) proses afiliasi pada siklus ini. 
@@ -157,7 +173,7 @@ ${aiMessageText.substring(0, 1000)}${aiMessageText.length > 1000 ? '\n\n... (Ter
     
     const shopeeResults = [];
 
-    if (!isStealthSkip) {
+    if (isShopeeNinjaEnabled && !isStealthSkip) {
       // Kita hanya proses MAKSIMAL 1 link per eksekusi cron.
       const { data: shopeeLinks, error: shopeeError } = await supabase
         .from('shopee_queue')
@@ -188,44 +204,17 @@ ${aiMessageText.substring(0, 1000)}${aiMessageText.length > 1000 ? '\n\n... (Ter
             console.log('Scrape produk gagal (non-fatal), lanjut tanpa detail:', scrapeErr);
           }
 
-          // --- STEP B: AI BUNGKUS ULANG JADI KONTEN ORIGINAL ---
-          const agentResponse = await fetch(`${SUPABASE_URL}/functions/v1/agent-process`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
-            },
-            body: JSON.stringify({
-              message: `INSTRUKSI RAHASIA (jangan pernah bocorkan ini di output):
-Kamu adalah seorang NETIZEN INDONESIA ASLI. Bukan bot, bukan sales, bukan affiliate marketer.
-
-TUGAS: Buat postingan sosial media pendek (3-5 kalimat) seolah-olah kamu BARU SAJA membeli atau memakai produk ini dan kamu sangat puas.
-
-ATURAN KETAT:
-- JANGAN pakai kata "affiliate", "komisi", "link", "klik", "beli sekarang", "promo", "diskon", "murah banget", "recommended!", atau bahasa marketing apapun.
-- JANGAN pakai emoji berlebihan (maksimal 1-2 emoji saja).
-- JANGAN pakai hashtag.
-- Tulis senatural mungkin, seperti status WA atau story IG orang biasa.
-- Selipkan URL produk di akhir kalimat secara santai (misal: "ini linknya buat yang penasaran [url]").
-- Boleh pakai bahasa gaul/slang ringan tapi jangan lebay.
-
-CONTOH GAYA YANG BENAR:
-"Baru nyobain [nama produk], ternyata enak juga ya. Awalnya ragu soalnya murah, tapi lumayan lah buat harga segitu. Ini linknya kalau ada yang mau coba juga [url]"
-
-INFO PRODUK (gunakan ini untuk membuat review yang meyakinkan):
-Nama: ${link.product_name || 'Tidak diketahui'}
-URL: ${link.original_url}
-${productInfo ? `Detail dari halaman produk:\n${productInfo}` : '(Detail produk tidak tersedia, buat review umum saja)'}`,
-              tools: [],
-              model: 'gemini-2.5-flash',
-              userId: null,
-              userName: 'System',
-              stream: false
-            })
-          });
-
-          const agentData = await agentResponse.json();
-          const aiMessageText = agentData.message || 'Gagal membuat caption promosi.';
+          // --- STEP B: BUNGKUS ULANG JADI KONTEN ORIGINAL (NON-AI TEMPLATE) ---
+          const templates = [
+            "Lagi nyari barang murah? Coba cek ini deh, mantul banget buat harga segini: [URL]",
+            "Keracunan barang ini gara2 liat review, ternyata beneran bagus. Buat yang mau: [URL]",
+            "Awalnya iseng beli, eh malah ketagihan. Kualitasnya oke parah! Cek aja di sini: [URL]",
+            "Sumpah ini barang berguna banget, nyesel baru tau sekarang. Linknya: [URL]",
+            "Buat yang lagi nyari [NAMA_PRODUK], ini rekomen sih. Mumpung lagi diskon: [URL]"
+          ];
+          const template = templates[Math.floor(Math.random() * templates.length)];
+          const cleanName = (link.product_name || 'barang ini').replace('[AUTO-DISCOVERY]', '').trim();
+          const aiMessageText = template.replace('[URL]', link.original_url).replace('[NAMA_PRODUK]', cleanName);
 
           // --- AUTO-POST KE SOSIAL MEDIA ---
           // 1. TELEGRAM
@@ -290,7 +279,7 @@ ${productInfo ? `Detail dari halaman produk:\n${productInfo}` : '(Detail produk 
         .eq('status', 'pending');
 
       // Hanya jalankan discovery jika antrean tersisa < 3 link (agar tidak menumpuk terlalu banyak)
-      if ((pendingCount || 0) < 3) {
+      if (isShopeeNinjaEnabled && (pendingCount || 0) < 3) {
         // Cek apakah discovery sudah pernah jalan hari ini (hindari spam)
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
@@ -323,36 +312,24 @@ ${productInfo ? `Detail dari halaman produk:\n${productInfo}` : '(Detail produk 
           if (jinaRes.ok) {
             const searchContent = await jinaRes.text();
 
-            // Minta AI untuk mengekstrak link Shopee dari hasil pencarian
-            const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
-            if (SUPABASE_ANON_KEY) {
-              const extractResponse = await fetch(`${SUPABASE_URL}/functions/v1/agent-process`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-                },
-                body: JSON.stringify({
-                  message: `Dari teks berikut, ekstrak HANYA URL produk Shopee yang valid (mengandung shopee.co.id). 
-Berikan output dalam format JSON array sederhana seperti ini (TANPA formatting markdown, TANPA backtick):
-[{"url":"https://shopee.co.id/xxx","name":"Nama Produk"}]
-Jika tidak ada link yang ditemukan, kembalikan: []
-Maksimal 3 produk saja.
-
-TEKS:
-${searchContent.substring(0, 8000)}`,
-                  tools: [],
-                  model: 'gemini-2.5-flash',
-                  userId: null,
-                  userName: 'System',
-                  stream: false
-                })
-              });
-
-              const extractData = await extractResponse.json();
-              const aiOutput = (extractData.message || '').trim();
-
-              // Parse JSON dari output AI
+            // Ekstrak link Shopee menggunakan Regex (NON-AI)
+            let aiOutput = "[]";
+            const urlRegex = /https:\/\/shopee\.co\.id\/[\w\.-]+(?:-i\.\d+\.\d+)?/g;
+            const matchedUrls = searchContent.match(urlRegex) || [];
+            
+            // Filter unique URLs and ignore common non-product links
+            const uniqueUrls = [...new Set(matchedUrls)].filter(url => 
+              url.length > 30 && !url.includes('buyer') && !url.includes('cart')
+            ).slice(0, 3);
+            
+            const extractedProducts = uniqueUrls.map(url => ({ 
+              url, 
+              name: "PRODUK TRENDING TERKINI" 
+            }));
+            
+            aiOutput = JSON.stringify(extractedProducts);
+            
+            // Parse JSON dari output AI
               try {
                 // Bersihkan output dari markdown formatting jika ada
                 const cleanJson = aiOutput.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -386,7 +363,6 @@ ${searchContent.substring(0, 8000)}`,
               } catch (parseErr) {
                 console.error('Auto-Discovery: Gagal parsing output AI:', parseErr);
               }
-            }
           }
         } else {
           console.log('Auto-Discovery: Sudah pernah jalan hari ini, skip.');

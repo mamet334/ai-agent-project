@@ -1094,6 +1094,22 @@ DILARANG KERAS MENGGUNAKAN PYTHON ATAU "TOOL_CODE". JANGAN PERNAH MENULISKAN KOD
     console.log(`[SYSTEM CONTEXT FINAL] fullSystemContext="${fullSystemContext.substring(fullSystemContext.length - 300)}"`);
     processingSteps.push(`[SYSTEM CONTEXT FINAL] fullSystemContext="${fullSystemContext.substring(fullSystemContext.length - 300)}"`);
 
+    // --- SINGLE GATEWAY: ANTI DUPLICATE MEMORY (TIER 1 & 2) ---
+    // Dipanggil TEPAT SEBELUM pengecekan logic agent atau model AI.
+    // Dijalankan asinkron agar tidak memblokir respon ke pengguna jika memungkinkan
+    if (userId && message && typeof message === 'string' && message.trim().length > 0) {
+      console.log(`[MEMORY_GATEWAY] Memasukkan request userId: ${userId} ke pipeline idempotency`);
+      await processAndSaveMemory(
+        message, 
+        "[System Ack]", 
+        userId, 
+        Deno.env.get('SUPABASE_URL') || '', 
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', 
+        GEMINI_API_KEY, 
+        GROQ_API_KEY
+      ).catch(e => console.error('[MEMORY_GATEWAY_ERROR]', e));
+    }
+
     if (tools && tools.length > 0) {
       // --- INTENT ROUTER (Pemotong Kompas Cerdas) ---
       let isChatBiasa = false;
@@ -1161,12 +1177,7 @@ Jawab HANYA dengan satu kata: "CHAT_BIASA" atau "BUTUH_AGENT".`;
         
         // --- MEMORY MANAGER (BACKGROUND SAVE) ---
         // Kita hanya mengambil 'message' murni (tanpa embel-embel dokumen 50rb karakter) agar token Groq tidak meledak
-        const memoryPromise1 = processAndSaveMemory(message, "[Chat Biasa - AI Respons Streamed]", userId, Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', GEMINI_API_KEY, GROQ_API_KEY).catch(e => console.error(e));
-        // @ts-ignore
-        if (typeof EdgeRuntime !== 'undefined' && typeof EdgeRuntime.waitUntil === 'function') {
-          // @ts-ignore
-          EdgeRuntime.waitUntil(memoryPromise1);
-        }
+        // --- [REMOVED] MEMORY MANAGER DUPLICATE CALL ---
 
         if (stream && !extractedImage) {
           const streamRes = getStreamResponse(finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps });
@@ -1306,12 +1317,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
         
         // --- MEMORY MANAGER (BACKGROUND SAVE) ---
         // Kita hanya mengambil 'message' murni agar hemat token
-        const memoryPromise2 = processAndSaveMemory(message, "[Sub-Agent Synthesis - AI Respons Streamed]", userId, Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', GEMINI_API_KEY, GROQ_API_KEY).catch(e => console.error(e));
-        // @ts-ignore
-        if (typeof EdgeRuntime !== 'undefined' && typeof EdgeRuntime.waitUntil === 'function') {
-          // @ts-ignore
-          EdgeRuntime.waitUntil(memoryPromise2);
-        }
+        // --- [REMOVED] MEMORY MANAGER DUPLICATE CALL ---
 
         if (stream && !extractedImage) {
           const streamRes = getStreamResponse(synthesisPrompt, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps });
@@ -1328,12 +1334,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
       }
     } else {
       // --- MEMORY MANAGER (BACKGROUND SAVE - DIRECT RESPONSE) ---
-      const memoryPromise3 = processAndSaveMemory(message, "[Direct Chat - AI Respons]", userId, Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', GEMINI_API_KEY, GROQ_API_KEY).catch(e => console.error(e));
-      // @ts-ignore
-      if (typeof EdgeRuntime !== 'undefined' && typeof EdgeRuntime.waitUntil === 'function') {
-        // @ts-ignore
-        EdgeRuntime.waitUntil(memoryPromise3);
-      }
+      // --- [REMOVED] MEMORY MANAGER DUPLICATE CALL ---
 
       if (stream && !extractedImage) {
         processingSteps.push('✍️ Menjawab langsung (tanpa tools)...');

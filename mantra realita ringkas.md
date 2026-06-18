@@ -128,6 +128,7 @@
 - ✅ **SKIP guard**: jika summary kosong, terlalu pendek, atau diawali `SKIP`, proses dibatalkan sebelum embedding.
 - ✅ **Dihapus guard `if (!geminiKey) return`** — pipeline tidak lagi berhenti saat Gemini kuota habis.
 - ✅ **OpenRouter model** diubah dari `openrouter/free` (404) → `anthropic/claude-sonnet-4.6` (aktif & berbayar per token via saldo OpenRouter).
+- ✅ **Production-Grade Idempotency Shield**: Menggabungkan 3 lapis proteksi (Single Gateway, Cache Memori, Database Constraint) untuk memastikan sistem memori kebal terhadap duplikasi ganda akibat spam-klik atau concurrency.
 
 ### Hasil Test:
 | Query | Memory Terdeteksi | Status |

@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@supabase/supabase-js": "^2.108.2",
     "cheerio": "^1.2.0",
     "duck-duck-scrape": "^2.2.7",
     "node-fetch": "^2.7.0",
