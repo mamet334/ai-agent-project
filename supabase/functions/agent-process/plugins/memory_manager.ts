@@ -1,4 +1,4 @@
-import { processAndSaveMemory } from './memory_manager_v1.ts';
+import { saveFactDirectly } from './memory_manager_v1.ts';
 
 export default {
   name: 'memory_manager',
@@ -18,13 +18,12 @@ Tugas asli: ${task}`;
         return { output: "Tidak ada memori baru yang perlu disimpan." };
       }
 
-      // Simpan langsung ke user_memories V1
+      // Simpan langsung ke user_memories V1 via saveFactDirectly
       const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
       const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
       const geminiKey = env.GEMINI_API_KEY || '';
-      const groqKey = env.GROQ_API_KEY || '';
 
-      await processAndSaveMemory(extractedFact, "[SUB-AGENT EXPLICIT SAVE]", userId, supabaseUrl, supabaseKey, geminiKey, groqKey);
+      await saveFactDirectly(extractedFact, userId, supabaseUrl, supabaseKey, geminiKey);
 
       return {
         output: `Memori berhasil ditanamkan ke dalam otak Vektor V1 (user_memories): "${extractedFact}"`,

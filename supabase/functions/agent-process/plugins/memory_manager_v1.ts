@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
-const getEmbedding = async (text: string, geminiKey: string) => {
+export const getEmbedding = async (text: string, geminiKey: string) => {
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${geminiKey}`;
     const res = await fetch(url, {
@@ -14,6 +14,73 @@ const getEmbedding = async (text: string, geminiKey: string) => {
   } catch (e) {
     console.error("[Memory Error] Embedding API failed", e);
     return [];
+  }
+};
+
+export const saveFactDirectly = async (fact: string, userId: string, supabaseUrl: string, supabaseKey: string, geminiKey: string) => {
+  const safeUserId = String(userId || '').toLowerCase().trim();
+  if (!safeUserId || !fact) return;
+
+  const logToDb = async (eventType: string, message: string) => {
+    try {
+      const client = createClient(supabaseUrl, supabaseKey);
+      await client.from('agent_logs').insert([{
+        user_id: safeUserId || null,
+        event_type: eventType,
+        provider: 'system',
+        message: `[Memory Direct Save] ${message}`
+      }]);
+    } catch (e: any) {
+      console.error("Failed to write log to DB:", e);
+    }
+  };
+
+  try {
+    await logToDb('memory_save_start', `Starting direct save. userId=${safeUserId}`);
+
+    const embedding = await getEmbedding(fact, geminiKey);
+    if (embedding.length === 0) {
+      await logToDb('memory_save_abort', `Embedding generation failed for fact: "${fact}"`);
+      return;
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Cek duplikasi
+    const { data: existingData, error: matchError } = await supabase.rpc('match_memories', {
+      query_embedding: embedding, 
+      match_threshold: 0.98, 
+      match_count: 1, 
+      target_user_id: safeUserId
+    });
+
+    if (matchError) {
+      await logToDb('memory_error', `match_memories RPC failed: ${matchError.message}`);
+      throw matchError;
+    }
+
+    if (existingData && existingData.length > 0) {
+      await logToDb('memory_duplicate_skipped', `Skipped duplicate: "${fact}"`);
+      return;
+    }
+
+    // Insert
+    const { error: insertError } = await supabase.from('user_memories').insert([{ 
+      user_id: safeUserId, 
+      summary: fact, 
+      embedding: embedding 
+    }]);
+
+    if (insertError) {
+      await logToDb('memory_insert_failed', `Insert failed: ${insertError.message}`);
+      throw insertError;
+    } else {
+      await logToDb('memory_insert_success', `Saved memory: "${fact}"`);
+    }
+
+  } catch (e: any) {
+    await logToDb('memory_error', `Exception in direct save: ${e.message}`);
+    throw e;
   }
 };
 
