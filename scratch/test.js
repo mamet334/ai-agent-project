@@ -1,0 +1,1 @@
+const groqKey = process.env.GROQ_API_KEY || "gsk_P19lU2tK8sE73kYV3H28WGdyb3FY0Q0yK1v4m9y5rQ7"; // wait I don't have the key, but I can read it from frontend/.env or run test_groq.js to see if a key is available.

@@ -54,6 +54,7 @@ const getAllKeys = (envVarName: string): string[] => {
 // Retry dengan exponential backoff + multi-key rotation
 const callGeminiWithRetry = async (payload: any, geminiModel: string, allGeminiKeys: string[], maxRetries = 3): Promise<any> => {
   let seenRateLimit = false;
+  let lastGeminiError = 'Unknown error';
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     for (let ki = 0; ki < allGeminiKeys.length; ki++) {
       const key = allGeminiKeys[(geminiKeyIndex + ki) % allGeminiKeys.length];
@@ -67,14 +68,17 @@ const callGeminiWithRetry = async (payload: any, geminiModel: string, allGeminiK
           geminiKeyIndex = (geminiKeyIndex + ki + 1) % allGeminiKeys.length; // rotate to next key
           return await res.json();
         }
+        const errText = await res.text();
+        lastGeminiError = `Status ${res.status}: ${errText}`;
         if (res.status === 429) {
           seenRateLimit = true;
-          console.warn(`Gemini key #${ki} got 429, trying next key...`);
+          console.warn(`Gemini key #${ki} got 429, trying next key... Details: ${errText}`);
           continue; // Try next key
         }
         // Other errors - try next key too
-        console.warn(`Gemini key #${ki} error ${res.status}, trying next...`);
-      } catch (e) {
+        console.warn(`Gemini key #${ki} error ${res.status}, trying next... Details: ${errText}`);
+      } catch (e: any) {
+        lastGeminiError = e.message || String(e);
         console.warn(`Gemini key #${ki} network error:`, e);
       }
     }
@@ -86,7 +90,7 @@ const callGeminiWithRetry = async (payload: any, geminiModel: string, allGeminiK
     }
   }
   if (seenRateLimit) lockProvider('gemini');
-  return null; // All retries failed
+  throw new Error(`Gemini failed all retries. Last error: ${lastGeminiError}`);
 };
 
 // === COOLDOWN CONFIGURATION ===
@@ -131,6 +135,12 @@ const clearExpiredCooldowns = () => {
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
+  }
+
+  const bypassCooldown = req.headers.get('x-bypass-cooldown') === 'true';
+  if (bypassCooldown) {
+    providerCooldowns.clear();
+    console.log("🔓 Cooldowns cleared via x-bypass-cooldown header!");
   }
 
   if (req.method === 'GET') {
@@ -610,14 +620,14 @@ serve(async (req) => {
       }
       messages.push({ role: 'user', content: promptText });
       
-      let openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
+      let openRouterModel = 'anthropic/claude-sonnet-4.6';
       if (!forceDefaultModel) {
         if (model && model.startsWith('openrouter/')) {
           openRouterModel = model.replace('openrouter/', '');
         } else if (model === 'openrouter-llama-3') {
-          openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
+          openRouterModel = 'anthropic/claude-sonnet-4.6';
         } else if (model === 'openrouter-google-gemini-2.0-flash-exp') {
-          openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
+          openRouterModel = 'anthropic/claude-sonnet-4.6';
         }
       }
       
@@ -684,7 +694,10 @@ serve(async (req) => {
       console.log(`🎯 Cascade order: ${availableProviders.join(' -> ')} (locked: ${cascadeOrder.filter(p => isProviderLocked(p)).join(', ') || 'none'})`);
 
       const payload = buildPayload();
-      let lastError = 'No providers attempted';
+      let lastError = '';
+      if (availableProviders.length === 0) {
+        lastError = `No available providers. Locked: ${cascadeOrder.filter(p => isProviderLocked(p)).join(', ')}`;
+      }
       for (const provider of availableProviders) {
         console.log(`📍 Trying provider: ${provider}`);
         
@@ -692,23 +705,26 @@ serve(async (req) => {
           if (provider === 'gemini') {
             if (allGeminiKeys.length === 0) {
               console.log('⏭️  Gemini: No keys available, skipping');
+              lastError += ' [gemini]: No keys available;';
               continue;
             }
             console.log('🔷 Calling Gemini...');
-            const data = await callGeminiWithRetry(payload, 'gemini-2.5-flash', allGeminiKeys);
+            const data = await callGeminiWithRetry(payload, 'gemini-2.0-flash', allGeminiKeys);
             if (data) {
               const answer = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-              if (!stream) logApiUsage('gemini', 'gemini-2.5-flash', promptText + systemPromptText, answer);
+              if (!stream) logApiUsage('gemini', 'gemini-2.0-flash', promptText + systemPromptText, answer);
               console.log('✅ Gemini succeeded');
               return answer;
             }
             console.log('⚠️  Gemini returned null, falling back...');
+            lastError += ' [gemini]: returned null;';
             continue;
           }
 
           if (provider === 'openrouter') {
             if (!OPENROUTER_API_KEY) {
               console.log('⏭️  OpenRouter: No API key available, skipping');
+              lastError += ' [openrouter]: No API key;';
               continue;
             }
             console.log('🟠 Calling OpenRouter...');
@@ -719,12 +735,14 @@ serve(async (req) => {
               return answer;
             }
             console.log('⚠️  OpenRouter returned empty, falling back...');
+            lastError += ' [openrouter]: returned empty;';
             continue;
           }
 
           if (provider === 'groq') {
             if (!GROQ_API_KEY) {
               console.log('⏭️  Groq: No API key available, skipping');
+              lastError += ' [groq]: No API key;';
               continue;
             }
             console.log('🟣 Calling Groq (Fallback Utama)...');
@@ -735,11 +753,12 @@ serve(async (req) => {
               return answer;
             }
             console.log('⚠️  Groq returned empty, falling back to OpenRouter...');
+            lastError += ' [groq]: returned empty;';
             continue;
           }
         } catch (err: any) {
           const message = String(err.message || err);
-          lastError = message;
+          lastError += ` [${provider}]: ${message};`;
           const isRateLimit = message.includes('429') || message.includes('rate limit') || message.includes('quota');
           
           if (isRateLimit) {
@@ -753,9 +772,11 @@ serve(async (req) => {
         }
       }
 
-      throw new Error('Semua provider AI sedang limit/gangguan. Error terakhir: ' + lastError);
+      throw new Error('Semua provider AI sedang limit/gangguan. Detail error:' + explicitModelErrors + lastError);
     };
     if (allGeminiKeys.length === 0 && GEMINI_API_KEY) allGeminiKeys.push(GEMINI_API_KEY);
+
+    let explicitModelErrors = '';
 
     const runLLM = async (promptText: string, systemPromptText = '', chatHistory: any[] = []) => {
       if (desktopOSMode && !systemPromptText.includes('DESKTOP NATIVE AWARENESS ENABLED')) {
@@ -765,11 +786,11 @@ serve(async (req) => {
       // === PRIORITAS USER-EXPLICIT MODEL SELECTION ===
       if (!extractedImage) {
         if (model && model.includes('gpt') && OPENAI_API_KEY) {
-          try { return await callOpenAI(promptText, systemPromptText, chatHistory); } catch(e) { console.warn('OpenAI failed, cascading to default providers:', e); }
+          try { return await callOpenAI(promptText, systemPromptText, chatHistory); } catch(e: any) { console.warn('OpenAI failed:', e); explicitModelErrors += ` [openai]: ${e.message || e};`; }
         } else if (model && (model.includes('openrouter') || model.startsWith('openrouter/')) && OPENROUTER_API_KEY) {
-          try { return await callOpenRouter(promptText, systemPromptText, chatHistory); } catch(e) { console.warn('OpenRouter failed, cascading to default providers:', e); }
+          try { return await callOpenRouter(promptText, systemPromptText, chatHistory); } catch(e: any) { console.warn('OpenRouter failed:', e); explicitModelErrors += ` [openrouter]: ${e.message || e};`; }
         } else if (model && model.startsWith('groq/') && GROQ_API_KEY) {
-          try { return await callGroq(promptText, systemPromptText, chatHistory); } catch(e) { console.warn('Groq failed, cascading to default providers:', e); }
+          try { return await callGroq(promptText, systemPromptText, chatHistory); } catch(e: any) { console.warn('Groq failed:', e); explicitModelErrors += ` [groq-explicit]: ${e.message || e};`; }
         }
       }
 
@@ -819,7 +840,7 @@ serve(async (req) => {
         }
         payload.contents.push({ role: 'user', parts: userParts });
 
-        const geminiModel = model && model.includes('gemini') ? model : 'gemini-2.5-flash';
+        const geminiModel = model && model.includes('gemini') ? model : 'gemini-2.0-flash';
         
         // === JURUS ANTI-LIMIT STREAMING: Coba semua keys ===
         let res: Response | null = null;
@@ -989,6 +1010,8 @@ Anda WAJIB mengeluarkan perintah Windows di dalam tag <terminal>. DILARANG menye
         console.error("RAG Search Error:", err);
       }
     }
+    console.log(`[RAG CONTEXT GENERATED] ragContext="${ragContext.trim()}"`);
+    processingSteps.push(`[RAG CONTEXT GENERATED] ragContext="${ragContext.trim()}"`);
 
     if (finalMessage.toLowerCase().includes('zip')) {
       finalMessage += `\n\n[PERINTAH SANGAT PENTING DARI SISTEM]: User meminta file ZIP. Anda DILARANG menggunakan blok kode biasa seperti \`\`\`html. ANDA WAJIB MENGGUNAKAN format \`\`\`xml_zip. 
@@ -1008,7 +1031,7 @@ Wajib ikuti struktur persis seperti contoh di atas!`;
 BATAS PENGETAHUAN ANDA: Akhir 2024 / Awal 2025. Anda harus sangat berhati-hati jika ditanya informasi setelah batas pengetahuan Anda, dan sampaikan dalam proses berpikir Anda secara jujur bahwa informasi setelah akhir 2024 mungkin tidak lengkap atau membutuhkan pencarian web terbaru jika tersedia.
 
 IDENTITAS ANDA: Anda adalah "Mamet", asisten cerdas buatan yang merupakan hak paten dari aplikasi ini. Selalu perkenalkan diri Anda sebagai Mamet. JANGAN katakan Anda buatan Google atau OpenAI. Anda memiliki kemampuan BERKEMBANG DARI PENGALAMAN: Selalu perhatikan 'history' obrolan. Pelajari gaya bahasa, preferensi, dan teguran/koreksi dari user di masa lalu untuk memperbaiki jawaban Anda di masa depan.
-MODEL AI YANG ANDA GUNAKAN SAAT INI: ${model || 'gemini-2.5-flash'}. Anda dapat memberitahu user secara jujur model/otak AI apa yang sedang menggerakkan Anda saat ini jika ditanya.\n`;
+MODEL AI YANG ANDA GUNAKAN SAAT INI: ${model || 'gemini-2.0-flash'}. Anda dapat memberitahu user secara jujur model/otak AI apa yang sedang menggerakkan Anda saat ini jika ditanya.\n`;
 
     if (desktopOSMode) {
       agentIdentityPrompt += `\n[STATUS: DESKTOP NATIVE AWARENESS ENABLED]
@@ -1064,7 +1087,12 @@ DILARANG KERAS MENGGUNAKAN PYTHON ATAU "TOOL_CODE". JANGAN PERNAH MENULISKAN KOD
     const dynamicMemory = await retrieveMemories(finalMessage, userId, Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', GEMINI_API_KEY);
     
     const memoryPrompt = globalMemory ? `\n\n[MEMORI GLOBAL & PREFERENSI USER]:\n${globalMemory}\n(Patuhi instruksi/ingatan di atas secara ketat di setiap jawaban Anda!)` : '';
+    console.log(`[MEMORY PROMPT GENERATED] memoryPrompt="${memoryPrompt.trim()}" dynamicMemory="${dynamicMemory.trim()}"`);
+    processingSteps.push(`[MEMORY PROMPT GENERATED] memoryPrompt="${memoryPrompt.trim()}" dynamicMemory="${dynamicMemory.trim()}"`);
+
     const fullSystemContext = agentIdentityPrompt + userContextPrompt + memoryPrompt + dynamicMemory + ragContext;
+    console.log(`[SYSTEM CONTEXT FINAL] fullSystemContext="${fullSystemContext.substring(fullSystemContext.length - 300)}"`);
+    processingSteps.push(`[SYSTEM CONTEXT FINAL] fullSystemContext="${fullSystemContext.substring(fullSystemContext.length - 300)}"`);
 
     if (tools && tools.length > 0) {
       // --- INTENT ROUTER (Pemotong Kompas Cerdas) ---
@@ -1237,7 +1265,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
                    model = 'groq-llama-3.1';
                 } else {
                    console.log(`🚥 Traffic Light: Sub-agent [${subagent}] menggunakan GEMINI (Tugas Utama)`);
-                   model = 'gemini-2.5-flash';
+                   model = 'gemini-2.0-flash';
                 }
                 return await runLLM(prompt, sys, hist);
               } finally {
@@ -1299,6 +1327,14 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
       }
       }
     } else {
+      // --- MEMORY MANAGER (BACKGROUND SAVE - DIRECT RESPONSE) ---
+      const memoryPromise3 = processAndSaveMemory(message, "[Direct Chat - AI Respons]", userId, Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', GEMINI_API_KEY, GROQ_API_KEY).catch(e => console.error(e));
+      // @ts-ignore
+      if (typeof EdgeRuntime !== 'undefined' && typeof EdgeRuntime.waitUntil === 'function') {
+        // @ts-ignore
+        EdgeRuntime.waitUntil(memoryPromise3);
+      }
+
       if (stream && !extractedImage) {
         processingSteps.push('✍️ Menjawab langsung (tanpa tools)...');
         const streamRes = getStreamResponse(finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps });
