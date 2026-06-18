@@ -133,6 +133,22 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  if (req.method === 'GET') {
+    try {
+      const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+      const { data: logsData, error: logsError } = await supClient.from('agent_logs').select('*').order('created_at', { ascending: false }).limit(50);
+      const { data: memData, error: memError } = await supClient.from('user_memories').select('*').order('created_at', { ascending: false }).limit(50);
+      return new Response(JSON.stringify({ logs: logsData, logsError, memories: memData, memError }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    } catch (e: any) {
+      return new Response(JSON.stringify({ error: e.message }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500
+      });
+    }
+  }
+
   try {
     let { message, tools, model, userId, userName, file, history, globalMemory, stream, desktopOSMode, ragEnabled } = await req.json();
 
