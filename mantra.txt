@@ -22,19 +22,17 @@
 - Estimasi token optimal berdasarkan kompleksitas task
 
 
-## 🧠 INTEGRASI MEMORY MANAGER V1 (JUNI 2026)
+## 🧠 INTEGRASI MEMORY MANAGER V2 — TEMPORAL KNOWLEDGE GRAPH (JUNI 2026)
 **File yang dibuat & dimodifikasi:**
-- `setup_memory_v1.sql` - Skema database pgvector, fungsi cleanup otomatis (100% stable).
-- `setup_memory_idempotency.sql` - Skema proteksi duplikasi (message_hash unique constraint).
-- `supabase/functions/agent-process/plugins/memory_manager_v1.ts` - Logika *retrieval* & klasifikasi asinkron yang aman dari limit. Integrasi Tier-1 In-Memory Cache (Idempotent Layer).
-- `supabase/functions/agent-process/index.ts` - Integrasi *Single Gateway* penyuntikan memori secara asinkron tanpa memblokir SSE.
-- `stress_test_memory.js` - Script uji balapan kondisi (Race Condition) di level production.
+- `setup_memory_v1.sql` & `setup_memory_idempotency.sql` - Skema proteksi duplikasi (message_hash) dan tabel relasi `memory_relations` serta *View* `active_user_memories` (CQRS).
+- `supabase/functions/agent-process/plugins/memory_manager_v1.ts` - Penambahan Graph Edge Builder untuk relasi kausal (`OVERRIDES`, `REFINES`, beserta `reason_type`).
+- `supabase/functions/agent-process/lib/context_optimizer.ts` - Modul baru berisi Intent Parser, CEBL (Context Execution Binding Layer), dan CSEL (Controlled Soft Exception Layer) untuk kompresi kognitif deterministik.
 
-**Fitur & Pencapaian:**
-- Penyimpanan jangka panjang otomatis (*invisible background job*) menggunakan Groq Llama 3 (Gratis).
-- *Retrieval* semantik (*Cosine Similarity* 0.85) otomatis ke *system prompt* utama untuk personalisasi chat.
-- Proteksi token: Pemotongan pesan murni (*pure text*) agar *rate limit* Groq tetap di bawah 200 token per simpanan.
-- **Production-Grade Idempotency Shield**: Menerapkan 3-Tier Anti-Duplicate (Single Gateway Routing, In-Memory Hash Set, Supabase Unique Constraint) untuk menjamin 0% duplikasi memori walau di-*trigger* berulang kali atau mengalami balapan kondisi (*race condition*).
+**Fitur & Pencapaian (Level Cognitive Architecture):**
+- **Lossless Evolution:** Fakta lama tidak pernah dihapus/di-overwrite. Tetap utuh dalam Contradiction Graph.
+- **CQRS Active View:** Penyelesaian *Dual Source of Truth*. Status `ACTIVE` bukan text statis, melainkan query dinamis (*Derived Truth*).
+- **Control Plane & Compiler:** RAG tidak lagi "asal tarik". *Intent* mengunci *Subgraph Extractor* via CEBL (Hard Constraints), yang hanya bisa dilonggarkan via CSEL (Soft Exception) hingga 25% demi nuansa emosional.
+- **Production-Grade Idempotency Shield**: Menerapkan 3-Tier Anti-Duplicate (Single Gateway Routing, In-Memory Hash Set, Supabase Unique Constraint) untuk menjamin 0% duplikasi memori walau di-*trigger* berulang kali.
 
 ## ✅ SELESAI (100% MEDVI RAG & KODING)
 1. Multi-Agent & Orchestrator (DeepSeek, Llama, Gemini)
