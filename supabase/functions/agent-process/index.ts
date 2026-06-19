@@ -164,6 +164,16 @@ serve(async (req) => {
   try {
     let { message, tools, model, userId, userName, file, history, globalMemory, stream, desktopOSMode, ragEnabled } = await req.json();
 
+    // ANTI-HALLUCINATION: Bersihkan history agar LLM tidak melihat/mempelajari tag fiktif dari chat masa lalu
+    if (history && Array.isArray(history)) {
+      history = history.map((msg: any) => {
+        if (msg.role === 'model' && typeof msg.content === 'string') {
+          msg.content = msg.content.replace(/<call:[^>]+>/gi, '').trim();
+        }
+        return msg;
+      });
+    }
+
     const isRagEnabled = ragEnabled !== false;
 
     // === CIRCUIT BREAKER (FASE 4B) ===
@@ -1082,10 +1092,17 @@ DILARANG KERAS MENGGUNAKAN PYTHON ATAU "TOOL_CODE". JANGAN PERNAH MENULISKAN KOD
 
 ATURAN MEMORI (SANGAT PENTING): 
 Semua proses penyimpanan memori/fakta dilakukan SECARA OTOMATIS di latar belakang (background) oleh sistem sebelum Anda menjawab. 
-DILARANG KERAS merender atau menulis tag pemanggilan fungsi fiktif seperti \`<call:memory_manager...>\` ke dalam jawaban Anda. Langsung saja berikan respons natural bahwa Anda sudah mengingatnya.
+DILARANG KERAS memanggil tool memori secara manual. Anda dilarang memberikan konfirmasi teknis penyimpanan memori.
+Do not extract memory from messages that are incomplete sentences, iterative corrections, or confirmations like "ya benar", "di sana", "betul". Only store memory after a stable, single-turn final statement.
+You are NOT allowed to claim memory is stored.
+You must only rely on [MEMORY_SYSTEM_ACK] from system.
+If [MEMORY_SYSTEM_ACK] is missing or memory_state is NOT "committed" → treat memory as NOT stored.
+Never generate or simulate tool calls.
+Only system backend performs memory persistence.
+If [MEMORY_SYSTEM_ACK] is MISSING, you MUST NOT state that memory is saved. Instead, just acknowledge the user's message conversationally (e.g., "Baik, saya mengerti", "Terima kasih informasinya"). NEVER OUTPUT AN EMPTY RESPONSE.
 
 Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika user menanyakan jumlah atau nama sub-agent Anda, sebutkan nama-nama di atas.`;
-    const userContextPrompt = userName ? `\nInformasi Akun: User login dengan email/nama "${userName}". Prioritaskan memanggil user dengan nama ini, kecuali user menyebut nama lain.` : '';
+    let userContextPrompt = userName ? `\nInformasi Akun: User login dengan email/nama "${userName}". Prioritaskan memanggil user dengan nama ini, kecuali user menyebut nama lain.` : '';
     
     // --- MEMORY MANAGER (RETRIEVAL) ---
     let memoryArray = await retrieveMemories(finalMessage, userId, Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', GEMINI_API_KEY);
@@ -1094,6 +1111,42 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
     const memoryPrompt = globalMemory ? `\n\n[MEMORI GLOBAL & PREFERENSI USER]:\n${globalMemory}\n(Patuhi instruksi/ingatan di atas secara ketat di setiap jawaban Anda!)` : '';
     console.log(`[MEMORY PROMPT GENERATED] memoryPrompt="${memoryPrompt.trim()}" memoryArray size=${memoryArray.length}`);
     processingSteps.push(`[MEMORY PROMPT GENERATED] memoryPrompt="${memoryPrompt.trim()}" memoryArray size=${memoryArray.length}`);
+
+    // --- SINGLE GATEWAY: ANTI DUPLICATE MEMORY (TIER 1 & 2) ---
+    // Dipanggil TEPAT SEBELUM membangun final context.
+    if (userId && message && typeof message === 'string' && message.trim().length > 0) {
+      console.log(`[MEMORY_GATEWAY] Memasukkan request userId: ${userId} ke pipeline idempotency`);
+      
+      // SELF HEALING: Terapkan koreksi pengguna jika ada sebelum menyimpan memori baru
+      await applyUserCorrection(userId, message, Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '');
+      
+      const saveResult = await processAndSaveMemory(
+        message, 
+        "[System Ack]", 
+        userId, 
+        Deno.env.get('SUPABASE_URL') || '', 
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', 
+        GEMINI_API_KEY, 
+        GROQ_API_KEY,
+        history
+      ).catch(e => { console.error('[MEMORY_GATEWAY_ERROR]', e); return null; });
+      if (saveResult && saveResult.memory_ack && saveResult.memory_state === 'committed') {
+         userContextPrompt += `\n\n[MEMORY_SYSTEM_ACK]\nstatus: success\nmemory_state: committed\nmemory_id: ${saveResult.memory_id}\nmemory_text: ${saveResult.memory_text}`;
+      }
+
+      // LEVEL 5 ASYNC TRIGGER: Jalankan deteksi kontradiksi di background
+      const healingPromise = runSelfHealingLoopAsync(
+        userId,
+        Deno.env.get('SUPABASE_URL') || '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+      ).catch(e => console.error('[LEVEL5_ASYNC_ERROR]', e));
+
+      // @ts-ignore - Supabase EdgeRuntime environment check
+      if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
+          // @ts-ignore
+          EdgeRuntime.waitUntil(healingPromise);
+      }
+    }
 
     const basePrompts = agentIdentityPrompt + userContextPrompt + memoryPrompt;
     
@@ -1115,38 +1168,7 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
     console.log(`[SYSTEM CONTEXT FINAL] fullSystemContext="${fullSystemContext.substring(fullSystemContext.length - 300)}"`);
     processingSteps.push(`[SYSTEM CONTEXT FINAL] fullSystemContext="${fullSystemContext.substring(fullSystemContext.length - 300)}"`);
 
-    // --- SINGLE GATEWAY: ANTI DUPLICATE MEMORY (TIER 1 & 2) ---
-    // Dipanggil TEPAT SEBELUM pengecekan logic agent atau model AI.
-    // Dijalankan asinkron agar tidak memblokir respon ke pengguna jika memungkinkan
-    if (userId && message && typeof message === 'string' && message.trim().length > 0) {
-      console.log(`[MEMORY_GATEWAY] Memasukkan request userId: ${userId} ke pipeline idempotency`);
-      
-      // SELF HEALING: Terapkan koreksi pengguna jika ada sebelum menyimpan memori baru
-      await applyUserCorrection(userId, message, Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '');
-      
-      await processAndSaveMemory(
-        message, 
-        "[System Ack]", 
-        userId, 
-        Deno.env.get('SUPABASE_URL') || '', 
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', 
-        GEMINI_API_KEY, 
-        GROQ_API_KEY
-      ).catch(e => console.error('[MEMORY_GATEWAY_ERROR]', e));
-
-      // LEVEL 5 ASYNC TRIGGER: Jalankan deteksi kontradiksi di background
-      const healingPromise = runSelfHealingLoopAsync(
-        userId,
-        Deno.env.get('SUPABASE_URL') || '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
-      ).catch(e => console.error('[LEVEL5_ASYNC_ERROR]', e));
-
-      // @ts-ignore - Supabase EdgeRuntime environment check
-      if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
-          // @ts-ignore
-          EdgeRuntime.waitUntil(healingPromise);
-      }
-    }
+    // Gateway already moved up.
 
     if (tools && tools.length > 0) {
       // --- INTENT ROUTER (Pemotong Kompas Cerdas) ---
