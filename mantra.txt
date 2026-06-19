@@ -34,6 +34,12 @@
 - **Control Plane & Compiler:** RAG tidak lagi "asal tarik". *Intent* mengunci *Subgraph Extractor* via CEBL (Hard Constraints), yang hanya bisa dilonggarkan via CSEL (Soft Exception) hingga 25% demi nuansa emosional.
 - **Production-Grade Idempotency Shield**: Menerapkan 3-Tier Anti-Duplicate (Single Gateway Routing, In-Memory Hash Set, Supabase Unique Constraint) untuk menjamin 0% duplikasi memori walau di-*trigger* berulang kali.
 
+### 🚧 NEXT MISSION (TARGET PEKERJAAN BERIKUTNYA):
+**Membangun Eksekutor Fisik dari Context Compression Engine**
+Karena *Control Plane* (CEBL & CSEL) sudah terpasang, tugas berikutnya adalah:
+1. **Membangun Subgraph Extractor:** Menulis kueri Supabase RPC yang mengekstraksi node dari `active_user_memories` dan merayapi tabel `memory_relations` secara dinamis sesuai batasan *budget* dari CEBL (misal: maks 8 node, traversal depth 3).
+2. **Membangun Context Compressor:** Membuat agen perajut teks yang akan mengubah kumpulan node mentah (JSON) dari database menjadi satu paragraf prosa / *bullet points* padat token sebelum disuntikkan ke dalam *Context Window* LLM.
+
 ## ✅ SELESAI (100% MEDVI RAG & KODING)
 1. Multi-Agent & Orchestrator (DeepSeek, Llama, Gemini)
 2. Self-Healing (Anti-Crash, Memory Sweeper, JSON Surgeon)

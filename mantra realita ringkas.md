@@ -137,6 +137,12 @@ Sistem memori Mamet AI telah melampaui paradigma database tradisional dan resmi 
 ### Hasil Test & Performa:
 Sistem dijamin bebas dari *race condition* karena *pessimistic locking* dengan Supabase RPC `atomic_entity_lock`. Kebocoran *context window* (token loss) pada fase *Retrieval* dikunci pada rasio nol. System benar-benar mengeksekusi *Inference-Time Cognitive Compression*.
 
+### 🚧 NEXT MISSION (TARGET PEKERJAAN BERIKUTNYA):
+**Membangun Eksekutor Fisik dari Context Compression Engine**
+Karena *Control Plane* (CEBL & CSEL) sudah terpasang, tugas berikutnya adalah:
+1. **Membangun Subgraph Extractor:** Menulis kueri Supabase RPC yang mengekstraksi node dari `active_user_memories` dan merayapi tabel `memory_relations` secara dinamis sesuai batasan *budget* dari CEBL.
+2. **Membangun Context Compressor:** Membuat agen perajut teks yang akan mengubah kumpulan node mentah (JSON) dari database menjadi satu paragraf prosa / *bullet points* padat token sebelum disuntikkan ke dalam *Context Window* LLM.
+
 ## 🔍 ANALISIS SISTEM OTAK AI
 - Frontend full menyalakan `MainOrchestrator` + `TokenSaverAgent` untuk optimasi prompt dan pengecekan budget sebelum backend.
 - Mametlite Lite memanggil `callAgentSimple()` langsung ke Supabase Edge Function tanpa orchestrator, dengan tools terbatas.
