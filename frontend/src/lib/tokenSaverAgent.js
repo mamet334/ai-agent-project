@@ -61,7 +61,16 @@ class TokenSaverAgent {
    * @returns {number} Complexity score
    */
   _estimateComplexity(task) {
-    const factors = (task.context || '').split(' ').length;
+    let contextStr = '';
+    if (typeof task.context === 'string') {
+      contextStr = task.context;
+    } else if (Array.isArray(task.context)) {
+      contextStr = task.context.map(msg => typeof msg === 'object' ? (msg.content || '') : String(msg)).join(' ');
+    } else {
+      contextStr = String(task.context || '');
+    }
+    
+    const factors = contextStr.split(/\s+/).length;
     return Math.min(factors / 1000, 1.0);
   }
 

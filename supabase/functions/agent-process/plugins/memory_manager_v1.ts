@@ -255,9 +255,15 @@ export const applyUserCorrection = async (userId, userPrompt, supabaseUrl, supab
 }
 
 export const processAndSaveMemory = async (userPrompt, aiResponse, userId, supabaseUrl, supabaseKey) => {
-  console.log("[L2_START]", { input: userPrompt });
+  const BUILD_ID = "MEMORY_BUILD_20260619_V1";
+  console.log("[BUILD_FINGERPRINT]", BUILD_ID);
+
+  console.log("[L2_START]", { 
+    build: BUILD_ID,
+    input: userPrompt 
+  });
   
-  console.log("[MEMORY_CALL]", {
+  console.log("[MEMORY_CALL_V2]", {
     time: Date.now(),
     message: userPrompt,
     stack: new Error().stack
@@ -272,8 +278,12 @@ export const processAndSaveMemory = async (userPrompt, aiResponse, userId, supab
   }
   const lower = userPrompt.toLowerCase().trim();
   
+  console.log("[CHECKPOINT_1]", { userId, userPrompt });
+  
   // GUARD CLAUSE: Deteksi Retrieval Intent
   const isRetrievalIntent = lower.includes('?') || /^(?:apa|kapan|siapa|dimana|di mana|bagaimana|tampilkan|sebutkan|cek|lihat|beritahu|apakah|adakah)\b/i.test(lower);
+  
+  console.log("[CHECKPOINT_2]", { isRetrievalIntent });
   
   if (isRetrievalIntent) {
     console.log(`[L2_EXIT] reason="retrieval_intent"`);
@@ -305,6 +315,9 @@ export const processAndSaveMemory = async (userPrompt, aiResponse, userId, supab
       // 1. IDENTITY LAYER: Generate Unique Fingerprint
       const messageHash = await generateMemoryHash(userId, lower);
       
+      console.log("[CHECKPOINT_3]", { messageHash });
+      console.log("[CHECKPOINT_4]", { cacheHit: processedMemoryKeys.has(messageHash) });
+      
       // 2. IDEMPOTENCY CHECK (In-Memory)
       if (processedMemoryKeys.has(messageHash)) {
          console.log(`[L2_EXIT] reason="idempotency_cache_hit"`);
@@ -330,6 +343,8 @@ export const processAndSaveMemory = async (userPrompt, aiResponse, userId, supab
       // 3. DATABASE SAFETY & SANITIZATION
       const sanitizedExtract = await extractStructuredMemory(userPrompt);
 
+      console.log("[CHECKPOINT_5]", { sanitizedExtract });
+
       if (!sanitizedExtract || sanitizedExtract.isInjectionAttempt) {
          console.log(`[L2_EXIT] reason="security_injection_blocked"`);
          console.warn("[SECURITY] Prompt Injection Blocked in Memory System");
@@ -341,6 +356,14 @@ export const processAndSaveMemory = async (userPrompt, aiResponse, userId, supab
       
       console.log("[L2_DB_INSERT_START]", { summary: sanitizedExtract.fact });
 
+      console.log("[BEFORE_INSERT]", {
+        userId,
+        summary: sanitizedExtract.fact,
+        type: sanitizedExtract.type,
+        confidence: sanitizedExtract.confidence,
+        messageHash
+      });
+
       const { data, error } = await supabase.from('user_memories').insert([{ 
         user_id: userId, 
         summary: sanitizedExtract.fact, 
@@ -350,6 +373,8 @@ export const processAndSaveMemory = async (userPrompt, aiResponse, userId, supab
         embedding: null,
         message_hash: messageHash
       }]).select('id').single();
+      
+      console.log("[AFTER_INSERT]", { data, error });
       
       if (error) {
         console.log("[L2_DB_INSERT_FAILED]", { error });
@@ -379,6 +404,12 @@ export const processAndSaveMemory = async (userPrompt, aiResponse, userId, supab
       
       logMemoryAudit(supabaseUrl, supabaseKey, { user_id: userId, event_type: 'memory_save_success', status: 'SUCCESS', query: userPrompt, execution_time_ms: Date.now() - startTime });
     } catch(e) { 
+      console.error("[FATAL_FULL]", {
+        errorName: e?.name,
+        errorCode: e?.code,
+        errorMessage: e?.message,
+        fullError: e
+      });
       console.error('[MEMORY_SAVE_FATAL]', { error: e, message: e?.message, details: e?.details, hint: e?.hint, code: e?.code });
       logMemoryAudit(supabaseUrl, supabaseKey, { user_id: userId, event_type: 'memory_save_failed', status: 'FAILED', reason: e.message, query: userPrompt, execution_time_ms: Date.now() - startTime });
     }

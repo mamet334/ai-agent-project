@@ -593,7 +593,11 @@ export default function AIAgent() {
       }
     };
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      console.log("[SESSION_STATUS]", { hasSession: !!session, error });
+      if (session) {
+        console.log("[SESSION_EXPIRES_AT]", new Date(session.expires_at * 1000).toISOString());
+      }
       if (session?.user) {
         setUser(session.user);
         fetchFreshUser();
@@ -603,6 +607,7 @@ export default function AIAgent() {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log("[SESSION_REFRESHED]", { event: _event, hasSession: !!session });
       if (session?.user) {
         setUser(session.user);
         fetchFreshUser();
@@ -720,7 +725,13 @@ export default function AIAgent() {
       };
       
       const fetchCron = async () => {
+        console.log("[SCHEDULED_TASK_REQUEST]", "Fetching scheduled_tasks");
         const { data, error } = await supabase.from('scheduled_tasks').select('*').order('created_at', { ascending: false });
+        if (error) {
+           console.log("[SCHEDULED_TASK_ERROR]", error);
+        } else {
+           console.log("[SCHEDULED_TASK_RESPONSE]", data);
+        }
         if (data) setScheduledTasks(data);
       };
 
@@ -1406,20 +1417,32 @@ export default function AIAgent() {
         // Hardcode ke Supabase Edge Function agar tidak terganggu oleh konfigurasi Vercel yang salah
         const endpoint = 'https://uuyzdjifhdfyyvpxsofu.supabase.co/functions/v1/agent-process';
 
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-            'x-byok-gemini': (localStorage.getItem('x-byok-gemini') || '').trim(),
-            'x-byok-groq': (localStorage.getItem('x-byok-groq') || '').trim(),
-            'x-byok-openai': (localStorage.getItem('x-byok-openai') || '').trim(),
-            'x-byok-openrouter': (localStorage.getItem('x-byok-openrouter') || '').trim()
-          },
-          body: JSON.stringify(payload)
-        });
-        
-        return response;
+        console.log("[USER_SEND]", { messageLength: payload.message?.length, hasFile: !!payload.file });
+        console.log("[FETCH_START]", endpoint);
+
+        try {
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+              'x-byok-gemini': (localStorage.getItem('x-byok-gemini') || '').trim(),
+              'x-byok-groq': (localStorage.getItem('x-byok-groq') || '').trim(),
+              'x-byok-openai': (localStorage.getItem('x-byok-openai') || '').trim(),
+              'x-byok-openrouter': (localStorage.getItem('x-byok-openrouter') || '').trim()
+            },
+            body: JSON.stringify(payload)
+          });
+          console.log("[FETCH_SUCCESS]", { status: response.status, ok: response.ok });
+          return response;
+        } catch(e) {
+          if (e.name === 'AbortError') {
+             console.log("[FETCH_ABORTED]", e);
+          } else {
+             console.log("[FETCH_FAILED]", e);
+          }
+          throw e;
+        }
       };
 
       const result = await orchestrator.executeTask(task, apiCall);
