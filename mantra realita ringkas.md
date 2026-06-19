@@ -3,7 +3,7 @@
 > Dokumen ini untuk memudahkan AI (Copilot/Cursor) memahami proyek secara cepat.
 
 ## 🧠 STACK
-- React/Vite (PWA) + Electron (Desktop)
+- React/Vite (SPA) + Electron (Desktop)
 - Supabase (DB, Auth, Edge Functions - Deno)
 - Vercel (hosting frontend)
 - API: DeepSeek, Llama, Gemini (BYOK)
@@ -12,7 +12,7 @@
 
 ### Inti
 - Multi-Agent Orchestrator + Token Optimization (kompres prompt, cek budget, tracking real-time) — **Frontend full**
-- Self-Healing, BYOK, PWA
+- Self-Healing, BYOK (Tanpa PWA selama fase development)
 - Vector RAG (PDF/Excel/Word)
 - 5-Layer Anti-Limit (multi-key rotation, fallback)
 - YouTube Analyst (5 ahli, anti-CAPTCHA)
