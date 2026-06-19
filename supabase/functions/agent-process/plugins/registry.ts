@@ -7,7 +7,6 @@ import bahasa from './language.ts';
 import debate from './debate.ts';
 import deepResearch from './deep_research.ts';
 import youtubeAnalyst from './youtube_analyst.ts';
-import memoryManager from './memory_manager.ts';
 import cronManager from './cron_manager.ts';
 import fileAnalyzer from './file_analyzer.ts';
 import shopeeNinja from './shopee_ninja.ts';
@@ -23,7 +22,6 @@ export const plugins = [
   debate,
   deepResearch,
   youtubeAnalyst,
-  memoryManager,
   cronManager,
   fileAnalyzer,
   shopeeNinja
