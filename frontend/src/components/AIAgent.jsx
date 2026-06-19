@@ -1567,11 +1567,14 @@ export default function AIAgent() {
                   if (data.choices && data.choices[0].delta && data.choices[0].delta.content) {
                     streamedContent += data.choices[0].delta.content;
                     
+                    // ANTI-HALLUCINATION FILTER: Hapus tag <call:...> agar tidak bocor ke UI
+                    const cleanContent = streamedContent.replace(/<call:[^>]+>/gi, '').replace(/^\s+/, '');
+                    
                     // Update state with new chunk
                     setConversations(prev => prev.map(c => {
                       if (c.id === effectiveConvId || c.id === syncedConvId) {
                         const updatedMessages = c.messages.map(m => 
-                          m.id === agentMessage.id ? { ...m, content: streamedContent } : m
+                          m.id === agentMessage.id ? { ...m, content: cleanContent } : m
                         );
                         return { ...c, messages: updatedMessages };
                       }

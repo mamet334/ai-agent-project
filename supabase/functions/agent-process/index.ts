@@ -1079,7 +1079,12 @@ console.log('hi');
 </file>
 \`\`\`
 DILARANG KERAS MENGGUNAKAN PYTHON ATAU "TOOL_CODE". JANGAN PERNAH MENULISKAN KODE PYTHON UNTUK MENGEKSEKUSI TOOL. JAWABLAH DENGAN TEKS BIASA.
-\nAnda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika user menanyakan jumlah atau nama sub-agent Anda, sebutkan nama-nama di atas.`;
+
+ATURAN MEMORI (SANGAT PENTING): 
+Semua proses penyimpanan memori/fakta dilakukan SECARA OTOMATIS di latar belakang (background) oleh sistem sebelum Anda menjawab. 
+DILARANG KERAS merender atau menulis tag pemanggilan fungsi fiktif seperti \`<call:memory_manager...>\` ke dalam jawaban Anda. Langsung saja berikan respons natural bahwa Anda sudah mengingatnya.
+
+Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika user menanyakan jumlah atau nama sub-agent Anda, sebutkan nama-nama di atas.`;
     const userContextPrompt = userName ? `\nInformasi Akun: User login dengan email/nama "${userName}". Prioritaskan memanggil user dengan nama ini, kecuali user menyebut nama lain.` : '';
     
     // --- MEMORY MANAGER (RETRIEVAL) ---
