@@ -31,3 +31,22 @@ END $$;
 
 -- 4. Create an index for fast lookups
 CREATE INDEX IF NOT EXISTS idx_user_memories_hash ON public.user_memories(user_id, message_hash);
+
+-- =========================================================================
+-- LEVEL 4 UPGRADE: Structured Memory Schema
+-- =========================================================================
+DO $$
+BEGIN
+    -- Menambahkan tipe memori (fact, preference, event)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_memories' AND column_name = 'memory_type') THEN
+        ALTER TABLE public.user_memories ADD COLUMN memory_type TEXT DEFAULT 'fact';
+    END IF;
+    -- Menambahkan skor kepercayaan (0.0 - 1.0)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_memories' AND column_name = 'confidence') THEN
+        ALTER TABLE public.user_memories ADD COLUMN confidence FLOAT DEFAULT 1.0;
+    END IF;
+    -- Menambahkan sumber origin memori
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_memories' AND column_name = 'source') THEN
+        ALTER TABLE public.user_memories ADD COLUMN source TEXT DEFAULT 'user';
+    END IF;
+END $$;

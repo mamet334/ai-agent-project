@@ -2,7 +2,9 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { Buffer } from 'node:buffer';
 import { getPluginPromptList, getPluginByName } from './plugins/registry.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { retrieveMemories, processAndSaveMemory } from './plugins/memory_manager_v1.ts';
+import { retrieveMemories, processAndSaveMemory, applyUserCorrection } from './plugins/memory_manager_v1.ts';
+import { buildContextFusion } from './lib/context_fusion.ts';
+import { runSelfHealingLoopAsync } from './plugins/self_healing.ts';
 
 async function getGeminiEmbedding(text: string, geminiKey: string): Promise<number[]> {
   try {
@@ -982,7 +984,7 @@ Anda WAJIB mengeluarkan perintah Windows di dalam tag <terminal>. DILARANG menye
     };
     
     // --- RAG KNOWLEDGE BASE SEARCH ---
-    let ragContext = '';
+    let ragArray: any[] = [];
     if (userId && isRagEnabled) {
       try {
         const queryEmbedding = await getGeminiEmbedding(message, GEMINI_API_KEY);
@@ -1000,18 +1002,15 @@ Anda WAJIB mengeluarkan perintah Windows di dalam tag <terminal>. DILARANG menye
           });
 
           if (!matchError && matchedDocs && matchedDocs.length > 0) {
-            ragContext = `\n\n[DOKUMEN REFERENSI KNOWLEDGE BASE]:\nBerikut adalah data dokumen milik user. JIKA RELEVAN dengan pertanyaan user, gunakan data ini. Jika tidak relevan, abaikan saja:\n`;
-            for (const doc of matchedDocs) {
-              ragContext += `- [Dari file "${doc.title}"]: "${doc.content}"\n`;
-            }
+            ragArray = matchedDocs.map((doc: any) => ({ type: 'rag', content: `[Dari file "${doc.title}"]: "${doc.content}"`, score: 2 }));
           }
         }
       } catch (err) {
         console.error("RAG Search Error:", err);
       }
     }
-    console.log(`[RAG CONTEXT GENERATED] ragContext="${ragContext.trim()}"`);
-    processingSteps.push(`[RAG CONTEXT GENERATED] ragContext="${ragContext.trim()}"`);
+    console.log(`[RAG CONTEXT GENERATED] ragArray size=${ragArray.length}`);
+    processingSteps.push(`[RAG CONTEXT GENERATED] ragArray size=${ragArray.length}`);
 
     if (finalMessage.toLowerCase().includes('zip')) {
       finalMessage += `\n\n[PERINTAH SANGAT PENTING DARI SISTEM]: User meminta file ZIP. Anda DILARANG menggunakan blok kode biasa seperti \`\`\`html. ANDA WAJIB MENGGUNAKAN format \`\`\`xml_zip. 
@@ -1084,13 +1083,30 @@ DILARANG KERAS MENGGUNAKAN PYTHON ATAU "TOOL_CODE". JANGAN PERNAH MENULISKAN KOD
     const userContextPrompt = userName ? `\nInformasi Akun: User login dengan email/nama "${userName}". Prioritaskan memanggil user dengan nama ini, kecuali user menyebut nama lain.` : '';
     
     // --- MEMORY MANAGER (RETRIEVAL) ---
-    const dynamicMemory = await retrieveMemories(finalMessage, userId, Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', GEMINI_API_KEY);
+    let memoryArray = await retrieveMemories(finalMessage, userId, Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', GEMINI_API_KEY);
+    if (!Array.isArray(memoryArray)) memoryArray = [];
     
     const memoryPrompt = globalMemory ? `\n\n[MEMORI GLOBAL & PREFERENSI USER]:\n${globalMemory}\n(Patuhi instruksi/ingatan di atas secara ketat di setiap jawaban Anda!)` : '';
-    console.log(`[MEMORY PROMPT GENERATED] memoryPrompt="${memoryPrompt.trim()}" dynamicMemory="${dynamicMemory.trim()}"`);
-    processingSteps.push(`[MEMORY PROMPT GENERATED] memoryPrompt="${memoryPrompt.trim()}" dynamicMemory="${dynamicMemory.trim()}"`);
+    console.log(`[MEMORY PROMPT GENERATED] memoryPrompt="${memoryPrompt.trim()}" memoryArray size=${memoryArray.length}`);
+    processingSteps.push(`[MEMORY PROMPT GENERATED] memoryPrompt="${memoryPrompt.trim()}" memoryArray size=${memoryArray.length}`);
 
-    const fullSystemContext = agentIdentityPrompt + userContextPrompt + memoryPrompt + dynamicMemory + ragContext;
+    const basePrompts = agentIdentityPrompt + userContextPrompt + memoryPrompt;
+    
+    const resolved = buildContextFusion({
+      memoryArray,
+      ragArray,
+      message: finalMessage,
+      basePrompts
+    });
+    
+    const fullSystemContext = resolved.finalContext;
+    
+    console.log("[MAMET BRAIN v2]", {
+      memoryUsed: resolved.memory.length,
+      ragUsed: resolved.rag.length,
+      contextSize: fullSystemContext.length
+    });
+
     console.log(`[SYSTEM CONTEXT FINAL] fullSystemContext="${fullSystemContext.substring(fullSystemContext.length - 300)}"`);
     processingSteps.push(`[SYSTEM CONTEXT FINAL] fullSystemContext="${fullSystemContext.substring(fullSystemContext.length - 300)}"`);
 
@@ -1099,6 +1115,10 @@ DILARANG KERAS MENGGUNAKAN PYTHON ATAU "TOOL_CODE". JANGAN PERNAH MENULISKAN KOD
     // Dijalankan asinkron agar tidak memblokir respon ke pengguna jika memungkinkan
     if (userId && message && typeof message === 'string' && message.trim().length > 0) {
       console.log(`[MEMORY_GATEWAY] Memasukkan request userId: ${userId} ke pipeline idempotency`);
+      
+      // SELF HEALING: Terapkan koreksi pengguna jika ada sebelum menyimpan memori baru
+      await applyUserCorrection(userId, message, Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '');
+      
       await processAndSaveMemory(
         message, 
         "[System Ack]", 
@@ -1108,6 +1128,19 @@ DILARANG KERAS MENGGUNAKAN PYTHON ATAU "TOOL_CODE". JANGAN PERNAH MENULISKAN KOD
         GEMINI_API_KEY, 
         GROQ_API_KEY
       ).catch(e => console.error('[MEMORY_GATEWAY_ERROR]', e));
+
+      // LEVEL 5 ASYNC TRIGGER: Jalankan deteksi kontradiksi di background
+      const healingPromise = runSelfHealingLoopAsync(
+        userId,
+        Deno.env.get('SUPABASE_URL') || '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+      ).catch(e => console.error('[LEVEL5_ASYNC_ERROR]', e));
+
+      // @ts-ignore - Supabase EdgeRuntime environment check
+      if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
+          // @ts-ignore
+          EdgeRuntime.waitUntil(healingPromise);
+      }
     }
 
     if (tools && tools.length > 0) {
