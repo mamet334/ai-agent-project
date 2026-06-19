@@ -81,5 +81,11 @@ BEGIN
       AND a.created_at < b.created_at -- Menghapus memori duplikat yang lebih lama
       AND a.id != b.id
       AND 1 - (a.embedding <=> b.embedding) > 0.98;
+      
+    -- 3. [SELF-HEALING] Hapus memori usang yang dianulir pengguna (confidence hancur)
+    -- Perlu mengecek apakah kolom confidence ada terlebih dahulu agar backward compatible
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_memories' AND column_name='confidence') THEN
+        EXECUTE 'DELETE FROM user_memories WHERE confidence < 0.2;';
+    END IF;
 END;
 $$;
