@@ -14,11 +14,14 @@ const logMemoryAudit = (supabaseUrl, supabaseKey, payload) => {
 
 // -----------------------------------------------------------------
 // PRODUCTION-GRADE IDEMPOTENCY CACHE
-// Mencegah double insert pada level in-memory (contoh: async retry/frontend double click)
+// Mencegah double insert pada level in-memory 
 // -----------------------------------------------------------------
 const processedMemoryKeys = new Set();
+
 // Membersihkan cache setiap 1 jam agar tidak memory leak
-setInterval(() => processedMemoryKeys.clear(), 1000 * 60 * 60);
+setInterval(() => {
+    processedMemoryKeys.clear();
+}, 1000 * 60 * 60);
 
 // Helper fungsi untuk membuat Unique Fingerprint
 const generateMemoryHash = async (userId, message) => {
@@ -175,29 +178,95 @@ export const extractStructuredMemory = async (userPrompt) => {
   }
   
   let type = 'EVENT';
+  let role = 'GENERAL';
   let confidence = 0.8;
+  let tags = {
+      domain: 'general'
+  };
+  let importance_score = 0.5; // Default average importance
+  let stability_score = 1.0;  // Default high stability
   
-  // FACT CLASSIFICATION
-  if (/(?:tinggal di|domisili|rumah.*di)/i.test(lower)) {
+  // FACT CLASSIFICATION, BUCKETING & DIMENSIONAL TAGGING (NO AI COST)
+  if (/(?:tinggal di|domisili|rumah.*di|ruamh.*di)/i.test(lower)) {
     type = 'LOCATION';
+    tags.type = 'location';
+    if (/(?:kantor|kerja)/i.test(lower)) {
+        role = 'WORK_BASE';
+        tags.domain = 'work';
+        tags.context = 'professional';
+    } else {
+        role = 'HOME_BASE';
+        tags.domain = 'residence';
+        tags.context = 'personal';
+    }
+    importance_score = 0.9; // Residence/Work is highly important
     confidence = 0.95;
   } else if (/(?:suka|alergi|favorit|preferensi|benci|lebih suka)/i.test(lower)) {
     type = 'PREFERENCE';
     confidence = 0.95;
+    
+    tags.type = 'preference';
+    tags.valence = /(?:benci|alergi|tidak suka)/i.test(lower) ? 'negative' : 'positive';
+
+    if (/(?:makan|minum|buah|sayur|diet|seafood|pedas|apel|mangga|manis|asin|goreng|rebus)/i.test(lower)) {
+        role = 'PREF_FOOD';
+        tags.domain = 'food';
+        if (/(?:diet|sehat|alergi)/i.test(lower)) {
+            tags.context = 'health';
+            importance_score = 0.95; // Medical/diet is critical
+        } else {
+            importance_score = 0.6;
+        }
+    } else if (/(?:warna|merah|biru|kuning|hijau|hitam|putih)/i.test(lower)) {
+        role = 'PREF_COLOR';
+        tags.domain = 'color';
+        importance_score = 0.4; // Visual preference is low importance
+    } else if (/(?:main|hobi|olahraga|baca|nonton|film|musik|lagu|game)/i.test(lower)) {
+        role = 'PREF_ACTIVITY';
+        tags.domain = 'activity';
+    } else {
+        role = 'PREF_GENERAL';
+        tags.domain = 'general';
+    }
   } else if (/(?:nama|panggil|bernama)/i.test(lower)) {
     type = 'IDENTITY';
+    role = 'USER_NAME';
+    tags.domain = 'identity';
+    tags.type = 'profile';
+    importance_score = 1.0; // Identity is paramount
     confidence = 0.95;
   } else if (/(?:bekerja sebagai|pekerjaan|profesi)/i.test(lower)) {
     type = 'OCCUPATION';
+    role = 'JOB_TITLE';
+    tags.domain = 'career';
+    tags.type = 'occupation';
+    tags.context = 'professional';
+    importance_score = 0.8;
     confidence = 0.95;
   } else if (/(?:project|proyek|sedang membangun)/i.test(lower)) {
     type = 'PROJECT';
+    role = 'CURRENT_PROJECT';
+    tags.domain = 'project';
+    tags.type = 'initiative';
+    tags.context = 'work_in_progress';
+    importance_score = 0.7;
+    stability_score = 0.5; // Projects change over time
     confidence = 0.9;
   } else if (/(?:target|tujuan|fokus|jadwal|deadline|tugas|harus selesai|riset)/i.test(lower)) {
     type = 'GOAL';
+    role = 'CURRENT_GOAL';
+    tags.domain = 'goal';
+    tags.type = 'planning';
+    tags.context = 'time_sensitive';
+    importance_score = 0.8;
+    stability_score = 0.4; // Goals are highly volatile
     confidence = 0.9;
-  } else if (/(?:adalah|ingat|catat)/i.test(lower)) {
+  } else if (/(?:adalah|ingat|catat|penting)/i.test(lower)) {
     type = 'FACT';
+    role = 'GENERAL_FACT';
+    tags.domain = 'general';
+    tags.type = 'fact';
+    importance_score = /(?:penting)/i.test(lower) ? 0.9 : 0.5;
     confidence = 0.9;
   }
   
@@ -217,6 +286,10 @@ export const extractStructuredMemory = async (userPrompt) => {
   return {
     fact: factStr,
     type,
+    role,
+    tags,
+    importance_score,
+    stability_score,
     confidence,
     isInjectionAttempt: false
   };
@@ -254,7 +327,7 @@ export const applyUserCorrection = async (userId, userPrompt, supabaseUrl, supab
    }
 }
 
-export const processAndSaveMemory = async (userPrompt, aiResponse, userId, supabaseUrl, supabaseKey) => {
+export const processAndSaveMemory = async (userPrompt, aiResponse, userId, supabaseUrl, supabaseKey, geminiKey, groqKey, history) => {
   const BUILD_ID = "MEMORY_BUILD_20260619_V1";
   console.log("[BUILD_FINGERPRINT]", BUILD_ID);
 
@@ -291,17 +364,88 @@ export const processAndSaveMemory = async (userPrompt, aiResponse, userId, supab
     logMemoryAudit(supabaseUrl, supabaseKey, { user_id: userId, event_type: 'memory_save_skipped', status: 'SUCCESS', reason: 'detected_as_retrieval_query', query: userPrompt, execution_time_ms: Date.now() - startTime });
     return; // Keluar sebelum regex save dieksekusi
   }
+
+  // --- CORRECTION DETECTION LAYER (INPUT STABILIZER) ---
+  // Mendeteksi apakah input hanyalah potongan kata, koreksi bertahap, atau konfirmasi sepihak.
+  const isCorrectionOrPartial = () => {
+    const words = lower.split(/\s+/);
+    let reason = null;
+    
+    // 1. Partial Input: Terlalu pendek (1-2 kata) dan bukan fakta tegas
+    if (words.length <= 2 && !/(?:tinggal|suka|benci|kerja|nama)/i.test(lower)) {
+        reason = 'partial_fragment';
+    }
+    
+    // 2. Iterative Correction / Confirmation Loop
+    if (!reason && words.length <= 4) {
+      if (/^(?:ya|benar|betul|bukan|salah|di\s+[a-z]+$|barat|timur|utara|selatan)$/i.test(lower)) reason = 'short_confirmation';
+      if (/^(?:ya benar|ya betul|bukan begitu)\b/i.test(lower)) reason = 'short_confirmation';
+    }
+    
+    // 3. Potongan frasa yang menggantung
+    if (!reason && (lower.endsWith('ad') || lower.endsWith('adalah') || lower.endsWith('di') || lower.endsWith('ke'))) {
+        reason = 'dangling_particle';
+    }
+    
+    // 4. SEMANTIC FALSE STABILITY (Context Window Check)
+    // Check if the current entity is being refined across recent turns.
+    if (!reason && history && Array.isArray(history)) {
+        const recentUserMsgs = history.filter(m => m.role === 'user').slice(-3).map(m => (m.content || '').toLowerCase());
+        
+        // If the user has recently issued corrections or short fragments that match the current entity intent, 
+        // treat this as an unstable refinement sequence and reject saving for now until a clean turn.
+        const refinementKeywords = ['di', 'ya', 'benar', 'bukan', 'salah'];
+        for (const prev of recentUserMsgs) {
+           if (prev !== lower && refinementKeywords.some(kw => prev.startsWith(kw) || prev === kw)) {
+               // We detect a sequence of refinements. Is it stable yet?
+               // A heuristic: if the user said "ya benar [fakta baru]", we might let it pass if it's long enough.
+               // But if they are just saying "di surabaya barat" right after "di surabaya", it's an unstable window.
+               if (/^(?:ya|benar|betul|bukan|salah|di\s+)/i.test(lower)) {
+                   reason = 'unstable_correction_sequence';
+                   break;
+               }
+           }
+        }
+    }
+    
+    return reason;
+  };
+
+  const correctionReason = isCorrectionOrPartial();
+  if (correctionReason) {
+    console.log(`[L2_EXIT] reason="unstable_correction_turn" sub_reason="${correctionReason}"`);
+    console.log("[MEMORY_PENDING] Input is part of a correction loop or partial sentence. Skipping write.");
+    
+    if (correctionReason === 'unstable_correction_sequence') {
+        return {
+           memory_ack: false,
+           memory_state: 'rejected',
+           memory_id: null,
+           memory_text: 'Menunggu percakapan lebih stabil sebelum menyimpan memori.',
+           reason: 'unstable_correction_sequence'
+        };
+    }
+    
+    return {
+       memory_ack: false,
+       memory_state: 'pending',
+       memory_id: null,
+       memory_text: 'Menunggu kalimat fakta yang utuh dan final.',
+       reason: correctionReason
+    };
+  }
+  // -----------------------------------------------------
   
   // SMART RULE-BASED EXTRACTION (NO AI COST)
   const pronouns = /(?:aku|gue|gua|saya|ane|namaku)/;
   
   const identityPattern = new RegExp(`(?:nama ${pronouns.source}|${pronouns.source} bernama|panggil ${pronouns.source})`, 'i');
-  const locationPattern = new RegExp(`(?:${pronouns.source} tinggal di|domisili ${pronouns.source}|rumah ${pronouns.source} di)`, 'i');
+  const locationPattern = new RegExp(`(?:${pronouns.source} tinggal di|domisili|rumahku|rumah.*di|ruamh.*di)`, 'i');
   const preferencePattern = new RegExp(`(?:${pronouns.source} suka|${pronouns.source} tidak suka|favoritku|favorit ${pronouns.source}|lebih suka|${pronouns.source} alergi|kebiasaan ${pronouns.source})`, 'i');
   const occupationPattern = new RegExp(`(?:${pronouns.source} bekerja sebagai|pekerjaanku|pekerjaan ${pronouns.source}|profesiku|profesi ${pronouns.source})`, 'i');
-  const projectPattern = new RegExp(`(?:project ${pronouns.source}|proyek ${pronouns.source}|${pronouns.source} sedang membangun)`, 'i');
-  const goalPattern = new RegExp(`(?:target ${pronouns.source}|tujuan ${pronouns.source}|fokus ${pronouns.source}|saat ini ${pronouns.source} fokus|tugas ${pronouns.source}|deadline|tenggat waktu|harus selesai|riset|besok ${pronouns.source} harus|jadwal)`, 'i');
-  const manualTrigger = /(?:ingat ini|ingat|tolong ingat|catat ini|jangan lupa|simpan ini|penting:)/i;
+  const projectPattern = new RegExp(`(?:project|proyek|sedang membangun)`, 'i');
+  const goalPattern = new RegExp(`(?:target|tujuan|fokus|tugas|deadline|tenggat waktu|harus selesai|riset|jadwal)`, 'i');
+  const manualTrigger = /(?:ingat|catat|jangan lupa|simpan|penting:)/i;
   
   const memoryRegex = new RegExp(`${identityPattern.source}|${locationPattern.source}|${preferencePattern.source}|${occupationPattern.source}|${projectPattern.source}|${goalPattern.source}|${manualTrigger.source}`, 'i');
   
@@ -324,7 +468,12 @@ export const processAndSaveMemory = async (userPrompt, aiResponse, userId, supab
          console.log("[MEMORY_IDEMPOTENT_CHECK] Hit local cache! Skipping duplicate insert:", messageHash);
          console.log("[MEMORY_SKIP_DUPLICATE]");
          logMemoryAudit(supabaseUrl, supabaseKey, { user_id: userId, event_type: 'memory_save_skipped', status: 'SUCCESS', reason: 'idempotent_cache_hit', query: userPrompt, execution_time_ms: Date.now() - startTime });
-         return;
+         return {
+            memory_ack: true,
+            memory_state: 'committed',
+            memory_id: 'cache-hit-' + messageHash.substring(0, 8),
+            memory_text: "Fakta sudah ada di memori sistem."
+         };
       }
       
       // Tandai sudah diproses
@@ -348,9 +497,42 @@ export const processAndSaveMemory = async (userPrompt, aiResponse, userId, supab
       if (!sanitizedExtract || sanitizedExtract.isInjectionAttempt) {
          console.log(`[L2_EXIT] reason="security_injection_blocked"`);
          console.warn("[SECURITY] Prompt Injection Blocked in Memory System");
-         return; 
+         return {
+            memory_ack: false,
+            memory_state: 'rejected',
+            memory_id: null,
+            memory_text: 'Security injection blocked'
+         }; 
       }
       
+      // --- DISTRIBUTED ENTITY LOCKING (V4 ATOMIC TRANSACTION) ---
+      const hasExplicitCorrection = /(?:salah|bukan|ralat|yang benar|eh salah|batal|ganti|sekarang)/i.test(lower);
+      const entityInstanceId = `${sanitizedExtract.type}_${sanitizedExtract.role}`.toUpperCase();
+      
+      const { data: lockResult, error: rpcError } = await supabase.rpc('atomic_entity_lock', {
+          p_user_id: userId,
+          p_entity_instance_id: entityInstanceId,
+          p_value: sanitizedExtract.fact,
+          p_explicit_correction: hasExplicitCorrection
+      });
+      
+      if (rpcError) {
+          console.error("[ENTITY_LOCK_RPC_ERROR]", rpcError);
+          // If RPC fails (e.g. not migrated yet), fallback to allow write to prevent breaking prod.
+          // But ideally we log this.
+      } else if (lockResult?.status === 'conflicted') {
+          console.log(`[L2_EXIT] reason="entity_conflict_detected"`);
+          console.log(`[ENTITY_LOCK] Conflict on ${sanitizedExtract.type}: "${lockResult.old_value}" vs "${sanitizedExtract.fact}"`);
+          return {
+             memory_ack: false,
+             memory_state: 'conflicted',
+             memory_id: null,
+             memory_text: `Terdapat konflik dengan fakta sebelumnya ("${lockResult.old_value}"). Harap berikan konfirmasi eksplisit (contoh: "ralat", "yang benar adalah...").`,
+             reason: 'entity_conflict_detected'
+          };
+      }
+      // ------------------------------------
+
       console.log("[L2_CLASSIFICATION]", { memoryType: sanitizedExtract.type, extractedFact: sanitizedExtract.fact });
       console.log(`[MEMORY_INTENT_DETECTED] type=${sanitizedExtract.type} text="${sanitizedExtract.fact}"`);
       
@@ -371,7 +553,13 @@ export const processAndSaveMemory = async (userPrompt, aiResponse, userId, supab
         confidence: sanitizedExtract.confidence,
         source: 'user',
         embedding: null,
-        message_hash: messageHash
+        message_hash: messageHash,
+        metadata: { 
+            bucket: sanitizedExtract.role, 
+            tags: sanitizedExtract.tags,
+            importance_score: sanitizedExtract.importance_score,
+            stability_score: sanitizedExtract.stability_score
+        }
       }]).select('id').single();
       
       console.log("[AFTER_INSERT]", { data, error });
@@ -384,13 +572,44 @@ export const processAndSaveMemory = async (userPrompt, aiResponse, userId, supab
           console.log("[MEMORY_IDEMPOTENT_CHECK] Hit Supabase UNIQUE constraint! Skipping duplicate:", messageHash);
           console.log("[MEMORY_SKIP_DUPLICATE]");
           logMemoryAudit(supabaseUrl, supabaseKey, { user_id: userId, event_type: 'memory_save_skipped', status: 'SUCCESS', reason: 'unique_constraint_violation', query: userPrompt, execution_time_ms: Date.now() - startTime });
-          return;
+          return {
+             memory_ack: true,
+             memory_state: 'committed',
+             memory_id: 'db-dup-' + messageHash.substring(0, 8),
+             memory_text: "Fakta sudah ada di database."
+          };
         }
         throw error;
       }
       
       console.log("[L2_DB_INSERT_SUCCESS]", { insertedId: data?.id });
       console.log("[MEMORY_INSERT_SUCCESS]");
+      
+      // --- CONTRADICTION GRAPH EDGE CREATION (LEVEL 7) ---
+      if (data?.id) {
+          // 1. Update the lock with the newly minted active_memory_id
+          await supabase.from('entity_locks')
+            .update({ active_memory_id: data.id })
+            .eq('user_id', userId)
+            .eq('entity_instance_id', entityInstanceId);
+            
+          // 2. Build the semantic graph edge if we replaced a previous memory node
+          if (lockResult?.replaced_memory_id) {
+              const relationType = hasExplicitCorrection ? 'OVERRIDES' : 'REFINES';
+              const reasonType = hasExplicitCorrection ? 'user_explicit_correction' : 'implicit_temporal_update';
+              
+              await supabase.from('memory_relations').insert({
+                  source_memory_id: lockResult.replaced_memory_id,
+                  target_memory_id: data.id,
+                  relation_type: relationType,
+                  reason_type: reasonType,
+                  confidence: sanitizedExtract.confidence
+              });
+              
+              console.log(`[CONTRADICTION_GRAPH] Edge created: ${lockResult.replaced_memory_id} --[${relationType}]--> ${data.id} (reason: ${reasonType})`);
+          }
+      }
+      // ---------------------------------------------------
       
       // READ BACK VERIFICATION (PHASE 3)
       if (data?.id) {
@@ -403,6 +622,13 @@ export const processAndSaveMemory = async (userPrompt, aiResponse, userId, supab
       }
       
       logMemoryAudit(supabaseUrl, supabaseKey, { user_id: userId, event_type: 'memory_save_success', status: 'SUCCESS', query: userPrompt, execution_time_ms: Date.now() - startTime });
+      
+      return {
+        memory_ack: true,
+        memory_state: 'committed',
+        memory_id: data?.id,
+        memory_text: sanitizedExtract.fact
+      };
     } catch(e) { 
       console.error("[FATAL_FULL]", {
         errorName: e?.name,
@@ -412,11 +638,25 @@ export const processAndSaveMemory = async (userPrompt, aiResponse, userId, supab
       });
       console.error('[MEMORY_SAVE_FATAL]', { error: e, message: e?.message, details: e?.details, hint: e?.hint, code: e?.code });
       logMemoryAudit(supabaseUrl, supabaseKey, { user_id: userId, event_type: 'memory_save_failed', status: 'FAILED', reason: e.message, query: userPrompt, execution_time_ms: Date.now() - startTime });
+      return {
+        memory_ack: false,
+        memory_state: 'rejected',
+        memory_id: null,
+        memory_text: "Database write failed"
+      };
     }
   } else {
     console.log(`[L2_EXIT] reason="no_memory_pattern_detected"`);
     console.log(`[MEMORY_INTENT_REJECTED] reason="No matching semantic pattern"`);
+    
     // If not matching regex, log as skip so we can analyze coverage
     logMemoryAudit(supabaseUrl, supabaseKey, { user_id: userId, event_type: 'memory_save_skipped', status: 'SUCCESS', reason: 'no_keyword_match', query: userPrompt, execution_time_ms: Date.now() - startTime });
+    
+    return {
+        memory_ack: false,
+        memory_state: 'unconfirmed',
+        memory_id: null,
+        memory_text: "No matching pattern"
+    };
   }
 };
