@@ -2,7 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { Buffer } from 'node:buffer';
 import { getPluginPromptList, getPluginByName } from './plugins/registry.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { retrieveMemories, processAndSaveMemory, applyUserCorrection } from './plugins/memory_manager_v1.ts';
+import { retrieveMemories } from './plugins/memory_manager_v1.ts';
 import { buildContextFusion } from './lib/context_fusion.ts';
 import { runSelfHealingLoopAsync } from './plugins/self_healing.ts';
 
@@ -163,6 +163,8 @@ serve(async (req) => {
 
   try {
     let { message, tools, model, userId, userName, file, history, globalMemory, stream, desktopOSMode, ragEnabled } = await req.json();
+    console.log("[L1] frontend payload", { userId, message: message ? message.substring(0, 50) + '...' : null });
+    console.log("[L2] edge function received", { hasUserId: !!userId, hasMessage: !!message });
 
     // ANTI-HALLUCINATION: Bersihkan history agar LLM tidak melihat/mempelajari tag fiktif dari chat masa lalu
     if (history && Array.isArray(history)) {
@@ -1115,37 +1117,7 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
     // --- SINGLE GATEWAY: ANTI DUPLICATE MEMORY (TIER 1 & 2) ---
     // Dipanggil TEPAT SEBELUM membangun final context.
     if (userId && message && typeof message === 'string' && message.trim().length > 0) {
-      console.log(`[MEMORY_GATEWAY] Memasukkan request userId: ${userId} ke pipeline idempotency`);
-      
-      // SELF HEALING: Terapkan koreksi pengguna jika ada sebelum menyimpan memori baru
-      await applyUserCorrection(userId, message, Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '');
-      
-      const saveResult = await processAndSaveMemory(
-        message, 
-        "[System Ack]", 
-        userId, 
-        Deno.env.get('SUPABASE_URL') || '', 
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', 
-        GEMINI_API_KEY, 
-        GROQ_API_KEY,
-        history
-      ).catch(e => { console.error('[MEMORY_GATEWAY_ERROR]', e); return null; });
-      if (saveResult && saveResult.memory_ack && saveResult.memory_state === 'committed') {
-         userContextPrompt += `\n\n[MEMORY_SYSTEM_ACK]\nstatus: success\nmemory_state: committed\nmemory_id: ${saveResult.memory_id}\nmemory_text: ${saveResult.memory_text}`;
-      }
-
-      // LEVEL 5 ASYNC TRIGGER: Jalankan deteksi kontradiksi di background
-      const healingPromise = runSelfHealingLoopAsync(
-        userId,
-        Deno.env.get('SUPABASE_URL') || '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
-      ).catch(e => console.error('[LEVEL5_ASYNC_ERROR]', e));
-
-      // @ts-ignore - Supabase EdgeRuntime environment check
-      if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
-          // @ts-ignore
-          EdgeRuntime.waitUntil(healingPromise);
-      }
+      console.log(`[MEMORY_GATEWAY] Edge Function hanya validasi auth dan memproses LLM. Tidak ada auto-save sembunyi.`);
     }
 
     const basePrompts = agentIdentityPrompt + userContextPrompt + memoryPrompt;

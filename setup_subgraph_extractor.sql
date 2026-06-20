@@ -5,7 +5,7 @@
 -- Terintegrasi dengan CEBL (Context Execution Binding Layer)
 
 CREATE OR REPLACE FUNCTION extract_cognitive_subgraph(
-    p_user_id TEXT,
+    p_user_id UUID,
     p_keywords TEXT[],
     p_intent_mode TEXT,
     p_max_nodes INT,

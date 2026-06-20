@@ -46,3 +46,58 @@ Jika sedang merancang prompt untuk Mamet AI, patuhi formula ini:
 
 ## 📜 KESEPAKATAN
 *“Kerangkeng besi dari sistem ini adalah kenyataan. Imajinasi hanya boleh dipakai saat mendesain arsitektur baru, tetapi saat menulis kode, gunakan mata dan baca realita proyek.”* — (Diabadikan: 20 Juni 2026)
+
+---
+
+## 🛡️ ANTI-HALLUCINATION DOC LAYER (AHDL) — FOR ANTIGRAVITY & AI AGENTS
+
+**TUJUAN:** Mencegah AI agent mengklaim status sistem sebagai “100% selesai/final”, menyamakan dokumentasi dengan runtime realita, membuat asumsi tanpa verifikasi execution layer, dan melakukan overconfidence pada changelog.
+
+### 1. 📌 Snapshot Principle
+Semua dokumen adalah snapshot, bukan kebenaran final.
+- **RULE:** Dokumentasi = “best known state at time of writing”
+- ❌ **Dilarang:** “system is 100% correct”, “fully synced with reality”, “final state achieved”
+- ✔️ **Wajib:** “as of last observed update”, “based on current known execution state”
+
+### 2. 🧠 Runtime Supremacy Rule
+Jika ada konflik: **RUNTIME > CODE > DOCUMENTATION**
+- *Execution behavior* lebih benar dari doc.
+- Doc tidak boleh mengalahkan observasi sistem.
+
+### 3. ⚠️ Confidence Dampening Rule
+AI harus menurunkan level kepastian untuk: system status, deployment status, architecture completeness, bug resolution claims.
+- **“100% done”** ➡️ *“completed based on current verification”*
+- **“fully stable”** ➡️ *“no known critical issues observed”*
+- **“fixed”** ➡️ *“issue mitigated / patched (unverified edge cases possible)”*
+
+### 4. 🔍 Verification Gate Rule
+Sebelum menulis status sistem, AI wajib menanyakan dalam *thought process*:
+1. Apakah ini hasil runtime observation?
+2. Apakah ini hanya hasil code reading?
+3. Apakah ada execution log?
+*(Jika tidak ada runtime proof ➡️ wajib downgrade confidence)*
+
+### 5. 🧾 Changelog Safety Format (MANDATORY)
+Semua update harus mengikuti format pelaporan ini:
+- **[CHANGE TYPE]:** Description perubahan
+- **[CONFIDENCE LEVEL]:** observed runtime / inferred code / partial info
+- **[IMPACT]:** frontend / backend / memory / infra
+- **[UNKNOWNS]:** daftar hal yang belum diverifikasi
+
+### 6. 🧯 Anti-Absolute Language Filter
+- ❌ **Dilarang keras:** 100% accurate, fully complete, perfectly synced, no issues exist, production ready (tanpa qualifier).
+- ✔️ **Ganti dengan:** “currently observed stable”, “no critical issues detected in current test scope”, “appears consistent with implementation”.
+
+### 7. 🧠 Memory vs Reality Separation Rule
+AI harus selalu membedakan:
+- **MEMORY:** dokumen, mantra, log
+- **CODE:** implementation
+- **RUNTIME:** execution result
+*(Jika sumber tidak jelas ➡️ wajib labelkan sebagai ASSUMPTION)*
+
+### 8. 🚨 Output Style Rule (Header Kewajiban Laporan)
+Setiap laporan status sistem harus dimulai dengan Header:
+**⚠️ REALITY CLASSIFICATION:**
+- [Observed Runtime] / [Code Inferred] / [Documentation Only]
+
+*(Note: Hallucination Trigger Detector Active. Kata "100%", "always", "never" dilarang dipakai dalam konteks kepastian sistem)*

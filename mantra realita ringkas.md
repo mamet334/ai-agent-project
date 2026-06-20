@@ -143,22 +143,47 @@ Karena *Control Plane* (CEBL & CSEL) sudah terpasang, tugas berikutnya adalah:
 1. **Membangun Subgraph Extractor:** Menulis kueri Supabase RPC yang mengekstraksi node dari `active_user_memories` dan merayapi tabel `memory_relations` secara dinamis sesuai batasan *budget* dari CEBL.
 2. **Membangun Context Compressor:** Membuat agen perajut teks yang akan mengubah kumpulan node mentah (JSON) dari database menjadi satu paragraf prosa / *bullet points* padat token sebelum disuntikkan ke dalam *Context Window* LLM.
 
-## 🔍 ANALISIS SISTEM OTAK AI
-- Frontend full menyalakan `MainOrchestrator` + `TokenSaverAgent` untuk optimasi prompt dan pengecekan budget sebelum backend.
-- Mametlite Lite memanggil `callAgentSimple()` langsung ke Supabase Edge Function tanpa orchestrator, dengan tools terbatas.
-- `agent-process` Edge Function menjadi pusat kontrol request: validasi, circuit breaker quota, history trimming, BYOK selection, dan SSE streaming.
-- Rotasi key BYOK dilakukan untuk `gemini`, `groq`, `openai`, dan `openrouter`; fallback dipilih sesuai prioritas provider.
-- Model utama adalah Gemini, dengan OpenRouter untuk model `openrouter-*` dan Groq sebagai fallback/cadangan.
-- RAG disupport lewat embedding Gemini dalam fungsi `rag-process`, lalu diintegrasikan ke prompt saat `rag_search` aktif.
-- Web search dan deep research dimasukkan ke payload Gemini sebagai tool `google_search` dan plugin khusus.
-- Backend juga mendukung sub-agent coordinator, function calling, file parsing, dan logging biaya token per request.
-- Sistem resiliency mengutamakan retry multi-key, fallback engine, dan circuit breaker harian untuk kontrol biaya.
+## 🔄 OUT-OF-BAND SYSTEM UPDATE (21 Juni 2026)
 
-## ⚠️ TANTANGAN YANG BELUM SELESAI
-- Code Signing Certificate (SmartScreen masih peringatan)
-- Auto-updater distribution (infrastruktur pending)
-- API proxy backend (untuk sembunyikan API keys dari frontend)
+### 1. MAMETLITE LITE - ARCHITECTURE CHANGE
+- `MainOrchestrator` **DIHAPUS** dari Mametlite Lite. Diganti total dengan `callAgentSimple()`.
+- Tidak ada *token optimization layer*, tidak ada *budget check* sebelum request, tidak ada *context packing / pre-processing*.
+- **Flow baru:** User Input (`App.jsx`) → build tools array → `callAgentSimple()` → Supabase Edge Function (`agent-process`) → SSE streaming response ke UI.
+
+### 2. TOOLS LOGIC UPDATE
+- **Tools mapping:**
+  - RAG ON → `['rag_search']`
+  - RAG + WEB → `['rag_search', 'web_search']`
+  - ALL ON → `['rag_search', 'web_search', 'deep_research']`
+  - ALL OFF → default `['rag_search', 'web_search']`
+
+### 3. CRITICAL BUG FIXES
+- **`tokenSaverAgent.js`**: Fix `(context || "").split is not a function`. Ditambahkan *type validation* sebelum `split()`.
+- **`callAgentSimple.js`**: Fix `buffer.split` crash. Ditambahkan *string type guard* sebelum parsing.
+- **`App.jsx`**: Fix `session.user.email` undefined crash. Diganti dengan *safe access (optional chaining)*.
+
+### 4. ELECTRON / DESKTOP FIXES
+- **Blank Screen Fix #1:** Menghapus `loadFile(index.html)` dan menggantinya dengan custom protocol: `mamet://app/index.html` (Secure protocol registered, Chromium origin safe).
+- **Blank Screen Fix #2 (CI Build Crash):** `.env` missing during GitHub Actions membuat Supabase client crash karena `VITE_SUPABASE_URL` undefined. Fix: Inject environment variables during build step.
+
+### 5. BACKEND RESILIENCE UPDATE
+- **Cascade order updated:** 
+  - Sebelumnya: Gemini → OpenRouter (buggy fallback propagation)
+  - Sekarang: **Gemini → Groq → OpenRouter**
+- **Fix:** Menambahkan `forceDefaultModel` dalam mode fallback dan mengunci fallback model ke `meta-llama/llama-3.1-8b-instruct:free`.
+
+### 6. MEMORY SYSTEM STATUS
+- **Event-sourced memory graph** active.
+- **CQRS active view** implemented.
+- **OVERRIDE / REFINES relation system** active.
+- **CEBL + CSEL** controlling context injection.
+- **atomic_entity_lock** prevents race conditions.
+
+### 7. KNOWN LIMITATIONS / NOT YET COMPLETED
+- Code signing certificate belum terimplementasi (SmartScreen warning tetap ada).
+- Auto-updater infrastructure masih parsial.
+- API proxy backend belum sepenuhnya terisolasi dari frontend.
 
 ---
 
-> Catatan: Semua fitur di atas sudah diimplementasikan dalam kode (bukan rencana).
+> Catatan: Semua fitur di atas sudah diimplementasikan dalam kode (bukan rencana). Mametlite Lite telah bergeser dari arsitektur berbasis orchestrator ke model eksekusi stateless direct-call, dengan pemilihan tool yang disederhanakan dan overhead pre-processing yang diminimalkan.
