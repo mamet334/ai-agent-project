@@ -1,6 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-
-// Helper to log audits asynchronously
+import { parseCognitiveIntent, bindCognitiveExecution } from '../lib/context_optimizer.ts';// Helper to log audits asynchronously
 const logMemoryAudit = (supabaseUrl, supabaseKey, payload) => {
   try {
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -41,7 +40,80 @@ export const saveFactDirectly = async (fact, userId, supabaseUrl, supabaseKey) =
   } catch(e) { console.error('Memory save error', e); }
 };
 
+export const MEMORY_V2_ENABLED = Deno.env.get('MEMORY_V2_ENABLED') === 'true';
+
+export const retrieveMemoriesV2 = async (userPrompt, userId, supabaseUrl, supabaseKey) => {
+  const startTime = Date.now();
+  if (!userId || userPrompt.trim().length < 4) return [];
+
+  try {
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    console.log('[COST LEAK DETECTION] memoryFetchCount: 1 (V2 Subgraph)');
+    
+    // 1. PIPELINE: Intent Filter (Control Plane)
+    const intentSpec = parseCognitiveIntent(userPrompt);
+    const contract = bindCognitiveExecution(intentSpec);
+    
+    const promptLower = userPrompt.toLowerCase();
+    const keywords = promptLower.split(/[\s\p{P}]+/).filter(w => w.length > 3);
+    
+    // 2. PIPELINE: Graph Traversal (Execution Engine)
+    const { data: subgraph, error } = await supabase.rpc('extract_cognitive_subgraph', {
+      p_user_id: userId,
+      p_keywords: keywords,
+      p_intent_mode: intentSpec.intent_mode,
+      p_max_nodes: contract.max_nodes,
+      p_max_edges: contract.max_edges,
+      p_traversal_depth: contract.graph_traversal_depth
+    });
+    
+    if (error) throw error;
+    
+    console.log('[MEMORY_V2_STATS]', subgraph.stats);
+    
+    if (!subgraph.nodes || subgraph.nodes.length === 0) return [];
+    
+    // 3. PIPELINE: Context Formatting
+    const finalMemories = subgraph.nodes.map(node => {
+      let enrichedContent = node.summary;
+      
+      // Penanda konteks historis jika ditarik melalui traversal
+      if (!node.is_root && (intentSpec.intent_mode === 'DELTA' || intentSpec.intent_mode === 'ANALYTIC')) {
+        enrichedContent = `[HISTORICAL / CAUSAL FACT] ${enrichedContent}`;
+      }
+
+      return {
+        id: node.id,
+        type: 'memory',
+        content: enrichedContent,
+        score: node.score || 5.0, 
+        timestamp: node.created_at,
+        is_root: node.is_root
+      };
+    });
+    
+    // Asynchronous hit tracker
+    const memoryIds = finalMemories.map(m => m.id);
+    if (memoryIds.length > 0) {
+       supabase.rpc('update_memory_stats', { memory_ids: memoryIds }).catch(() => {});
+    }
+    
+    return finalMemories;
+  } catch (e) {
+    console.error('[MEMORY_V2_ERROR] Fallback triggered', e);
+    return null; // Null indicates failure, triggering fallback to V1
+  }
+};
+
 export const retrieveMemories = async (userPrompt, userId, supabaseUrl, supabaseKey) => {
+  // FEATURE FLAG & FALLBACK MECHANISM
+  if (MEMORY_V2_ENABLED) {
+     const v2Result = await retrieveMemoriesV2(userPrompt, userId, supabaseUrl, supabaseKey);
+     if (v2Result !== null) {
+         return v2Result; 
+     }
+  }
+
   const startTime = Date.now();
   if (!userId || userPrompt.trim().length < 4) {
      logMemoryAudit(supabaseUrl, supabaseKey, { user_id: userId, event_type: 'memory_retrieval_failed', status: 'FAILED', reason: 'query_too_short', query: userPrompt, execution_time_ms: Date.now() - startTime });
