@@ -245,3 +245,46 @@ P3
 - Knowledge Synthesizer Agent
 - Multi-Agent Performance Monitor
 - Autonomous Project Manager
+
+---
+
+### 🔄 OUT-OF-BAND SYSTEM UPDATE (21 Juni 2026)
+
+#### 1. MAMETLITE LITE - ARCHITECTURE CHANGE
+- `MainOrchestrator` **DIHAPUS** dari Mametlite Lite. Diganti total dengan `callAgentSimple()`.
+- Tidak ada *token optimization layer*, tidak ada *budget check* sebelum request, tidak ada *context packing / pre-processing*.
+- **Flow baru:** User Input (`App.jsx`) → build tools array → `callAgentSimple()` → Supabase Edge Function (`agent-process`) → SSE streaming response ke UI.
+
+#### 2. TOOLS LOGIC UPDATE
+- **Tools mapping:**
+  - RAG ON → `['rag_search']`
+  - RAG + WEB → `['rag_search', 'web_search']`
+  - ALL ON → `['rag_search', 'web_search', 'deep_research']`
+  - ALL OFF → default `['rag_search', 'web_search']`
+
+#### 3. CRITICAL BUG FIXES
+- **`tokenSaverAgent.js`**: Fix `(context || "").split is not a function`. Ditambahkan *type validation* sebelum `split()`.
+- **`callAgentSimple.js`**: Fix `buffer.split` crash. Ditambahkan *string type guard* sebelum parsing.
+- **`App.jsx`**: Fix `session.user.email` undefined crash. Diganti dengan *safe access (optional chaining)*.
+
+#### 4. ELECTRON / DESKTOP FIXES
+- **Blank Screen Fix #1:** Menghapus `loadFile(index.html)` dan menggantinya dengan custom protocol: `mamet://app/index.html` (Secure protocol registered, Chromium origin safe).
+- **Blank Screen Fix #2 (CI Build Crash):** `.env` missing during GitHub Actions membuat Supabase client crash karena `VITE_SUPABASE_URL` undefined. Fix: Inject environment variables during build step.
+
+#### 5. BACKEND RESILIENCE UPDATE
+- **Cascade order updated:** 
+  - Sebelumnya: Gemini → OpenRouter (buggy fallback propagation)
+  - Sekarang: **Gemini → Groq → OpenRouter**
+- **Fix:** Menambahkan `forceDefaultModel` dalam mode fallback dan mengunci fallback model ke `meta-llama/llama-3.1-8b-instruct:free`.
+
+#### 6. MEMORY SYSTEM STATUS
+- **Event-sourced memory graph** active.
+- **CQRS active view** implemented.
+- **OVERRIDE / REFINES relation system** active.
+- **CEBL + CSEL** controlling context injection.
+- **atomic_entity_lock** prevents race conditions.
+
+#### 7. KNOWN LIMITATIONS / NOT YET COMPLETED
+- Code signing certificate belum terimplementasi (SmartScreen warning tetap ada).
+- Auto-updater infrastructure masih parsial.
+- API proxy backend belum sepenuhnya terisolasi dari frontend.
