@@ -52,12 +52,9 @@ export async function readMemory(user_id: string, key: string) {
 
   if (error) throw new Error(`Read failed: ${error.message}`);
   
-  if (!data || data.length === 0) return { active: null, latent: [] };
+  if (!data || data.length === 0) return [];
 
-  return {
-    active: data[0],
-    latent: data.slice(1)
-  };
+  return data;
 }
 
 export async function overrideMemory(user_id: string, key: string, value: string) {
