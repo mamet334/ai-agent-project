@@ -16,7 +16,13 @@ export interface GlobalCognitionInput {
   behavior_profile: any;
 }
 
+export const LEGACY_COGNITION_ENABLED = false;
+
 export function runGlobalCognitionLoop(input: GlobalCognitionInput): FinalDecisionContext {
+  if (!LEGACY_COGNITION_ENABLED) {
+    return input.decision_context;
+  }
+
   const current_context = { ...input.decision_context };
   
   // Shallow clone memory to allow safe swapping without modifying original references deeply

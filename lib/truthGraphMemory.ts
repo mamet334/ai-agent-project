@@ -30,19 +30,24 @@ const memoryGraph: TruthGraph = {
   edges: []
 };
 
+export const LEGACY_COGNITION_ENABLED = false;
+
 export function createNode(id: string, fact: any): GraphNode {
+  if (!LEGACY_COGNITION_ENABLED) return { id, fact, weight: 0 };
   const node: GraphNode = { id, fact, weight: 0 };
   memoryGraph.nodes.set(id, node);
   return node;
 }
 
 export function addEdge(source_id: string, target_id: string, relationType: 'SUPPORTS' | 'CONTRADICTS' | 'RELATES' | 'EVOLVES_TO'): GraphEdge {
+  if (!LEGACY_COGNITION_ENABLED) return { source_id, target_id, relationType };
   const edge: GraphEdge = { source_id, target_id, relationType };
   memoryGraph.edges.push(edge);
   return edge;
 }
 
 export function computeNodeWeight(node_id: string, truth_score: number, recency_timestamp: number, confidence: number): number {
+  if (!LEGACY_COGNITION_ENABLED) return 0;
   const node = memoryGraph.nodes.get(node_id);
   if (!node) return 0;
 
@@ -57,11 +62,13 @@ export function computeNodeWeight(node_id: string, truth_score: number, recency_
 }
 
 export function detectConflictEdges(): GraphEdge[] {
+  if (!LEGACY_COGNITION_ENABLED) return [];
   // Returns all structural contradictions without resolving them
   return memoryGraph.edges.filter(edge => edge.relationType === 'CONTRADICTS');
 }
 
 export function traverseTruthGraph(query_source_id: string, max_depth: number = 2): GraphNode[] {
+  if (!LEGACY_COGNITION_ENABLED) return [];
   const visited = new Set<string>();
   const result: GraphNode[] = [];
   
@@ -87,5 +94,6 @@ export function traverseTruthGraph(query_source_id: string, max_depth: number = 
 }
 
 export function getFullGraph() {
+  if (!LEGACY_COGNITION_ENABLED) return { nodes: new Map(), edges: [] };
   return memoryGraph;
 }

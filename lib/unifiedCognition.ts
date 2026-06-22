@@ -77,7 +77,19 @@ export function selectActiveTruth(resolved_candidates: any[]): any | null {
   return resolved_candidates[0];
 }
 
+export const LEGACY_COGNITION_ENABLED = false;
+
 export function executeCognition(input: UCLInput): UCLOutput {
+  if (!LEGACY_COGNITION_ENABLED) {
+    return {
+      final_memory_state: input.memory_candidates,
+      selected_truth: input.memory_candidates?.[0] || null,
+      behavior_influence_score: 0.5,
+      decision_rationale: "[LEGACY DISABLED] UnifiedCognition is bypassed.",
+      execution_plan: undefined
+    };
+  }
+
   // 1. Behavior integration
   const behavior_influence_score = computeContextPriority(input.behavior_profile);
 
