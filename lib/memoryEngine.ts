@@ -1,12 +1,18 @@
 import { supabase } from './supabaseClient';
 import { MemoryNode } from '../types/memory';
 import { recalculateTruthScores } from './truthScorer';
+import { logTruthEvaluation } from './truthScoringEngine';
 
-export async function writeMemory(user_id: string, key: string, value: string): Promise<MemoryNode> {
+export async function writeMemory(user_id: string, key: string, value: string, optional_truth_score?: number): Promise<MemoryNode> {
   if (!key || key.trim() === '') throw new Error("Empty key is not allowed.");
   if (value === null || value === undefined) throw new Error("Null/undefined value is not allowed.");
   
   const semantic_identity = String(value).toLowerCase().trim();
+  const initial_score = optional_truth_score !== undefined ? optional_truth_score : 0;
+
+  if (optional_truth_score !== undefined) {
+     logTruthEvaluation({ key, label: optional_truth_score >= 0.75 ? "TRUSTED" : "LATENT", truth_score: optional_truth_score });
+  }
 
   // Insert raw memory first
   const { data: newRow, error: insertError } = await supabase
@@ -17,7 +23,7 @@ export async function writeMemory(user_id: string, key: string, value: string): 
        value: String(value),
        semantic_identity,
        confidence: 1.0,
-       truth_score: 0 // placeholder before calc
+       truth_score: initial_score
     }])
     .select()
     .single();

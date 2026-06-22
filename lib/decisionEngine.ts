@@ -8,6 +8,8 @@
  * NO RAW TEXT PARSING ALLOWED
  */
 
+import { runGlobalCognitionLoop } from './globalCognitionLoop';
+
 export interface MemoryResult {
   value: string;
   truth_score: number;
@@ -159,14 +161,24 @@ export function buildDecisionContext(input: DecisionEngineInput): FinalDecisionC
   const intent_mode = input.intent_data?.intent_spec?.intent_mode || input.intent_data?.semantic_intent || "DEFAULT_INTENT";
   
   // STEP 2 & 4: MEMORY RESOLUTION
-  // Trusting Supabase Single Source of Truth (already sorted by truth_score DESC)
   let active_memory: MemoryResult | null = null;
   let latent_memories: MemoryResult[] = [];
   let confidence_score = 1.0;
 
   if (input.memory_results && input.memory_results.length > 0) {
-    active_memory = input.memory_results[0];
-    latent_memories = input.memory_results.slice(1);
+    // Sort memory candidates using TSE priority order: 1. truth_score, 2. recency, 3. confidence
+    const sorted = [...input.memory_results].sort((a, b) => {
+      if (b.truth_score !== a.truth_score) return b.truth_score - a.truth_score;
+      
+      const timeB = new Date(b.created_at || 0).getTime();
+      const timeA = new Date(a.created_at || 0).getTime();
+      if (timeB !== timeA) return timeB - timeA;
+      
+      return (b.confidence || 0) - (a.confidence || 0);
+    });
+
+    active_memory = sorted[0];
+    latent_memories = sorted.slice(1);
     confidence_score = active_memory.truth_score > 0 ? active_memory.truth_score : 1.0;
   }
 
@@ -180,7 +192,7 @@ export function buildDecisionContext(input: DecisionEngineInput): FinalDecisionC
   }
 
   // Generate FINAL CONTEXT
-  const finalContext: FinalDecisionContext = {
+  let finalContext: FinalDecisionContext = {
     intent: intent_mode,
     execution_contract: buildExecutionContract(intent_mode),
     exception_policy: buildExceptionPolicy(intent_mode),
@@ -200,6 +212,17 @@ export function buildDecisionContext(input: DecisionEngineInput): FinalDecisionC
   if (language_enhancement) {
     finalContext.language_enhancement = language_enhancement;
   }
+
+  // --- GLOBAL COGNITION FEEDBACK LOOP (SELF-REVIEW) ---
+  finalContext = runGlobalCognitionLoop({
+    decision_context: finalContext,
+    memory_context: {
+      tgml_nodes: input.memory_results || [],
+      conflict_edges: [] // Supplied properly when fully integrated with TGML
+    },
+    truth_scores: {},
+    behavior_profile: input.behavior_memory
+  });
 
   return finalContext;
 }
