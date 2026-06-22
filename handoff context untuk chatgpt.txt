@@ -1,4 +1,4 @@
-🧠 MAMET AI — HANDOFF CONTEXT (INSTRUCTOR SNAPSHOT v1)
+🧠 MAMET AI — HANDOFF CONTEXT (INSTRUCTOR SNAPSHOT v2)
 
 ROLE SYSTEM:
 - Mamet AI = AI assistant system yang sedang dibangun
@@ -12,146 +12,113 @@ ROLE SYSTEM:
 
 1) LONG-TERM MEMORY (SUPABASE)
 - Database persisten (mamet_memory)
-- Menyimpan:
-  - key / value memory
-  - semantic_identity
-  - confidence
-  - truth_score
-- Query utama: ORDER BY truth_score DESC
+- Menyimpan: key / value memory, semantic_identity, confidence, truth_score
 - Supabase = SINGLE SOURCE OF TRUTH
 
 2) SHORT-TERM MEMORY (SESSION RAM)
 - In-memory FIFO buffer (±10 chat terakhir)
 - Tidak disimpan ke database
-- Fungsi:
-  - konteks percakapan cepat
-  - anti-amnesia jangka pendek
-- Optional auto-summary ringan (tanpa LLM berat)
+- Fungsi: konteks percakapan cepat & anti-amnesia jangka pendek
 
 3) BEHAVIOR MEMORY ENGINE
-- Heuristic user profiling real-time
-- Mendeteksi:
-  - gaya bahasa (formal/casual/technical)
-  - kecepatan respon (fast/detail)
-  - pola berpikir (analitis/eksekusi/arsitektur)
-  - kebiasaan override / revisi
-- Decay factor ~0.98 agar adaptif
-- Tidak menggunakan database
+- Heuristic user profiling real-time (formal/casual, kecepatan respon, pola pikir)
+- Decay factor ~0.98 agar adaptif. Tidak menggunakan database.
 
 ============================================================
-🔁 2. INTELLIGENCE PIPELINE (CORE FLOW)
+🔁 2. INTELLIGENCE PIPELINE (CURRENT FINAL TRUTH)
 ============================================================
 
 User Input
   ↓
-Semantic Bridge (normalisasi + keyword heuristic)
+Semantic Bridge (normalisasi + keyword heuristic) & Intent Preprocessor
   ↓
-Intent Preprocessor (context_optimizer + classification)
+Memory Engine (Supabase READ ONLY - fetch data mentah)
   ↓
-Memory Engine (Supabase retrieval by truth_score)
+Memory Governor (FILTER ONLY - menyaring noise & ranking relevansi)
   ↓
-Decision Engine (conflict resolution + logic control)
+Optimal Context Budgeting / OCB (COMPRESSION ONLY - optimasi budget token)
   ↓
-Context Unifier (merge: memory + behavior + short-term)
+Decision Engine (SINGLE SOURCE OF TRUTH / FINAL AUTHORITY - final orchestrator)
   ↓
 LLM (ChatGPT → hanya language renderer)
 
-============================================================
-🧩 3. MODUL YANG SUDAH ADA
-============================================================
-
-- Semantic Bridge:
-  - normalisasi teks
-  - slang detection
-  - fuzzy + keyword matching O(1)
-
-- Intent Preprocessor:
-  - STATE_QUERY / DELTA / PROFILE / ANALYTIC
-  - tidak akses database
-
-- Decision Engine:
-  - execution_contract generator
-  - conflict resolution policy
-  - language agent activation control
-
-- Context Unifier:
-  - memilih active vs latent memory
-  - tidak merge string (no hallucinated concatenation)
-  - language agent hanya optional (UI-triggered)
-
-- Short-Term Memory:
-  - FIFO session buffer
-  - auto summary ringan
-
-- Behavior Memory:
-  - user behavior profiling + decay system
+*No other layer is allowed to exist in execution path.*
 
 ============================================================
-🧠 4. DESIGN PRINCIPLES
+🧩 3. MODULE RESPONSIBILITY CLARIFICATION
 ============================================================
 
-- NO HALLUCINATION RULE:
-  LLM tidak boleh mengarang data memory
-
-- SINGLE SOURCE OF TRUTH:
-  Supabase adalah referensi utama
-
-- SEPARATION OF CONCERNS:
-  parsing ≠ decision ≠ memory ≠ rendering
-
-- LLM ROLE LIMITATION:
-  hanya sebagai response renderer, bukan brain utama
+- Memory Engine: ONLY fetch data from Supabase. NO scoring, NO filtering logic.
+- Memory Governor: ONLY filter and rank memory relevance. NO final decision authority. NO prompt building.
+- OCB: ONLY compress and optimize token usage. NO semantic decision making.
+- Decision Engine: ONLY FINAL AUTHORITY. Builds final prompt, merges context + behavior + memory, produces final LLM input.
 
 ============================================================
-📊 5. CURRENT SYSTEM STATUS
+🗄️ 4. LEGACY SYSTEM STATUS (ARCHIVED / INACTIVE)
+============================================================
+
+Modul-modul berikut telah dinonaktifkan via feature flag:
+`LEGACY_COGNITION_ENABLED = false`
+
+- SCC (Single Cognitive Core)
+- CMG (Cognitive Memory Governor)
+- G-CFL (Global Cognition Loop)
+- UCL (Unified Cognition Layer)
+- TGML (Truth Graph Memory Layer)
+- MSC (Memory Stability Core)
+
+STATUS: Non-executing, safe archive only, NO influence on runtime pipeline.
+
+============================================================
+🧠 5. DESIGN PRINCIPLES & HARD CONSTRAINTS
+============================================================
+
+- SINGLE DECISION AUTHORITY MODEL: Decision Engine adalah pemegang keputusan tunggal mutlak.
+- DETERMINISTIC LINEAR PIPELINE: Tidak ada recursion, loop, atau multiple orchestrators.
+- NO OVERLAPPING ENGINES: Tidak ada duplicate scoring systems atau parallel decision systems.
+- NO HIDDEN LOGIC: Tidak ada hidden reasoning pipelines di luar Decision Engine.
+- NO HALLUCINATION: LLM hanya sebagai response renderer, bukan pengambil keputusan.
+- REACTIVATION BAN: Jangan mengaktifkan ulang modul legacy ke dalam jalur eksekusi utama.
+- NO NEW COGNITIVE LAYERS: Dilarang menambah lapisan kognitif baru di luar pipeline ini.
+
+============================================================
+📊 6. CURRENT SYSTEM STATUS
 ============================================================
 
 - Memory System: STABLE
-- Behavior System: ACTIVE
-- Decision Engine: STABLE
-- Pipeline Architecture: CLEAN
-- Reasoning Layer: BASIC (belum multi-step reasoning)
+- Pipeline Architecture: CLEAN, LINEAR, LOW-LATENCY
+- System state: "Mamet AI is a stable, single-authority, memory-driven deterministic assistant system with optimized context pipeline and fully disabled legacy cognitive stack."
 
 ============================================================
-🚧 6. MASALAH TERBUKA
+🚧 7. MASALAH TERBUKA
 ============================================================
 
-- Belum ada multi-step reasoning engine
-- Conflict resolution masih rule-based (truth_score)
-- Belum ada vector/embedding semantic intelligence
-- Context compression intelligence belum matang
-- LLM masih raw renderer (belum fully guarded)
+- Belum ada vector/embedding semantic intelligence murni
+- LLM masih raw renderer (belum fully guarded secara token budget absolut)
 
 ============================================================
-🎯 7. TUJUAN SISTEM
+🎯 8. TUJUAN SISTEM
 ============================================================
 
-Mamet AI =
-
-"Long-term autonomous assistant dengan:
-- memory kuat
-- behavior awareness
-- deterministic reasoning layer"
+Mamet AI = "Long-term autonomous assistant dengan memory kuat, behavior awareness, dan deterministic linear reasoning layer"
 
 ============================================================
-🧑‍🏫 8. PERAN CHATGPT (INSTRUCTOR MODE)
+🧑‍🏫 9. PERAN CHATGPT (INSTRUCTOR MODE)
 ============================================================
 
-- System architect reviewer
-- Anti-hallucination validator
-- Design correctness checker
-- Guard terhadap overengineering
+- System architect reviewer & Anti-hallucination validator
+- Design correctness checker & Guard terhadap overengineering
 - Pengarah ke production-grade system
 
 ============================================================
-▶️ 9. CONTINUATION INSTRUCTION
+▶️ 10. CONTINUATION INSTRUCTION
 ============================================================
 
 Jika digunakan di chat baru:
 
 "Continue as Mamet AI Instructor.
-Use Handoff Context v1 as system state.
-Focus on production-grade architecture review."
+Use Handoff Context v2 as system state.
+Focus on clean, single-authority production-grade architecture review."
 ============================================================
 LAST UPDATE SNAPSHOT vb00db70:
 - Timestamp: 2026-06-22 03:34:54 UTC
