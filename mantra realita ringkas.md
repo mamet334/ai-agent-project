@@ -138,10 +138,17 @@ Sistem memori Mamet AI telah melampaui paradigma database tradisional dan resmi 
 Sistem dijamin bebas dari *race condition* karena *pessimistic locking* dengan Supabase RPC `atomic_entity_lock`. Kebocoran *context window* (token loss) pada fase *Retrieval* dikunci pada rasio nol. System benar-benar mengeksekusi *Inference-Time Cognitive Compression*.
 
 ### 🚧 NEXT MISSION (TARGET PEKERJAAN BERIKUTNYA):
-**Membangun Eksekutor Fisik dari Context Compression Engine**
-Karena *Control Plane* (CEBL & CSEL) sudah terpasang, tugas berikutnya adalah:
-1. **Membangun Subgraph Extractor:** Menulis kueri Supabase RPC yang mengekstraksi node dari `active_user_memories` dan merayapi tabel `memory_relations` secara dinamis sesuai batasan *budget* dari CEBL.
-2. **Membangun Context Compressor:** Membuat agen perajut teks yang akan mengubah kumpulan node mentah (JSON) dari database menjadi satu paragraf prosa / *bullet points* padat token sebelum disuntikkan ke dalam *Context Window* LLM.
+**Membangun Context Compressor Agent**
+Karena *Control Plane* (CEBL & CSEL) dan *Execution Engine* (Subgraph Extractor) sudah terpasang secara aktif, tugas berikutnya adalah:
+1. ~~**Membangun Subgraph Extractor:**~~ ✅ SELESAI (Sudah terimplementasi via `extract_cognitive_subgraph` di `setup_subgraph_extractor.sql` dan dipanggil di `memory_manager_v1.ts`).
+2. **Membangun Context Compressor Agent:** Membuat agen perajut teks untuk menghemat *Context Window*.
+   - **Rincian Implementasi:**
+     - **Lokasi File:** Membuat modul baru di `supabase/functions/agent-process/plugins/context_compressor.ts`.
+     - **Teknologi LLM:** Menggunakan Groq (Llama-3 8B) karena butuh latensi ultra-rendah (<1 detik) untuk *pre-processing*, dengan *fallback* ke Gemini 1.5 Flash.
+     - **Input:** Menerima objek array JSON mentah (`subgraph.nodes` & `subgraph.edges`) yang ditarik oleh fungsi RPC `extract_cognitive_subgraph`.
+     - **Tugas LLM:** Melakukan *Inference-Time Cognitive Compression*. Membaca seluruh JSON, membuang metadata yang tidak perlu, dan merangkum relasi kausal menjadi teks prosa pendek atau *bullet points* padat informasi.
+     - **Output:** Mengurangi beban token dari ~4000 token JSON mentah menjadi hanya ~300-500 token teks murni.
+     - **Integrasi:** Disuntikkan pada fungsi `retrieveMemoriesV2` (di dalam `memory_manager_v1.ts`) tepat sebelum data ingatan dikembalikan.
 
 ## 🔄 OUT-OF-BAND SYSTEM UPDATE (21 Juni 2026)
 

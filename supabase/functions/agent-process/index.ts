@@ -293,69 +293,7 @@ serve(async (req) => {
       throw new Error('GEMINI_API_KEY is not set');
     }
 
-    const streamGroqResponse = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], metaData: any = {}, fallbackSource = '', throwOnError = false) => {
-      const messages = [];
-      if (systemPromptText) messages.push({ role: 'system', content: systemPromptText });
-      if (chatHistory && chatHistory.length > 0) {
-        for (const msg of chatHistory) {
-          messages.push({ role: msg.role === 'model' ? 'assistant' : 'user', content: msg.content });
-        }
-      }
-      messages.push({ role: 'user', content: promptText });
-      
-      let groqModel = 'llama-3.1-8b-instant';
-      if (model && model.startsWith('groq/')) {
-        groqModel = model.replace('groq/', '');
-      } else if (model === 'groq-llama-3.3') {
-        groqModel = 'llama-3.3-70b-versatile';
-      } else if (model === 'groq-llama-3.1') {
-        groqModel = 'llama-3.1-8b-instant';
-      }
-
-      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${GROQ_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: groqModel,
-          messages: messages,
-          temperature: 0.1,
-          stream: true
-        })
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        console.error("Groq Stream Error:", errText);
-        
-        if (throwOnError) {
-           throw new Error(errText); // Lempar error agar caller bisa melanjutkan fallback
-        }
-
-        const fallbackNote = fallbackSource ? `\n\n*(Catatan Mamet Healer: Groq ikut meledak saat mencoba menjadi otak cadangan untuk ${fallbackSource} yang sebelumnya gagal.)*` : '';
-        const stream = new ReadableStream({
-          start(controller) {
-            const data = JSON.stringify({ choices: [{ delta: { content: `\n\n**Groq API Error**: ${errText}${fallbackNote}` } }] });
-            controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
-            controller.close();
-          }
-        });
-        return new Response(stream, { headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' } });
-      }
-
-      const safeMeta = { ...metaData };
-      if (safeMeta.subagentRuns) safeMeta.subagentRuns = safeMeta.subagentRuns.map((r: any) => ({ ...r, output: '[Omitted]' }));
-
-      return new Response(res.body, {
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'text/event-stream',
-          'X-Agent-Metadata': btoa(encodeURIComponent(JSON.stringify(safeMeta)))
-        }
-      });
-    };
+    // [REMOVED streamGroqResponse - Replaced by unified getStreamResponse]
 
     const callGroq = async (promptText: string, systemPromptText = '', chatHistory: any[] = []) => {
       const messages = [];
@@ -434,62 +372,7 @@ serve(async (req) => {
       return Math.min(10, Math.max(1, score));
     };
 
-    const streamOpenAIResponse = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], metaData: any = {}) => {
-      const messages = [];
-      if (systemPromptText) messages.push({ role: 'system', content: systemPromptText });
-      if (chatHistory && chatHistory.length > 0) {
-        for (const msg of chatHistory) {
-          messages.push({ role: msg.role === 'model' ? 'assistant' : 'user', content: msg.content });
-        }
-      }
-      messages.push({ role: 'user', content: promptText });
-      
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: model || 'gpt-4o-mini',
-          messages: messages,
-          temperature: 0.1,
-          stream: true
-        })
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        console.error("OpenAI Stream Error:", errText);
-        
-        // --- MAMET HEALER (PENYEMBUH KOMA / AUTO-FALLBACK) ---
-        if (GROQ_API_KEY) {
-          console.log("Mamet Healer: Memutar rute ke Groq (Fallback)...");
-          await logAgentEvent('FALLBACK_TRIGGERED', 'OpenAI', `Stream Error: ${errText.substring(0, 200)}`);
-          return streamGroqResponse(promptText, systemPromptText + "\n\n(Catatan: Anda sedang menggunakan otak cadangan Groq karena OpenAI mengalami gangguan/limit)", chatHistory, metaData, 'OpenAI');
-        }
-
-        const stream = new ReadableStream({
-          start(controller) {
-            const data = JSON.stringify({ choices: [{ delta: { content: `\n\n**OpenAI API Error**: ${errText}` } }] });
-            controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
-            controller.close();
-          }
-        });
-        return new Response(stream, { headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' } });
-      }
-
-      const safeMeta = { ...metaData };
-      if (safeMeta.subagentRuns) safeMeta.subagentRuns = safeMeta.subagentRuns.map((r: any) => ({ ...r, output: '[Omitted]' }));
-      
-      return new Response(res.body, {
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'text/event-stream',
-          'X-Agent-Metadata': btoa(encodeURIComponent(JSON.stringify(safeMeta)))
-        }
-      });
-    };
+    // [REMOVED streamOpenAIResponse - Replaced by unified getStreamResponse]
 
     const callOpenAI = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], overrideModel?: string) => {
       const messages = [];
@@ -523,105 +406,7 @@ serve(async (req) => {
     };
 
     // ========== MODIFIKASI UTAMA: streamOpenRouterResponse dengan error handling yang lebih baik ==========
-    const streamOpenRouterResponse = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], metaData: any = {}, forceDefaultModel = false) => {
-      try {
-        // Validasi API key
-        if (!OPENROUTER_API_KEY || OPENROUTER_API_KEY.trim() === '') {
-          console.error("❌ OPENROUTER_API_KEY kosong atau tidak valid");
-          throw new Error("OPENROUTER_API_KEY is missing");
-        }
-
-        const messages = [];
-        if (systemPromptText) messages.push({ role: 'system', content: systemPromptText });
-        if (chatHistory && chatHistory.length > 0) {
-          for (const msg of chatHistory) {
-            messages.push({ role: msg.role === 'model' ? 'assistant' : 'user', content: msg.content });
-          }
-        }
-        messages.push({ role: 'user', content: promptText });
-        
-        let openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
-        if (!forceDefaultModel) {
-          if (model && model.startsWith('openrouter/')) {
-            openRouterModel = model.replace('openrouter/', '');
-          } else if (model === 'openrouter-llama-3') {
-            openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
-          } else if (model === 'openrouter-google-gemini-2.0-flash-exp') {
-            openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
-          }
-        }
-        
-        console.log(`🔵 [OpenRouter] Memanggil model: ${openRouterModel}, Key: ${OPENROUTER_API_KEY.substring(0,6)}...`);
-        
-        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-            'HTTP-Referer': 'https://ai-agent-project.vercel.app',
-            'X-Title': 'Mamet AI Agent',
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: openRouterModel,
-            messages: messages,
-            temperature: 0.1,
-            stream: true
-          })
-        });
-
-        if (!res.ok) {
-          const errText = await res.text();
-          console.error(`🔴 [OpenRouter] HTTP ${res.status}: ${errText}`);
-          
-          // Coba fallback ke Groq jika tersedia
-          if (GROQ_API_KEY && GROQ_API_KEY.trim() !== '') {
-            console.log("🟡 Mamet Healer: Fallback ke Groq...");
-            await logAgentEvent('FALLBACK_TRIGGERED', 'OpenRouter', `HTTP ${res.status}: ${errText.substring(0, 200)}`);
-            return streamGroqResponse(promptText, systemPromptText + "\n\n(Catatan: Fallback ke Groq karena OpenRouter error)", chatHistory, metaData, 'OpenRouter');
-          }
-          
-          // Jika tidak ada fallback, kirim error sebagai stream
-          const errorStream = new ReadableStream({
-            start(controller) {
-              const data = JSON.stringify({ choices: [{ delta: { content: `\n\n**OpenRouter Error (${res.status})**: ${errText.substring(0, 300)}` } }] });
-              controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
-              controller.close();
-            }
-          });
-          return new Response(errorStream, { headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' } });
-        }
-
-        // Sukses
-        const safeMeta = { ...metaData };
-        if (safeMeta.subagentRuns) safeMeta.subagentRuns = safeMeta.subagentRuns.map((r: any) => ({ ...r, output: '[Omitted]' }));
-
-        return new Response(res.body, {
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'text/event-stream',
-            'X-Agent-Metadata': btoa(encodeURIComponent(JSON.stringify(safeMeta)))
-          }
-        });
-        
-      } catch (err: any) {
-        console.error("💥 [OpenRouter] Exception fatal:", err.message, err.stack);
-        
-        // Fallback ke Groq jika tersedia
-        if (GROQ_API_KEY && GROQ_API_KEY.trim() !== '') {
-          console.log("🟡 Mamet Healer: Exception, fallback ke Groq...");
-          return streamGroqResponse(promptText, systemPromptText + "\n\n(Catatan: Fallback ke Groq karena OpenRouter exception)", chatHistory, metaData, 'OpenRouter');
-        }
-        
-        const errorStream = new ReadableStream({
-          start(controller) {
-            const data = JSON.stringify({ choices: [{ delta: { content: `\n\n**OpenRouter Fatal Error**: ${err.message}` } }] });
-            controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
-            controller.close();
-          }
-        });
-        return new Response(errorStream, { headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' } });
-      }
-    };
+    // [REMOVED streamOpenRouterResponse - Replaced by unified getStreamResponse]
     // ========== AKHIR MODIFIKASI ==========
 
     const callOpenRouter = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], forceDefaultModel = false) => {
@@ -834,165 +619,228 @@ serve(async (req) => {
     let subagentRuns: any[] = [];
     let processingSteps: string[] = [];
 
-    const streamGeminiResponse = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], metaData: any = {}) => {
-      try {
-        const payload: any = { contents: [] };
-        if (systemPromptText) {
-          payload.systemInstruction = { parts: [{ text: systemPromptText }] };
-        }
-        if (chatHistory && chatHistory.length > 0) {
-          for (const msg of chatHistory) {
-            payload.contents.push({
-              role: msg.role === 'model' ? 'model' : 'user',
-              parts: [{ text: msg.content }]
-            });
-          }
-        }
-        const userParts: any[] = [{ text: promptText }];
-        if (extractedImage) {
-          userParts.push({ inlineData: { mimeType: extractedImage.mimeType, data: extractedImage.data } });
-        }
-        payload.contents.push({ role: 'user', parts: userParts });
+    const getStreamResponse = (promptText: string, systemPromptText = '', chatHistory: any[] = [], metaData: any = {}) => {
+      const safeMeta = { ...metaData };
+      if (safeMeta.subagentRuns) safeMeta.subagentRuns = safeMeta.subagentRuns.map((r: any) => ({ ...r, output: '[Omitted to save header space]' }));
 
-        const geminiModel = model && model.includes('gemini') ? model : 'gemini-2.0-flash';
-        
-        // === JURUS ANTI-LIMIT STREAMING: Coba semua keys ===
-        let res: Response | null = null;
-        for (let ki = 0; ki < allGeminiKeys.length; ki++) {
-          const key = allGeminiKeys[(geminiKeyIndex + ki) % allGeminiKeys.length];
-          const attempt = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:streamGenerateContent?alt=sse&key=${key}`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          if (attempt.ok) {
-            res = attempt;
-            geminiKeyIndex = (geminiKeyIndex + ki + 1) % allGeminiKeys.length;
-            break;
-          }
-          if (attempt.status === 429) {
-            console.warn(`Stream: Gemini key #${ki} got 429, trying next...`);
-            continue;
-          }
-          // Other error, also try next key
-          console.warn(`Stream: Gemini key #${ki} error ${attempt.status}`);
-        }
+      const stream = new ReadableStream({
+        async start(controller) {
+          const encoder = new TextEncoder();
+          const enqueueStr = (text: string) => {
+             const data = JSON.stringify({ choices: [{ delta: { content: text } }] });
+             controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+          };
 
-        if (!res || !res.ok) {
-          // === FALLBACK STREAMING: Groq dulu (cepat & stabil), lalu OpenRouter ===
-          console.log('Mamet Anti-Limit Stream: Semua Gemini keys limit, falling back ke Groq...');
-          if (GROQ_API_KEY) {
+          // 1. SSE EARLY INIT
+          console.log("[SSE EARLY INIT] Streaming started before LLM calls");
+          enqueueStr(""); // Send first chunk immediately to prevent hanging HTTP request
+
+          if (desktopOSMode && !systemPromptText.includes('DESKTOP NATIVE AWARENESS ENABLED')) {
+             systemPromptText += `\n[STATUS: DESKTOP NATIVE AWARENESS ENABLED]\nAnda WAJIB mengeluarkan perintah Windows di dalam tag <terminal>. DILARANG menyebut sub-agent atau menolak. Contoh: <terminal>dir %USERPROFILE%\\Desktop</terminal>\n`;
+          }
+
+          // 2. TIMEOUT SAFETY FETCH
+          const fetchWithTimeout = async (url: string, options: RequestInit, timeout = 15000) => {
+            const aborter = new AbortController();
+            const id = setTimeout(() => aborter.abort(), timeout);
             try {
-              // Panggil dengan throwOnError = true agar jika limit 6000 TPM habis, bisa dilempar ke OpenRouter
-              return await streamGroqResponse(promptText, systemPromptText, chatHistory, metaData, 'Gemini-429', true);
-            } catch (errGroq) {
-              console.log('Mamet Anti-Limit Stream: Groq juga meledak (Limit TPM). Falling back ke OpenRouter...');
-              if (OPENROUTER_API_KEY) {
-                return streamOpenRouterResponse(promptText, systemPromptText, chatHistory, metaData, true);
-              }
+              const res = await fetch(url, { ...options, signal: aborter.signal });
+              clearTimeout(id);
+              return res;
+            } catch (err) {
+              clearTimeout(id);
+              throw err;
             }
-          } else if (OPENROUTER_API_KEY) {
-            return streamOpenRouterResponse(promptText, systemPromptText, chatHistory, metaData, true);
-          }
-          const errStream = new ReadableStream({
-            start(controller) {
-              const data = JSON.stringify({ choices: [{ delta: { content: `\n\n**Semua API sedang limit.** Coba lagi dalam beberapa menit atau tambahkan API key cadangan di Settings.` } }] });
-              controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
-              controller.close();
-            }
-          });
-          return new Response(errStream, { headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' } });
-        }
+          };
 
-        // Convert Gemini SSE format to OpenAI SSE format expected by frontend
-        let buffer = '';
-        let isThinking = false;
-        const transformStream = new TransformStream({
-          transform(chunk, controller) {
-            const text = new TextDecoder().decode(chunk);
-            buffer += text;
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-            
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                try {
-                  const data = JSON.parse(line.substring(6));
-                  const part = data.candidates?.[0]?.content?.parts?.[0];
-                  const content = part?.text || '';
-                  const partIsThought = !!part?.thought;
-                  
-                  if (content) {
-                    let prefix = '';
-                    if (partIsThought && !isThinking) {
-                      prefix = '<think>';
-                      isThinking = true;
-                    } else if (!partIsThought && isThinking) {
-                      prefix = '</think>\n\n';
-                      isThinking = false;
-                    }
-                    
-                    const openAiFormat = JSON.stringify({ choices: [{ delta: { content: prefix + content } }] });
-                    controller.enqueue(new TextEncoder().encode(`data: ${openAiFormat}\n\n`));
+          const processOpenAIStream = async (res: Response) => {
+             const reader = res.body?.getReader();
+             if (!reader) throw new Error("No body");
+             let buffer = '';
+             while (true) {
+               const { done, value } = await reader.read();
+               if (done) break;
+               buffer += new TextDecoder().decode(value);
+               const lines = buffer.split('\n');
+               buffer = lines.pop() || '';
+               for (const line of lines) {
+                 if (line.startsWith('data: ') && !line.includes('[DONE]')) {
+                   try {
+                     const data = JSON.parse(line.substring(6));
+                     const content = data.choices?.[0]?.delta?.content || '';
+                     if (content) enqueueStr(content);
+                   } catch(e) {}
+                 }
+               }
+             }
+          };
+
+          const processGeminiStream = async (res: Response) => {
+             const reader = res.body?.getReader();
+             if (!reader) throw new Error("No body");
+             let buffer = '';
+             let isThinking = false;
+             while (true) {
+               const { done, value } = await reader.read();
+               if (done) break;
+               buffer += new TextDecoder().decode(value);
+               const lines = buffer.split('\n');
+               buffer = lines.pop() || '';
+               for (const line of lines) {
+                 if (line.startsWith('data: ')) {
+                   try {
+                     const data = JSON.parse(line.substring(6));
+                     const part = data.candidates?.[0]?.content?.parts?.[0];
+                     let content = part?.text || '';
+                     const partIsThought = !!part?.thought;
+                     if (content) {
+                       if (partIsThought && !isThinking) { content = '<think>\n' + content; isThinking = true; }
+                       else if (!partIsThought && isThinking) { content = '\n</think>\n\n' + content; isThinking = false; }
+                       enqueueStr(content);
+                     }
+                   } catch(e) {}
+                 }
+               }
+             }
+             if (isThinking) enqueueStr('\n</think>\n\n');
+          };
+
+          // Format messages
+          const oaiMessages = [];
+          const geminiContents = [];
+          if (systemPromptText) {
+             oaiMessages.push({ role: 'system', content: systemPromptText });
+          }
+          if (chatHistory && chatHistory.length > 0) {
+            for (const msg of chatHistory) {
+              oaiMessages.push({ role: msg.role === 'model' ? 'assistant' : 'user', content: msg.content });
+              geminiContents.push({ role: msg.role === 'model' ? 'model' : 'user', parts: [{ text: msg.content }] });
+            }
+          }
+          oaiMessages.push({ role: 'user', content: promptText });
+          
+          const userParts: any[] = [{ text: promptText }];
+          if (extractedImage) userParts.push({ inlineData: { mimeType: extractedImage.mimeType, data: extractedImage.data } });
+          geminiContents.push({ role: 'user', parts: userParts });
+
+          const geminiPayload: any = { contents: geminiContents };
+          if (systemPromptText) geminiPayload.systemInstruction = { parts: [{ text: systemPromptText }] };
+
+          // === STREAMING CASCADE EXECUTION ===
+          let currentError = '';
+
+          const tryGroq = async (fallbackNote = '') => {
+            if (!GROQ_API_KEY) throw new Error("No Groq Key");
+            let groqModel = 'llama-3.1-8b-instant';
+            if (model && model.startsWith('groq/')) groqModel = model.replace('groq/', '');
+            console.log("[Stream] Trying Groq:", groqModel);
+            const res = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ model: groqModel, messages: oaiMessages, temperature: 0.1, stream: true })
+            });
+            if (!res.ok) throw new Error(`Groq HTTP ${res.status}: ${await res.text()}`);
+            if (fallbackNote) enqueueStr(`\n\n*(Fallback Note: ${fallbackNote})*\n\n`);
+            await processOpenAIStream(res);
+          };
+
+          const tryOpenRouter = async (fallbackNote = '') => {
+            if (!OPENROUTER_API_KEY) throw new Error("No OpenRouter Key");
+            let orModel = 'meta-llama/llama-3.1-8b-instruct:free';
+            if (model && model.startsWith('openrouter/')) orModel = model.replace('openrouter/', '');
+            console.log("[Stream] Trying OpenRouter:", orModel);
+            const res = await fetchWithTimeout('https://openrouter.ai/api/v1/chat/completions', {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${OPENROUTER_API_KEY}`, 'HTTP-Referer': 'https://ai-agent-project.vercel.app', 'X-Title': 'Mamet AI Agent', 'Content-Type': 'application/json' },
+              body: JSON.stringify({ model: orModel, messages: oaiMessages, temperature: 0.1, stream: true })
+            });
+            if (!res.ok) throw new Error(`OpenRouter HTTP ${res.status}: ${await res.text()}`);
+            if (fallbackNote) enqueueStr(`\n\n*(Fallback Note: ${fallbackNote})*\n\n`);
+            await processOpenAIStream(res);
+          };
+
+          const tryGemini = async (fallbackNote = '') => {
+             if (allGeminiKeys.length === 0) throw new Error("No Gemini Keys");
+             const geminiModel = model && model.includes('gemini') ? model : 'gemini-2.0-flash';
+             console.log("[Stream] Trying Gemini:", geminiModel);
+             
+             let res: Response | null = null;
+             let lastErr = '';
+             for (let ki = 0; ki < allGeminiKeys.length; ki++) {
+               const key = allGeminiKeys[(geminiKeyIndex + ki) % allGeminiKeys.length];
+               try {
+                 const attempt = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:streamGenerateContent?alt=sse&key=${key}`, {
+                   method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(geminiPayload)
+                 }, 15000);
+                 if (attempt.ok) {
+                   geminiKeyIndex = (geminiKeyIndex + ki + 1) % allGeminiKeys.length;
+                   res = attempt;
+                   break;
+                 }
+                 lastErr = `HTTP ${attempt.status}`;
+               } catch(e: any) { lastErr = e.message; }
+             }
+             if (!res) throw new Error(`Gemini exhausted. Last error: ${lastErr}`);
+             if (fallbackNote) enqueueStr(`\n\n*(Fallback Note: ${fallbackNote})*\n\n`);
+             await processGeminiStream(res);
+          };
+
+          const tryOpenAI = async () => {
+             if (!OPENAI_API_KEY) throw new Error("No OpenAI Key");
+             console.log("[Stream] Trying OpenAI:", model);
+             const res = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
+               method: 'POST', headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+               body: JSON.stringify({ model: model || 'gpt-4o-mini', messages: oaiMessages, temperature: 0.1, stream: true })
+             });
+             if (!res.ok) throw new Error(`OpenAI HTTP ${res.status}: ${await res.text()}`);
+             await processOpenAIStream(res);
+          };
+
+          try {
+            // EXPLICIT MODELS
+            if (model && model.includes('gpt') && OPENAI_API_KEY) {
+              try { await tryOpenAI(); controller.close(); return; } catch(e: any) { currentError += e.message; console.warn("OpenAI fail, cascading...", e); }
+            }
+            if (model && (model.includes('openrouter') || model.startsWith('openrouter/')) && OPENROUTER_API_KEY) {
+              try { await tryOpenRouter(); controller.close(); return; } catch(e: any) { currentError += e.message; console.warn("OR fail, cascading...", e); }
+            }
+            if (model && model.startsWith('groq/') && GROQ_API_KEY) {
+              try { await tryGroq(); controller.close(); return; } catch(e: any) { currentError += e.message; console.warn("Groq fail, cascading...", e); }
+            }
+
+            // CASCADE: Gemini -> Groq -> OpenRouter
+            try {
+               await tryGemini(); controller.close(); return;
+            } catch(e1: any) {
+               console.warn("Cascade: Gemini failed:", e1.message);
+               try {
+                  await tryGroq("Gemini sedang limit, ini otak cadangan Groq"); controller.close(); return;
+               } catch(e2: any) {
+                  console.warn("Cascade: Groq failed:", e2.message);
+                  try {
+                     await tryOpenRouter("Groq dan Gemini limit, ini otak cadangan OpenRouter"); controller.close(); return;
+                  } catch(e3: any) {
+                     console.error("Cascade: OpenRouter failed:", e3.message);
+                     enqueueStr(`\n\n**Semua AI Provider (Gemini, Groq, OpenRouter) sedang limit atau gangguan.**\nDetail: ${e1.message} | ${e2.message} | ${e3.message}`);
+                     controller.close(); return;
                   }
-                } catch (e) {
-                   console.error("Gemini parse error in Edge Function:", e.message);
-                }
-              }
+               }
             }
-          },
-          flush(controller) {
-            if (isThinking) {
-              const openAiFormat = JSON.stringify({ choices: [{ delta: { content: '</think>' } }] });
-              controller.enqueue(new TextEncoder().encode(`data: ${openAiFormat}\n\n`));
-            }
+          } catch(fatalErr: any) {
+             console.error("Fatal Stream Error:", fatalErr);
+             enqueueStr(`\n\n**Internal Server Error:** ${fatalErr.message}`);
+             controller.close();
           }
-        });
-
-        // Sanitize metadata to avoid header limits and invalid ByteString errors (emojis)
-        const safeMeta = { ...metaData };
-        if (safeMeta.subagentRuns) {
-          safeMeta.subagentRuns = safeMeta.subagentRuns.map((r: any) => ({ ...r, output: '[Omitted to save header space]' }));
         }
-        
-        return new Response(res.body?.pipeThrough(transformStream), {
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'text/event-stream',
-            'X-Agent-Metadata': btoa(encodeURIComponent(JSON.stringify(safeMeta)))
-          }
-        });
-      } catch (err: any) {
-        console.error("streamGeminiResponse Error:", err);
-        const stream = new ReadableStream({
-          start(controller) {
-            const data = JSON.stringify({ choices: [{ delta: { content: `\n\n**Internal Server Error di Gemini Stream**: ${err.message}` } }] });
-            controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
-            controller.close();
-          }
-        });
-        return new Response(stream, { headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' } });
-      }
-    };
+      });
 
-    const getStreamResponse = (prompt: string, sysPrompt: string, hist: any[], meta: any) => {
-      if (desktopOSMode && !sysPrompt.includes('DESKTOP NATIVE AWARENESS ENABLED')) {
-         sysPrompt += `\n[STATUS: DESKTOP NATIVE AWARENESS ENABLED]
-Anda WAJIB mengeluarkan perintah Windows di dalam tag <terminal>. DILARANG menyebut sub-agent atau menolak. Contoh: <terminal>dir %USERPROFILE%\\Desktop</terminal>\n`;
-      }
-      
-      if (model && model.includes('gpt') && OPENAI_API_KEY) {
-        return streamOpenAIResponse(prompt, sysPrompt, hist, meta);
-      } else if (model && (model.includes('openrouter') || model.startsWith('openrouter/')) && OPENROUTER_API_KEY) {
-        return streamOpenRouterResponse(prompt, sysPrompt, hist, meta);
-      } else if (model && model.startsWith('groq/') && GROQ_API_KEY) {
-        return streamGroqResponse(prompt, sysPrompt, hist, meta);
-      } else {
-        // DEFAULT: Gemini dengan Groq sebagai fallback streaming
-        // streamGeminiResponse sudah punya internal fallback ke OpenRouter
-        // Kita override agar fallback ke Groq dulu jika ada keynya
-        return streamGeminiResponse(prompt, sysPrompt, hist, meta);
-      }
+      return new Response(stream, {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'text/event-stream',
+          'X-Agent-Metadata': btoa(encodeURIComponent(JSON.stringify(safeMeta)))
+        }
+      });
     };
     
     // --- RAG KNOWLEDGE BASE SEARCH ---

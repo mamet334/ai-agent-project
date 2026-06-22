@@ -1,0 +1,154 @@
+🧠 MAMET AI — HANDOFF CONTEXT (INSTRUCTOR SNAPSHOT v1)
+
+ROLE SYSTEM:
+- Mamet AI = AI assistant system yang sedang dibangun
+- Antigravity = execution / coding workstation (bengkelnya sistem)
+- ChatGPT = system instructor + architecture reviewer + anti-hallucination checker
+- Fokus: production-grade AI assistant (bukan eksperimen bebas)
+
+============================================================
+🏗️ 1. ARSITEKTUR MEMORI
+============================================================
+
+1) LONG-TERM MEMORY (SUPABASE)
+- Database persisten (mamet_memory)
+- Menyimpan:
+  - key / value memory
+  - semantic_identity
+  - confidence
+  - truth_score
+- Query utama: ORDER BY truth_score DESC
+- Supabase = SINGLE SOURCE OF TRUTH
+
+2) SHORT-TERM MEMORY (SESSION RAM)
+- In-memory FIFO buffer (±10 chat terakhir)
+- Tidak disimpan ke database
+- Fungsi:
+  - konteks percakapan cepat
+  - anti-amnesia jangka pendek
+- Optional auto-summary ringan (tanpa LLM berat)
+
+3) BEHAVIOR MEMORY ENGINE
+- Heuristic user profiling real-time
+- Mendeteksi:
+  - gaya bahasa (formal/casual/technical)
+  - kecepatan respon (fast/detail)
+  - pola berpikir (analitis/eksekusi/arsitektur)
+  - kebiasaan override / revisi
+- Decay factor ~0.98 agar adaptif
+- Tidak menggunakan database
+
+============================================================
+🔁 2. INTELLIGENCE PIPELINE (CORE FLOW)
+============================================================
+
+User Input
+  ↓
+Semantic Bridge (normalisasi + keyword heuristic)
+  ↓
+Intent Preprocessor (context_optimizer + classification)
+  ↓
+Memory Engine (Supabase retrieval by truth_score)
+  ↓
+Decision Engine (conflict resolution + logic control)
+  ↓
+Context Unifier (merge: memory + behavior + short-term)
+  ↓
+LLM (ChatGPT → hanya language renderer)
+
+============================================================
+🧩 3. MODUL YANG SUDAH ADA
+============================================================
+
+- Semantic Bridge:
+  - normalisasi teks
+  - slang detection
+  - fuzzy + keyword matching O(1)
+
+- Intent Preprocessor:
+  - STATE_QUERY / DELTA / PROFILE / ANALYTIC
+  - tidak akses database
+
+- Decision Engine:
+  - execution_contract generator
+  - conflict resolution policy
+  - language agent activation control
+
+- Context Unifier:
+  - memilih active vs latent memory
+  - tidak merge string (no hallucinated concatenation)
+  - language agent hanya optional (UI-triggered)
+
+- Short-Term Memory:
+  - FIFO session buffer
+  - auto summary ringan
+
+- Behavior Memory:
+  - user behavior profiling + decay system
+
+============================================================
+🧠 4. DESIGN PRINCIPLES
+============================================================
+
+- NO HALLUCINATION RULE:
+  LLM tidak boleh mengarang data memory
+
+- SINGLE SOURCE OF TRUTH:
+  Supabase adalah referensi utama
+
+- SEPARATION OF CONCERNS:
+  parsing ≠ decision ≠ memory ≠ rendering
+
+- LLM ROLE LIMITATION:
+  hanya sebagai response renderer, bukan brain utama
+
+============================================================
+📊 5. CURRENT SYSTEM STATUS
+============================================================
+
+- Memory System: STABLE
+- Behavior System: ACTIVE
+- Decision Engine: STABLE
+- Pipeline Architecture: CLEAN
+- Reasoning Layer: BASIC (belum multi-step reasoning)
+
+============================================================
+🚧 6. MASALAH TERBUKA
+============================================================
+
+- Belum ada multi-step reasoning engine
+- Conflict resolution masih rule-based (truth_score)
+- Belum ada vector/embedding semantic intelligence
+- Context compression intelligence belum matang
+- LLM masih raw renderer (belum fully guarded)
+
+============================================================
+🎯 7. TUJUAN SISTEM
+============================================================
+
+Mamet AI =
+
+"Long-term autonomous assistant dengan:
+- memory kuat
+- behavior awareness
+- deterministic reasoning layer"
+
+============================================================
+🧑‍🏫 8. PERAN CHATGPT (INSTRUCTOR MODE)
+============================================================
+
+- System architect reviewer
+- Anti-hallucination validator
+- Design correctness checker
+- Guard terhadap overengineering
+- Pengarah ke production-grade system
+
+============================================================
+▶️ 9. CONTINUATION INSTRUCTION
+============================================================
+
+Jika digunakan di chat baru:
+
+"Continue as Mamet AI Instructor.
+Use Handoff Context v1 as system state.
+Focus on production-grade architecture review."
