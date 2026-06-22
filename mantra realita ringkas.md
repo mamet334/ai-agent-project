@@ -8,6 +8,12 @@
 - Vercel (hosting frontend)
 - API: DeepSeek, Llama, Gemini (BYOK)
 
+## 🏛️ ARSITEKTUR KOGNITIF (UPDATE JUNI 2026)
+**Single Decision Authority Pipeline:**
+Sistem memori berjalan murni secara deterministik dan linear tanpa *recursive loop*.
+`User Input → Memory Engine (Read) → Memory Governor (Rank) → OCB (Compress) → Decision Engine (Final Orchestrator) → LLM`
+*(Semua sistem orkestrator lawas seperti SCC, CMG, G-CFL, TGML telah dinonaktifkan sepenuhnya untuk kecepatan & stabilitas mutlak).*
+
 ## ✅ FITUR UTAMA (SEMUA SELESAI 100%)
 
 ### Inti
