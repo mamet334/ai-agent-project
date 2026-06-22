@@ -1,5 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { parseCognitiveIntent, bindCognitiveExecution } from '../lib/context_optimizer.ts';// Helper to log audits asynchronously
+import { parseCognitiveIntent, bindCognitiveExecution } from '../lib/context_optimizer.ts';
+import { compressCognitiveContext } from './context_compressor.ts';
+
+// Helper to log audits asynchronously
 const logMemoryAudit = (supabaseUrl, supabaseKey, payload) => {
   try {
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -84,32 +87,37 @@ export const retrieveMemoriesV2 = async (userPrompt, userId, supabaseUrl, supaba
     
     if (!subgraph.nodes || subgraph.nodes.length === 0) return [];
     
-    // 3. PIPELINE: Context Formatting
-    const finalMemories = subgraph.nodes.map(node => {
-      let enrichedContent = node.summary;
-      
-      // Penanda konteks historis jika ditarik melalui traversal
-      if (!node.is_root && (intentSpec.intent_mode === 'DELTA' || intentSpec.intent_mode === 'ANALYTIC')) {
-        enrichedContent = `[HISTORICAL / CAUSAL FACT] ${enrichedContent}`;
-      }
-
-      return {
-        id: node.id,
-        type: 'memory',
-        content: enrichedContent,
-        score: node.score || 5.0, 
-        timestamp: node.created_at,
-        is_root: node.is_root
-      };
+    // 3. PIPELINE: Context Compression (Deterministic & Synthesized)
+    const compressedContext = await compressCognitiveContext({
+      intent: intentSpec,
+      nodes: subgraph.nodes,
+      edges: subgraph.edges,
+      query: userPrompt
     });
+
+    console.log('[MEMORY_V2_COMPRESSION_STATS]', {
+      token_before: compressedContext.token_before,
+      token_after: compressedContext.token_after,
+      confidence_score: compressedContext.confidence_score
+    });
+
+    const finalMemoryObject = {
+      id: compressedContext.source_nodes[0] || 'compressed-memory-root',
+      type: 'memory',
+      content: compressedContext.compressed_summary + (compressedContext.emotional_context.length > 0 ? '\n\n[EMOTIONAL CONTEXT: ' + compressedContext.emotional_context.join(', ') + ']' : ''),
+      score: compressedContext.confidence_score * 10,
+      timestamp: new Date().toISOString(),
+      is_root: true,
+      is_compressed_context: true,
+      metadata: { source_nodes: compressedContext.source_nodes }
+    };
     
     // Asynchronous hit tracker
-    const memoryIds = finalMemories.map(m => m.id);
-    if (memoryIds.length > 0) {
-       supabase.rpc('update_memory_stats', { memory_ids: memoryIds }).catch(() => {});
+    if (compressedContext.source_nodes.length > 0) {
+       supabase.rpc('update_memory_stats', { memory_ids: compressedContext.source_nodes }).catch(() => {});
     }
     
-    return finalMemories;
+    return [finalMemoryObject];
   } catch (e) {
     console.error('[MEMORY_V2_ERROR] Fallback triggered', e);
     return null; // Null indicates failure, triggering fallback to V1
