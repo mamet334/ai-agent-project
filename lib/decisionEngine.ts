@@ -9,6 +9,7 @@
  */
 
 import { runGlobalCognitionLoop } from './globalCognitionLoop';
+import { runCognitiveMemoryGovernor } from './cognitiveMemoryGovernor';
 
 export interface MemoryResult {
   value: string;
@@ -57,6 +58,7 @@ export interface FinalDecisionContext {
   language_enhancement?: any;
   confidence_score: number;
   response_mode: "direct" | "enhanced_language";
+  cmg_gate?: any;
 }
 
 export interface CognitiveExecutionContract {
@@ -223,6 +225,27 @@ export function buildDecisionContext(input: DecisionEngineInput): FinalDecisionC
     truth_scores: {},
     behavior_profile: input.behavior_memory
   });
+
+  // --- COGNITIVE MEMORY GOVERNOR (CMG) - FINAL GATE ---
+  const cmgResult = runCognitiveMemoryGovernor({
+    final_decision_context: finalContext,
+    memory_context: {
+      tgml_nodes: input.memory_results || [],
+      conflict_edges: []
+    },
+    truth_score_bundle: {},
+    behavior_profile: input.behavior_memory,
+    global_loop_result: finalContext
+  });
+
+  // Apply CMG Gate Enforcement
+  finalContext.cmg_gate = cmgResult;
+  finalContext.confidence_score = cmgResult.confidence;
+  
+  if (cmgResult.status !== "ALLOW") {
+    // If REJECT or REWRITE, force the selected_truth (which drops if REJECTED)
+    finalContext.memory.active = cmgResult.selected_truth;
+  }
 
   return finalContext;
 }
