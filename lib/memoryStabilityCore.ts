@@ -9,7 +9,20 @@ export interface MSCGraphState {
   edges: any[];
 }
 
+export const LEGACY_COGNITION_ENABLED = false;
+
 export function runMemoryStabilityCore(graph: MSCGraphState) {
+  if (!LEGACY_COGNITION_ENABLED) {
+    return {
+      timestamp: Date.now(),
+      health: { orphan_nodes: 0, overconnected_nodes: 0, circular_contradictions: 0 },
+      lifecycle: { active: 0, latent: 0, archived: 0 },
+      noise_filtering: { to_remove_count: 0 },
+      stability_score: 1.0,
+      cleanup_mode_triggered: false
+    };
+  }
+
   // STEP 1: GRAPH HEALTH CHECK
   let orphan_nodes = 0;
   let overconnected_nodes = 0;

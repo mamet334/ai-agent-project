@@ -22,7 +22,18 @@ export interface CMGOutput {
   selected_truth: any | null; // ONLY 1 ACTIVE TRUTH
 }
 
+export const LEGACY_COGNITION_ENABLED = false;
+
 export function runCognitiveMemoryGovernor(input: CMGInput): CMGOutput {
+  if (!LEGACY_COGNITION_ENABLED) {
+    return {
+      status: "ALLOW",
+      reason: "[LEGACY DISABLED] CognitiveMemoryGovernor is bypassed.",
+      confidence: input.final_decision_context?.confidence_score || 1.0,
+      selected_truth: input.final_decision_context?.memory?.active || null
+    };
+  }
+
   const active_truth = input.final_decision_context?.memory?.active;
   let status: "ALLOW" | "REJECT" | "REWRITE" = "ALLOW";
   let reason = "Valid context.";
