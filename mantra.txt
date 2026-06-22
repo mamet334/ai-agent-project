@@ -1,4 +1,19 @@
 # MANTRA MAMET AI 🔮
+
+## 🏛️ CLEAN PRODUCTION ARCHITECTURE (SINGLE AUTHORITY PIPELINE) - JUNI 2026
+**Status Arsitektur Terbaru:**
+Sistem kognitif Mamet AI telah dirombak penuh (Refactor Option A) dari arsitektur *multi-orchestrator* yang kompleks menjadi alur tunggal deterministik yang sangat bersih dan cepat.
+
+**Alur Eksekusi Resmi (Final Truth):**
+1. **Memory Engine** (Hanya `SELECT` Supabase, tanpa *scoring* tambahan).
+2. **Memory Governor** (Satu-satunya *authority* untuk filter *noise* < 0.3 dan ranking `Truth Score > Recency`).
+3. **Optimal Context Budgeting / OCB** (Kompresi limitasi token *latent memory*).
+4. **Decision Engine** (Otoritas Mutlak tunggal penyusun *prompt* & pembuat keputusan).
+5. **LLM** (Hanya sebagai perender bahasa akhir).
+
+**Modul Kognitif Lawas (Disabled / Bypassed):**
+Lapisan rekursif dan evaluasi bertingkat seperti `Single Cognitive Core (SCC)`, `Cognitive Memory Governor (CMG)`, `Global Cognition Loop (G-CFL)`, `Unified Cognition Layer (UCL)`, `Truth Graph Memory Layer (TGML)`, dan `Memory Stability Core (MSC)` **telah diisolasi dan dinonaktifkan** via *Feature Flag* (`LEGACY_COGNITION_ENABLED = false`). Tidak ada lagi *hidden decision logic* di luar Decision Engine.
+
 [Tech: React/Vite & Supabase Edge (Deno)]
 [Vercel Production URL: https://ai-agent-project-2a9h.vercel.app/]
 
