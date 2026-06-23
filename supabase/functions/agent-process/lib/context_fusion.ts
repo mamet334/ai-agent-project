@@ -1,4 +1,4 @@
-export function buildContextFusion({ memoryArray = [], ragArray = [], message = '', basePrompts = '' }) {
+export function buildStructuredContext({ memoryArray = [], ragArray = [], message = '', basePrompts = '', ctx = null }) {
   // 1. Process Memory (ALWAYS INJECTED / NON-COMPETITIVE)
   const finalMemory = [];
   const seenContent = new Set();
@@ -51,29 +51,69 @@ export function buildContextFusion({ memoryArray = [], ragArray = [], message = 
     }
   }
 
-  // 3. Build Final Context String
-  let finalContext = basePrompts;
-  
-  if (finalMemory.length > 0) {
-    finalContext += '\n\n[MEMORY - PRIORITY 3]\n';
-    finalContext += finalMemory.map(m => {
+  const structuredContext = {
+    basePrompts,
+    memory: {
+      items: finalMemory,
+      summary: finalMemory.length > 0 ? `${finalMemory.length} memory items retrieved.` : null
+    },
+    rag: {
+      documents: finalRag,
+      summary: finalRag.length > 0 ? `${finalRag.length} document chunks retrieved.` : null
+    },
+    user: {
+      intent: message ? message.substring(0, 100) : 'unknown',
+      riskFlags: ctx ? Object.keys(ctx.security).filter(k => k.includes('Risk') && ctx.security[k]) : []
+    },
+    execution: {
+      mode: ctx ? ctx.mode : 'UNKNOWN',
+      ragTopK: ctx ? ctx.rag.topK : finalRag.length
+    }
+  };
+
+  return structuredContext;
+}
+
+export function buildFinalPrompt(structuredContext) {
+  if (!structuredContext) return '';
+
+  let finalContext = structuredContext.basePrompts || '';
+
+  if (structuredContext.memory && structuredContext.memory.items.length > 0) {
+    finalContext += '\n\n[MEMORY CONTEXT]\n';
+    finalContext += structuredContext.memory.items.map(m => {
        const stateTag = m.memory_state === 'HISTORICAL' ? '[HISTORICAL] ' : '';
        return `- ${stateTag}${m.content}`;
     }).join('\n');
   }
 
-  if (finalRag.length > 0) {
-    finalContext += '\n\n[RAG - PRIORITY 2]\nBerikut adalah data dokumen milik user. JIKA RELEVAN dengan pertanyaan user, gunakan data ini. Jika tidak relevan, abaikan saja:\n';
-    finalContext += finalRag.map(r => `- ${r.content}`).join('\n');
+  if (structuredContext.rag && structuredContext.rag.documents.length > 0) {
+    finalContext += '\n\n[RAG CONTEXT]\nBerikut adalah data dokumen milik user. JIKA RELEVAN dengan pertanyaan user, gunakan data ini. Jika tidak relevan, abaikan saja:\n';
+    finalContext += structuredContext.rag.documents.map(r => `- ${r.content}`).join('\n');
   }
 
-  if (finalMemory.length > 0 && finalRag.length > 0) {
-    finalContext += '\n\n[FINAL RULE]\n- Always prioritize memory over RAG for user preferences or facts. Jika ada kontradiksi antara RAG dan MEMORY, ikuti MEMORY.\n';
+  // EXECUTION CONTEXT TRACE
+  if (structuredContext.execution && structuredContext.execution.mode !== 'UNKNOWN') {
+    finalContext += `\n\n[EXECUTION CONTEXT]\nmode: ${structuredContext.execution.mode}\nragTopK: ${structuredContext.execution.ragTopK}\n`;
   }
+
+  if (structuredContext.memory && structuredContext.memory.items.length > 0 && 
+      structuredContext.rag && structuredContext.rag.documents.length > 0) {
+    finalContext += '\n\n[INSTRUCTION BLOCK]\n- Memory has higher priority than RAG for user preferences or facts.\n- Resolve contradictions deterministically (ikuti MEMORY).\n';
+  }
+
+  return finalContext;
+}
+
+// Backward-compatible wrapper
+export function buildContextFusion(args) {
+  const structuredContext = buildStructuredContext(args);
+  const finalContext = buildFinalPrompt(structuredContext);
 
   return {
-    memory: finalMemory,
-    rag: finalRag,
-    finalContext
+    memory: structuredContext.memory.items,
+    rag: structuredContext.rag.documents,
+    finalContext,
+    structuredContext
   };
 }
