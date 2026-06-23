@@ -1138,7 +1138,8 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
       memoryArray,
       ragArray,
       message: finalMessage,
-      basePrompts
+      basePrompts,
+      ctx
     });
     
     const fullSystemContext = resolved.finalContext;
@@ -1146,7 +1147,8 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
     console.log("[MAMET BRAIN v2]", {
       memoryUsed: resolved.memory.length,
       ragUsed: resolved.rag.length,
-      contextSize: fullSystemContext.length
+      contextSize: fullSystemContext.length,
+      structuredContextKeys: resolved.structuredContext ? Object.keys(resolved.structuredContext) : []
     });
 
     console.log(`[SYSTEM CONTEXT FINAL] fullSystemContext="${fullSystemContext.substring(fullSystemContext.length - 300)}"`);
