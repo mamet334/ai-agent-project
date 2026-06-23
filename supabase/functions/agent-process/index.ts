@@ -178,24 +178,37 @@ serve(async (req) => {
       pendingBackgroundTasks.push(tracked);
     };
 
-    let { message, tools, model, userId, userName, file, history, globalMemory, stream, desktopOSMode, ragEnabled } = await req.json();
+    // === AUTH BINDING LAYER (HARDENING) ===
+    const authHeader = req.headers.get("Authorization");
+    const token = authHeader?.replace("Bearer ", "");
     
-    // --- MULTI-TENANT HARDENING (DETERMINISTIC USER ISOLATION) ---
-    // Mengubah raw email menjadi stable namespace yang lowercase dan tanpa spasi
-    // untuk mencegah race condition atau data bocor antar user.
-    if (userId && typeof userId === 'string') {
-        userId = userId.toLowerCase().trim();
-        // FAIL-FAST: UUID VALIDATION
-        const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (!UUID_REGEX.test(userId)) {
-            return new Response(JSON.stringify({ error: "FATAL_ERROR: Invalid userId format. Must be a UUID." }), {
-                status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-            });
-        }
+    if (!token) {
+        return new Response(JSON.stringify({ error: "Unauthorized: Missing token" }), {
+            status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
     }
 
-    console.log("[L1] frontend payload", { userId, message: message ? message.substring(0, 50) + '...' : null });
-    console.log("[L2] edge function received", { hasUserId: !!userId, hasMessage: !!message });
+    const authSupabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    );
+
+    const { data: { user }, error: authError } = await authSupabase.auth.getUser(token);
+
+    if (authError || !user || !user.id) {
+        return new Response(JSON.stringify({ error: "Unauthorized: Invalid or expired token" }), {
+            status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+    }
+
+    const AUTH_USER_ID = user.id;
+
+    let { message, tools, model, userId: _clientUserId, userName, file, history, globalMemory, stream, desktopOSMode, ragEnabled } = await req.json();
+    
+    // OVERRIDE ALL IDENTITY USAGE
+    let userId = AUTH_USER_ID;
+
+    console.log("[L1] auth binding", { providedUserId: _clientUserId, actualAuthId: userId, message: message ? message.substring(0, 50) + '...' : null });
 
     // ANTI-HALLUCINATION: Bersihkan history agar LLM tidak melihat/mempelajari tag fiktif dari chat masa lalu
     if (history && Array.isArray(history)) {
