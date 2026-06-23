@@ -1421,11 +1421,14 @@ export default function AIAgent() {
         console.log("[FETCH_START]", endpoint);
 
         try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+
           const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+              'Authorization': `Bearer ${token}`,
               'x-byok-gemini': (localStorage.getItem('x-byok-gemini') || '').trim(),
               'x-byok-groq': (localStorage.getItem('x-byok-groq') || '').trim(),
               'x-byok-openai': (localStorage.getItem('x-byok-openai') || '').trim(),

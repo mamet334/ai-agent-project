@@ -4,8 +4,11 @@
  * Tools yang digunakan: rag_search, web_search, deep_research
  */
 
+import { supabase } from './supabase.js';
+
 /**
  * Panggil agent backend dengan tools terbatas
+
  * @param {string} message - User message
  * @param {Array<string>} tools - Tools yang diaktifkan (websearch, research, dll)
  * @param {string} userId - User ID dari Supabase Auth
@@ -52,10 +55,14 @@ export async function callAgentSimple(
     throw new Error('VITE_SUPABASE_URL atau VITE_SUPABASE_ANON_KEY tidak dikonfigurasi');
   }
 
+  // Ambil token JWT asli dari session
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token || anonKey;
+
   // Build headers dengan BYOK keys
   const headers = {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${anonKey}`,
+    'Authorization': `Bearer ${token}`,
     'x-byok-gemini': (byokKeys['x-byok-gemini'] || '').trim(),
     'x-byok-groq': (byokKeys['x-byok-groq'] || '').trim(),
     'x-byok-openai': (byokKeys['x-byok-openai'] || '').trim(),
