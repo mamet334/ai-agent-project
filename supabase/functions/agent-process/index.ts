@@ -209,6 +209,64 @@ serve(async (req) => {
 
     const isRagEnabled = ragEnabled !== false;
 
+    // === RISK GATE (FASE 4C) ===
+    const RISK_GATE_ENABLED = true;
+    function riskGate(input: { message: string, tools?: string[], ragEnabled?: boolean, userId?: string }): "ALLOW" | "ALLOW_WITH_LIMIT" | "BLOCK" {
+      if (!RISK_GATE_ENABLED) return "ALLOW";
+      let riskScore = 0;
+      const lowerMsg = (input.message || '').toLowerCase();
+      
+      // 1. INJECTION DETECTION (HIGH RISK)
+      const injectionPatterns = ["ignore previous instructions", "system prompt", "developer mode", "reveal memory", "bypass"];
+      if (injectionPatterns.some(p => lowerMsg.includes(p))) riskScore += 3;
+      
+      // 2. TOOL ABUSE DETECTION (MEDIUM RISK)
+      const toolAbusePatterns = ["recursive agent requests", "infinite search loops", "mass retrieval requests"];
+      if (toolAbusePatterns.some(p => lowerMsg.includes(p))) riskScore += 2;
+      
+      // 3. OVER-RETRIEVAL DETECTION
+      const overRetrievalPatterns = ["all data", "dump all", "entire database"];
+      if (overRetrievalPatterns.some(p => lowerMsg.includes(p))) riskScore += 2;
+      
+      // 4. MALFORMED INPUT CHECK
+      if (lowerMsg.length > 5000) riskScore += 1;
+      const words = lowerMsg.split(/[\\s\\p{P}]+/);
+      const uniqueWords = new Set(words);
+      if (words.length > 100 && uniqueWords.size < words.length * 0.1) riskScore += 1;
+      
+      if (riskScore >= 4) return "BLOCK";
+      if (riskScore >= 2) return "ALLOW_WITH_LIMIT";
+      return "ALLOW";
+    }
+
+    const gateResult = riskGate({ message, tools, ragEnabled: isRagEnabled, userId });
+    
+    if (gateResult === "BLOCK") {
+      console.warn(`[RISK GATE] Blocked request from user ${userId} due to HIGH risk score.`);
+      const blockMsg = "Permintaan ditolak oleh Sistem Keamanan (Risk Gate). Deteksi injeksi atau pola berbahaya.";
+      if (!stream) {
+        return new Response(JSON.stringify({ message: blockMsg }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      } else {
+        const streamRes = new ReadableStream({
+          start(controller) {
+            const data = JSON.stringify({ choices: [{ delta: { content: blockMsg } }] });
+            controller.enqueue(new TextEncoder().encode(`data: ${data}\\n\\n`));
+            controller.close();
+          }
+        });
+        return new Response(streamRes, { headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' } });
+      }
+    }
+    
+    let effectiveRagMatchCount = 5;
+    if (gateResult === "ALLOW_WITH_LIMIT") {
+      console.warn(`[RISK GATE] Applied limits to user ${userId} due to MEDIUM risk score.`);
+      effectiveRagMatchCount = 2;
+      if (tools && Array.isArray(tools)) {
+         tools = []; // disable tools temporarily
+      }
+    }
+
     // === CIRCUIT BREAKER (FASE 4B) ===
     // Mengecek apakah user sudah melewati batas harian token sebelum AI merespons.
     if (userId) {
@@ -904,7 +962,7 @@ serve(async (req) => {
           const { data: matchedDocs, error: matchError } = await supabaseClient.rpc('match_documents', {
             query_embedding: queryEmbedding,
             match_threshold: 0.60,
-            match_count: 5,
+            match_count: effectiveRagMatchCount,
             p_user_id: userId
           });
 
