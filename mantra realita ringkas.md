@@ -192,7 +192,12 @@ Karena *Control Plane* (CEBL & CSEL) dan *Execution Engine* (Subgraph Extractor)
 - **CEBL + CSEL** controlling context injection.
 - **atomic_entity_lock** prevents race conditions.
 
-### 7. KNOWN LIMITATIONS / NOT YET COMPLETED
+### 7. OPENROUTER & MEMORY ROUTING STABILIZATION (23 Juni 2026)
+- **OpenRouter Routing Fix:** Memperbaiki bug "model hijacking" di `index.ts` (Edge Function) di mana model `openrouter/...` dengan substring `gpt` (seperti `openai/gpt-4o-mini`) salah ditangkap oleh Native OpenAI logic. Fix: `model.includes('gpt') && !model.includes('openrouter')`.
+- **404 Provider Fix:** Menyelesaikan isu HTTP 404 dari OpenRouter dengan menghapus batasan "Anthropic-only" pada API Key OpenRouter user, sehingga mengembalikan akses ke 97% model (termasuk OpenAI).
+- **Fact Detector (HHPC):** Mengganti regex strict dengan *Hybrid Heuristic Probabilistic Classifier (HHPC)* untuk memfasilitasi deteksi intensi memori dengan natural language (support nuansa bahasa Indonesia: "juga", "aku", "sekarang"). Diimplementasikan tiering `T1`, `T2`, `T3` pada `fact_detector.ts`.
+
+### 8. KNOWN LIMITATIONS / NOT YET COMPLETED
 - Code signing certificate belum terimplementasi (SmartScreen warning tetap ada).
 - Auto-updater infrastructure masih parsial.
 - API proxy backend belum sepenuhnya terisolasi dari frontend.
