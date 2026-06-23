@@ -98,6 +98,13 @@ Sistem memori berjalan murni secara deterministik dan linear tanpa *recursive lo
 - ✅ Fixed `(e.context || "").split is not a function` errors:
   - `tokenSaverAgent.js` line 64: Pastikan context adalah string sebelum `.split()`
   - `tokenSaverAgent.js` line 84: Validasi text sebelum `.split()`
+
+## 🛡️ PERUBAHAN KEAMANAN & ARSITEKTUR (24 JUNI 2026 - PHASE 9)
+- ✅ **Execution Policy Layer:** Menambahkan lapisan deterministik untuk mengatur risk score, mengizinkan pembatasan akses alat (sub-agent), dan menyesuaikan limit RAG secara dinamis berdasarkan potensi ancaman di prompt (Prompt Injection & Context Poisoning).
+- ✅ **Unified Execution Context:** Semua metrik keamanan dan retrieval dikumpulkan dalam satu objek utuh sebagai 'single source of truth' untuk `agent-process/index.ts`.
+- ✅ **Structured Reasoning Layer (Context Fusion):** Data Memory dan RAG kini dikonversi menjadi objek struktur (*structured context*) sebelum dirangkai menjadi string final. Mempermudah debugging, mencegah tumpang tindih data, dan memberikan batas yang jelas untuk memori vs RAG.
+- ✅ **Auth Binding Layer:** `agent-process` Edge Function sekarang memverifikasi token JWT dari `Authorization` header dan menjadikannya sumber identitas utama, meng-override (menimpa) `userId` bawaan dari JSON Payload, sehingga IDOR dapat sepenuhnya dicegah.
+- ✅ **Frontend Sync:** Memperbarui pemanggilan *fetch* di `AIAgent.jsx` dan `mametlite/src/lib/callAgentSimple.js` agar mengirimkan Session JWT User alih-alih `ANON_KEY`.
   - `callAgentSimple.js` line 115: Validasi buffer sebelum `.split()`
   - `App.jsx` line 271: Optional chaining untuk session.user.email
 
