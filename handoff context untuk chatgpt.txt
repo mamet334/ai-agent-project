@@ -1,184 +1,93 @@
-🧠 MAMET AI — HANDOFF CONTEXT (INSTRUCTOR SNAPSHOT v3)
+🧠 MAMET AI — HANDOFF CONTEXT (RUNTIME TRUTH SNAPSHOT v4)
 
 ROLE SYSTEM:
 - Mamet AI = AI assistant system yang sedang dibangun
 - Antigravity = execution / coding workstation (bengkelnya sistem)
 - ChatGPT = system instructor + architecture reviewer + anti-hallucination checker
-- Fokus: production-grade AI assistant (bukan eksperimen bebas)
+- Fokus: strict adherence to ACTUAL runtime codebase (Edge Function & Procedural Logic).
 
 ============================================================
-🏗️ 1. ARSITEKTUR MEMORI
+⚠️ 1. CRITICAL ARCHITECTURE WARNING (NO PHANTOM CODE)
 ============================================================
 
-1) LONG-TERM MEMORY (SUPABASE)
-- Database persisten (mamet_memory)
-- Menyimpan: key / value memory, semantic_identity, confidence, truth_score
-- Supabase = SINGLE SOURCE OF TRUTH
+Dokumen ini merepresentasikan REALITAS KODE PRODUKSI saat ini.
+DILARANG BERHALUSINASI merujuk pada kelas/modul arsitektur kognitif abstrak (Semantic Bridge, Decision Engine, Behavior Engine, dll) karena mereka TIDAK PERNAH DIEKSEKUSI di environment produksi.
+Semua file di folder root `/lib` (seperti `decisionEngine.ts`, dll) adalah PHANTOM CODE (Legacy/Draft) dan HARUS DIABAIKAN.
 
-2) SHORT-TERM MEMORY (SESSION RAM)
-- In-memory FIFO buffer (±10 chat terakhir)
-- Tidak disimpan ke database
-- Fungsi: konteks percakapan cepat & anti-amnesia jangka pendek
-
-3) BEHAVIOR MEMORY ENGINE
-- Heuristic user profiling real-time (formal/casual, kecepatan respon, pola pikir)
-- Decay factor ~0.98 agar adaptif. Tidak menggunakan database.
+Realitas Eksekusi Mamet AI adalah sebuah Skrip Monolitik Prosedural yang berjalan di Supabase Edge Function (`agent-process/index.ts`).
 
 ============================================================
-🔁 2. INTELLIGENCE PIPELINE (CURRENT FINAL TRUTH)
+⚙️ 2. THE REAL INTELLIGENCE PIPELINE (DETERMINISTIC)
 ============================================================
 
-User Input
-  ↓
-Semantic Bridge (normalisasi + keyword heuristic) & Intent Preprocessor
-  ↓
-Memory Engine (Supabase READ ONLY - fetch data mentah)
-  ↓
-Memory Governor (FILTER ONLY - menyaring noise & ranking relevansi)
-  ↓
-Optimal Context Budgeting / OCB (COMPRESSION ONLY - optimasi budget token)
-  ↓
-Decision Engine (SINGLE SOURCE OF TRUTH / FINAL AUTHORITY - final orchestrator)
-  ↓
-LLM (ChatGPT → hanya language renderer)
+Sistem memproses setiap HTTP request dalam langkah linear berikut:
 
-*No other layer is allowed to exist in execution path.*
+1. [GATEKEEPER LAYER]
+   - UUID Validation Gate: Menolak format non-UUID secara langsung (HTTP 400 Fail-Fast).
+   - Circuit Breaker: Memeriksa RPC `check_daily_quota` di Supabase.
 
-============================================================
-🧩 3. MODULE RESPONSIBILITY CLARIFICATION
-============================================================
+2. [STATELESS SESSION]
+   - Edge Function TIDAK memiliki in-memory short-term memory (RAM state).
+   - Frontend mengirimkan riwayat percakapan (`history`) mentah-mentah ke backend di setiap request.
 
-- Memory Engine: ONLY fetch data from Supabase. NO scoring, NO filtering logic.
-- Memory Governor: ONLY filter and rank memory relevance. NO final decision authority. NO prompt building.
-- OCB: ONLY compress and optimize token usage. NO semantic decision making.
-- Decision Engine: ONLY FINAL AUTHORITY. Builds final prompt, merges context + behavior + memory, produces final LLM input.
+3. [DATA RETRIEVAL LAYER]
+   - Memory Engine: Menjalankan `retrieveMemories()` untuk mengambil data mentah via RPC `match_user_memories`. Supabase = SINGLE SOURCE OF TRUTH.
+   - RAG Fetcher: Menjalankan RPC `match_documents` jika `ragEnabled: true`.
 
-============================================================
-🗄️ 4. LEGACY SYSTEM STATUS (ARCHIVED / INACTIVE)
-============================================================
+4. [CONTEXT FUSION LAYER] (`context_fusion.ts`)
+   - Bukan "Cognitive Governor". Ini adalah modul string-builder prosedural murni.
+   - Menyaring duplikasi string mentah via `seenContent.add()`.
+   - Menerapkan hard-cap manual (10.000 chars untuk Memori, 15.000 chars untuk RAG).
+   - Menyusun Final Prompt secara sekuensial (Memory = Priority 3, RAG = Priority 2).
 
-Modul-modul berikut telah dinonaktifkan via feature flag:
-`LEGACY_COGNITION_ENABLED = false`
+5. [SUB-AGENT / PLUGIN ROUTER]
+   - Jika payload berisi `tools`, memanggil spesifik fungsi eksternal (Web Search, YouTube Analyst).
 
-- SCC (Single Cognitive Core)
-- CMG (Cognitive Memory Governor)
-- G-CFL (Global Cognition Loop)
-- UCL (Unified Cognition Layer)
-- TGML (Truth Graph Memory Layer)
-- MSC (Memory Stability Core)
+6. [LLM CASCADE ORCHESTRATOR] (`getStreamResponse`)
+   - Strict Model Routing: Mencoba Gemini.
+   - Invalid Model Guard: Jika HTTP 404/400 → lempar FATAL_CLIENT_ERROR dan putus koneksi (Fail-Fast).
+   - Fallback (Hanya 429/500): Cascade fallback ke Groq → OpenRouter.
 
-STATUS: Non-executing, safe archive only, NO influence on runtime pipeline.
+7. [BACKGROUND TASKS] (`safeFireAndTrack`)
+   - Logging API Usage.
+   - Menulis memori baru secara asinkron via `processMemoryWriteQueue` (Memory Write Worker).
 
 ============================================================
-🧠 5. DESIGN PRINCIPLES & HARD CONSTRAINTS
+🚧 3. MASALAH TERBUKA & LIMITASI AKTUAL
 ============================================================
 
-- SINGLE DECISION AUTHORITY MODEL: Decision Engine adalah pemegang keputusan tunggal mutlak.
-- DETERMINISTIC LINEAR PIPELINE: Tidak ada recursion, loop, atau multiple orchestrators.
-- NO OVERLAPPING ENGINES: Tidak ada duplicate scoring systems atau parallel decision systems.
-- NO HIDDEN LOGIC: Tidak ada hidden reasoning pipelines di luar Decision Engine.
-- NO HALLUCINATION: LLM hanya sebagai response renderer, bukan pengambil keputusan.
-- REACTIVATION BAN: Jangan mengaktifkan ulang modul legacy ke dalam jalur eksekusi utama.
-- NO NEW COGNITIVE LAYERS: Dilarang menambah lapisan kognitif baru di luar pipeline ini.
+- Ungoverned RAG Bypass: Data RAG disuntikkan nyaris tanpa filtrasi matematis/semantik yang solid selama tidak ada string exact match yang berbenturan dengan Memory.
+- Procedural Scaling: Karena `agent-process/index.ts` adalah monolith yang sangat panjang (1400+ baris), perawatannya menjadi rawan regresi.
+- Phantom Codebase: Adanya folder `/lib` yang tidak terpakai menyebabkan kebingungan struktural.
+- Belum ada vector/embedding semantic intelligence murni di dalam layer penyusunan memori itu sendiri.
 
 ============================================================
-📊 6. CURRENT SYSTEM STATUS
+🎯 4. TUJUAN SISTEM
 ============================================================
 
-- Memory System: FULLY ISOLATED & DETERMINISTIC
-- Pipeline Architecture: FAIL-FAST ORCHESTRATION ENGINE (Zero-Tolerance Fault Injection)
-- System state: "Mamet AI is a stable, single-authority, memory-driven deterministic assistant system with explicitly isolated environment for MametLite, and a hardened Edge Function pipeline that strictly terminates anomalous requests (Fail-Fast) rather than silently degrading."
+Mamet AI = "Fail-Fast, Procedural Edge-Orchestrator dengan deterministic memory injection, bukan simulated cognitive system."
 
 ============================================================
-🚧 7. MASALAH TERBUKA
+🧑‍🏫 5. PERAN CHATGPT (INSTRUCTOR MODE)
 ============================================================
 
-- Belum ada vector/embedding semantic intelligence murni (Saat ini RAG dan Memori di Edge Function berjalan independen)
-- Visibilitas token cost secara visual di frontend (UI dashboard untuk $0.50 daily limit)
+- System architect reviewer & Anti-hallucination validator.
+- Dilarang merancang sistem OOP rumit. Solusi harus kompatibel dengan arsitektur Edge Function prosedural saat ini.
+- Ingat bahwa setiap baris kode backend ada di TypeScript Deno (Supabase Edge Functions).
 
 ============================================================
-🎯 8. TUJUAN SISTEM
-============================================================
-
-Mamet AI = "Long-term autonomous assistant dengan memory kuat, behavior awareness, dan deterministic linear reasoning layer"
-
-============================================================
-🧑‍🏫 9. PERAN CHATGPT (INSTRUCTOR MODE)
-============================================================
-
-- System architect reviewer & Anti-hallucination validator
-- Design correctness checker & Guard terhadap overengineering
-- Pengarah ke production-grade system
-
-============================================================
-▶️ 10. CONTINUATION INSTRUCTION
+▶️ 6. CONTINUATION INSTRUCTION
 ============================================================
 
 Jika digunakan di chat baru:
 
 "Continue as Mamet AI Instructor.
-Use Handoff Context v3 as system state.
-Focus on clean, single-authority production-grade architecture review and enforce Fail-Fast principles."
-============================================================
-LAST UPDATE SNAPSHOT vb00db70:
-- Timestamp: 2026-06-22 03:34:54 UTC
-- Changed modules: lib/behaviorMemoryEngine.ts, lib/contextUnifier.ts, lib/decisionEngine.ts, lib/intentPreprocessor.ts, lib/memoryEngine.ts, lib/semanticBridge.ts, lib/shortTermMemory.ts
-- Memory layer changes: lib/behaviorMemoryEngine.ts, lib/memoryEngine.ts, lib/shortTermMemory.ts
-- Decision engine changes: lib/contextUnifier.ts, lib/decisionEngine.ts
-- Behavior layer changes: None
-- Pipeline changes: lib/intentPreprocessor.ts, lib/semanticBridge.ts
-- Risk notes: Low - Code logic only, deterministic execution expected
-- System status: ACTIVE - Auto-compiled and verified.
+Use Handoff Context v4 (RUNTIME TRUTH) as system state.
+Do NOT reference legacy cognitive modules. Focus ONLY on the procedural Deno Edge Function architecture."
 
 ============================================================
-LAST UPDATE SNAPSHOT v8cae5f7:
-- Timestamp: 2026-06-22 04:10:22 UTC
-- Changed modules: lib/decisionEngine.ts, lib/globalCognitionLoop.ts, lib/memoryEngine.ts, lib/truthGraphMemory.ts, lib/truthScoringEngine.ts, lib/unifiedCognition.ts
-- Memory layer changes: lib/memoryEngine.ts
-- Decision engine changes: lib/decisionEngine.ts
-- Behavior layer changes: None
-- Pipeline changes: None
-- Risk notes: Low - Code logic only, deterministic execution expected
-- System status: ACTIVE - Auto-compiled and verified.
-
-============================================================
-LAST UPDATE SNAPSHOT v21ddcb3:
-- Timestamp: 2026-06-22 04:17:30 UTC
-- Changed modules: lib/cognitiveMemoryGovernor.ts, lib/decisionEngine.ts, lib/memoryStabilityCore.ts
-- Memory layer changes: None
-- Decision engine changes: lib/decisionEngine.ts
-- Behavior layer changes: None
-- Pipeline changes: None
-- Risk notes: Low - Code logic only, deterministic execution expected
-- System status: ACTIVE - Auto-compiled and verified.
-
-============================================================
-LAST UPDATE SNAPSHOT vebc13ca:
-- Timestamp: 2026-06-22 05:06:10 UTC
-- Changed modules: lib/cognitiveMemoryGovernor.ts, lib/decisionEngine.ts, lib/globalCognitionLoop.ts, lib/memoryGovernor.ts, lib/memoryStabilityCore.ts, lib/ocb.ts, lib/singleCognitiveCore.ts, lib/truthGraphMemory.ts, lib/unifiedCognition.ts
-- Memory layer changes: None
-- Decision engine changes: lib/decisionEngine.ts
-- Behavior layer changes: None
-- Pipeline changes: None
-- Risk notes: Low - Code logic only, deterministic execution expected
-- System status: ACTIVE - Auto-compiled and verified.
-
-============================================================
-LAST UPDATE SNAPSHOT ve4d240f:
-- Timestamp: 2026-06-23 01:22:15 UTC
-- Changed modules: supabase/functions/agent-process/lib/fact_detector.ts
-- Memory layer changes: None
-- Decision engine changes: None
-- Behavior layer changes: None
-- Pipeline changes: None
-- Risk notes: Schema changed in setup_memory_audit_log.sql - requires Supabase sync verification
-- System status: ACTIVE - Auto-compiled and verified.
-
-============================================================
-LAST UPDATE SNAPSHOT Phase 7:
-- Timestamp: 2026-06-23 16:15:00 UTC
-- Changed modules: supabase/functions/agent-process/index.ts, mametlite/src/lib/callAgentSimple.js
-- Architecture changes: Decoupled Mamet Full from MametLite via `appSource` boundary.
-- Execution engine changes: Implemented Fail-Fast Orchestration (UUID Validation Gate, 404/400 Model Guard, SSE closeSafely guarantees).
-- Risk notes: None. System has been production-verified via Runtime Test Harness.
-- System status: HARDENED - Zero-Tolerance Fault Injection verified.
+LAST UPDATE SNAPSHOT Phase 8 (Runtime Truth Sync):
+- Timestamp: 2026-06-23 16:30:00 UTC
+- Status: Handoff Document dirombak ulang 100% untuk mengikuti realitas kode produksi, menghapus seluruh klaim Phantom Code (Decision Engine, Semantic Bridge).
+- Pipeline Truth: Procedural Monolith + Fail-Fast Execution.
+- Risk notes: None. Dokumen kini adalah cerminan identik dari runtime yang hidup.
