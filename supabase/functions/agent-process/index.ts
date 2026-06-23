@@ -207,25 +207,30 @@ serve(async (req) => {
       });
     }
 
-    const isRagEnabled = ragEnabled !== false;
-
-    // === EXECUTION POLICY LAYER (FASE 4C) ===
+    // === UNIFIED EXECUTION POLICY LAYER (FASE 4C) ===
     const POLICY_LAYER_ENABLED = true;
     
-    type ExecutionPolicy = {
-      decision: "ALLOW" | "ALLOW_WITH_LIMIT" | "BLOCK",
-      config: { toolsEnabled: boolean, ragTopK: number, webSearchEnabled: boolean, subAgentEnabled: boolean },
-      flags: { injectionRisk: boolean, abuseRisk: boolean, overRetrievalRisk: boolean }
+    type UnifiedExecutionContext = {
+      mode: "AI" | "LITE";
+      security: { decision: "ALLOW" | "ALLOW_WITH_LIMIT" | "BLOCK"; toolsEnabled: boolean; injectionRisk: boolean; abuseRisk: boolean; };
+      rag: { topK: number; threshold: number; allowLongDocs: boolean; compressionLevel: "low" | "high"; };
+      execution: { memoryPriority: "memory_first" | "balanced"; webSearchEnabled: boolean; subAgentEnabled: boolean; };
+      trace: { riskScore: number; retrievalStrategy: string; timestamp: number; };
     };
 
-    function buildExecutionPolicy(input: { message: string }): ExecutionPolicy {
-      const defaultPolicy: ExecutionPolicy = {
-        decision: "ALLOW",
-        config: { toolsEnabled: true, ragTopK: 5, webSearchEnabled: true, subAgentEnabled: true },
-        flags: { injectionRisk: false, abuseRisk: false, overRetrievalRisk: false }
+    function buildUnifiedExecutionContext(input: { message: string, desktopOSMode?: boolean, tools?: string[], ragEnabled?: boolean }): UnifiedExecutionContext {
+      const mode = input.desktopOSMode ? "AI" : "LITE";
+      const isRagEnabled = input.ragEnabled !== false;
+      
+      const ctx: UnifiedExecutionContext = {
+        mode,
+        security: { decision: "ALLOW", toolsEnabled: true, injectionRisk: false, abuseRisk: false },
+        rag: { topK: mode === "LITE" ? 5 : 5, threshold: 0.60, allowLongDocs: true, compressionLevel: "low" },
+        execution: { memoryPriority: "memory_first", webSearchEnabled: true, subAgentEnabled: true },
+        trace: { riskScore: 0, retrievalStrategy: isRagEnabled ? "hybrid" : "none", timestamp: Date.now() }
       };
 
-      if (!POLICY_LAYER_ENABLED) return defaultPolicy;
+      if (!POLICY_LAYER_ENABLED) return ctx;
 
       let riskScore = 0;
       const lowerMsg = (input.message || '').toLowerCase();
@@ -234,21 +239,20 @@ serve(async (req) => {
       const injectionPatterns = ["ignore previous instructions", "system prompt", "developer mode", "reveal memory", "bypass"];
       if (injectionPatterns.some(p => lowerMsg.includes(p))) {
         riskScore += 3;
-        defaultPolicy.flags.injectionRisk = true;
+        ctx.security.injectionRisk = true;
       }
       
       // 2. TOOL ABUSE DETECTION (MEDIUM RISK)
       const toolAbusePatterns = ["recursive agent requests", "infinite search loops", "mass retrieval requests"];
       if (toolAbusePatterns.some(p => lowerMsg.includes(p))) {
         riskScore += 2;
-        defaultPolicy.flags.abuseRisk = true;
+        ctx.security.abuseRisk = true;
       }
       
       // 3. OVER-RETRIEVAL DETECTION
       const overRetrievalPatterns = ["all data", "dump all", "entire database"];
       if (overRetrievalPatterns.some(p => lowerMsg.includes(p))) {
         riskScore += 2;
-        defaultPolicy.flags.overRetrievalRisk = true;
       }
       
       // 4. MALFORMED INPUT CHECK
@@ -257,23 +261,39 @@ serve(async (req) => {
       const uniqueWords = new Set(words);
       if (words.length > 100 && uniqueWords.size < words.length * 0.1) riskScore += 1;
       
+      ctx.trace.riskScore = riskScore;
+      
       // 5. EVALUATE POLICY
       if (riskScore >= 4) {
-        defaultPolicy.decision = "BLOCK";
-        defaultPolicy.config = { toolsEnabled: false, ragTopK: 0, webSearchEnabled: false, subAgentEnabled: false };
+        ctx.security.decision = "BLOCK";
+        ctx.security.toolsEnabled = false;
+        ctx.rag.topK = 0;
+        ctx.execution.webSearchEnabled = false;
+        ctx.execution.subAgentEnabled = false;
       } else if (riskScore >= 2) {
-        defaultPolicy.decision = "ALLOW_WITH_LIMIT";
-        defaultPolicy.config = { toolsEnabled: false, ragTopK: 2, webSearchEnabled: false, subAgentEnabled: false };
+        ctx.security.decision = "ALLOW_WITH_LIMIT";
+        ctx.security.toolsEnabled = false;
+        ctx.rag.topK = 2;
+        ctx.execution.webSearchEnabled = false;
+        ctx.execution.subAgentEnabled = false;
       }
       
-      return defaultPolicy;
+      return ctx;
     }
 
-    const policy = buildExecutionPolicy({ message });
+    const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEnabled });
+    const isRagEnabled = ctx.trace.retrievalStrategy !== "none";
+
+    console.log("[UNIFIED TRACE]", {
+      mode: ctx.mode,
+      decision: ctx.security.decision,
+      ragTopK: ctx.rag.topK,
+      riskScore: ctx.trace.riskScore
+    });
     
     // ENFORCEMENT BLOCK
-    if (policy.decision === "BLOCK") {
-      console.warn(`[EXECUTION POLICY] Blocked request from user ${userId} due to HIGH risk. Flags:`, policy.flags);
+    if (ctx.security.decision === "BLOCK") {
+      console.warn(`[EXECUTION POLICY] Blocked request from user ${userId} due to HIGH risk. Trace:`, ctx.trace);
       const blockMsg = "Permintaan ditolak oleh Sistem Kebijakan Eksekusi. Deteksi injeksi atau pola berbahaya.";
       if (!stream) {
         return new Response(JSON.stringify({ message: blockMsg }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -289,12 +309,13 @@ serve(async (req) => {
       }
     }
     
-    if (policy.decision === "ALLOW_WITH_LIMIT") {
-      console.warn(`[EXECUTION POLICY] Applied limits to user ${userId} due to MEDIUM risk. Flags:`, policy.flags);
+    if (ctx.security.decision === "ALLOW_WITH_LIMIT") {
+      console.warn(`[EXECUTION POLICY] Applied limits to user ${userId} due to MEDIUM risk. Trace:`, ctx.trace);
     }
 
-    let effectiveRagMatchCount = policy.config.ragTopK;
-    if (!policy.config.toolsEnabled && tools && Array.isArray(tools)) {
+    let effectiveRagMatchCount = ctx.rag.topK;
+    let effectiveRagThreshold = ctx.rag.threshold;
+    if (!ctx.security.toolsEnabled && tools && Array.isArray(tools)) {
        tools = []; // Menerapkan kebijakan secara eksplisit
     }
 
@@ -992,7 +1013,7 @@ serve(async (req) => {
           
           const { data: matchedDocs, error: matchError } = await supabaseClient.rpc('match_documents', {
             query_embedding: queryEmbedding,
-            match_threshold: 0.60,
+            match_threshold: effectiveRagThreshold,
             match_count: effectiveRagMatchCount,
             p_user_id: userId
           });
