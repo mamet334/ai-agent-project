@@ -585,7 +585,7 @@ serve(async (req) => {
 
       // === PRIORITAS USER-EXPLICIT MODEL SELECTION ===
       if (!extractedImage) {
-        if (model && model.includes('gpt') && OPENAI_API_KEY) {
+        if (model && model.includes('gpt') && !model.includes('openrouter') && OPENAI_API_KEY) {
           try { return await callOpenAI(promptText, systemPromptText, chatHistory); } catch(e: any) { console.warn('OpenAI failed:', e); explicitModelErrors += ` [openai]: ${e.message || e};`; }
         } else if (model && (model.includes('openrouter') || model.startsWith('openrouter/')) && OPENROUTER_API_KEY) {
           try { return await callOpenRouter(promptText, systemPromptText, chatHistory); } catch(e: any) { console.warn('OpenRouter failed:', e); explicitModelErrors += ` [openrouter]: ${e.message || e};`; }
@@ -799,7 +799,7 @@ serve(async (req) => {
 
           try {
             // EXPLICIT MODELS
-            if (model && model.includes('gpt') && OPENAI_API_KEY) {
+            if (model && model.includes('gpt') && !model.includes('openrouter') && OPENAI_API_KEY) {
               try { await tryOpenAI(); controller.close(); return; } catch(e: any) { currentError += e.message; console.warn("OpenAI fail, cascading...", e); }
             }
             if (model && (model.includes('openrouter') || model.startsWith('openrouter/')) && OPENROUTER_API_KEY) {
