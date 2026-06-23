@@ -28,8 +28,29 @@ export const plugins = [
 ];
 
 // Fungsi helper untuk membangun daftar tool otomatis bagi LLM
-export const getPluginPromptList = () => {
-  return plugins.map((p, index) => `${index + 1}. "${p.name}": ${p.description}`).join('\n');
+export const getPluginPromptList = (requestedTools?: string[], desktopOSMode: boolean = false) => {
+  const toolAliases: Record<string, string> = {
+    'web_search': 'researcher',
+    'code_executor': 'coder',
+    'web_scraper': 'scraper',
+    'rag_search': 'rag_search'
+  };
+
+  const resolvedTools = requestedTools ? requestedTools.map(t => toolAliases[t] || t) : [];
+
+  return plugins
+    .filter(p => {
+      // 1. Strict Whitelisting
+      if (resolvedTools && resolvedTools.length > 0) {
+        if (!resolvedTools.includes(p.name)) return false;
+      }
+      
+      // 2. Keamanan tambahan: file_analyzer khusus Desktop OS Mode
+      if (p.name === 'file_analyzer' && !desktopOSMode) return false;
+      
+      return true;
+    })
+    .map((p, index) => `${index + 1}. "${p.name}": ${p.description}`).join('\n');
 };
 
 export const getPluginByName = (name: string) => {

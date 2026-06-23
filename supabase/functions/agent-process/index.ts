@@ -857,7 +857,7 @@ serve(async (req) => {
           
           const { data: matchedDocs, error: matchError } = await supabaseClient.rpc('match_documents', {
             query_embedding: queryEmbedding,
-            match_threshold: 0.75,
+            match_threshold: 0.60,
             match_count: 5,
             p_user_id: userId
           });
@@ -1068,12 +1068,13 @@ Jawab HANYA dengan satu kata: "CHAT_BIASA" atau "BUTUH_AGENT".`;
       } else {
         let coordinatorSystemPrompt = `Tugas Anda adalah menganalisis permintaan user dan memilih sub-agent yang tepat.
 Anda memiliki tim Sub-Agent nyata berikut ini:
-${getPluginPromptList()}
+${getPluginPromptList(tools, desktopOSMode)}
 
 PENTING:
 1. Anda adalah mesin parsing JSON. Anda DILARANG KERAS merespons dengan kalimat atau teks biasa. Anda WAJIB mengembalikan HANYA sebuah Array JSON murni. Jika tidak butuh sub-agent, kembalikan [].
 2. Jika user menanyakan informasi aktual, fakta terbaru, berita, pertandingan olahraga (seperti MotoGP 2026), cuaca, harga saham, atau info di luar batas pengetahuan internal Anda (akhir 2024), Anda WAJIB memanggil sub-agent "researcher" atau "deep_research". JANGAN gunakan sub-agent "logika" untuk menjawab pertanyaan fakta/aktual!
 3. Jika user meminta penjadwalan, tugas berulang, atau otomatisasi, Anda WAJIB memanggil sub-agent "cron_manager". DILARANG MENGARANG JADWAL SENDIRI.
+4. JIKA pertanyaan user adalah tentang data spesifik (nama orang, lokasi, jumlah, isi laporan) yang kemungkinan besar ada di Pangkalan Data RAG/Dokumen internal user, kembalikan []. Sistem RAG beroperasi otomatis di jalur terpisah. JANGAN panggil "researcher" (Pencarian Web) untuk mencari dokumen personal!
 
 Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP Italia Mugello 2026"}]`;
 
