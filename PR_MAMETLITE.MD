@@ -101,3 +101,32 @@ Seiring dengan pemisahan *Mametlite*, backend monolitik Mamet (`agent-process/in
 - [x] Fungsi RAG dan Memori sepenuhnya berjalan secara deterministik dan aman antar-user.
 - [x] Eksekusi sub-agent dijamin maksimal 12 detik tanpa menyisakan proses siluman (*zombie*).
 - [x] Tidak ada penurunan kinerja UI / API Response Shape dari sisi Klien.
+
+---
+
+# Update 23 Juni 2026: Fail-Fast Architecture & Runtime Verification (Phase 7)
+
+**Tipe:** Architecture Hardening / Zero-Tolerance Fault Injection
+
+## 📌 Deskripsi Pembaruan
+Mamet AI Execution Engine telah diubah dari model *silent failure* (menelan error secara diam-diam) menjadi **Fail-Fast Orchestration Engine**. Sistem kini secara proaktif akan langsung menghentikan pipeline pada detik pertama anomali terdeteksi, daripada melanjutkan proses komputasi yang mahal dan berpotensi halusinasi.
+
+## 🚀 Perbaikan Utama
+
+### 1. Strict Identity Validation Gate (UUID Enforcement)
+- **Problem:** Parameter `userId` sebelumnya lolos ke layer LLM dan RAG tanpa validasi bentuk, memungkinkan karakter aneh atau data kosong merusak konteks pencarian.
+- **Fix:** Validasi *Regex-based* di baris pertama Edge Function. Jika bukan format UUID v4 standar, fungsi langsung merespons dengan HTTP 400 Bad Request (`FATAL_ERROR: Invalid userId format`), mencegah tereksekusinya seluruh *backend pipeline*.
+
+### 2. Controlled Model Fallback (Invalid Model Guard)
+- **Problem:** Sistem sebelumnya melempar error tak berjejak saat menangani model provider yang dihapus atau tidak tersedia, seringkali jatuh ke *fallback* sekunder secara membabi-buta.
+- **Fix:** Apabila penyedia utama melempar HTTP 404 (Model Not Found) atau 400 (Bad Request), exception `FATAL_CLIENT_ERROR` akan ditangkap. Eksekusi langsung memutus sambungan (HALTED) secara *graceful* kepada UI klien tanpa memanggil provider *fallback*. Model cadangan kini HANYA dipanggil jika terjadi `HTTP 429 Quota Exceeded` atau HTTP 500.
+
+### 3. Guarantee SSE [DONE] Signal on Error Patches
+- **Problem:** Fitur UI di klien sering mengalami *infinite hang* atau tertahan saat *edge function* *crash* karena sinyal penutup stream `[DONE]` gagal terkirim.
+- **Fix:** Penerapan wajib asinkron `closeSafely()` pada semua *catch blocks*, memastikan semua lajur fatal error menutup aliran stream secara sah sehingga UI *frontend* melepaskan status *loading*.
+
+## ✅ Verifikasi Runtime Aktual (Runtime Test Harness)
+Perbaikan ini tidak sekadar klaim teoritis, melainkan **Telah Lulus Validasi Runtime Eksternal** yang dijalankan di *production environment*:
+- **[PASS] UUID Gate**: Payload non-UUID (`test@gmail.com`) divalidasi langsung ditolak (HTTP 400) tanpa mengeksekusi RAG/LLM.
+- **[PASS] Invalid Model Guard**: Model LLM fiktif memicu pesan stream eksplisit `[SYSTEM HALTED] Client Error: FATAL_CLIENT_ERROR` ke UI tanpa beban komputasi tambahan.
+- **[PASS] SSE Completion**: Sinyal terminasi stream terbaca sempurna dan *asynchronous logging* berhasil dikirim tanpa memblokir siklus permintaan HTTP.
