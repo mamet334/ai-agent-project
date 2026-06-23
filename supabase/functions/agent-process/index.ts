@@ -135,6 +135,7 @@ const clearExpiredCooldowns = () => {
   }
 };
 
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -163,7 +164,29 @@ serve(async (req) => {
   }
 
   try {
+    // === PHASE 5: RELIABLE ASYNC DELIVERY LAYER ===
+    // Melacak semua janji asinkron (background tasks) per-request agar bisa di-await
+    // secara terkendali sebelum stream/koneksi utama benar-benar ditutup.
+    const pendingBackgroundTasks: Promise<any>[] = [];
+    const safeFireAndTrack = (taskName: string, promise: Promise<any>) => {
+      const start = Date.now();
+      const tracked = promise.then(() => {
+        console.log(`[BACKGROUND_TASK_SUCCESS] ${taskName} selesai (${Date.now() - start}ms)`);
+      }).catch(err => {
+        console.error(`[BACKGROUND_TASK_FAILED] ${taskName} gagal:`, err);
+      });
+      pendingBackgroundTasks.push(tracked);
+    };
+
     let { message, tools, model, userId, userName, file, history, globalMemory, stream, desktopOSMode, ragEnabled } = await req.json();
+    
+    // --- MULTI-TENANT HARDENING (DETERMINISTIC USER ISOLATION) ---
+    // Mengubah raw email menjadi stable namespace yang lowercase dan tanpa spasi
+    // untuk mencegah race condition atau data bocor antar user.
+    if (userId && typeof userId === 'string') {
+        userId = userId.toLowerCase().trim();
+    }
+
     console.log("[L1] frontend payload", { userId, message: message ? message.substring(0, 50) + '...' : null });
     console.log("[L2] edge function received", { hasUserId: !!userId, hasMessage: !!message });
 
@@ -215,33 +238,31 @@ serve(async (req) => {
     }
 
     // === TOKEN TRACKER ESTIMATOR (FASE 4A) ===
-    const logApiUsage = async (provider: string, modelName: string, inputText: string, outputText: string) => {
+    const logApiUsage = (provider: string, modelName: string, inputText: string, outputText: string) => {
       if (!userId) return;
-      try {
+      safeFireAndTrack('LogAPIUsage', (async () => {
         // Estimasi kasar: 1 token = 4 karakter
         const inputTokens = Math.ceil(inputText.length / 4);
         const outputTokens = Math.ceil(outputText.length / 4);
         
-        // Asumsi biaya (Cost per 1k token)
-        let costIn = 0.0001; let costOut = 0.0002; // Default (Gemini/DeepSeek)
+        let costIn = 0.0001; let costOut = 0.0002; 
         if (modelName.includes('gpt-4o')) { costIn = 0.005; costOut = 0.015; }
         else if (modelName.includes('llama')) { costIn = 0.00005; costOut = 0.00008; }
 
         const totalCost = ((inputTokens / 1000) * costIn) + ((outputTokens / 1000) * costOut);
-        
         const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
         await supClient.from('api_usage').insert([{ 
            user_id: userId, provider, model: modelName,
            input_tokens: inputTokens, output_tokens: outputTokens, cost_usd: totalCost
         }]);
-      } catch (e) { console.error("Logging token failed", e); }
+      })());
     };
 
-    const logAgentEvent = async (eventType: string, provider: string, logMessage: string) => {
-      try {
+    const logAgentEvent = (eventType: string, provider: string, logMessage: string) => {
+      safeFireAndTrack('LogAgentEvent', (async () => {
         const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
         await supClient.from('agent_logs').insert([{ user_id: userId || null, event_type: eventType, provider, message: logMessage }]);
-      } catch (e) { console.error("Log error failed:", e); }
+      })());
     };
 
 
@@ -797,40 +818,47 @@ serve(async (req) => {
              await processOpenAIStream(res);
           };
 
+          const closeSafely = async () => {
+             controller.close();
+             if (pendingBackgroundTasks.length > 0) {
+                 await Promise.allSettled(pendingBackgroundTasks);
+             }
+          };
+
           try {
             // EXPLICIT MODELS
             if (model && model.includes('gpt') && !model.includes('openrouter') && OPENAI_API_KEY) {
-              try { await tryOpenAI(); controller.close(); return; } catch(e: any) { currentError += e.message; console.warn("OpenAI fail, cascading...", e); }
+              try { await tryOpenAI(); await closeSafely(); return; } catch(e: any) { currentError += e.message; console.warn("OpenAI fail, cascading...", e); }
             }
             if (model && (model.includes('openrouter') || model.startsWith('openrouter/')) && OPENROUTER_API_KEY) {
-              try { await tryOpenRouter(); controller.close(); return; } catch(e: any) { currentError += e.message; console.warn("OR fail, cascading...", e); }
+              try { await tryOpenRouter(); await closeSafely(); return; } catch(e: any) { currentError += e.message; console.warn("OR fail, cascading...", e); }
             }
             if (model && model.startsWith('groq/') && GROQ_API_KEY) {
-              try { await tryGroq(); controller.close(); return; } catch(e: any) { currentError += e.message; console.warn("Groq fail, cascading...", e); }
+              try { await tryGroq(); await closeSafely(); return; } catch(e: any) { currentError += e.message; console.warn("Groq fail, cascading...", e); }
             }
 
             // CASCADE: Gemini -> Groq -> OpenRouter
             try {
-               await tryGemini(); controller.close(); return;
+               await tryGemini(); await closeSafely(); return;
             } catch(e1: any) {
                console.warn("Cascade: Gemini failed:", e1.message);
                try {
-                  await tryGroq("Gemini sedang limit, ini otak cadangan Groq"); controller.close(); return;
+                  await tryGroq("Gemini sedang limit, ini otak cadangan Groq"); await closeSafely(); return;
                } catch(e2: any) {
                   console.warn("Cascade: Groq failed:", e2.message);
                   try {
-                     await tryOpenRouter("Groq dan Gemini limit, ini otak cadangan OpenRouter"); controller.close(); return;
+                     await tryOpenRouter("Groq dan Gemini limit, ini otak cadangan OpenRouter"); await closeSafely(); return;
                   } catch(e3: any) {
                      console.error("Cascade: OpenRouter failed:", e3.message);
                      enqueueStr(`\n\n**Semua AI Provider (Gemini, Groq, OpenRouter) sedang limit atau gangguan.**\nDetail: ${e1.message} | ${e2.message} | ${e3.message}`);
-                     controller.close(); return;
+                     await closeSafely(); return;
                   }
                }
             }
           } catch(fatalErr: any) {
              console.error("Fatal Stream Error:", fatalErr);
              enqueueStr(`\n\n**Internal Server Error:** ${fatalErr.message}`);
-             controller.close();
+             await closeSafely();
           }
         }
       });
@@ -1112,85 +1140,183 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
       let accumulatedContext = `Permintaan awal user: "${finalMessage}"\n\n`;
 
       if (plan && plan.length > 0) {
+        // --- PHASE 4: DEPENDENCY-AWARE EXECUTION GRAPH BUILDER ---
+        const INDEPENDENT_PLUGINS = new Set(['scraper', 'researcher', 'deep_research', 'youtube_analyst', 'file_analyzer', 'shopee_ninja', 'memory_manager', 'cron_manager']);
+        const executionTiers: any[][] = [];
+        let currentTier: any[] = [];
         const seenTasks = new Set();
+        
         for (let i = 0; i < plan.length; i++) {
-          // --- MAMET HEALER (OBAT PENENANG / INFINITE LOOP BREAKER) ---
           if (i >= 5) {
-            console.log("Mamet Healer: Jumlah tugas terlalu banyak (>5). Menyuntikkan obat penenang...");
+            console.log("Mamet Healer: Membatasi maksimal 5 tugas (Budget Limit).");
             break;
           }
           
-          const { subagent, task } = plan[i];
-          const taskSignature = subagent + ":" + (task || "").substring(0, 30);
+          const p = plan[i];
+          const taskSignature = p.subagent + ":" + (p.task || "").substring(0, 30);
           
-          if (seenTasks.has(taskSignature)) {
-            console.log("Mamet Healer: Mendeteksi perulangan instruksi (Loop). Menghentikan proses sub-agent...");
-            break;
-          }
+          if (seenTasks.has(taskSignature)) continue;
           seenTasks.add(taskSignature);
-
-          let subagentResText = 'Gagal memproses.';
-          let subagentSources: any[] = [];
-          let subagentToolExec = null;
-
-          const plugin = getPluginByName(subagent);
-          if (plugin) {
-            processingSteps.push(`🚀 Menjalankan Sub-Agent "${subagent}": ${task}`);
-            const env = { 
-              GEMINI_API_KEY, 
-              GROQ_API_KEY, 
-              OPENAI_API_KEY, 
-              OPENROUTER_API_KEY, 
-              APIFY_API_TOKEN: Deno.env.get('APIFY_API_TOKEN') || '',
-              allGeminiKeys 
-            };
-            const fullTask = `Tugas Spesifik Anda: ${task}\n\nPermintaan Asli User: "${finalMessage}"\n\nKonteks Tambahan:\n${accumulatedContext}`;
-            
-            // --- TRAFFIC LIGHT ROUTER (AI BERLAPIS) ---
-            const customRunLLM = async (prompt: string, sys: string, hist: any[]) => {
-              const originalModel = model;
-              try {
-                if (subagent === 'coder' || subagent === 'debate') {
-                   console.log(`🚥 Traffic Light: Sub-agent [${subagent}] dialihkan ke OpenRouter Gemini (Tugas Berat)`);
-                   model = 'openrouter-google-gemini-2.0-flash-exp';
-                } else if (subagent === 'scraper' || subagent === 'memory_manager' || subagent === 'communicator' || subagent === 'youtube_analyst' || subagent === 'file_analyzer') {
-                   console.log(`🚥 Traffic Light: Sub-agent [${subagent}] dialihkan ke GROQ (Tugas Ringan)`);
-                   model = 'groq-llama-3.1';
-                } else {
-                   console.log(`🚥 Traffic Light: Sub-agent [${subagent}] menggunakan GEMINI (Tugas Utama)`);
-                   model = 'gemini-2.0-flash';
-                }
-                return await runLLM(prompt, sys, hist);
-              } finally {
-                model = originalModel; // Restore original model ke setelan awal
-              }
-            };
-
-            // --- MAMET HEALER (PENAWAR RACUN / ERROR SHIELD) ---
-            try {
-              const result = await plugin.execute({ task: fullTask, cleanTask: task, accumulatedContext, env, runLLM: customRunLLM, userId });
-              subagentResText = result.output;
-              subagentSources = result.sources || [];
-              subagentToolExec = result.toolExecution || null;
-              const outputPreview = (subagentResText || '').substring(0, 80).replace(/\n/g, ' ');
-              processingSteps.push(`✅ Sub-Agent "${subagent}" selesai${subagentSources.length > 0 ? ` → ${subagentSources.length} sumber referensi` : ''} → "${outputPreview}..."`);
-            } catch (err: any) {
-              console.error(`Mamet Healer: Menangkap Error mematikan dari Sub-Agent [${subagent}]!`, err);
-              subagentResText = `[SISTEM DILINDUNGI OLEH MAMET HEALER]: Sub-agent gagal beroperasi karena error teknis (${err.message || 'Unknown'}). Tolong sampaikan ke user dengan ramah bahwa fitur ini sedang terkendala.`;
-              processingSteps.push(`❌ Sub-Agent "${subagent}" gagal: ${err.message || 'Unknown error'}`);
-            }
-          } else {
-             subagentResText = `Sub-agent '${subagent}' tidak ditemukan di sistem plugin.`;
-             processingSteps.push(`⚠️ Sub-Agent "${subagent}" tidak ditemukan`);
-          }
-
-          subagentRuns.push({
-            subagent, task, output: subagentResText, sources: subagentSources, toolExecution: subagentToolExec
-          });
-          accumulatedContext += `--- Hasil Sub-Agent [${subagent.toUpperCase()}]: ---\nTugas: ${task}\nOutput: ${subagentResText}\n\n`;
           
-          // Penundaan 1 detik untuk menghindari API Rate Limit (Error 429) pada akun gratis
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          if (INDEPENDENT_PLUGINS.has(p.subagent)) {
+              // Independent plugins can be batched together for safe parallel execution
+              currentTier.push(p);
+          } else {
+              // Dependent plugins flush the current batch, and run sequentially in their own tier
+              if (currentTier.length > 0) {
+                  executionTiers.push([...currentTier]);
+                  currentTier = [];
+              }
+              executionTiers.push([p]);
+          }
+        }
+        if (currentTier.length > 0) executionTiers.push(currentTier);
+
+        // --- PHASE 4: CONTROLLED ORCHESTRATION & BUDGET ENFORCEMENT ---
+        const GLOBAL_TIMEOUT_MS = 24000; // 24s total execution budget
+        const PER_PLUGIN_TIMEOUT_MS = 12000;
+        const orchestrationStartTime = Date.now();
+
+        processingSteps.push(`🧠 Orchestrator: Membangun graph dengan ${executionTiers.length} tier eksekusi.`);
+
+        for (let tierIdx = 0; tierIdx < executionTiers.length; tierIdx++) {
+            const tierTasks = executionTiers[tierIdx];
+            
+            // Check Global Budget
+            if (Date.now() - orchestrationStartTime > GLOBAL_TIMEOUT_MS) {
+                console.warn(`[BUDGET_ENFORCER] Global Orchestration Budget Exceeded! Sisa tugas dibatalkan.`);
+                processingSteps.push(`⚠️ Eksekusi dibatalkan karena melebihi total waktu budget (24s).`);
+                break;
+            }
+
+            // Run Tier in Parallel safely
+            const tierPromises = tierTasks.map(async (taskDef) => {
+               const { subagent, task } = taskDef;
+               let subagentResText = 'Gagal memproses.';
+               let subagentSources: any[] = [];
+               let subagentToolExec = null;
+               
+               const plugin = getPluginByName(subagent);
+               if (!plugin) {
+                   processingSteps.push(`⚠️ Sub-Agent "${subagent}" tidak ditemukan`);
+                   return { subagent, task, subagentResText: `Sub-agent '${subagent}' tidak ditemukan di sistem plugin.`, subagentSources, subagentToolExec };
+               }
+               
+               processingSteps.push(`🚀 Eksekusi [Tier ${tierIdx+1}]: Sub-Agent "${subagent}"`);
+               
+               const env = { 
+                  GEMINI_API_KEY, GROQ_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY, 
+                  APIFY_API_TOKEN: Deno.env.get('APIFY_API_TOKEN') || '', allGeminiKeys 
+               };
+               const fullTask = `Tugas Spesifik Anda: ${task}\n\nPermintaan Asli User: "${finalMessage}"\n\nKonteks Tambahan (Hasil Tier Sebelumnya):\n${accumulatedContext}`;
+               
+               const customRunLLM = async (prompt: string, sys: string, hist: any[]) => {
+                  const originalModel = model;
+                  try {
+                    if (subagent === 'coder' || subagent === 'debate') {
+                       console.log(`🚥 Traffic Light: Sub-agent [${subagent}] dialihkan ke OpenRouter Gemini`);
+                       model = 'openrouter-google-gemini-2.0-flash-exp';
+                    } else if (subagent === 'scraper' || subagent === 'communicator' || subagent === 'youtube_analyst' || subagent === 'file_analyzer') {
+                       console.log(`🚥 Traffic Light: Sub-agent [${subagent}] dialihkan ke GROQ`);
+                       model = 'groq-llama-3.1';
+                    } else {
+                       console.log(`🚥 Traffic Light: Sub-agent [${subagent}] menggunakan GEMINI`);
+                       model = 'gemini-2.0-flash';
+                    }
+                    return await runLLM(prompt, sys, hist);
+                  } finally { model = originalModel; }
+               };
+
+               // --- MAMET HEALER (PHASE 3 ISOLATION + PHASE 4 BUDGET) ---
+               const startTime = Date.now();
+               let lifecycleState = 'CREATED';
+               const abortController = new AbortController();
+               const executionId = `exec_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+               try {
+                  lifecycleState = 'RUNNING';
+                  
+                  // Phase 5: TRUE EXECUTION CANCELLATION LAYER
+                  // Memberikan 'propagate execution hook' ke plugin agar auto-abort bekerja
+                  const controlledFetch = (input: RequestInfo | URL, init?: RequestInit) => {
+                      return fetch(input, { ...init, signal: init?.signal || abortController.signal });
+                  };
+                  
+                  const executeContext = { 
+                      task: fullTask, cleanTask: task, accumulatedContext, 
+                      env: { ...env, signal: abortController.signal, fetch: controlledFetch }, 
+                      runLLM: customRunLLM, userId, signal: abortController.signal 
+                  };
+
+                  const isolatedExecutionPromise = (async () => {
+                     try {
+                         const rawResult = await plugin.execute(executeContext);
+                         if (lifecycleState !== 'RUNNING') {
+                             console.warn(`[GATING_LAYER] Execution ${executionId} (${subagent}) late. Result DISCARDED.`);
+                             return null; 
+                         }
+                         lifecycleState = 'COMPLETED';
+                         return rawResult;
+                     } catch (err) {
+                         if (lifecycleState !== 'RUNNING') return null;
+                         throw err;
+                     }
+                  })();
+
+                  const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => {
+                        if (lifecycleState === 'RUNNING') {
+                            lifecycleState = 'ORPHANED';
+                            abortController.abort(new Error('TIMEOUT_ABORT'));
+                            reject(new Error('HARD_TIMEOUT_REACHED'));
+                        }
+                    }, PER_PLUGIN_TIMEOUT_MS);
+                  });
+                  
+                  const result = await Promise.race([isolatedExecutionPromise, timeoutPromise]) as any;
+                  
+                  if (lifecycleState !== 'COMPLETED') throw new Error('GATING_VALIDATION_FAILED');
+                  
+                  subagentResText = result?.output || '';
+                  subagentSources = result?.sources || [];
+                  subagentToolExec = result?.toolExecution || null;
+                  
+                  const durationMs = Date.now() - startTime;
+                  const outputPreview = (subagentResText || '').substring(0, 80).replace(/\n/g, ' ');
+                  processingSteps.push(`✅ [Tier ${tierIdx+1}] "${subagent}" selesai (${durationMs}ms)${subagentSources.length > 0 ? ` → ${subagentSources.length} sumber referensi` : ''} → "${outputPreview}..."`);
+               } catch (err: any) {
+                  const durationMs = Date.now() - startTime;
+                  const status = err.message === 'HARD_TIMEOUT_REACHED' ? 'timeout' : 'fail';
+                  
+                  subagentToolExec = { status: lifecycleState, safe_fallback: true, error_classification: status === 'timeout' ? "TIMEOUT_GATED" : "EXECUTION_ERROR" };
+                  
+                  if (status === 'timeout') {
+                    subagentResText = `[SISTEM DILINDUNGI OLEH MAMET HEALER]: Eksekusi sub-agent "${subagent}" dibatalkan permanen (Hard Timeout ${PER_PLUGIN_TIMEOUT_MS/1000}s).`;
+                    processingSteps.push(`⏳ [Tier ${tierIdx+1}] "${subagent}" tereliminasi (Hard Timeout Gated)`);
+                  } else {
+                    subagentResText = `[SISTEM DILINDUNGI OLEH MAMET HEALER]: Eksekusi sub-agent gagal pada mode terisolasi (${err.message || 'Unknown'}).`;
+                    processingSteps.push(`❌ [Tier ${tierIdx+1}] "${subagent}" gagal terisolasi: ${err.message || 'Unknown'}`);
+                  }
+               }
+               return { subagent, task, subagentResText, subagentSources, subagentToolExec };
+            });
+
+            // Tunggu semua tugas di tier ini selesai (Partial Result Aggregation)
+            const tierResults = await Promise.allSettled(tierPromises);
+
+            // Akumulasi hasil untuk Tier berikutnya
+            for (const outcome of tierResults) {
+                if (outcome.status === 'fulfilled') {
+                    const res = outcome.value;
+                    subagentRuns.push({ subagent: res.subagent, task: res.task, output: res.subagentResText, sources: res.subagentSources, toolExecution: res.subagentToolExec });
+                    accumulatedContext += `--- Hasil Sub-Agent [${res.subagent.toUpperCase()}]: ---\nTugas: ${res.task}\nOutput: ${res.subagentResText}\n\n`;
+                }
+            }
+            
+            // Penundaan ringan antar Tier untuk Rate Limit LLM
+            if (tierIdx < executionTiers.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
         }
 
         const synthesisPrompt = `Anda telah menugaskan beberapa sub-agent.${fullSystemContext}\n\nPermintaan Awal User: "${finalMessage}"\n\nRiwayat pekerjaan sub-agent:\n${accumulatedContext}\n\nJAWABLAH pesan/pertanyaan user dengan ramah dan natural berdasarkan informasi dari sub-agent di atas. \n\nPENTING: \n- JANGAN gunakan format kaku seperti "Laporan Hasil Kerja". Bersikaplah seperti manusia biasa (asisten yang ramah bernama Mamet).\n- Langsung berikan jawaban, sapaan balik, atau solusi tanpa perlu panjang lebar menjelaskan proses sub-agent (kecuali user secara spesifik bertanya tentang prosesnya).\n- Jika pada riwayat pekerjaan sub-agent terdapat bagian "Gambar Terkait" (dalam format Markdown ![Gambar](url)), Anda WAJIB menyertakan gambar-gambar tersebut di bagian paling akhir jawaban Anda untuk memberikan visualisasi kepada user.\n- Jika Sub-Agent mengembalikan pesan ERROR atau GAGAL, sampaikan kepada user dengan sopan bahwa tugas tersebut gagal. Jangan pernah mengarang data palsu!\n- Gunakan format Tabel Markdown HANYA jika menyajikan data terstruktur, statistik, harga, atau perbandingan.\n- DILARANG KERAS menggunakan blok \`\`\`mermaid\`\`\` KECUALI user secara tertulis meminta "buatkan diagram" atau "gambarkan flowchart". Jika user tidak meminta diagram, JANGAN pernah memakainya!`;
@@ -1202,7 +1328,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
         if (ENABLE_ASYNC_MEMORY_WRITE) {
             const supUrl = Deno.env.get('SUPABASE_URL') || '';
             const supKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-            await processMemoryWriteQueue(userId, finalMessage, supUrl, supKey).catch(e => console.error(e));
+            await safeFireAndTrack('MemoryWriteQueue_A', processMemoryWriteQueue(userId, finalMessage, supUrl, supKey));
         }
 
         if (stream && !extractedImage) {
@@ -1224,7 +1350,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
       if (ENABLE_ASYNC_MEMORY_WRITE) {
           const supUrl = Deno.env.get('SUPABASE_URL') || '';
           const supKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-          await processMemoryWriteQueue(userId, finalMessage, supUrl, supKey).catch(e => console.error(e));
+          await safeFireAndTrack('MemoryWriteQueue_B', processMemoryWriteQueue(userId, finalMessage, supUrl, supKey));
       }
 
       if (stream && !extractedImage) {
@@ -1233,6 +1359,11 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
         if (streamRes) return streamRes;
       }
       replyMessage = await runLLM(finalMessage, fullSystemContext, history);
+    }
+
+    // Phase 5: Guarantee async delivery before sending JSON response
+    if (pendingBackgroundTasks.length > 0) {
+       await Promise.allSettled(pendingBackgroundTasks);
     }
 
     const aiResponse = {

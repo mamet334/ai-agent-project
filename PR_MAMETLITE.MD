@@ -69,3 +69,35 @@ Saat ini Mamet Full dan Mametlite berbagi tabel `documents`. Jika dokumen dari M
 
 **Disetujui oleh:** 
 Forensic Runtime Auditor AI
+
+---
+
+# Update 23 Juni 2026: Execution Engine Stabilization (Phase 4-6)
+
+**Tipe:** Architecture Hardening / Zero-Infra Optimization
+
+## 📌 Deskripsi Pembaruan
+Seiring dengan pemisahan *Mametlite*, backend monolitik Mamet (`agent-process/index.ts`) telah menjalani transformasi total pada lapisan *Orchestration* & *Execution* untuk mencegah *freeze*, *zombie tasks*, dan *memory leaks* tanpa memerlukan infrastruktur tambahan.
+
+## 🚀 Perbaikan Utama
+
+### 1. Parallel Tier Execution (Dependency-Aware Graph)
+- **Problem:** Eksekusi sebelumnya sekuensial; satu plugin lambat (seperti *web scraper*) akan memblokir seluruh respon.
+- **Fix:** Menjadwalkan plugin independen (scraper, youtube_analyst) ke dalam antrean (Tiers) yang dijalankan secara paralel dengan `Promise.allSettled`.
+
+### 2. Hard Isolation Gating (Anti-Zombie Tasks)
+- **Problem:** Fitur *timeout* sebelumnya (*Promise.race*) hanya mengabaikan janji asinkron, tetapi koneksi `fetch` tetap memakan *resource* CPU.
+- **Fix:** Mengikat `abortController.signal` ke semua `executeContext.env.fetch`. Jika *Timeout* 12 detik tersentuh, sisa eksekusi plugin langsung dihancurkan pada level jaringan. Hasil yang datang terlambat (Zombie) ditolak lewat `if (lifecycleState !== 'COMPLETED') throw Error`.
+
+### 3. Reliable Async Delivery Layer
+- **Problem:** Pengiriman log RAG dan *Memories* sering hilang jika Edge Function mati sebelum eksekusi asinkron (`floating promise`) selesai.
+- **Fix:** Seluruh eksekusi latar belakang dibungkus dalam utilitas baru `safeFireAndTrack(taskName, promise)`. Fungsi dipaksa menunggu hingga *Stream Controller* ditutup atau respons terakhir siap dikirim.
+
+### 4. Deterministic Multi-Tenant Isolation
+- **Problem:** Raw Email dari token sering kali tidak konsisten karena kapitalisasi atau sisa spasi, merusak pencarian data.
+- **Fix:** Normalisasi `userId = userId.toLowerCase().trim();` wajib diterapkan sebagai gerbang akses sebelum membaca tabel Supabase RAG (*Row Level Security*).
+
+## ✅ Kriteria Penerimaan Akhir
+- [x] Fungsi RAG dan Memori sepenuhnya berjalan secara deterministik dan aman antar-user.
+- [x] Eksekusi sub-agent dijamin maksimal 12 detik tanpa menyisakan proses siluman (*zombie*).
+- [x] Tidak ada penurunan kinerja UI / API Response Shape dari sisi Klien.
