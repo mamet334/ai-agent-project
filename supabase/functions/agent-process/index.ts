@@ -5,6 +5,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { retrieveMemories } from './plugins/memory_manager_v1.ts';
 import { buildContextFusion } from './lib/context_fusion.ts';
 import { runSelfHealingLoopAsync } from './plugins/self_healing.ts';
+import { processMemoryWriteQueue } from './memory_write_worker.ts';
 
 async function getGeminiEmbedding(text: string, geminiKey: string): Promise<number[]> {
   try {
@@ -1196,8 +1197,12 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
         processingSteps.push('📝 Merangkum dan menyintesis jawaban akhir...');
         
         // --- MEMORY MANAGER (BACKGROUND SAVE) ---
-        // Kita hanya mengambil 'message' murni agar hemat token
-        // --- [REMOVED] MEMORY MANAGER DUPLICATE CALL ---
+        const ENABLE_ASYNC_MEMORY_WRITE = Deno.env.get('ENABLE_ASYNC_MEMORY_WRITE') !== 'false';
+        if (ENABLE_ASYNC_MEMORY_WRITE) {
+            const supUrl = Deno.env.get('SUPABASE_URL') || '';
+            const supKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+            processMemoryWriteQueue(userId, finalMessage, supUrl, supKey).catch(e => console.error(e));
+        }
 
         if (stream && !extractedImage) {
           const streamRes = getStreamResponse(synthesisPrompt, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps });
@@ -1214,7 +1219,12 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
       }
     } else {
       // --- MEMORY MANAGER (BACKGROUND SAVE - DIRECT RESPONSE) ---
-      // --- [REMOVED] MEMORY MANAGER DUPLICATE CALL ---
+      const ENABLE_ASYNC_MEMORY_WRITE = Deno.env.get('ENABLE_ASYNC_MEMORY_WRITE') !== 'false';
+      if (ENABLE_ASYNC_MEMORY_WRITE) {
+          const supUrl = Deno.env.get('SUPABASE_URL') || '';
+          const supKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+          processMemoryWriteQueue(userId, finalMessage, supUrl, supKey).catch(e => console.error(e));
+      }
 
       if (stream && !extractedImage) {
         processingSteps.push('✍️ Menjawab langsung (tanpa tools)...');
