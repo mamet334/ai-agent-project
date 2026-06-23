@@ -1068,7 +1068,7 @@ Jawab HANYA dengan satu kata: "CHAT_BIASA" atau "BUTUH_AGENT".`;
       } else {
         let coordinatorSystemPrompt = `Tugas Anda adalah menganalisis permintaan user dan memilih sub-agent yang tepat.
 Anda memiliki tim Sub-Agent nyata berikut ini:
-${getPluginPromptList(tools, desktopOSMode)}
+${getPluginPromptList(tools)}
 
 PENTING:
 1. Anda adalah mesin parsing JSON. Anda DILARANG KERAS merespons dengan kalimat atau teks biasa. Anda WAJIB mengembalikan HANYA sebuah Array JSON murni. Jika tidak butuh sub-agent, kembalikan [].
