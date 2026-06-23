@@ -24,7 +24,7 @@ class MainOrchestrator {
 
     // Optimasi task
     const strategy = this.tokenSaver.analyzeTask(task);
-    task.prompt = this.tokenSaver.optimizePrompt(task.prompt);
+    // task.prompt = this.tokenSaver.optimizePrompt(task.prompt); // DISABLED FOR CAUSAL AUDIT
 
     // Eksekusi dengan batasan token
     try {

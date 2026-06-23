@@ -39,7 +39,7 @@ class MainOrchestrator {
 
     try {
       strategy = this.tokenSaver.analyzeTask(task);
-      optimizedPrompt = this.tokenSaver.optimizePrompt(task.prompt);
+      // optimizedPrompt = this.tokenSaver.optimizePrompt(task.prompt); // DISABLED FOR CAUSAL AUDIT
     } catch (err) {
       console.warn('[Orchestrator] TokenSaver error, pakai default', err);
       // tetap pakai prompt asli dan strategy default
