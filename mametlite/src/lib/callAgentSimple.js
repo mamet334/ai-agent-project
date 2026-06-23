@@ -66,7 +66,7 @@ export async function callAgentSimple(
   const payload = {
     message,
     tools: effectiveTools,
-    model: 'gemini-2.0-flash', // Model default untuk mametlite (diperbaiki dari 2.5 yang belum rilis)
+    model: 'gemini-2.5-flash', // Model default untuk mametlite
     userId,
     userName,
     ragEnabled,
