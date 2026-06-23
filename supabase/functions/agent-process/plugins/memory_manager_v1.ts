@@ -141,8 +141,14 @@ export const retrieveMemories = async (userPrompt, userId, supabaseUrl, supabase
   try {
     const supabase = createClient(supabaseUrl, supabaseKey);
     console.log('[COST LEAK DETECTION] memoryFetchCount: 1');
-    // Ambil max 15 memory terakhir, filter deprecated di kode agar kompatibel dengan schema pra-Level 5
-    let { data } = await supabase.from('user_memories').select('id, summary, created_at, memory_hits, memory_type, confidence, source, is_deprecated, memory_state, causal_links, reasoning_depth_score, justification_chain').eq('user_id', userId).order('created_at', { ascending: false }).limit(15);
+    // Safe select to avoid missing column PostgREST errors (PGRST204)
+    let { data, error } = await supabase.from('user_memories').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(15);
+    
+    if (error) {
+       console.error('[MEMORY_RETRIEVAL_ERROR] DB Query failed:', error);
+       return [];
+    }
+    
     if (!data || data.length === 0) return [];
     
     // Filter out Level 5 deprecated memories safely
