@@ -46,7 +46,10 @@ export function buildContextFusion({ memoryArray = [], ragArray = [], message = 
   
   if (finalMemory.length > 0) {
     finalContext += '\n\n[MEMORY - PRIORITY 3]\n';
-    finalContext += finalMemory.map(m => `- ${m.content}`).join('\n');
+    finalContext += finalMemory.map(m => {
+       const stateTag = m.memory_state === 'HISTORICAL' ? '[HISTORICAL] ' : '';
+       return `- ${stateTag}${m.content}`;
+    }).join('\n');
   }
 
   if (finalRag.length > 0) {
