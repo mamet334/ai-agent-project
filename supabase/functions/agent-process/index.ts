@@ -1201,7 +1201,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
         if (ENABLE_ASYNC_MEMORY_WRITE) {
             const supUrl = Deno.env.get('SUPABASE_URL') || '';
             const supKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-            processMemoryWriteQueue(userId, finalMessage, supUrl, supKey).catch(e => console.error(e));
+            await processMemoryWriteQueue(userId, finalMessage, supUrl, supKey).catch(e => console.error(e));
         }
 
         if (stream && !extractedImage) {
@@ -1223,7 +1223,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
       if (ENABLE_ASYNC_MEMORY_WRITE) {
           const supUrl = Deno.env.get('SUPABASE_URL') || '';
           const supKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-          processMemoryWriteQueue(userId, finalMessage, supUrl, supKey).catch(e => console.error(e));
+          await processMemoryWriteQueue(userId, finalMessage, supUrl, supKey).catch(e => console.error(e));
       }
 
       if (stream && !extractedImage) {
