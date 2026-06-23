@@ -1,6 +1,6 @@
 export default {
   name: 'file_analyzer',
-  description: 'WORKSPACE EDITOR: Membaca, menganalisis, MEMODIFIKASI, dan MEMBUAT file/folder baru di dalam Workspace lokal user. Sangat cocok untuk mengedit kode proyek, membuat file dokumen, dan merombak struktur folder secara otomatis.',
+  description: 'WORKSPACE EDITOR: HANYA GUNAKAN JIKA user SECARA EKSPLISIT meminta membaca file lokal, mengedit kode, mengecek hardisk, atau merombak folder di komputer mereka. JANGAN PERNAH gunakan tool ini untuk mencari informasi umum, menjawab pertanyaan, atau mencari data yang tidak secara jelas disebutkan ada di hardisk lokal.',
   execute: async ({ task, accumulatedContext, runLLM }) => {
     try {
       // Cari konten workspace yang sudah di-inject oleh frontend

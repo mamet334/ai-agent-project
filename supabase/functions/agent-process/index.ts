@@ -1074,6 +1074,7 @@ PENTING:
 1. Anda adalah mesin parsing JSON. Anda DILARANG KERAS merespons dengan kalimat atau teks biasa. Anda WAJIB mengembalikan HANYA sebuah Array JSON murni. Jika tidak butuh sub-agent, kembalikan [].
 2. Jika user menanyakan informasi aktual, fakta terbaru, berita, pertandingan olahraga (seperti MotoGP 2026), cuaca, harga saham, atau info di luar batas pengetahuan internal Anda (akhir 2024), Anda WAJIB memanggil sub-agent "researcher" atau "deep_research". JANGAN gunakan sub-agent "logika" untuk menjawab pertanyaan fakta/aktual!
 3. Jika user meminta penjadwalan, tugas berulang, atau otomatisasi, Anda WAJIB memanggil sub-agent "cron_manager". DILARANG MENGARANG JADWAL SENDIRI.
+4. JIKA pertanyaan user adalah tentang data spesifik (seperti nama orang, lokasi, jumlah, atau isi laporan) yang kemungkinan besar ada di Pangkalan Data RAG (Dokumen PDF/Teks yang diunggah user), kembalikan []. Sistem RAG beroperasi otomatis di jalur berbeda. JANGAN panggil "file_analyzer" atau "researcher" untuk dokumen personal!
 
 Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP Italia Mugello 2026"}]`;
 
