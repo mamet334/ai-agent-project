@@ -31,20 +31,31 @@ export const processMemoryWriteQueue = async (
     // 1. FACT DETECTOR GATE
     const detectorResult = detectFact(userMessage);
 
-    if (!detectorResult.shouldSaveMemory) {
-       await logAudit('SKIPPED', detectorResult.intent, detectorResult.confidence, detectorResult.reason);
+    // MEMORY WRITE RULE (CRITICAL): ONLY allowed if intent == FACT and memory_eligible == true
+    if (!detectorResult.memory_eligible || detectorResult.intent !== 'FACT') {
+       await logAudit('SKIPPED', detectorResult.intent, detectorResult.score, detectorResult.reason);
+       return;
+    }
+
+    // SKIP WRITE FOR EPHEMERAL EVENTS
+    if (detectorResult.memory_type === 'EVENT') {
+       await logAudit('SKIPPED', 'FACT', detectorResult.score, 'Event detected, ephemeral memory skipped');
        return;
     }
 
     const msgLower = userMessage.trim().toLowerCase();
     
     let extractedFact = userMessage.trim();
-    let memoryType = 'FACT';
+    let memoryType = detectorResult.memory_type || detectorResult.tier; // Uses Semantic Types or fallback to T1, T2, T3
 
-    if (msgLower.includes('suka') || msgLower.includes('alergi') || msgLower.includes('benci')) {
-        memoryType = 'PREFERENCE';
-    } else if (msgLower.includes('nama') || msgLower.includes('panggil')) {
-        memoryType = 'IDENTITY';
+    // 2.5. STATE TRANSITION FOR EXCLUSIVE TYPES
+    if (memoryType === 'LOCATION' || memoryType === 'JOB') {
+        await supabase
+          .from('user_memories')
+          .update({ memory_state: 'HISTORICAL' })
+          .eq('user_id', userId)
+          .eq('memory_type', memoryType)
+          .neq('memory_state', 'HISTORICAL');
     }
 
     // 2. DEDUPLICATION LAYER
@@ -56,9 +67,9 @@ export const processMemoryWriteQueue = async (
       .limit(1);
 
     if (existing && existing.length > 0) {
-       const newConfidence = Math.min(1.0, (existing[0].confidence || 0.8) + 0.1);
+       const newConfidence = Math.min(1.0, (existing[0].confidence || detectorResult.score) + 0.1);
        await supabase.from('user_memories').update({ confidence: newConfidence }).eq('id', existing[0].id);
-       await logAudit('DEDUPED', 'FACT', 0.9, 'Duplikat, confidence naik');
+       await logAudit('DEDUPED', 'FACT', detectorResult.score, 'Duplikat, confidence naik');
        return;
     }
 
@@ -67,11 +78,12 @@ export const processMemoryWriteQueue = async (
       user_id: userId,
       content: extractedFact,
       memory_type: memoryType,
-      confidence: 0.9,
-      source: 'rule_based_async_worker'
+      confidence: detectorResult.score,
+      source: 'rule_based_async_worker',
+      memory_state: 'ACTIVE'
     }, supabaseUrl, supabaseKey);
 
-    await logAudit('STORED', 'FACT', 0.9, 'Pola baru cocok dan tersimpan');
+    await logAudit('STORED', 'FACT', detectorResult.score, detectorResult.reason);
   } catch (error) {
     await logAudit('REJECTED', 'UNKNOWN', 0.0, `System Error: ${error}`);
   }

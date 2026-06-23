@@ -15,7 +15,7 @@ const logMemoryAudit = (supabaseUrl, supabaseKey, payload) => {
 };
 
 export const saveFactDirectly = async (
-  payload: { user_id: string, content: string, memory_type: string, confidence: number, source: string }, 
+  payload: { user_id: string, content: string, memory_type: string, confidence: number, source: string, memory_state?: string }, 
   supabaseUrl: string, 
   supabaseKey: string
 ) => {
@@ -29,6 +29,7 @@ export const saveFactDirectly = async (
     memory_type: payload.memory_type,
     confidence: payload.confidence,
     source: payload.source,
+    memory_state: payload.memory_state || 'ACTIVE',
     embedding: null
   }]).select('id').single();
 
@@ -141,8 +142,12 @@ export const retrieveMemories = async (userPrompt, userId, supabaseUrl, supabase
   try {
     const supabase = createClient(supabaseUrl, supabaseKey);
     console.log('[COST LEAK DETECTION] memoryFetchCount: 1');
+    const promptLower = userPrompt.toLowerCase();
+    const isTemporalQuery = ['sebelum', 'dulu', 'pernah', 'awal', 'terakhir'].some(w => promptLower.includes(w));
+    const dbLimit = isTemporalQuery ? 50 : 15;
+    
     // Safe select to avoid missing column PostgREST errors (PGRST204)
-    let { data, error } = await supabase.from('user_memories').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(15);
+    let { data, error } = await supabase.from('user_memories').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(dbLimit);
     
     if (error) {
        console.error('[MEMORY_RETRIEVAL_ERROR] DB Query failed:', error);
@@ -187,13 +192,18 @@ export const retrieveMemories = async (userPrompt, userId, supabaseUrl, supabase
        const relevanceScore = score;
        const confidenceScore = mem.confidence || 1.0;
        const ageDays = (Date.now() - new Date(mem.created_at).getTime()) / (1000 * 60 * 60 * 24);
-       const recencyScore = Math.max(0, 100 - (ageDays * 2));
+       let recencyScore = Math.max(0, 100 - (ageDays * 2));
        const frequencyScore = Math.min(100, (mem.memory_hits || 0) * 10);
        
        // STRICT COGNITIVE STATE ENFORCEMENT
        let stateModifier = 0;
        if (mem.memory_state === 'STABILIZED') stateModifier = 15.0;
        else if (mem.memory_state === 'CONFLICTED') stateModifier = -20.0;
+       else if (mem.memory_state === 'HISTORICAL') stateModifier = isTemporalQuery ? 20.0 : -10.0; // Boost historical for temporal queries
+
+       if (isTemporalQuery) {
+           recencyScore = Math.min(100, ageDays * 2); // Reverse decay: older is better
+       }
        
        const cognitiveDepth = (mem.reasoning_depth_score || 0) * 10.0;
        const truthVerification = (mem.truth_verification_score || 0) * 10.0;
@@ -204,9 +214,16 @@ export const retrieveMemories = async (userPrompt, userId, supabaseUrl, supabase
        return { ...mem, score: finalScore, decayScore: recencyScore, frequencyScore, finalScore };
     });
     
-    // Sort by score (descending) and take top 5
+    // Sort by score (descending) and take dynamic top K
     scoredMemories.sort((a, b) => b.score - a.score);
-    const topMemories = scoredMemories.slice(0, 5);
+    
+    // DYNAMIC TOP-K
+    let dynamicTopK = 5;
+    if (isTemporalQuery) dynamicTopK = 10;
+    else if (['suka', 'favorit', 'makanan', 'minuman'].some(w => promptLower.includes(w))) dynamicTopK = 8;
+    else if (['tinggal', 'dimana', 'lokasi'].some(w => promptLower.includes(w))) dynamicTopK = 3;
+
+    const topMemories = scoredMemories.slice(0, dynamicTopK);
     
     // No legacy score===0 fallback anymore. Adaptive formula guarantees >0 score for any valid memory.
     
