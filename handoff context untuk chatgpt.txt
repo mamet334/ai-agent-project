@@ -91,3 +91,10 @@ LAST UPDATE SNAPSHOT Phase 8 (Runtime Truth Sync):
 - Status: Handoff Document dirombak ulang 100% untuk mengikuti realitas kode produksi, menghapus seluruh klaim Phantom Code (Decision Engine, Semantic Bridge).
 - Pipeline Truth: Procedural Monolith + Fail-Fast Execution.
 - Risk notes: None. Dokumen kini adalah cerminan identik dari runtime yang hidup.
+
+============================================================
+LAST UPDATE SNAPSHOT Phase 9 (Hardening & Observability):
+- Timestamp: 2026-06-24 01:10:00 WIB
+- Status: Implementasi Execution Policy Layer, Unified Execution Context, Structured Reasoning Layer (Context Fusion), dan Auth Binding Layer (JWT override).
+- Pipeline Truth: Procedural Monolith dengan Auth Server-Authoritative, Dynamic RAG TopK/Threshold, dan Structured Prompt Serialization.
+- Risk notes: Frontend telah dikonfigurasi untuk mengirim token JWT aktif (bukan Anon Key) agar lolos dari Auth Binding Layer (401).
