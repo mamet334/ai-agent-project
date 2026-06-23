@@ -209,24 +209,47 @@ serve(async (req) => {
 
     const isRagEnabled = ragEnabled !== false;
 
-    // === RISK GATE (FASE 4C) ===
-    const RISK_GATE_ENABLED = true;
-    function riskGate(input: { message: string, tools?: string[], ragEnabled?: boolean, userId?: string }): "ALLOW" | "ALLOW_WITH_LIMIT" | "BLOCK" {
-      if (!RISK_GATE_ENABLED) return "ALLOW";
+    // === EXECUTION POLICY LAYER (FASE 4C) ===
+    const POLICY_LAYER_ENABLED = true;
+    
+    type ExecutionPolicy = {
+      decision: "ALLOW" | "ALLOW_WITH_LIMIT" | "BLOCK",
+      config: { toolsEnabled: boolean, ragTopK: number, webSearchEnabled: boolean, subAgentEnabled: boolean },
+      flags: { injectionRisk: boolean, abuseRisk: boolean, overRetrievalRisk: boolean }
+    };
+
+    function buildExecutionPolicy(input: { message: string }): ExecutionPolicy {
+      const defaultPolicy: ExecutionPolicy = {
+        decision: "ALLOW",
+        config: { toolsEnabled: true, ragTopK: 5, webSearchEnabled: true, subAgentEnabled: true },
+        flags: { injectionRisk: false, abuseRisk: false, overRetrievalRisk: false }
+      };
+
+      if (!POLICY_LAYER_ENABLED) return defaultPolicy;
+
       let riskScore = 0;
       const lowerMsg = (input.message || '').toLowerCase();
       
       // 1. INJECTION DETECTION (HIGH RISK)
       const injectionPatterns = ["ignore previous instructions", "system prompt", "developer mode", "reveal memory", "bypass"];
-      if (injectionPatterns.some(p => lowerMsg.includes(p))) riskScore += 3;
+      if (injectionPatterns.some(p => lowerMsg.includes(p))) {
+        riskScore += 3;
+        defaultPolicy.flags.injectionRisk = true;
+      }
       
       // 2. TOOL ABUSE DETECTION (MEDIUM RISK)
       const toolAbusePatterns = ["recursive agent requests", "infinite search loops", "mass retrieval requests"];
-      if (toolAbusePatterns.some(p => lowerMsg.includes(p))) riskScore += 2;
+      if (toolAbusePatterns.some(p => lowerMsg.includes(p))) {
+        riskScore += 2;
+        defaultPolicy.flags.abuseRisk = true;
+      }
       
       // 3. OVER-RETRIEVAL DETECTION
       const overRetrievalPatterns = ["all data", "dump all", "entire database"];
-      if (overRetrievalPatterns.some(p => lowerMsg.includes(p))) riskScore += 2;
+      if (overRetrievalPatterns.some(p => lowerMsg.includes(p))) {
+        riskScore += 2;
+        defaultPolicy.flags.overRetrievalRisk = true;
+      }
       
       // 4. MALFORMED INPUT CHECK
       if (lowerMsg.length > 5000) riskScore += 1;
@@ -234,16 +257,24 @@ serve(async (req) => {
       const uniqueWords = new Set(words);
       if (words.length > 100 && uniqueWords.size < words.length * 0.1) riskScore += 1;
       
-      if (riskScore >= 4) return "BLOCK";
-      if (riskScore >= 2) return "ALLOW_WITH_LIMIT";
-      return "ALLOW";
+      // 5. EVALUATE POLICY
+      if (riskScore >= 4) {
+        defaultPolicy.decision = "BLOCK";
+        defaultPolicy.config = { toolsEnabled: false, ragTopK: 0, webSearchEnabled: false, subAgentEnabled: false };
+      } else if (riskScore >= 2) {
+        defaultPolicy.decision = "ALLOW_WITH_LIMIT";
+        defaultPolicy.config = { toolsEnabled: false, ragTopK: 2, webSearchEnabled: false, subAgentEnabled: false };
+      }
+      
+      return defaultPolicy;
     }
 
-    const gateResult = riskGate({ message, tools, ragEnabled: isRagEnabled, userId });
+    const policy = buildExecutionPolicy({ message });
     
-    if (gateResult === "BLOCK") {
-      console.warn(`[RISK GATE] Blocked request from user ${userId} due to HIGH risk score.`);
-      const blockMsg = "Permintaan ditolak oleh Sistem Keamanan (Risk Gate). Deteksi injeksi atau pola berbahaya.";
+    // ENFORCEMENT BLOCK
+    if (policy.decision === "BLOCK") {
+      console.warn(`[EXECUTION POLICY] Blocked request from user ${userId} due to HIGH risk. Flags:`, policy.flags);
+      const blockMsg = "Permintaan ditolak oleh Sistem Kebijakan Eksekusi. Deteksi injeksi atau pola berbahaya.";
       if (!stream) {
         return new Response(JSON.stringify({ message: blockMsg }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       } else {
@@ -258,13 +289,13 @@ serve(async (req) => {
       }
     }
     
-    let effectiveRagMatchCount = 5;
-    if (gateResult === "ALLOW_WITH_LIMIT") {
-      console.warn(`[RISK GATE] Applied limits to user ${userId} due to MEDIUM risk score.`);
-      effectiveRagMatchCount = 2;
-      if (tools && Array.isArray(tools)) {
-         tools = []; // disable tools temporarily
-      }
+    if (policy.decision === "ALLOW_WITH_LIMIT") {
+      console.warn(`[EXECUTION POLICY] Applied limits to user ${userId} due to MEDIUM risk. Flags:`, policy.flags);
+    }
+
+    let effectiveRagMatchCount = policy.config.ragTopK;
+    if (!policy.config.toolsEnabled && tools && Array.isArray(tools)) {
+       tools = []; // Menerapkan kebijakan secara eksplisit
     }
 
     // === CIRCUIT BREAKER (FASE 4B) ===
