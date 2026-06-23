@@ -185,6 +185,13 @@ serve(async (req) => {
     // untuk mencegah race condition atau data bocor antar user.
     if (userId && typeof userId === 'string') {
         userId = userId.toLowerCase().trim();
+        // FAIL-FAST: UUID VALIDATION
+        const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!UUID_REGEX.test(userId)) {
+            return new Response(JSON.stringify({ error: "FATAL_ERROR: Invalid userId format. Must be a UUID." }), {
+                status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        }
     }
 
     console.log("[L1] frontend payload", { userId, message: message ? message.substring(0, 50) + '...' : null });
@@ -800,7 +807,13 @@ serve(async (req) => {
                    break;
                  }
                  lastErr = `HTTP ${attempt.status}`;
-               } catch(e: any) { lastErr = e.message; }
+                 if (attempt.status === 404 || attempt.status === 400) {
+                     throw new Error(`FATAL_CLIENT_ERROR: Gemini Model Not Found or Bad Request. ${lastErr}`);
+                 }
+               } catch(e: any) { 
+                 lastErr = e.message; 
+                 if (lastErr.includes('FATAL_CLIENT_ERROR')) throw e;
+               }
              }
              if (!res) throw new Error(`Gemini exhausted. Last error: ${lastErr}`);
              if (fallbackNote) enqueueStr(`\n\n*(Fallback Note: ${fallbackNote})*\n\n`);
@@ -819,6 +832,7 @@ serve(async (req) => {
           };
 
           const closeSafely = async () => {
+             try { controller.enqueue(new TextEncoder().encode(`data: [DONE]\n\n`)); } catch (e) {}
              controller.close();
              if (pendingBackgroundTasks.length > 0) {
                  await Promise.allSettled(pendingBackgroundTasks);
@@ -841,6 +855,10 @@ serve(async (req) => {
             try {
                await tryGemini(); await closeSafely(); return;
             } catch(e1: any) {
+               if (e1.message.includes('FATAL_CLIENT_ERROR')) {
+                   enqueueStr(`\n\n**[SYSTEM HALTED] Client Error:** ${e1.message}\n\n`);
+                   await closeSafely(); return;
+               }
                console.warn("Cascade: Gemini failed:", e1.message);
                try {
                   await tryGroq("Gemini sedang limit, ini otak cadangan Groq"); await closeSafely(); return;
@@ -890,12 +908,19 @@ serve(async (req) => {
             p_user_id: userId
           });
 
-          if (!matchError && matchedDocs && matchedDocs.length > 0) {
+          if (matchError) {
+             throw new Error(`RAG_DB_FAIL: ${matchError.message}`);
+          }
+
+          if (matchedDocs && matchedDocs.length > 0) {
             ragArray = matchedDocs.map((doc: any) => ({ type: 'rag', content: `[Dari file "${doc.title}"]: "${doc.content}"`, score: 2 }));
           }
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("RAG Search Error:", err);
+        if (err.message && err.message.includes("RAG_DB_FAIL")) {
+            throw err; // Lempar ke outer catch agar request putus dan mengirimkan HTTP 500
+        }
       }
     }
     console.log(`[RAG CONTEXT GENERATED] ragArray size=${ragArray.length}`);
