@@ -23,7 +23,8 @@ Realitas Eksekusi Mamet AI adalah sebuah Skrip Monolitik Prosedural yang berjala
 Sistem memproses setiap HTTP request dalam langkah linear berikut:
 
 1. [GATEKEEPER LAYER]
-   - UUID Validation Gate: Menolak format non-UUID secara langsung (HTTP 400 Fail-Fast).
+   - Auth Binding Layer: Ekstrak JWT aktif, tolak request tanpa token valid (401), menimpa `userId` dari payload dengan Server Identity (AUTH_USER_ID) untuk mencegah IDOR.
+   - Execution Policy Layer: Menghitung skor risiko untuk memblokir prompt injection atau membatasi akses eksekusi.
    - Circuit Breaker: Memeriksa RPC `check_daily_quota` di Supabase.
 
 2. [STATELESS SESSION]
@@ -31,14 +32,13 @@ Sistem memproses setiap HTTP request dalam langkah linear berikut:
    - Frontend mengirimkan riwayat percakapan (`history`) mentah-mentah ke backend di setiap request.
 
 3. [DATA RETRIEVAL LAYER]
-   - Memory Engine: Menjalankan `retrieveMemories()` untuk mengambil data mentah via RPC `match_user_memories`. Supabase = SINGLE SOURCE OF TRUTH.
-   - RAG Fetcher: Menjalankan RPC `match_documents` jika `ragEnabled: true`.
+   - Dikontrol oleh Unified Execution Context (mengatur batas RAG TopK dan Threshold).
+   - Memory Engine: Menjalankan `retrieveMemories()` secara eksklusif menggunakan `AUTH_USER_ID`.
+   - RAG Fetcher: Menjalankan RPC `match_documents` secara eksklusif menggunakan `AUTH_USER_ID`.
 
 4. [CONTEXT FUSION LAYER] (`context_fusion.ts`)
-   - Bukan "Cognitive Governor". Ini adalah modul string-builder prosedural murni.
-   - Menyaring duplikasi string mentah via `seenContent.add()`.
-   - Menerapkan hard-cap manual (10.000 chars untuk Memori, 15.000 chars untuk RAG).
-   - Menyusun Final Prompt secara sekuensial (Memory = Priority 3, RAG = Priority 2).
+   - Structured Reasoning Layer: Mengubah hasil Memory dan RAG menjadi objek JSON hierarkis terstruktur (Tahap 1).
+   - Prompt Serialization: Merangkai objek konteks secara deterministik ke dalam string dengan blok delimiter tegas untuk mencegah tumpang tindih data RAG vs Memory (Tahap 2).
 
 5. [SUB-AGENT / PLUGIN ROUTER]
    - Jika payload berisi `tools`, memanggil spesifik fungsi eksternal (Web Search, YouTube Analyst).
@@ -56,7 +56,7 @@ Sistem memproses setiap HTTP request dalam langkah linear berikut:
 🚧 3. MASALAH TERBUKA & LIMITASI AKTUAL
 ============================================================
 
-- Ungoverned RAG Bypass: Data RAG disuntikkan nyaris tanpa filtrasi matematis/semantik yang solid selama tidak ada string exact match yang berbenturan dengan Memory.
+- Database RLS Bypass: Penggunaan `SUPABASE_SERVICE_ROLE_KEY` di backend mem-bypass RLS. Beruntung, implementasi Auth Binding Layer telah berhasil memitigasi IDOR di level Edge Function (Server-Authoritative), namun koneksi ke Postgres secara idealnya tetap harus menggunakan `supabase.auth` client langsung.
 - Procedural Scaling: Karena `agent-process/index.ts` adalah monolith yang sangat panjang (1400+ baris), perawatannya menjadi rawan regresi.
 - Phantom Codebase: Adanya folder `/lib` yang tidak terpakai menyebabkan kebingungan struktural.
 - Belum ada vector/embedding semantic intelligence murni di dalam layer penyusunan memori itu sendiri.
