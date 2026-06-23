@@ -1,25 +1,15 @@
 export function buildContextFusion({ memoryArray = [], ragArray = [], message = '', basePrompts = '' }) {
-  // STRICT SCORING GATE: Only items with valid numeric scores are allowed
-  const allContexts = [
-    ...memoryArray.map(m => ({ ...m, priorityType: 3, totalWeight: m.score * 3, content: m.content || m.summary || '' })),
-    ...ragArray.map(r => ({ ...r, priorityType: 2, totalWeight: r.score * 2, content: r.content || '' }))
-  ].filter(c => typeof c.totalWeight === 'number' && !isNaN(c.totalWeight) && c.content.trim() !== '');
-
-  // Ranking absolut berdasarkan kombinasi bobot dan skor dinamis
-  allContexts.sort((a, b) => b.totalWeight - a.totalWeight);
-
-  // Seleksi TOP-K yang paling relevan (k = 7)
-  const topKContexts = allContexts.slice(0, 7);
-
-  // Filter duplicate substring if needed inside topK
+  // 1. Process Memory (ALWAYS INJECTED / NON-COMPETITIVE)
   const finalMemory = [];
-  const finalRag = [];
   const seenContent = new Set();
   let currentChars = basePrompts.length;
 
-  for (const item of topKContexts) {
+  const validMemory = memoryArray
+    .map(m => ({ ...m, content: m.content || m.summary || '' }))
+    .filter(m => m.content.trim() !== '');
+
+  for (const item of validMemory) {
     const lower = item.content.toLowerCase();
-    
     let isConflict = false;
     for (const seen of seenContent) {
       if (lower.includes(seen) || seen.includes(lower)) {
@@ -27,15 +17,35 @@ export function buildContextFusion({ memoryArray = [], ragArray = [], message = 
         break;
       }
     }
-
     if (!isConflict) {
-      if (currentChars + item.content.length > 8000) continue;
-      
-      if (item.priorityType === 3) {
-        finalMemory.push(item);
-      } else {
-        finalRag.push(item);
+      if (currentChars + item.content.length > 10000) break; // Emergency safety cap
+      finalMemory.push(item);
+      seenContent.add(lower);
+      currentChars += item.content.length;
+    }
+  }
+
+  // 2. Process RAG (APPENDED WITHOUT COMPETING FOR SLOTS)
+  const finalRag = [];
+  const validRag = ragArray
+    .map(r => ({ ...r, content: r.content || '' }))
+    .filter(r => r.content.trim() !== '');
+
+  for (const item of validRag) {
+    const lower = item.content.toLowerCase();
+    let isConflict = false;
+    
+    // Cegah RAG mengulang fakta yang sudah ada di Memory
+    for (const seen of seenContent) {
+      if (lower.includes(seen) || seen.includes(lower)) {
+        isConflict = true;
+        break;
       }
+    }
+    
+    if (!isConflict) {
+      if (currentChars + item.content.length > 15000) break; // Secondary safety cap
+      finalRag.push(item);
       seenContent.add(lower);
       currentChars += item.content.length;
     }
