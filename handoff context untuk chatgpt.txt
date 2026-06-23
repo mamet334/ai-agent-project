@@ -1,4 +1,4 @@
-🧠 MAMET AI — HANDOFF CONTEXT (INSTRUCTOR SNAPSHOT v2)
+🧠 MAMET AI — HANDOFF CONTEXT (INSTRUCTOR SNAPSHOT v3)
 
 ROLE SYSTEM:
 - Mamet AI = AI assistant system yang sedang dibangun
@@ -85,16 +85,16 @@ STATUS: Non-executing, safe archive only, NO influence on runtime pipeline.
 📊 6. CURRENT SYSTEM STATUS
 ============================================================
 
-- Memory System: STABLE
-- Pipeline Architecture: CLEAN, LINEAR, LOW-LATENCY
-- System state: "Mamet AI is a stable, single-authority, memory-driven deterministic assistant system with optimized context pipeline and fully disabled legacy cognitive stack."
+- Memory System: FULLY ISOLATED & DETERMINISTIC
+- Pipeline Architecture: FAIL-FAST ORCHESTRATION ENGINE (Zero-Tolerance Fault Injection)
+- System state: "Mamet AI is a stable, single-authority, memory-driven deterministic assistant system with explicitly isolated environment for MametLite, and a hardened Edge Function pipeline that strictly terminates anomalous requests (Fail-Fast) rather than silently degrading."
 
 ============================================================
 🚧 7. MASALAH TERBUKA
 ============================================================
 
-- Belum ada vector/embedding semantic intelligence murni
-- LLM masih raw renderer (belum fully guarded secara token budget absolut)
+- Belum ada vector/embedding semantic intelligence murni (Saat ini RAG dan Memori di Edge Function berjalan independen)
+- Visibilitas token cost secara visual di frontend (UI dashboard untuk $0.50 daily limit)
 
 ============================================================
 🎯 8. TUJUAN SISTEM
@@ -117,8 +117,8 @@ Mamet AI = "Long-term autonomous assistant dengan memory kuat, behavior awarenes
 Jika digunakan di chat baru:
 
 "Continue as Mamet AI Instructor.
-Use Handoff Context v2 as system state.
-Focus on clean, single-authority production-grade architecture review."
+Use Handoff Context v3 as system state.
+Focus on clean, single-authority production-grade architecture review and enforce Fail-Fast principles."
 ============================================================
 LAST UPDATE SNAPSHOT vb00db70:
 - Timestamp: 2026-06-22 03:34:54 UTC
@@ -173,3 +173,12 @@ LAST UPDATE SNAPSHOT ve4d240f:
 - Pipeline changes: None
 - Risk notes: Schema changed in setup_memory_audit_log.sql - requires Supabase sync verification
 - System status: ACTIVE - Auto-compiled and verified.
+
+============================================================
+LAST UPDATE SNAPSHOT Phase 7:
+- Timestamp: 2026-06-23 16:15:00 UTC
+- Changed modules: supabase/functions/agent-process/index.ts, mametlite/src/lib/callAgentSimple.js
+- Architecture changes: Decoupled Mamet Full from MametLite via `appSource` boundary.
+- Execution engine changes: Implemented Fail-Fast Orchestration (UUID Validation Gate, 404/400 Model Guard, SSE closeSafely guarantees).
+- Risk notes: None. System has been production-verified via Runtime Test Harness.
+- System status: HARDENED - Zero-Tolerance Fault Injection verified.
