@@ -197,7 +197,14 @@ Karena *Control Plane* (CEBL & CSEL) dan *Execution Engine* (Subgraph Extractor)
 - **404 Provider Fix:** Menyelesaikan isu HTTP 404 dari OpenRouter dengan menghapus batasan "Anthropic-only" pada API Key OpenRouter user, sehingga mengembalikan akses ke 97% model (termasuk OpenAI).
 - **Fact Detector (HHPC):** Mengganti regex strict dengan *Hybrid Heuristic Probabilistic Classifier (HHPC)* untuk memfasilitasi deteksi intensi memori dengan natural language (support nuansa bahasa Indonesia: "juga", "aku", "sekarang"). Diimplementasikan tiering `T1`, `T2`, `T3` pada `fact_detector.ts`.
 
-### 8. KNOWN LIMITATIONS / NOT YET COMPLETED
+### 8. HUMAN-LIKE MEMORY UPGRADE (23 Juni 2026)
+- **Semantic Classification:** Meng-upgrade tipe memori statis (T1/T2) menjadi semantik penuh (`IDENTITY`, `LOCATION`, `JOB`, `PREFERENCE`, `PROJECT`, `RELATION`, `KNOWLEDGE`, `EVENT`) di dalam `fact_detector.ts`.
+- **Ephemeral Event Filter:** Menangani FPR tinggi dari kata *'makan'* dan *'minum'* dengan memasukkannya ke kategori `EVENT` dan mengimplementasikan *SKIP WRITE* di `memory_write_worker.ts` untuk mencegah polusi graf memori.
+- **State Transition (ACTIVE/HISTORICAL):** Mengatasi *Collision* pada memori eksklusif (`LOCATION`, `JOB`). Data baru tidak menimpa atau berdampingan dengan data lama, melainkan memaksa data lama bergeser ke state `HISTORICAL`.
+- **Temporal Retrieval & Reverse Decay:** Mem-bypass `recencyScore` default dan menembus limit DB (15 -> 50) ketika terdeteksi *keyword* masa lalu (*sebelum, dulu*). Memori historis yang tadinya tertumpuk kini berhasil di-*rescue*.
+- **Dynamic Top-K:** Menghapus *hard-limit* absolut `slice(0, 5)` dan menggantinya dengan logika elastis bergantung intent (`LOCATION: 3`, `PREFERENCE: 8`, `TEMPORAL: 10`).
+
+### 9. KNOWN LIMITATIONS / NOT YET COMPLETED
 - Code signing certificate belum terimplementasi (SmartScreen warning tetap ada).
 - Auto-updater infrastructure masih parsial.
 - API proxy backend belum sepenuhnya terisolasi dari frontend.
