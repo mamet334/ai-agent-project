@@ -160,7 +160,6 @@ export const retrieveMemories = async (userPrompt, userId, supabaseUrl, supabase
     data = data.filter(d => d.is_deprecated !== true);
     
     // Lightweight Scoring System (NO AI)
-    const promptLower = userPrompt.toLowerCase();
     const keywords = promptLower.split(/[\s\p{P}]+/).filter(w => w.length > 3);
     
     // Deduplikasi berdasar isi teks
