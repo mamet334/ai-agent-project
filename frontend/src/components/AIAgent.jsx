@@ -444,6 +444,7 @@ export default function AIAgent() {
   const [tools, setTools] = useState(['web_search', 'code_executor', 'api_caller']);
   const [selectedTools, setSelectedTools] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isDeveloperMode, setIsDeveloperMode] = useState(false);
   const [logs, setLogs] = useState([]);
   const [attachedFile, setAttachedFile] = useState(null);
   const [workspaceHandle, setWorkspaceHandle] = useState(null);
@@ -2244,76 +2245,79 @@ export default function AIAgent() {
               </div>
             </div>
 
-            <div className="border-t border-purple-500/20 pt-4">
-              <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
-                📈 Server Monitoring
-              </h3>
-              <p className="text-[10px] text-slate-400 mb-3 leading-tight">
-                Pantau Uptime & Performa web app.
-              </p>
-              <div className="flex flex-col gap-2">
-                <button 
-                  onClick={() => setActiveView('monitoring')}
-                  className={`w-full py-2 border rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${activeView === 'monitoring' ? 'bg-blue-500/20 text-blue-300 border-blue-500/50' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-600 hover:text-white'}`}
-                >
-                  <Activity className="w-3.5 h-3.5" /> Dashboard Monitoring
-                </button>
-              </div>
-            </div>
+            {isDeveloperMode && (
+              <>
+                <div className="border-t border-purple-500/20 pt-4">
+                  <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    📈 Server Monitoring
+                  </h3>
+                  <p className="text-[10px] text-slate-400 mb-3 leading-tight">
+                    Pantau Uptime & Performa web app.
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    <button 
+                      onClick={() => setActiveView('monitoring')}
+                      className={`w-full py-2 border rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${activeView === 'monitoring' ? 'bg-blue-500/20 text-blue-300 border-blue-500/50' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-600 hover:text-white'}`}
+                    >
+                      <Activity className="w-3.5 h-3.5" /> Dashboard Monitoring
+                    </button>
+                  </div>
+                </div>
 
-            {/* Billing & Quota Section */}
-            <div className="border-t border-purple-500/20 pt-4">
-              <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
-                💳 Billing & Quota
-              </h3>
-              <p className="text-[10px] text-slate-400 mb-3 leading-tight">
-                Pantau pengeluaran token AI harian.
-              </p>
-              <div className="flex flex-col gap-2">
-                <button 
-                  onClick={() => setActiveView('billing')}
-                  className={`w-full py-2 border rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${activeView === 'billing' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-600 hover:text-white'}`}
-                >
-                  <DollarSign className="w-3.5 h-3.5" /> Quota Token AI
-                </button>
-              </div>
-            </div>
+                {/* Billing & Quota Section */}
+                <div className="border-t border-purple-500/20 pt-4">
+                  <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    💳 Billing & Quota
+                  </h3>
+                  <p className="text-[10px] text-slate-400 mb-3 leading-tight">
+                    Pantau pengeluaran token AI harian.
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    <button 
+                      onClick={() => setActiveView('billing')}
+                      className={`w-full py-2 border rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${activeView === 'billing' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-600 hover:text-white'}`}
+                    >
+                      <DollarSign className="w-3.5 h-3.5" /> Quota Token AI
+                    </button>
+                  </div>
+                </div>
 
-            <div className="border-t border-purple-500/20 pt-4">
-              <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
-                🛍️ Shopee Affiliate
-              </h3>
-              <p className="text-[10px] text-slate-400 mb-3 leading-tight">
-                Antrean & Auto-Post promosi Shopee.
-              </p>
-              <div className="flex flex-col gap-2">
-                <button 
-                  onClick={() => setActiveView('shopee')}
-                  className={`w-full py-2 border rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${activeView === 'shopee' ? 'bg-orange-500/20 text-orange-300 border-orange-500/50' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-600 hover:text-white'}`}
-                >
-                  <ShoppingBag className="w-3.5 h-3.5" /> Shopee Ninja
-                </button>
-                  <button
-                    onClick={() => setActiveView('observability')}
-                    className={`w-full py-2 border rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${activeView === 'observability' ? 'bg-purple-500/20 text-purple-300 border-purple-500/50' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-600 hover:text-white'}`}
-                  >
-                    <Activity className="w-4 h-4" /> Observability
-                  </button>
-                  <button
-                    onClick={() => setActiveView('memoryhealth')}
-                    className={`w-full py-2 border rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${activeView === 'memoryhealth' ? 'bg-blue-500/20 text-blue-300 border-blue-500/50' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-600 hover:text-white'}`}
-                  >
-                    <Database className="w-4 h-4" /> Mem Health
-                  </button>
-                  <button
-                    onClick={() => setActiveView('work')}
-                    className={`w-full py-2 border rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${activeView === 'work' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-600 hover:text-white'}`}
-                  >
-                    <Briefcase className="w-4 h-4" /> Work Track
-                  </button>
-
-              </div>
-            </div>
+                <div className="border-t border-purple-500/20 pt-4">
+                  <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    🛍️ Shopee Affiliate
+                  </h3>
+                  <p className="text-[10px] text-slate-400 mb-3 leading-tight">
+                    Antrean & Auto-Post promosi Shopee.
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    <button 
+                      onClick={() => setActiveView('shopee')}
+                      className={`w-full py-2 border rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${activeView === 'shopee' ? 'bg-orange-500/20 text-orange-300 border-orange-500/50' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-600 hover:text-white'}`}
+                    >
+                      <ShoppingBag className="w-3.5 h-3.5" /> Shopee Ninja
+                    </button>
+                      <button
+                        onClick={() => setActiveView('observability')}
+                        className={`w-full py-2 border rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${activeView === 'observability' ? 'bg-purple-500/20 text-purple-300 border-purple-500/50' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-600 hover:text-white'}`}
+                      >
+                        <Activity className="w-4 h-4" /> Observability
+                      </button>
+                      <button
+                        onClick={() => setActiveView('memoryhealth')}
+                        className={`w-full py-2 border rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${activeView === 'memoryhealth' ? 'bg-blue-500/20 text-blue-300 border-blue-500/50' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-600 hover:text-white'}`}
+                      >
+                        <Database className="w-4 h-4" /> Mem Health
+                      </button>
+                      <button
+                        onClick={() => setActiveView('work')}
+                        className={`w-full py-2 border rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${activeView === 'work' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-600 hover:text-white'}`}
+                      >
+                        <Briefcase className="w-4 h-4" /> Work Track
+                      </button>
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="border-t border-purple-500/20 pt-4">
               <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">
@@ -2340,9 +2344,18 @@ export default function AIAgent() {
 
           {/* Settings & User */}
           <div className="p-4 border-t border-purple-500/20 space-y-2">
-            <div className="flex items-center gap-2 px-3 py-2 text-xs text-slate-400 truncate">
-              <User className="w-4 h-4 shrink-0" />
-              <span className="truncate">{user?.email}</span>
+            <div className="flex items-center justify-between px-3 py-2 text-xs text-slate-400">
+              <div className="flex items-center gap-2 truncate">
+                <User className="w-4 h-4 shrink-0" />
+                <span className="truncate">{user?.email}</span>
+              </div>
+              <button 
+                onClick={() => setIsDeveloperMode(!isDeveloperMode)}
+                className={`p-1 rounded transition-colors ${isDeveloperMode ? 'bg-purple-500/20 text-purple-400' : 'hover:bg-slate-800'}`}
+                title="Toggle Developer Mode"
+              >
+                <Terminal className="w-3.5 h-3.5" />
+              </button>
             </div>
             <div className="flex gap-2">
               <button onClick={() => setIsSettingsModalOpen(true)} className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 text-slate-300 border border-slate-700/50 transition-all text-sm font-medium">
