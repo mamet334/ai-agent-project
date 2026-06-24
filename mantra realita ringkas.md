@@ -108,6 +108,13 @@ Sistem memori berjalan murni secara deterministik dan linear tanpa *recursive lo
   - `callAgentSimple.js` line 115: Validasi buffer sebelum `.split()`
   - `App.jsx` line 271: Optional chaining untuk session.user.email
 
+### 🛡️ KNOWLEDGE WORKSPACE ARCHITECTURE (25 JUNI 2026 - PHASE 10)
+- ✅ **Knowledge Workspace Manager:** RAG arsitektur berevolusi dari *flat-hierarchy* menjadi terspesialisasi dalam tabel `knowledge_spaces`. Terdapat tipe 'CORE' (sistem eksklusif, read-only untuk penghapusan) dan 'WORKSPACE' (sandbox dinamis pengguna).
+- ✅ **Otonomi RAG via Chat:** Memperkenalkan Sub-Agent `knowledge_manager` di *Coordinator LLM* yang memungkinkan Mamet menjalankan aksi (CREATE, SAVE, DELETE, LIST, STATS, SUMMARIZE) terhadap *workspace* langsung melalui perintah chat.
+- ✅ **Knowledge Quality Filter:** Modul `knowledge_quality_filter.ts` bertindak sebagai *guardrail* (Filter Kualitas) menggunakan model *LLM Fallback* yang memastikan hanya teks bernilai informasi (riset, laporan, SOP) yang disisipkan ke *vector store*, menolak basa-basi atau *noise*.
+- ✅ **Workspace Summaries:** Rangkuman dari tiap *workspace* dapat diekstraksi dan disimpan secara asinkron (Upsert) dalam tabel `workspace_summaries`.
+- ✅ **Safe Isolation:** Menghapus satu *workspace* secara otomatis (*ON DELETE CASCADE*) menyapu bersih tabel `documents` dan `document_chunks` di bawahnya tanpa membebani memori *Edge Function*.
+
 ### Tools Logic Fix
 - ✅ Fixed tools building dalam `handleSend()`:
   - Hanya RAG ON → `['rag_search']`
