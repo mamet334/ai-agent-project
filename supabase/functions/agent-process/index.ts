@@ -1028,7 +1028,8 @@ serve(async (req) => {
             query_embedding: queryEmbedding,
             match_threshold: effectiveRagThreshold,
             match_count: effectiveRagMatchCount,
-            p_user_id: userId
+            p_user_id: userId,
+            p_space_id: null
           });
 
           if (matchError) {
