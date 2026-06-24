@@ -109,3 +109,10 @@ LAST UPDATE SNAPSHOT vc113d8d:
 - Pipeline changes: None
 - Risk notes: Schema changed in setup_knowledge_workspace.sql - requires Supabase sync verification
 - System status: ACTIVE - Auto-compiled and verified.
+
+============================================================
+LAST UPDATE SNAPSHOT Phase 10 (Knowledge Workspace Integration):
+- Timestamp: 2026-06-25 01:10:00 WIB
+- Status: RAG Architecture berevolusi dari Flat-Hierarchy ke Knowledge Spaces (CORE vs WORKSPACE). Menambahkan Sub-agent `knowledge_manager` dan Guardrail `knowledge_quality_filter.ts`.
+- Pipeline Truth: Otonomi Chat to RAG berhasil diaktifkan dengan proteksi ketat 'CORE' Read-Only bagi agen AI. Database dimigrasi dengan ON DELETE CASCADE.
+- Risk notes: Peningkatan latency saat operasi RAG Write dari obrolan telah dimitigasi dengan filter awal agar dokumen kosong tidak dikirim.

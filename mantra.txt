@@ -310,3 +310,9 @@ P3
 - Code signing certificate belum terimplementasi (SmartScreen warning tetap ada).
 - Auto-updater infrastructure masih parsial.
 - API proxy backend belum sepenuhnya terisolasi dari frontend.
+
+#### 8. KNOWLEDGE WORKSPACE ARCHITECTURE (25 Juni 2026)
+- **Hierarchical RAG Spaces:** Migrasi dari RAG *flat* menjadi *Workspace-Based* dengan penambahan `knowledge_spaces` (CORE vs WORKSPACE). Isolasi konteks untuk Web Dev, Riset, dll.
+- **Knowledge Manager Sub-Agent:** Mamet memiliki kemampuan otonom merespons instruksi "Simpan ke ruang X", "Buat workspace Y" langsung via chat menggunakan plugin `knowledge_manager.ts`.
+- **Quality Filter Guardrail:** Fitur penyaring basa-basi sebelum vektorisasi untuk menjamin RAG bebas polusi (*noise-free*). Filter dapat dinonaktifkan per-*workspace*.
+- **Workspace Summaries:** Penambahan tabel `workspace_summaries` untuk mempercepat Mamet merangkum keseluruhan data di satu *space* tanpa memuat ribuan vektor sekaligus.
