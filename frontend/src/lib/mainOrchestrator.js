@@ -23,15 +23,15 @@ class MainOrchestrator {
       }
     }
 
-    // Cek budget
-    const estimatedTokens = task.estimatedTokens || 1000;
-    if (!this.tokenSaver.checkBudget(estimatedTokens)) {
-      return {
-        status: 'budget_exceeded',
-        error: 'Token budget exceeded',
-        stats: this.tokenSaver.getStats()
-      };
-    }
+    // Cek budget dinonaktifkan atas permintaan user
+    // const estimatedTokens = task.estimatedTokens || 1000;
+    // if (!this.tokenSaver.checkBudget(estimatedTokens)) {
+    //   return {
+    //     status: 'budget_exceeded',
+    //     error: 'Token budget exceeded',
+    //     stats: this.tokenSaver.getStats()
+    //   };
+    // }
 
     // ✅ AMANKAN panggilan ke tokenSaver (error dari analyzeTask/optimizePrompt tidak akan crash)
     let strategy = { complexity: 'low', action: 'direct' };

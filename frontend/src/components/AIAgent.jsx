@@ -2086,7 +2086,8 @@ export default function AIAgent() {
               </div>
             )}
 
-            {/* Token Stats Display */}
+            {/* Token Stats Display (Dinonaktifkan) */}
+            {/* 
             {tokenStats && (
               <div className="border-t border-purple-500/20 pt-4 mb-4">
                 <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
@@ -2127,6 +2128,7 @@ export default function AIAgent() {
                 </div>
               </div>
             )}
+            */}
 
             {/* Auto-Update Section (Electron only) */}
             {window.electronAPI && (
