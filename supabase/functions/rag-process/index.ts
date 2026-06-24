@@ -26,25 +26,53 @@ function chunkText(text: string, maxLength: number = 4500): string[] {
   return chunks.filter(c => c.length > 0);
 }
 
-// Fungsi mendapatkan Embedding dari Gemini
-async function getGeminiEmbedding(text: string, geminiKey: string): Promise<number[]> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent?key=${geminiKey}`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'models/gemini-embedding-2',
-      content: { parts: [{ text }] }
-    })
-  });
+// Global state for Round-Robin API Keys
+let geminiKeyIndex = 0;
 
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Gemini Embedding Error: ${err}`);
+// Fungsi mendapatkan Embedding dari Gemini dengan Multi-Key Rotation & Retry
+async function getGeminiEmbeddingWithRetry(text: string, allKeys: string[], maxRetries = 3): Promise<number[]> {
+  let lastError = 'Unknown error';
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    for (let ki = 0; ki < allKeys.length; ki++) {
+      const key = allKeys[(geminiKeyIndex + ki) % allKeys.length];
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent?key=${key}`;
+      
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'models/gemini-embedding-2',
+            content: { parts: [{ text }] }
+          })
+        });
+
+        if (response.ok) {
+          geminiKeyIndex = (geminiKeyIndex + ki + 1) % allKeys.length;
+          const data = await response.json();
+          return data.embedding.values;
+        }
+
+        const errText = await response.text();
+        lastError = `Status ${response.status}: ${errText}`;
+        
+        if (response.status === 429) {
+          console.warn(`Gemini key #${ki} hit 429, trying next key...`);
+          continue;
+        }
+      } catch (e: any) {
+        lastError = e.message || String(e);
+      }
+    }
+    
+    if (attempt < maxRetries - 1) {
+      const waitMs = Math.pow(2, attempt) * 1000;
+      await new Promise(r => setTimeout(r, waitMs));
+    }
   }
-
-  const data = await response.json();
-  return data.embedding.values;
+  
+  throw new Error(`Gemini Embedding Error: ${lastError}`);
 }
 
 serve(async (req) => {
@@ -64,11 +92,18 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Missing title, text, or userId' }), { status: 400, headers: corsHeaders });
     }
 
-    // Ambil API Key (mendukung BYOK)
+    // Ambil API Key (mendukung BYOK & Multi-Key)
     const keysString = Deno.env.get('GEMINI_API_KEY') || '';
-    const geminiKey = req.headers.get('x-byok-gemini') || (keysString.split(',')[0].trim());
+    const byokKey = req.headers.get('x-byok-gemini');
+    let allGeminiKeys: string[] = [];
+    
+    if (byokKey) {
+      allGeminiKeys = [byokKey.trim()];
+    } else if (keysString) {
+      allGeminiKeys = keysString.split(',').map(k => k.trim()).filter(k => k);
+    }
 
-    if (!geminiKey) {
+    if (allGeminiKeys.length === 0) {
       return new Response(JSON.stringify({ error: 'Gemini API Key is missing' }), { status: 400, headers: corsHeaders });
     }
 
@@ -99,7 +134,7 @@ serve(async (req) => {
       if (chunk.trim() === '') continue;
       
       try {
-        const embeddingVector = await getGeminiEmbedding(chunk, geminiKey);
+        const embeddingVector = await getGeminiEmbeddingWithRetry(chunk, allGeminiKeys);
         
         // Simpan chunk ke database
         const { error: chunkError } = await supabaseClient
