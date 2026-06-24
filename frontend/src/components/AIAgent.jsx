@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe, Clock, Copy, Check, BrainCircuit, Trash2, Edit2, Download, FolderOpen, AlertTriangle, Activity, DollarSign, ShoppingBag, Database, Briefcase } from 'lucide-react';
+import { Send, Code2, Zap, GitBranch, MessageCircle, Settings, Plus, Menu, X, LogOut, User, Lock, Mail, Paperclip, FileText, Image as ImageIcon, Globe, Clock, Copy, Check, BrainCircuit, Trash2, Edit2, Download, FolderOpen, AlertTriangle, Activity, DollarSign, ShoppingBag, Database, Briefcase, Terminal } from 'lucide-react';
 import { supabase } from '../supabase';
 import MonitoringDashboard from './MonitoringDashboard';
 import ObservabilityDashboard from './ObservabilityDashboard';
