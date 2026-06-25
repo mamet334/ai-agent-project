@@ -1414,7 +1414,8 @@ export default function AIAgent() {
           stream: true,
           history: optimizedTask.context,
           workspaceTarget: 'AUTO',
-          localWorkspaceEnabled: !!(workspaceHandle || desktopWorkspacePath)
+          localWorkspaceEnabled: !!(workspaceHandle || desktopWorkspacePath),
+          auditMode: localStorage.getItem('mamet_audit') || 'OFF'
         };
 
         // Hardcode ke Supabase Edge Function agar tidak terganggu oleh konfigurasi Vercel yang salah
