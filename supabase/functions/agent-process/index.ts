@@ -257,7 +257,7 @@ serve(async (req) => {
       const ctx: UnifiedExecutionContext = {
         mode,
         security: { decision: "ALLOW", toolsEnabled: true, injectionRisk: false, abuseRisk: false },
-        rag: { topK: mode === "LITE" ? 5 : 5, threshold: 0.60, allowLongDocs: true, compressionLevel: "low" },
+        rag: { topK: mode === "LITE" ? 10 : 5, threshold: 0.60, allowLongDocs: true, compressionLevel: "low" },
         execution: { memoryPriority: "memory_first", webSearchEnabled: true, subAgentEnabled: true },
         trace: { riskScore: 0, retrievalStrategy: isRagEnabled ? "hybrid" : "none", timestamp: Date.now() }
       };
@@ -1247,7 +1247,7 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
     let userContextPrompt = userName ? `\nInformasi Akun: User login dengan email/nama "${userName}". Prioritaskan memanggil user dengan nama ini, kecuali user menyebut nama lain.` : '';
     
     // --- MEMORY MANAGER (RETRIEVAL) ---
-    let memoryArray = await retrieveMemories(finalMessage, userId, Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', GEMINI_API_KEY);
+    let memoryArray = mode === "LITE" ? [] : await retrieveMemories(finalMessage, userId, Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', GEMINI_API_KEY);
     if (!Array.isArray(memoryArray)) memoryArray = [];
     
     const memoryPrompt = globalMemory ? `\n\n[MEMORI GLOBAL & PREFERENSI USER]:\n${globalMemory}\n(Patuhi instruksi/ingatan di atas secara ketat di setiap jawaban Anda!)` : '';
@@ -1641,7 +1641,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
         if (ENABLE_ASYNC_MEMORY_WRITE) {
             const supUrl = Deno.env.get('SUPABASE_URL') || '';
             const supKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-            await safeFireAndTrack('MemoryWriteQueue_A', processMemoryWriteQueue(userId, finalMessage, supUrl, supKey));
+            if (mode !== "LITE") await safeFireAndTrack('MemoryWriteQueue_A', processMemoryWriteQueue(userId, finalMessage, supUrl, supKey));
         }
 
         if (stream && !extractedImage) {
@@ -1663,7 +1663,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
       if (ENABLE_ASYNC_MEMORY_WRITE) {
           const supUrl = Deno.env.get('SUPABASE_URL') || '';
           const supKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-          await safeFireAndTrack('MemoryWriteQueue_B', processMemoryWriteQueue(userId, finalMessage, supUrl, supKey));
+          if (mode !== "LITE") await safeFireAndTrack('MemoryWriteQueue_B', processMemoryWriteQueue(userId, finalMessage, supUrl, supKey));
       }
 
       if (stream && !extractedImage) {
