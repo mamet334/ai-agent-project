@@ -2579,7 +2579,7 @@ export default function AIAgent() {
             <>
               {/* Messages */}
               <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-40">
-                <div className="max-w-3xl mx-auto w-full min-h-full flex flex-col space-y-6">
+                <div className="max-w-4xl mx-auto w-full min-h-full flex flex-col space-y-6">
                   {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center">
                 <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center mb-6 shadow-2xl">
@@ -2820,7 +2820,7 @@ export default function AIAgent() {
 
           {/* Input Area */}
           <div className="absolute bottom-0 left-0 w-full border-t border-purple-500/20 bg-slate-900/20 backdrop-blur-sm p-4 md:p-6 z-20">
-            <div className="max-w-3xl mx-auto w-full">
+            <div className="max-w-4xl mx-auto w-full">
             
             {/* File attachment preview */}
             {attachedFile && (
@@ -2833,7 +2833,7 @@ export default function AIAgent() {
               </div>
             )}
 
-            <div className="flex gap-2 md:gap-3 items-end">
+            <div className="bg-slate-800/50 border border-purple-500/30 rounded-2xl p-2 md:p-3 transition-all focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/20 shadow-lg">
               <input
                 type="file"
                 ref={fileInputRef}
@@ -2845,57 +2845,65 @@ export default function AIAgent() {
                   }
                 }}
               />
-              <button
-                onClick={() => fileInputRef.current?.click()}
+              
+              <textarea
+                id="chat-input"
+                value={input}
+                onChange={e => {
+                  setInput(e.target.value);
+                  const target = e.target;
+                  setTimeout(() => {
+                    target.style.height = '52px';
+                    target.style.height = `${Math.min(target.scrollHeight, 300)}px`;
+                  }, 0);
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                placeholder="Ketik permintaan atau pertanyaan... (Shift+Enter untuk baris baru)"
+                className="w-full bg-transparent border-none outline-none text-white placeholder-slate-500 min-h-[52px] max-h-[300px] resize-none overflow-y-auto scrollbar-thin scrollbar-thumb-purple-500/30 px-2 py-1"
                 disabled={loading}
-                className="p-3.5 bg-slate-800/50 hover:bg-slate-700 border border-purple-500/30 rounded-xl text-slate-400 hover:text-purple-400 transition-all focus:outline-none disabled:opacity-50 h-[50px] flex items-center justify-center"
-                title="Lampirkan Dokumen (PDF, TXT, DOCX)"
-              >
-                <Paperclip className="w-5 h-5" />
-              </button>
+                rows="1"
+              />
 
-              <button
-                onClick={handleSelectWorkspace}
-                disabled={loading}
-                className={`p-3.5 border rounded-xl transition-all focus:outline-none disabled:opacity-50 h-[50px] flex items-center justify-center ${(workspaceHandle || desktopWorkspacePath) ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/50 text-emerald-400' : 'bg-slate-800/50 hover:bg-slate-700 border-emerald-500/30 text-slate-400 hover:text-emerald-400'}`}
-                title={(workspaceHandle || desktopWorkspacePath) ? "Workspace Terhubung! Klik untuk memutuskan sambungan (hemat token)" : "Hubungkan Folder Kerja (Workspace) Sementara"}
-              >
-                <FolderOpen className="w-5 h-5" />
-              </button>
+              {/* Taskbar / Action Buttons */}
+              <div className="flex items-center justify-between mt-2 pt-2 border-t border-purple-500/20">
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={loading}
+                    className="p-2 text-slate-400 hover:text-purple-400 hover:bg-slate-700/50 rounded-xl transition-colors focus:outline-none disabled:opacity-50"
+                    title="Lampirkan Dokumen (PDF, TXT, DOCX)"
+                  >
+                    <Paperclip className="w-5 h-5" />
+                  </button>
 
-              <div className="flex-1 relative">
-                <textarea
-                  id="chat-input"
-                  value={input}
-                  onChange={e => {
-                    setInput(e.target.value);
-                    const target = e.target;
-                    setTimeout(() => {
-                      target.style.height = '52px';
-                      target.style.height = `${Math.min(target.scrollHeight, 300)}px`;
-                    }, 0);
-                  }}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                  placeholder="Ketik permintaan atau pertanyaan... (Shift+Enter untuk baris baru)"
-                  className="w-full bg-slate-800/50 border border-purple-500/30 rounded-xl px-4 py-3.5 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all text-white placeholder-slate-500 min-h-[52px] max-h-[300px] resize-none overflow-y-auto scrollbar-thin scrollbar-thumb-purple-500/30"
-                  disabled={loading}
-                  rows="1"
-                />
+                  <button
+                    onClick={handleSelectWorkspace}
+                    disabled={loading}
+                    className={`p-2 rounded-xl transition-colors focus:outline-none disabled:opacity-50 ${
+                      (workspaceHandle || desktopWorkspacePath)
+                        ? 'text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20'
+                        : 'text-slate-400 hover:text-emerald-400 hover:bg-slate-700/50'
+                    }`}
+                    title={(workspaceHandle || desktopWorkspacePath) ? "Workspace Terhubung! Klik untuk memutuskan sambungan" : "Hubungkan Folder Kerja (Workspace)"}
+                  >
+                    <FolderOpen className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <button
+                  onClick={handleSendMessage}
+                  disabled={loading || (!input.trim() && !attachedFile)}
+                  className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 disabled:from-slate-600 disabled:to-slate-600 text-white rounded-xl px-5 py-2 font-medium flex items-center gap-2 transition-all shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 disabled:shadow-none"
+                >
+                  <Send className="w-4 h-4" />
+                  <span className="hidden sm:inline">Send</span>
+                </button>
               </div>
-
-              <button
-                onClick={handleSendMessage}
-                disabled={loading || (!input.trim() && !attachedFile)}
-                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 disabled:from-slate-600 disabled:to-slate-600 text-white rounded-xl px-6 py-3 font-medium flex items-center gap-2 transition-all shadow-lg shadow-purple-500/50 hover:shadow-purple-500/70 disabled:shadow-none h-[50px]"
-              >
-                <Send className="w-4 h-4" />
-                Send
-              </button>
             </div>
             <p className="text-xs text-slate-500 mt-3">
               Active tools: {selectedTools.length > 0 ? selectedTools.join(', ') : 'none selected'}
