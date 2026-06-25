@@ -1401,8 +1401,20 @@ export default function AIAgent() {
       };
 
       const apiCall = async (optimizedTask, strategy) => {
+        let finalMessage = optimizedTask.prompt || '';
+        let finalAuditMode = localStorage.getItem('mamet_audit') || 'OFF';
+
+        // 🪄 Magic Keyword Interceptor
+        if (finalMessage.toLowerCase().includes('/audit-full')) {
+           finalAuditMode = 'FULL';
+           finalMessage = finalMessage.replace(/\/audit-full/gi, '').trim();
+        } else if (finalMessage.toLowerCase().includes('/audit')) {
+           finalAuditMode = 'BASIC';
+           finalMessage = finalMessage.replace(/\/audit/gi, '').trim();
+        }
+
         const payload = {
-          message: optimizedTask.prompt,
+          message: finalMessage,
           file: filePayload,
           tools: effectiveTools,
           model: selectedModel,
@@ -1415,7 +1427,7 @@ export default function AIAgent() {
           history: optimizedTask.context,
           workspaceTarget: 'AUTO',
           localWorkspaceEnabled: !!(workspaceHandle || desktopWorkspacePath),
-          auditMode: localStorage.getItem('mamet_audit') || 'OFF'
+          auditMode: finalAuditMode
         };
 
         // Hardcode ke Supabase Edge Function agar tidak terganggu oleh konfigurasi Vercel yang salah
