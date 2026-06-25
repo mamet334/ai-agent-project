@@ -2579,7 +2579,7 @@ export default function AIAgent() {
             <>
               {/* Messages */}
               <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-40">
-                <div className="max-w-4xl mx-auto w-full min-h-full flex flex-col space-y-6">
+                <div className="max-w-6xl mx-auto w-full min-h-full flex flex-col space-y-6">
                   {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center">
                 <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center mb-6 shadow-2xl">
@@ -2606,7 +2606,7 @@ export default function AIAgent() {
                     className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-4 duration-500`}
                   >
                     <div
-                      className={`relative max-w-[95%] md:max-w-2xl ${
+                      className={`relative max-w-[95%] md:max-w-4xl ${
                         message.type === 'user'
                           ? 'bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl rounded-tr-sm'
                           : 'bg-slate-800/50 backdrop-blur rounded-2xl rounded-tl-sm border border-purple-500/30 pb-10'
@@ -2820,7 +2820,7 @@ export default function AIAgent() {
 
           {/* Input Area */}
           <div className="absolute bottom-0 left-0 w-full border-t border-purple-500/20 bg-slate-900/20 backdrop-blur-sm p-4 md:p-6 z-20">
-            <div className="max-w-4xl mx-auto w-full">
+            <div className="max-w-6xl mx-auto w-full">
             
             {/* File attachment preview */}
             {attachedFile && (
