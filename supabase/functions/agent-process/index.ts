@@ -1039,13 +1039,31 @@ serve(async (req) => {
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
           );
+          // --- WORKSPACE BOUNDARY DETECTION ---
+          let detectedSpaceId = null;
+          const lowerMsg = message.toLowerCase();
           
+          if (lowerMsg.includes('workspace') || lowerMsg.includes('ruang') || lowerMsg.includes('space')) {
+             const { data: spaces } = await supabaseClient.from('knowledge_spaces').select('id, name').eq('user_id', userId);
+             if (spaces && spaces.length > 0) {
+                // Urutkan dari nama terpanjang agar "Observasi Pasar Freelance" dievaluasi sebelum "Observasi Pasar"
+                spaces.sort((a: any, b: any) => b.name.length - a.name.length);
+                for (const space of spaces) {
+                   if (lowerMsg.includes(space.name.toLowerCase())) {
+                      detectedSpaceId = space.id;
+                      processingSteps.push(`🔍 [RAG] Boundary Locked: "${space.name}"`);
+                      break;
+                   }
+                }
+             }
+          }
+
           const { data: matchedDocs, error: matchError } = await supabaseClient.rpc('match_documents', {
             query_embedding: queryEmbedding,
             match_threshold: effectiveRagThreshold,
             match_count: effectiveRagMatchCount,
             p_user_id: userId,
-            p_space_id: null
+            p_space_id: detectedSpaceId
           });
 
           if (matchError) {
@@ -1272,10 +1290,10 @@ PENTING:
 2. Jika user menanyakan informasi aktual, fakta terbaru, berita, pertandingan olahraga (seperti MotoGP 2026), cuaca, harga saham, atau info di luar batas pengetahuan internal Anda (akhir 2024), Anda WAJIB memanggil sub-agent "researcher" atau "deep_research". JANGAN gunakan sub-agent "logika" untuk menjawab pertanyaan fakta/aktual!
 3. Jika user meminta penjadwalan, tugas berulang, atau otomatisasi, Anda WAJIB memanggil sub-agent "cron_manager". DILARANG MENGARANG JADWAL SENDIRI.
 4. JIKA pertanyaan user adalah tentang data spesifik (nama orang, lokasi, jumlah, isi laporan) yang kemungkinan besar ada di Pangkalan Data RAG/Dokumen internal user, kembalikan []. Sistem RAG beroperasi otomatis di jalur terpisah. JANGAN panggil "researcher" (Pencarian Web) untuk mencari dokumen personal!
-5. RULE KETAT WORKSPACE vs LOKAL (ROUTING GUARD):
-- JIKA prompt mengandung kata "workspace" DAN TIDAK MENGANDUNG kata (desktop, folder, directory, hardisk), MAKA "knowledge_manager" WAJIB menjadi kandidat utama.
-- JIKA prompt mengandung kata "folder", "directory", "desktop", atau "hardisk" DAN TIDAK MENGANDUNG kata "knowledge workspace", MAKA "file_analyzer" WAJIB menjadi kandidat utama (atau balas [] pada Mode Desktop).
-
+5. RULE KETAT KNOWLEDGE WORKSPACE (MACRO VS MICRO QUERY):
+- MACRO QUERY: Jika user meminta "ringkas", "rangkum", "pola", "tren", "insight", "kesimpulan", "seluruh workspace", "semua dokumen", atau "isi workspace", Anda WAJIB memanggil "knowledge_manager" dengan instruksi yang tepat (GET_WORKSPACE_SUMMARY atau LIST_DOCUMENTS).
+- MICRO QUERY: Jika user mencari data spesifik ("cari", "siapa", "berapa", "kapan", "detail", "informasi tentang") di dalam workspace, Anda WAJIB MENGEMBALIKAN []. Sistem RAG Micro (Vector Search) akan otomatis berjalan di jalur terpisah. JANGAN panggil knowledge_manager untuk Micro Query.
+- LOKAL FOLDER: JIKA prompt mengandung kata "folder", "directory", "desktop", atau "hardisk" DAN TIDAK MENGANDUNG kata "workspace", MAKA "file_analyzer" WAJIB menjadi kandidat utama (atau balas [] pada Mode Desktop).
 Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP Italia Mugello 2026"}]`;
         
         coordinatorSystemPrompt += guardianPromptDirective;
@@ -1309,6 +1327,17 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
             plan = [];
           }
         }
+      }
+
+      // --- PATCH: Mencegah error (p.task).substring is not a function ---
+      // Jika LLM (Coordinator) memberikan object pada field task (halusinasi struktur), konversi ke string.
+      if (Array.isArray(plan)) {
+        plan = plan.map(p => {
+          if (p && typeof p.task !== 'string') {
+            p.task = typeof p.task === 'object' ? JSON.stringify(p.task) : String(p.task || "");
+          }
+          return p;
+        });
       }
 
       let accumulatedContext = `Permintaan awal user: "${finalMessage}"\n\n`;
