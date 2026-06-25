@@ -524,6 +524,81 @@ export default function AIAgent() {
   });
   const [inspectorFocusedId, setInspectorFocusedId] = useState(null);
   const [openInspectorSection, setOpenInspectorSection] = useState(null);
+  const [leftWidth, setLeftWidth] = useState(() => {
+    const stored = localStorage.getItem('mamet_left_width');
+    return stored ? parseInt(stored, 10) : 280;
+  });
+  const [rightWidth, setRightWidth] = useState(() => {
+    const stored = localStorage.getItem('mamet_right_width');
+    return stored ? parseInt(stored, 10) : 260;
+  });
+  const isResizing = useRef(null);
+
+  const startResizing = (panel, e) => {
+    e.preventDefault();
+    isResizing.current = panel;
+    document.body.style.cursor = 'col-resize';
+  };
+
+  useEffect(() => {
+    const handlePointerMove = (e) => {
+      if (!isResizing.current) return;
+      const container = document.getElementById('mamet-workspace-container');
+      if (!container) return;
+      
+      if (isResizing.current === 'left') {
+        let w = Math.max(220, Math.min(450, e.clientX));
+        container.style.setProperty('--left-width', `${w}px`);
+      } else {
+        let w = Math.max(220, Math.min(700, document.body.clientWidth - e.clientX));
+        container.style.setProperty('--right-width', `${w}px`);
+      }
+    };
+
+    const handlePointerUp = () => {
+      if (isResizing.current) {
+        const container = document.getElementById('mamet-workspace-container');
+        if (container) {
+          if (isResizing.current === 'left') {
+            const widthStr = container.style.getPropertyValue('--left-width').replace('px', '');
+            if (widthStr) {
+              localStorage.setItem('mamet_left_width', widthStr);
+              setLeftWidth(parseInt(widthStr, 10));
+            }
+          } else {
+            const widthStr = container.style.getPropertyValue('--right-width').replace('px', '');
+            if (widthStr) {
+              localStorage.setItem('mamet_right_width', widthStr);
+              setRightWidth(parseInt(widthStr, 10));
+            }
+          }
+        }
+        isResizing.current = null;
+        document.body.style.cursor = 'default';
+      }
+    };
+
+    document.addEventListener('pointermove', handlePointerMove);
+    document.addEventListener('pointerup', handlePointerUp);
+    return () => {
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, []);
+
+  const resetWidth = (panel) => {
+    const container = document.getElementById('mamet-workspace-container');
+    if (!container) return;
+    if (panel === 'left') {
+      container.style.setProperty('--left-width', '280px');
+      localStorage.setItem('mamet_left_width', '280');
+      setLeftWidth(280);
+    } else {
+      container.style.setProperty('--right-width', '260px');
+      localStorage.setItem('mamet_right_width', '260');
+      setRightWidth(260);
+    }
+  };
   const [inspectorTab, setInspectorTab] = useState('Execution');
 
   useEffect(() => {
@@ -1981,7 +2056,11 @@ export default function AIAgent() {
         </div>
       )}
 
-      <div className="relative flex h-screen overflow-hidden">
+      <div 
+        id="mamet-workspace-container"
+        className="relative flex h-screen overflow-hidden"
+        style={{ '--left-width': `${leftWidth}px`, '--right-width': `${rightWidth}px` }}
+      >
         {/* Sidebar Overlay (Mobile only) */}
         {sidebarOpen && (
           <div 
@@ -1992,7 +2071,7 @@ export default function AIAgent() {
 
         {/* Sidebar */}
         <div className={`
-          fixed inset-y-0 left-0 z-50 w-[280px] shrink-0 bg-slate-950 border-r border-purple-500/20 flex flex-col overflow-hidden transition-transform duration-300 ease-in-out
+          fixed inset-y-0 left-0 z-50 w-[280px] md:w-[var(--left-width)] shrink-0 bg-slate-950 border-r border-purple-500/20 flex flex-col overflow-hidden transition-transform duration-300 ease-in-out
           md:relative md:translate-x-0 md:bg-slate-900/50 md:backdrop-blur-md md:z-auto
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         `}>
@@ -2418,6 +2497,13 @@ export default function AIAgent() {
             </div>
           </div>
         </div>
+
+        {/* Left Resizer */}
+        <div 
+          className="hidden md:block w-1.5 cursor-col-resize hover:bg-white/10 active:bg-white/20 transition-colors z-40 shrink-0"
+          onPointerDown={(e) => startResizing('left', e)}
+          onDoubleClick={() => resetWidth('left')}
+        />
 
         {/* Main Chat Area */}
         <div className="flex-1 flex flex-col overflow-hidden w-full relative">
@@ -2960,8 +3046,15 @@ export default function AIAgent() {
           )}
         </div>
 
+        {/* Right Resizer */}
+        <div 
+          className="hidden xl:block w-1.5 cursor-col-resize hover:bg-white/10 active:bg-white/20 transition-colors z-40 shrink-0"
+          onPointerDown={(e) => startResizing('right', e)}
+          onDoubleClick={() => resetWidth('right')}
+        />
+
         {/* Right Panel (Inspector) */}
-        <div className="hidden xl:flex w-[260px] shrink-0 bg-[#0A0A0A] border-l border-white/5 flex-col overflow-hidden z-30 font-sans text-slate-300">
+        <div className="hidden xl:flex w-[var(--right-width)] shrink-0 bg-[#0A0A0A] border-l border-white/5 flex-col overflow-hidden z-30 font-sans text-slate-300">
           <div className="h-14 px-4 border-b border-white/5 flex items-center justify-between bg-[#0A0A0A] shrink-0">
             <h2 className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-2">
               Inspector
