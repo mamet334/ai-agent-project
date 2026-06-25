@@ -532,12 +532,27 @@ export default function AIAgent() {
     const stored = localStorage.getItem('mamet_right_width');
     return stored ? parseInt(stored, 10) : 260;
   });
+  const [inputHeight, setInputHeight] = useState(() => {
+    const stored = localStorage.getItem('mamet_input_height_v2');
+    return stored ? parseInt(stored, 10) : 20;
+  });
   const isResizing = useRef(null);
+  const resizeStart = useRef({ y: 0, height: 0 });
 
   const startResizing = (panel, e) => {
     e.preventDefault();
     isResizing.current = panel;
-    document.body.style.cursor = 'col-resize';
+    if (panel === 'left' || panel === 'right') {
+      document.body.style.cursor = 'col-resize';
+    } else if (panel === 'input') {
+      document.body.style.cursor = 'row-resize';
+      const container = document.getElementById('mamet-workspace-container');
+      const currentHeightStr = container?.style.getPropertyValue('--input-height') || '20px';
+      resizeStart.current = {
+        y: e.clientY,
+        height: parseInt(currentHeightStr, 10) || 20
+      };
+    }
   };
 
   useEffect(() => {
@@ -549,9 +564,14 @@ export default function AIAgent() {
       if (isResizing.current === 'left') {
         let w = Math.max(220, Math.min(450, e.clientX));
         container.style.setProperty('--left-width', `${w}px`);
-      } else {
+      } else if (isResizing.current === 'right') {
         let w = Math.max(220, Math.min(700, document.body.clientWidth - e.clientX));
         container.style.setProperty('--right-width', `${w}px`);
+      } else if (isResizing.current === 'input') {
+        const deltaY = resizeStart.current.y - e.clientY;
+        let newHeight = resizeStart.current.height + deltaY;
+        newHeight = Math.max(20, Math.min(400, newHeight));
+        container.style.setProperty('--input-height', `${newHeight}px`);
       }
     };
 
@@ -565,11 +585,17 @@ export default function AIAgent() {
               localStorage.setItem('mamet_left_width', widthStr);
               setLeftWidth(parseInt(widthStr, 10));
             }
-          } else {
+          } else if (isResizing.current === 'right') {
             const widthStr = container.style.getPropertyValue('--right-width').replace('px', '');
             if (widthStr) {
               localStorage.setItem('mamet_right_width', widthStr);
               setRightWidth(parseInt(widthStr, 10));
+            }
+          } else if (isResizing.current === 'input') {
+            const heightStr = container.style.getPropertyValue('--input-height').replace('px', '');
+            if (heightStr) {
+              localStorage.setItem('mamet_input_height_v2', heightStr);
+              setInputHeight(parseInt(heightStr, 10));
             }
           }
         }
@@ -593,10 +619,14 @@ export default function AIAgent() {
       container.style.setProperty('--left-width', '280px');
       localStorage.setItem('mamet_left_width', '280');
       setLeftWidth(280);
-    } else {
+    } else if (panel === 'right') {
       container.style.setProperty('--right-width', '260px');
       localStorage.setItem('mamet_right_width', '260');
       setRightWidth(260);
+    } else if (panel === 'input') {
+      container.style.setProperty('--input-height', '20px');
+      localStorage.setItem('mamet_input_height_v2', '20');
+      setInputHeight(20);
     }
   };
   const [inspectorTab, setInspectorTab] = useState('Execution');
@@ -2059,7 +2089,7 @@ export default function AIAgent() {
       <div 
         id="mamet-workspace-container"
         className="relative flex h-screen overflow-hidden"
-        style={{ '--left-width': `${leftWidth}px`, '--right-width': `${rightWidth}px` }}
+        style={{ '--left-width': `${leftWidth}px`, '--right-width': `${rightWidth}px`, '--input-height': `${inputHeight}px` }}
       >
         {/* Sidebar Overlay (Mobile only) */}
         {sidebarOpen && (
@@ -2695,7 +2725,7 @@ export default function AIAgent() {
           ) : (
             <>
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-40">
+              <div className="flex-1 overflow-y-auto p-4 md:p-8">
                 <div className="max-w-6xl mx-auto w-full min-h-full flex flex-col space-y-6">
                   {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center">
@@ -2951,7 +2981,7 @@ export default function AIAgent() {
           </div>
 
           {/* Input Area */}
-          <div className="absolute bottom-0 left-0 w-full border-t border-purple-500/20 bg-slate-900/20 backdrop-blur-sm p-4 md:p-6 z-20">
+          <div className="relative shrink-0 w-full border-t border-purple-500/20 bg-slate-900/20 backdrop-blur-sm p-2 md:py-3 md:px-4 z-20">
             <div className="max-w-6xl mx-auto w-full">
             
             {/* File attachment preview */}
@@ -2965,7 +2995,14 @@ export default function AIAgent() {
               </div>
             )}
 
-            <div className="bg-slate-800/50 border border-purple-500/30 rounded-2xl p-2 md:p-3 transition-all focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/20 shadow-lg">
+            <div className="bg-slate-800/50 border border-purple-500/30 rounded-2xl p-1.5 md:py-2 md:px-3 transition-all focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/20 shadow-lg relative flex flex-col">
+              {/* Top Resizer Handle */}
+              <div 
+                className="w-16 h-1 mx-auto bg-white/5 hover:bg-white/20 active:bg-white/30 rounded-full cursor-row-resize transition-colors mb-1 shrink-0"
+                onPointerDown={(e) => startResizing('input', e)}
+                onDoubleClick={() => resetWidth('input')}
+              />
+              
               <input
                 type="file"
                 ref={fileInputRef}
@@ -2985,8 +3022,8 @@ export default function AIAgent() {
                   setInput(e.target.value);
                   const target = e.target;
                   setTimeout(() => {
-                    target.style.height = '24px';
-                    target.style.height = `${Math.min(target.scrollHeight, 300)}px`;
+                    target.style.height = '20px';
+                    target.style.height = `${target.scrollHeight}px`;
                   }, 0);
                 }}
                 onKeyDown={e => {
@@ -2996,7 +3033,12 @@ export default function AIAgent() {
                   }
                 }}
                 placeholder="Ketik permintaan atau pertanyaan... (Shift+Enter untuk baris baru)"
-                className="w-full bg-transparent border-none outline-none text-white placeholder-slate-500 min-h-[24px] max-h-[300px] resize-none overflow-y-auto scrollbar-thin scrollbar-thumb-purple-500/30 px-2 py-0 mb-1"
+                className="w-full bg-transparent border-none outline-none text-white placeholder-slate-500 resize-none overflow-y-auto scrollbar-thin scrollbar-thumb-purple-500/30 px-2 py-0 mb-0"
+                style={{
+                  height: input === '' ? 'var(--input-height, 24px)' : undefined,
+                  minHeight: 'var(--input-height)',
+                  maxHeight: 'max(180px, var(--input-height))'
+                }}
                 disabled={loading}
                 rows="1"
               />
