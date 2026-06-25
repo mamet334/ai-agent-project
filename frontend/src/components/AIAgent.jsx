@@ -1148,7 +1148,7 @@ export default function AIAgent() {
 
     setInput('');
     const inputEl = document.getElementById('chat-input');
-    if (inputEl) inputEl.style.height = '52px';
+    if (inputEl) inputEl.style.height = '24px';
 
     setAttachedFile(null); // Clear early
     setLoading(true);
@@ -2853,7 +2853,7 @@ export default function AIAgent() {
                   setInput(e.target.value);
                   const target = e.target;
                   setTimeout(() => {
-                    target.style.height = '52px';
+                    target.style.height = '24px';
                     target.style.height = `${Math.min(target.scrollHeight, 300)}px`;
                   }, 0);
                 }}
@@ -2864,13 +2864,13 @@ export default function AIAgent() {
                   }
                 }}
                 placeholder="Ketik permintaan atau pertanyaan... (Shift+Enter untuk baris baru)"
-                className="w-full bg-transparent border-none outline-none text-white placeholder-slate-500 min-h-[52px] max-h-[300px] resize-none overflow-y-auto scrollbar-thin scrollbar-thumb-purple-500/30 px-2 py-1"
+                className="w-full bg-transparent border-none outline-none text-white placeholder-slate-500 min-h-[24px] max-h-[300px] resize-none overflow-y-auto scrollbar-thin scrollbar-thumb-purple-500/30 px-2 py-0 mb-1"
                 disabled={loading}
                 rows="1"
               />
 
               {/* Taskbar / Action Buttons */}
-              <div className="flex items-center justify-between mt-2 pt-2 border-t border-purple-500/20">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => fileInputRef.current?.click()}
