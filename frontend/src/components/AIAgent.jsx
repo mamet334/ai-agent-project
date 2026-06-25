@@ -2578,7 +2578,7 @@ export default function AIAgent() {
           ) : (
             <>
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
+              <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 pb-40">
                 {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center">
                 <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center mb-6 shadow-2xl">
@@ -2817,7 +2817,7 @@ export default function AIAgent() {
           </div>
 
           {/* Input Area */}
-          <div className="border-t border-purple-500/20 bg-slate-900/50 backdrop-blur-md p-4 md:p-6">
+          <div className="absolute bottom-0 left-0 w-full border-t border-purple-500/20 bg-slate-900/30 backdrop-blur-lg p-4 md:p-6 z-20">
             
             {/* File attachment preview */}
             {attachedFile && (
