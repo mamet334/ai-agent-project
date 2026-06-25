@@ -15,7 +15,9 @@ export const knowledgeManagerPlugin = {
     else if (task.includes('SAVE_TO_WORKSPACE') || taskLower.includes('simpan')) action = 'SAVE_TO_WORKSPACE';
     else if (task.includes('DELETE_WORKSPACE') || taskLower.includes('hapus')) action = 'DELETE_WORKSPACE';
     else if (task.includes('GET_WORKSPACE_STATS') || taskLower.includes('statistik')) action = 'GET_WORKSPACE_STATS';
-    else if (task.includes('UPDATE_WORKSPACE_SUMMARY') || taskLower.includes('ringkas')) action = 'UPDATE_WORKSPACE_SUMMARY';
+    else if (task.includes('UPDATE_WORKSPACE_SUMMARY')) action = 'UPDATE_WORKSPACE_SUMMARY';
+    else if (task.includes('GET_WORKSPACE_SUMMARY') || taskLower.includes('ringkasan') || taskLower.includes('pola') || taskLower.includes('kesimpulan') || taskLower.includes('tren') || taskLower.includes('insight')) action = 'GET_WORKSPACE_SUMMARY';
+    else if (task.includes('LIST_DOCUMENTS') || taskLower.includes('semua dokumen') || taskLower.includes('daftar dokumen') || taskLower.includes('isi workspace') || taskLower.includes('seluruh dokumen')) action = 'LIST_DOCUMENTS';
     
     // Ekstrak nama space (Cari string setelah kata kunci "workspace", "ruang", "space")
     let spaceName = '';
@@ -28,7 +30,7 @@ export const knowledgeManagerPlugin = {
        if (quoteMatch) spaceName = quoteMatch[1].trim();
     }
 
-    if (!spaceName && ['CREATE_WORKSPACE', 'SAVE_TO_WORKSPACE', 'DELETE_WORKSPACE', 'UPDATE_WORKSPACE_SUMMARY'].includes(action)) {
+    if (!spaceName && ['CREATE_WORKSPACE', 'SAVE_TO_WORKSPACE', 'DELETE_WORKSPACE', 'UPDATE_WORKSPACE_SUMMARY', 'GET_WORKSPACE_SUMMARY', 'LIST_DOCUMENTS'].includes(action)) {
        return { output: 'Nama workspace tidak ditemukan dalam instruksi. Mohon sebutkan nama workspace dengan jelas.', sources: [] };
     }
 
@@ -153,6 +155,35 @@ export const knowledgeManagerPlugin = {
 
            if (upsertErr) throw upsertErr;
            return { output: `Ringkasan workspace "${spaceName}" berhasil diperbarui.`, sources: [] };
+        }
+
+        case 'GET_WORKSPACE_SUMMARY': {
+           const { data: space } = await supabase.from('knowledge_spaces').select('*').eq('user_id', userId).eq('name', spaceName).single();
+           if (!space) return { output: `Workspace "${spaceName}" tidak ditemukan.`, sources: [] };
+
+           const { data: summaryData } = await supabase.from('workspace_summaries').select('summary').eq('space_id', space.id).single();
+           if (!summaryData || !summaryData.summary) {
+               return { output: `Workspace "${spaceName}" belum memiliki ringkasan global. Cobalah jalankan aksi UPDATE_WORKSPACE_SUMMARY terlebih dahulu.`, sources: [] };
+           }
+           
+           return { output: `[Ringkasan Macro Workspace "${spaceName}"]\n${summaryData.summary}`, sources: [] };
+        }
+
+        case 'LIST_DOCUMENTS': {
+           const { data: space } = await supabase.from('knowledge_spaces').select('*').eq('user_id', userId).eq('name', spaceName).single();
+           if (!space) return { output: `Workspace "${spaceName}" tidak ditemukan.`, sources: [] };
+
+           const { data: docs } = await supabase.from('documents').select('id, title, created_at').eq('space_id', space.id).order('created_at', { ascending: false });
+           
+           if (!docs || docs.length === 0) {
+               return { output: `Workspace "${spaceName}" masih kosong. Tidak ada dokumen.`, sources: [] };
+           }
+
+           let listStr = `Daftar Dokumen di Workspace "${spaceName}":\n\n`;
+           for (const d of docs) {
+               listStr += `- ${d.title} (ID: ${d.id})\n`;
+           }
+           return { output: listStr, sources: [] };
         }
 
         default:
