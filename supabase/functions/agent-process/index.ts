@@ -204,8 +204,11 @@ serve(async (req) => {
 
     const AUTH_USER_ID = user.id;
 
-    let { message, tools, model, userId: _clientUserId, userName, file, history, globalMemory, stream, desktopOSMode, ragEnabled, workspaceTarget = 'AUTO', localWorkspaceEnabled = false } = await req.json();
+    let { message, tools, model, userId: _clientUserId, userName, file, history, globalMemory, stream, desktopOSMode, ragEnabled, workspaceTarget = 'AUTO', localWorkspaceEnabled = false, auditMode = 'OFF' } = await req.json();
     
+    let routingDecision: any = null;
+    let contractValidation: any = null;
+
     // Fallback deteksi jika frontend versi lama
     if (message && (message.includes('[LOCAL FOLDER CONTENT]') || message.includes('[DESKTOP DIRECTORY ABSOLUTE PATH]'))) {
       localWorkspaceEnabled = true;
@@ -971,6 +974,58 @@ serve(async (req) => {
           };
 
           const closeSafely = async () => {
+             // --- 🔎 MAMET AI V3 LIGHT+ (AUDIT INJECTOR) ---
+             try {
+                if (safeMeta.auditMode === 'BASIC' || safeMeta.auditMode === 'FULL') {
+                    const amode = safeMeta.auditMode;
+                    const MAX_AUDIT_SUBAGENTS = 5;
+                    const shortId = (id: string | null) => id ? `${id.substring(0, 8)}...` : 'null';
+                    
+                    let auditStr = '\n\n---\n**🔍 AUDIT REPORT**\n\n';
+                    
+                    if (amode === 'BASIC') {
+                        const ragPass = safeMeta.routingDecision?.workspace_id ? 'PASS' : (safeMeta.routingDecision?.scope === 'CORE' ? 'PASS' : 'FAIL');
+                        const hasSave = safeMeta.subagentRuns?.find((r: any) => r.toolExecution?.target);
+                        
+                        auditStr += `- **Execution Contract:** ${safeMeta.contractValidation?.status || 'N/A'}\n`;
+                        auditStr += `- **Routing Scope:** ${safeMeta.routingDecision?.scope || 'N/A'}\n`;
+                        auditStr += `- **RAG Isolation:** ${ragPass}\n`;
+                        if (hasSave) auditStr += `- **Save Decision:** APPROVED\n`;
+                    } else if (amode === 'FULL') {
+                        auditStr += `**Execution Contract:**\n${safeMeta.contractValidation?.status || 'N/A'}\n\n`;
+                        
+                        auditStr += `**Routing Decision:**\nscope=${safeMeta.routingDecision?.scope || 'N/A'}\nworkspace_id=${shortId(safeMeta.routingDecision?.workspace_id)}\n\n`;
+                        
+                        auditStr += `**RAG:**\nscope=${safeMeta.routingDecision?.scope || 'N/A'}\nworkspace_id=${shortId(safeMeta.routingDecision?.workspace_id)}\nmatch_count=AUTO\n\n`;
+                        
+                        const saveTask = safeMeta.subagentRuns?.find((r: any) => r.toolExecution?.target);
+                        if (saveTask && saveTask.toolExecution) {
+                            auditStr += `**Save:**\ntarget=${saveTask.toolExecution.target}\nworkspace_id=${shortId(saveTask.toolExecution.workspace_id)}\nreason_code=${saveTask.toolExecution.reason_code}\napproved_by=${saveTask.toolExecution.approved_by}\n\n`;
+                        }
+                        
+                        if (safeMeta.subagentRuns?.length > 0) {
+                            auditStr += `**Subagent Execution:**\n`;
+                            const runs = safeMeta.subagentRuns.slice(0, MAX_AUDIT_SUBAGENTS);
+                            for (const r of runs) {
+                                auditStr += `- ${r.subagent}\n`;
+                            }
+                            if (safeMeta.subagentRuns.length > MAX_AUDIT_SUBAGENTS) {
+                                auditStr += `- ... (${safeMeta.subagentRuns.length - MAX_AUDIT_SUBAGENTS} more)\n`;
+                            }
+                        }
+                    }
+                    
+                    const MAX_AUDIT_LENGTH = 1500;
+                    if (auditStr.length > MAX_AUDIT_LENGTH) {
+                        auditStr = auditStr.substring(0, MAX_AUDIT_LENGTH) + '\n... [AUDIT_TRUNCATED]';
+                    }
+                    
+                    enqueueStr(auditStr);
+                }
+             } catch (auditErr) {
+                console.error("[Audit Injector Error]", auditErr);
+             }
+
              try { controller.enqueue(new TextEncoder().encode(`data: [DONE]\n\n`)); } catch (e) {}
              controller.close();
              if (pendingBackgroundTasks.length > 0) {
@@ -1040,7 +1095,7 @@ serve(async (req) => {
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
           );
           // 🧭 STEP 2: ROUTING DECIDER LAYER (EXPLICIT CONTROL)
-          let routingDecision = {
+          routingDecision = {
               scope: "CORE",
               workspace_id: null as string | null,
               reason_code: "DEFAULT_ROUTING"
@@ -1373,7 +1428,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
       }
 
       // 🧱 STEP 1: EXECUTION CONTRACT LAYER (LIGHT VERSION)
-      let contractValidation = { step: "VALIDATION", status: "OK", reason_code: "PASSED", normalized_plan: plan };
+      contractValidation = { step: "VALIDATION", status: "OK", reason_code: "PASSED", normalized_plan: plan };
       
       if (!Array.isArray(plan)) {
           contractValidation = { step: "VALIDATION", status: "REJECTED", reason_code: "SCHEMA_VIOLATION: Root is not an array", normalized_plan: [] };
@@ -1590,13 +1645,13 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
         }
 
         if (stream && !extractedImage) {
-          const streamRes = getStreamResponse(synthesisPrompt, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps });
+          const streamRes = getStreamResponse(synthesisPrompt, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps, auditMode, routingDecision, contractValidation });
           if (streamRes) return streamRes;
         }
         replyMessage = await runLLM(synthesisPrompt, fullSystemContext, history);
       } else {
         if (stream && !extractedImage) {
-          const streamRes = getStreamResponse(finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps });
+          const streamRes = getStreamResponse(finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps, auditMode, routingDecision, contractValidation });
           if (streamRes) return streamRes;
         }
         replyMessage = await runLLM(finalMessage, fullSystemContext, history);
@@ -1613,7 +1668,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
 
       if (stream && !extractedImage) {
         processingSteps.push('✍️ Menjawab langsung (tanpa tools)...');
-        const streamRes = getStreamResponse(finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps });
+        const streamRes = getStreamResponse(finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps, auditMode, routingDecision, contractValidation });
         if (streamRes) return streamRes;
       }
       replyMessage = await runLLM(finalMessage, fullSystemContext, history);
