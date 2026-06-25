@@ -1039,44 +1039,54 @@ serve(async (req) => {
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
           );
-          // --- WORKSPACE BOUNDARY DETECTION ---
-          let detectedSpaceId = null;
-          const lowerMsg = message.toLowerCase();
-          
+          // 🧭 STEP 2: ROUTING DECIDER LAYER (EXPLICIT CONTROL)
+          let routingDecision = {
+              scope: "CORE",
+              workspace_id: null as string | null,
+              reason_code: "DEFAULT_ROUTING"
+          };
+
           const { data: spaces } = await supabaseClient.from('knowledge_spaces').select('id, name, space_type').eq('user_id', userId);
           if (spaces && spaces.length > 0) {
+             const coreSpace = spaces.find((s: any) => s.space_type === 'CORE');
+             routingDecision.workspace_id = coreSpace ? coreSpace.id : null;
+
              const isWorkspaceQuery = lowerMsg.includes('workspace') || lowerMsg.includes('ruang') || lowerMsg.includes('space');
-             
              if (isWorkspaceQuery) {
-                // Urutkan dari nama terpanjang agar "Observasi Pasar Freelance" dievaluasi sebelum "Observasi Pasar"
                 const workspaceSpaces = spaces.filter((s: any) => s.space_type === 'WORKSPACE').sort((a: any, b: any) => b.name.length - a.name.length);
                 for (const space of workspaceSpaces) {
                    if (lowerMsg.includes(space.name.toLowerCase())) {
-                      detectedSpaceId = space.id;
-                      processingSteps.push(`🔍 [RAG] Boundary Locked: "${space.name}"`);
+                      routingDecision = {
+                          scope: "WORKSPACE",
+                          workspace_id: space.id,
+                          reason_code: "EXPLICIT_WORKSPACE_MENTION_DETECTED"
+                      };
                       break;
                    }
                 }
              }
 
-             // --- PREVENT RAG GLOBAL LEAKAGE ---
-             // Jika bukan kueri workspace spesifik, ATAU workspace tidak ditemukan, kunci ke CORE.
-             // Jangan biarkan p_space_id = null karena akan menyebabkan Global Vector Search menembus semua workspace!
-             if (!detectedSpaceId) {
-                const coreSpace = spaces.find((s: any) => s.space_type === 'CORE');
-                if (coreSpace) {
-                   detectedSpaceId = coreSpace.id;
-                   processingSteps.push(`🔍 [RAG] Default Boundary: CORE Knowledge`);
-                }
+             if (routingDecision.scope === "CORE") {
+                 routingDecision.reason_code = isWorkspaceQuery ? "WORKSPACE_NOT_FOUND_FALLBACK_TO_CORE" : "NO_EXPLICIT_WORKSPACE_DETECTED";
              }
           }
+
+          // 🧱 STEP 3: RAG HARD ISOLATION LAYER (LIGHT ENFORCEMENT)
+          // NO hidden fallback to GLOBAL RAG
+          if (!routingDecision.workspace_id) {
+             console.warn(`[RAG HARD ISOLATION] workspace_id is null. GLOBAL FALLBACK IS BLOCKED.`);
+          } else {
+             console.log(`[RAG_SCOPE_USED]: ${routingDecision.scope} | [WORKSPACE_ID]: ${routingDecision.workspace_id} | [IS_ISOLATED]: true`);
+          }
+          
+          processingSteps.push(`🔍 [Routing Decider] Scope: ${routingDecision.scope} (${routingDecision.reason_code})`);
 
           const { data: matchedDocs, error: matchError } = await supabaseClient.rpc('match_documents', {
             query_embedding: queryEmbedding,
             match_threshold: effectiveRagThreshold,
             match_count: effectiveRagMatchCount,
             p_user_id: userId,
-            p_space_id: detectedSpaceId
+            p_space_id: routingDecision.workspace_id
           });
 
           if (matchError) {
@@ -1342,26 +1352,46 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
         }
       }
 
-      // --- PATCH: Mencegah error (p.task).substring is not a function ---
+      // --- MAMET HEALER: Fallback Layer (Downgraded Priority) ---
       // Jika LLM (Coordinator) memberikan object tunggal (halusinasi struktur), bungkus ke dalam Array
       if (plan && !Array.isArray(plan) && typeof plan === 'object') {
           console.warn("[Mamet Healer] Coordinator returned an object instead of array. Coercing to Array.");
           plan = [plan];
       }
 
-      // Jika LLM (Coordinator) memberikan object pada field task (halusinasi struktur), konversi ke string.
       if (Array.isArray(plan)) {
         plan = plan.map(p => {
           if (p && typeof p.task !== 'string') {
             p.task = typeof p.task === 'object' ? JSON.stringify(p.task) : String(p.task || "");
           }
-          // --- PATCH: Mencegah error res.subagent.toUpperCase() is not a function ---
           if (p && !p.subagent) {
              console.warn(`[Mamet Healer] Missing subagent key detected in LLM output. Forcing to "UNKNOWN".`);
              p.subagent = 'UNKNOWN';
           }
           return p;
         });
+      }
+
+      // 🧱 STEP 1: EXECUTION CONTRACT LAYER (LIGHT VERSION)
+      let contractValidation = { step: "VALIDATION", status: "OK", reason_code: "PASSED", normalized_plan: plan };
+      
+      if (!Array.isArray(plan)) {
+          contractValidation = { step: "VALIDATION", status: "REJECTED", reason_code: "SCHEMA_VIOLATION: Root is not an array", normalized_plan: [] };
+      } else {
+          for (const p of plan) {
+              if (!p || typeof p !== 'object' || !p.subagent || !p.task || p.subagent === 'UNKNOWN' || p.subagent.trim() === '') {
+                  contractValidation = { step: "VALIDATION", status: "REJECTED", reason_code: `SCHEMA_VIOLATION: Missing or invalid subagent/task fields`, normalized_plan: [] };
+                  console.warn(`[Execution Contract] REJECTED: ${contractValidation.reason_code}. Object: ${JSON.stringify(p)}`);
+                  break;
+              }
+          }
+      }
+
+      if (contractValidation.status === "REJECTED") {
+          plan = []; // Block execution pipeline
+          processingSteps.push(`❌ [Execution Contract] Skema ditolak: ${contractValidation.reason_code}`);
+      } else {
+          console.log(`[Execution Contract] VALIDATED OK. Starting execution loop.`);
       }
 
       let accumulatedContext = `Permintaan awal user: "${finalMessage}"\n\n`;

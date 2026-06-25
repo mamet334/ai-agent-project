@@ -137,7 +137,17 @@ export const knowledgeManagerPlugin = {
              if (!chunkErr) successCount++;
           }
 
-          return { output: `Berhasil menyimpan informasi ke workspace "${spaceName}" (${successCount} chunks vektor).`, sources: [] };
+          // 💾 STEP 4: SAVE DECISION TRANSPARENCY LAYER
+          return { 
+             output: `Berhasil menyimpan informasi ke workspace "${spaceName}" (${successCount} chunks vektor).`, 
+             sources: [],
+             toolExecution: {
+                 target: "WORKSPACE",
+                 workspace_id: space.id,
+                 reason_code: "EXPLICIT_ROUTER_INSTRUCTION",
+                 approved_by: "SYSTEM_ROUTER"
+             }
+          };
         }
 
         case 'GET_WORKSPACE_STATS': {
