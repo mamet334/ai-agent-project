@@ -2866,8 +2866,11 @@ export default function AIAgent() {
                   value={input}
                   onChange={e => {
                     setInput(e.target.value);
-                    e.target.style.height = '52px';
-                    e.target.style.height = `${Math.min(e.target.scrollHeight, 300)}px`;
+                    const target = e.target;
+                    setTimeout(() => {
+                      target.style.height = '52px';
+                      target.style.height = `${Math.min(target.scrollHeight, 300)}px`;
+                    }, 0);
                   }}
                   onKeyDown={e => {
                     if (e.key === 'Enter' && !e.shiftKey) {
