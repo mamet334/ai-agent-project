@@ -1,14 +1,14 @@
 export default {
   name: 'file_analyzer',
-  description: 'WORKSPACE EDITOR: Membaca, menganalisis, MEMODIFIKASI, dan MEMBUAT file/folder baru di dalam Workspace lokal user. Sangat cocok untuk mengedit kode proyek, membuat file dokumen, dan merombak struktur folder secara otomatis.',
+  description: 'LOCAL FOLDER EDITOR: Membaca, menganalisis, MEMODIFIKASI, dan MEMBUAT file/folder baru di dalam direktori lokal user. Sangat cocok untuk mengedit kode proyek, membuat file dokumen, dan merombak struktur folder secara otomatis.',
   execute: async ({ task, accumulatedContext, runLLM }) => {
     try {
       // Cari konten workspace yang sudah di-inject oleh frontend
-      const workspaceMatch = accumulatedContext.match(/\[WORKSPACE FILES CONTENT\]([\s\S]*?)\[\/WORKSPACE FILES CONTENT\]/);
+      const workspaceMatch = accumulatedContext.match(/\[LOCAL FOLDER CONTENT\]([\s\S]*?)\[\/LOCAL FOLDER CONTENT\]/);
       
       if (!workspaceMatch) {
         return {
-          output: `[WORKSPACE TIDAK TERSEDIA]: User belum memilih folder kerja (Workspace) atau browser tidak mendukung File System Access API. Sampaikan ke user: "Silakan klik ikon 📁 Folder di kotak chat bawah untuk memilih folder kerja terlebih dahulu, lalu ulangi permintaan Anda."`,
+          output: `[LOCAL FOLDER TIDAK TERSEDIA]: User belum memilih folder kerja lokal atau browser tidak mendukung File System Access API. Sampaikan ke user: "Silakan klik ikon 📁 Folder di kotak chat bawah untuk memilih folder kerja terlebih dahulu, lalu ulangi permintaan Anda."`,
           toolExecution: { name: 'file_analyzer', args: { status: 'no_workspace' } }
         };
       }
@@ -17,16 +17,16 @@ export default {
       
       if (!workspaceContent || workspaceContent === 'EMPTY') {
         return {
-          output: `[WORKSPACE KOSONG]: Folder kerja yang dipilih tidak memiliki file yang bisa dibaca (atau terlalu besar). Sampaikan ke user bahwa folder tersebut kosong atau hanya berisi file biner.`,
+          output: `[LOCAL FOLDER KOSONG]: Folder kerja yang dipilih tidak memiliki file yang bisa dibaca (atau terlalu besar). Sampaikan ke user bahwa folder tersebut kosong atau hanya berisi file biner.`,
           toolExecution: { name: 'file_analyzer', args: { status: 'empty_workspace' } }
         };
       }
 
       // Gunakan LLM untuk menganalisis konten workspace sesuai tugas
-      const analyzerPrompt = `Anda adalah Sub-Agent "WORKSPACE EDITOR". Anda memiliki hak akses penuh untuk membaca, menganalisis, membuat, dan memodifikasi file di dalam folder kerja (Workspace) lokal milik user.
+      const analyzerPrompt = `Anda adalah Sub-Agent "LOCAL FOLDER EDITOR". Anda memiliki hak akses penuh untuk membaca, menganalisis, membuat, dan memodifikasi file di dalam folder kerja lokal milik user.
 Tugas Anda: ${task}
 
-Berikut adalah isi file-file dari folder kerja (Workspace) saat ini:
+Berikut adalah isi file-file dari folder kerja saat ini:
 
 ${workspaceContent}
 
@@ -52,11 +52,11 @@ PENTING UNTUK PENYIMPANAN FILE:
 - Anda bisa menulis banyak tag <file> sekaligus.
 - Selalu cantumkan <filename> di bagian atas.`;
 
-      const analysisResult = await runLLM(analyzerPrompt, 'Anda adalah Sub-Agent WORKSPACE EDITOR. Jawab dengan cerdas dan gunakan format XML jika harus menyimpan file.');
+      const analysisResult = await runLLM(analyzerPrompt, 'Anda adalah Sub-Agent LOCAL FOLDER EDITOR. Jawab dengan cerdas dan gunakan format XML jika harus menyimpan file.');
 
       return {
         output: analysisResult,
-        toolExecution: { name: 'workspace_editor', args: { status: 'success', task: task.substring(0, 100) } }
+        toolExecution: { name: 'local_folder_editor', args: { status: 'success', task: task.substring(0, 100) } }
       };
     } catch (err) {
       return { output: `File Analyzer gagal: ${err}` };
