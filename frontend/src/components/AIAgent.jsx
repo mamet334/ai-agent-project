@@ -1147,6 +1147,9 @@ export default function AIAgent() {
     const currentFileName = currentFile ? currentFile.name : null;
 
     setInput('');
+    const inputEl = document.getElementById('chat-input');
+    if (inputEl) inputEl.style.height = '52px';
+
     setAttachedFile(null); // Clear early
     setLoading(true);
     thinkingStartRef.current = Date.now();
@@ -2859,8 +2862,13 @@ export default function AIAgent() {
 
               <div className="flex-1 relative">
                 <textarea
+                  id="chat-input"
                   value={input}
-                  onChange={e => setInput(e.target.value)}
+                  onChange={e => {
+                    setInput(e.target.value);
+                    e.target.style.height = '52px';
+                    e.target.style.height = `${Math.min(e.target.scrollHeight, 300)}px`;
+                  }}
                   onKeyDown={e => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
@@ -2868,7 +2876,7 @@ export default function AIAgent() {
                     }
                   }}
                   placeholder="Ketik permintaan atau pertanyaan... (Shift+Enter untuk baris baru)"
-                  className="w-full bg-slate-800/50 border border-purple-500/30 rounded-xl px-4 py-3.5 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all text-white placeholder-slate-500 min-h-[52px] max-h-[300px] resize-y scrollbar-thin scrollbar-thumb-purple-500/30"
+                  className="w-full bg-slate-800/50 border border-purple-500/30 rounded-xl px-4 py-3.5 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all text-white placeholder-slate-500 min-h-[52px] max-h-[300px] resize-none overflow-y-auto scrollbar-thin scrollbar-thumb-purple-500/30"
                   disabled={loading}
                   rows="1"
                 />
