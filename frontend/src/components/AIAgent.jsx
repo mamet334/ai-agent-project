@@ -1320,11 +1320,11 @@ export default function AIAgent() {
           }
           
           // Inject workspace content yang akan dibaca oleh file_analyzer plugin
-          apiInput += `\n\n[WORKSPACE FILES CONTENT]${workspaceContent}[/WORKSPACE FILES CONTENT]`;
+          apiInput += `\n\n[LOCAL FOLDER CONTENT]${workspaceContent}[/LOCAL FOLDER CONTENT]`;
           
           setLogs(prev => [...prev, `✅ ${workspaceFiles.length} file workspace berhasil dimuat`]);
         } else {
-          apiInput += `\n\n[WORKSPACE FILES CONTENT]EMPTY[/WORKSPACE FILES CONTENT]`;
+          apiInput += `\n\n[LOCAL FOLDER CONTENT]EMPTY[/LOCAL FOLDER CONTENT]`;
         }
       } catch (wsErr) {
         console.error('Workspace injection error:', wsErr);
@@ -1333,7 +1333,7 @@ export default function AIAgent() {
     }
 
     if (desktopWorkspacePath) {
-      apiInput += `\n\n[DESKTOP WORKSPACE ABSOLUTE PATH]${desktopWorkspacePath}[/DESKTOP WORKSPACE ABSOLUTE PATH]\nInformasi Tambahan: Folder kerja (workspace) aktif Anda saat ini berada di direktori lokal: "${desktopWorkspacePath}". Jika Anda perlu mengakses file, mencari file, atau menjalankan perintah di workspace ini, lakukan perintah terminal (seperti cd "${desktopWorkspacePath}" diikuti perintah lainnya) terlebih dahulu.`;
+      apiInput += `\n\n[DESKTOP DIRECTORY ABSOLUTE PATH]${desktopWorkspacePath}[/DESKTOP DIRECTORY ABSOLUTE PATH]\nInformasi Tambahan: Folder kerja lokal aktif Anda saat ini berada di direktori lokal: "${desktopWorkspacePath}". Jika Anda perlu mengakses file, mencari file, atau menjalankan perintah di folder kerja ini, lakukan perintah terminal (seperti cd "${desktopWorkspacePath}" diikuti perintah lainnya) terlebih dahulu.`;
     }
 
     const userMessage = {
@@ -1392,7 +1392,7 @@ export default function AIAgent() {
         context: messages.map(m => {
           let content = m.content;
           if (m.type === 'user') {
-            content = content.replace(/\[WORKSPACE FILES CONTENT\][\s\S]*?\[\/WORKSPACE FILES CONTENT\]/g, '').trim();
+            content = content.replace(/\[LOCAL FOLDER CONTENT\][\s\S]*?\[\/LOCAL FOLDER CONTENT\]/g, '').trim();
           }
           return { role: m.type === 'user' ? 'user' : 'model', content };
         }).slice(-10),
@@ -1412,7 +1412,9 @@ export default function AIAgent() {
           desktopOSMode: isDesktopMode,
           ragEnabled: ragEnabled,
           stream: true,
-          history: optimizedTask.context
+          history: optimizedTask.context,
+          workspaceTarget: 'AUTO',
+          localWorkspaceEnabled: !!(workspaceHandle || desktopWorkspacePath)
         };
 
         // Hardcode ke Supabase Edge Function agar tidak terganggu oleh konfigurasi Vercel yang salah

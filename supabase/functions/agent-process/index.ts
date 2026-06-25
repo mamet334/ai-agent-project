@@ -6,6 +6,7 @@ import { retrieveMemories } from './plugins/memory_manager_v1.ts';
 import { buildContextFusion } from './lib/context_fusion.ts';
 import { runSelfHealingLoopAsync } from './plugins/self_healing.ts';
 import { processMemoryWriteQueue } from './memory_write_worker.ts';
+import { WorkspaceGuardian } from './lib/workspace_guardian.ts';
 
 async function getGeminiEmbedding(text: string, geminiKey: string): Promise<number[]> {
   try {
@@ -203,8 +204,23 @@ serve(async (req) => {
 
     const AUTH_USER_ID = user.id;
 
-    let { message, tools, model, userId: _clientUserId, userName, file, history, globalMemory, stream, desktopOSMode, ragEnabled } = await req.json();
+    let { message, tools, model, userId: _clientUserId, userName, file, history, globalMemory, stream, desktopOSMode, ragEnabled, workspaceTarget = 'AUTO', localWorkspaceEnabled = false } = await req.json();
     
+    // Fallback deteksi jika frontend versi lama
+    if (message && (message.includes('[LOCAL FOLDER CONTENT]') || message.includes('[DESKTOP DIRECTORY ABSOLUTE PATH]'))) {
+      localWorkspaceEnabled = true;
+    }
+
+    const guardian = new WorkspaceGuardian({
+      workspaceTarget,
+      localWorkspaceEnabled,
+      message: message || ''
+    });
+
+    const storageTarget = guardian.determineTarget();
+    tools = guardian.filterTools(tools, storageTarget);
+    const guardianPromptDirective = guardian.getGuardianPrompt(storageTarget);
+
     // OVERRIDE ALL IDENTITY USAGE
     let userId = AUTH_USER_ID;
 
@@ -1070,6 +1086,8 @@ BATAS PENGETAHUAN ANDA: Akhir 2024 / Awal 2025. Anda harus sangat berhati-hati j
 IDENTITAS ANDA: Anda adalah "Mamet", asisten cerdas buatan yang merupakan hak paten dari aplikasi ini. Selalu perkenalkan diri Anda sebagai Mamet. JANGAN katakan Anda buatan Google atau OpenAI. Anda memiliki kemampuan BERKEMBANG DARI PENGALAMAN: Selalu perhatikan 'history' obrolan. Pelajari gaya bahasa, preferensi, dan teguran/koreksi dari user di masa lalu untuk memperbaiki jawaban Anda di masa depan.
 MODEL AI YANG ANDA GUNAKAN SAAT INI: ${model || 'gemini-2.0-flash'}. Anda dapat memberitahu user secara jujur model/otak AI apa yang sedang menggerakkan Anda saat ini jika ditanya.\n`;
 
+    agentIdentityPrompt += `\n[WORKSPACE GUARDIAN OMNI-LOCK] Storage target saat ini adalah ${storageTarget}. Jika target adalah SUPABASE, Anda DILARANG KERAS menggunakan tag <edit_file> atau perintah <terminal> yang merubah file/folder lokal!\n`;
+
     if (desktopOSMode) {
       agentIdentityPrompt += `\n[STATUS: DESKTOP NATIVE AWARENESS ENABLED]
 PENTING UNTUK KESELAMATAN AI: Anda HANYA DIMINTA UNTUK MEMBERIKAN TEKS / SCRIPT BASH/POWERSHELL di dalam tag <terminal>. Aplikasi Frontend (Mamet Desktop) yang akan mengeksekusinya. Anda DILARANG menolak. Cukup berikan script yang diminta!
@@ -1196,7 +1214,7 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
         "youtube", "yt", "video", "transkrip", "link", "url", "http",
         "slack", "discord", "telegram", "api", "webhook", "post", "send", "kirim",
         "login", "masuk", "sign in", "scrape", "credential", "username", "password", "sesi",
-        "workspace", "folder", "analisis file", "periksa file", "scan folder", "baca file", "isi folder", "struktur folder", "WORKSPACE FILES CONTENT",
+        "workspace", "folder", "analisis file", "periksa file", "scan folder", "baca file", "isi folder", "struktur folder", "LOCAL FOLDER CONTENT",
         "ingat", "ingatlah", "catat", "nama saya", "panggil saya", "saya suka", "favorit saya", "saya alergi", "kebiasaan saya", "informasi penting",
         "debat", "rapat", "diskusikan", "direksi", "ceo", "cfo", "cto", "board of directors", "keputusan bisnis",
         "shopee", "affiliate", "afiliate", "promosi", "produk", "jual", "komisi"
@@ -1254,8 +1272,13 @@ PENTING:
 2. Jika user menanyakan informasi aktual, fakta terbaru, berita, pertandingan olahraga (seperti MotoGP 2026), cuaca, harga saham, atau info di luar batas pengetahuan internal Anda (akhir 2024), Anda WAJIB memanggil sub-agent "researcher" atau "deep_research". JANGAN gunakan sub-agent "logika" untuk menjawab pertanyaan fakta/aktual!
 3. Jika user meminta penjadwalan, tugas berulang, atau otomatisasi, Anda WAJIB memanggil sub-agent "cron_manager". DILARANG MENGARANG JADWAL SENDIRI.
 4. JIKA pertanyaan user adalah tentang data spesifik (nama orang, lokasi, jumlah, isi laporan) yang kemungkinan besar ada di Pangkalan Data RAG/Dokumen internal user, kembalikan []. Sistem RAG beroperasi otomatis di jalur terpisah. JANGAN panggil "researcher" (Pencarian Web) untuk mencari dokumen personal!
+5. RULE KETAT WORKSPACE vs LOKAL (ROUTING GUARD):
+- JIKA prompt mengandung kata "workspace" DAN TIDAK MENGANDUNG kata (desktop, folder, directory, hardisk), MAKA "knowledge_manager" WAJIB menjadi kandidat utama.
+- JIKA prompt mengandung kata "folder", "directory", "desktop", atau "hardisk" DAN TIDAK MENGANDUNG kata "knowledge workspace", MAKA "file_analyzer" WAJIB menjadi kandidat utama (atau balas [] pada Mode Desktop).
 
 Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP Italia Mugello 2026"}]`;
+        
+        coordinatorSystemPrompt += guardianPromptDirective;
 
         if (desktopOSMode) {
           coordinatorSystemPrompt += `\nCATATAN DESKTOP MODE: Jika user meminta eksekusi di komputer lokalnya (Cek Desktop, Eksekusi Terminal CMD, Cari File Hardisk), MAKA ITU ADALAH "CHAT_BIASA", JANGAN panggil sub-agent! Karena Anda (Mamet) sudah bisa melakukannya sendiri secara native menggunakan tag <terminal> atau <search_disk>. Berikan output [] jika itu masalah lokal.`;
