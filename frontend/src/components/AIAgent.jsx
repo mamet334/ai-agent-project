@@ -2653,7 +2653,7 @@ export default function AIAgent() {
                             }}
                             className="text-[11px] text-slate-500 hover:text-slate-300 flex items-center gap-1.5 border border-white/5 rounded-md px-2.5 py-1.5 bg-[#0A0A0A]/50 transition-colors w-max shadow-sm"
                           >
-                            <Brain className="w-3 h-3 opacity-70" /> View Reasoning
+                            <BrainCircuit className="w-3 h-3 opacity-70" /> View Reasoning
                           </button>
                         </div>
                       )}
@@ -3024,7 +3024,7 @@ export default function AIAgent() {
                     open={openInspectorSection === 'reasoning'}
                   >
                     <summary className="text-[11px] font-medium text-slate-400 p-4 cursor-pointer select-none flex items-center gap-1.5 outline-none transition-colors hover:text-slate-300">
-                      <Brain className="w-3 h-3 opacity-70" /> Reasoning
+                      <BrainCircuit className="w-3 h-3 opacity-70" /> Reasoning
                       <svg className="w-2.5 h-2.5 ml-auto group-open:rotate-180 transition-transform opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                     </summary>
                     <div className="px-4 pb-4">
