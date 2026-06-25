@@ -228,6 +228,12 @@ Karena *Control Plane* (CEBL & CSEL) dan *Execution Engine* (Subgraph Extractor)
 - ✅ **Native Flexbox Migration:** Membongkar arsitektur *Composer* dari `absolute bottom-0` (Overlay Architecture) dan memigrasikannya menjadi `relative shrink-0` di dalam *parent* `flex-col`.
 - ✅ **Zero-Overlap Bug Fix:** Menghapus *static/dynamic padding* (`pb-40`) pada *scroll container* chat. Mengandalkan hukum fisika Flexbox murni di mana *Composer* secara fisik akan mendesak area pesan ke atas saat membesar (karena *paste* prompt panjang), memastikan 100% pesan terakhir tidak akan pernah tertelan/tertutup antarmuka *input*.
 
+### 11. ADVANCED RETRIEVAL STABILIZATION (v2.1.0 - 26 Juni 2026)
+- ✅ **RAG Identity Separation (MametLite vs AI):** Memisahkan parameter `TopK` di mana LITE mengambil 10 keping dokumen (fokus bacaan luas) dan AI mengambil 5 keping (fokus memori chat). LITE kini diputus total kemampuannya untuk membaca/menulis `user_memories` (Strict Read-Only Identity).
+- ✅ **Context Fusion Limits & Semantic Chunking:** Mencabut *hard truncation* (`break`) yang memenggal paksa kepingan RAG/Memory, menggantinya dengan logika akumulasi yang lebih cerdas. Logika *chunking* di `vector_utils.ts` kini memuat 250 karakter *semantic overlap* (berhenti otomatis di batas titik/paragraf terdekat) untuk mencegah hilangnya jembatan referensi antar-pasal.
+- ✅ **Deduplication & Hybrid Re-Ranking Layer:** Mengimplementasi lapisan *Deduplication* lokal via Cosine Similarity (Word-overlap) secara efisien di `agent-process` Edge Function. Ditambah *Hybrid Re-Ranking* yang mencampur bobot `similarity` (70%), `position` (20%), dan kepadatan kata kunci dari kueri (10%) untuk menyaring sampah semantik.
+- ✅ **Deterministic Dual-Pipeline:** Web Validation di mode LITE tidak lagi dikontrol oleh ilusi *Tool Calling* semata, tetapi diatur oleh `webHint` (pendeteksi *intent* cepat berbasis Regex: `terbaru`, `2024`, dll) yang memberlakukan *Web vs RAG Comparison Contract* secara ketat ke dalam promt akhir LLM.
+
 ---
 
 > Catatan: Semua fitur di atas sudah diimplementasikan dalam kode (bukan rencana). Mametlite Lite telah bergeser dari arsitektur berbasis orchestrator ke model eksekusi stateless direct-call, dengan pemilihan tool yang disederhanakan dan overhead pre-processing yang diminimalkan.
