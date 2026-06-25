@@ -2858,14 +2858,19 @@ export default function AIAgent() {
               </button>
 
               <div className="flex-1 relative">
-                <input
-                  type="text"
+                <textarea
                   value={input}
                   onChange={e => setInput(e.target.value)}
-                  onKeyPress={e => e.key === 'Enter' && handleSendMessage()}
-                  placeholder="Ketik permintaan atau pertanyaan..."
-                  className="w-full bg-slate-800/50 border border-purple-500/30 rounded-xl px-4 py-3.5 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all text-white placeholder-slate-500 h-[50px]"
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                  placeholder="Ketik permintaan atau pertanyaan... (Shift+Enter untuk baris baru)"
+                  className="w-full bg-slate-800/50 border border-purple-500/30 rounded-xl px-4 py-3.5 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all text-white placeholder-slate-500 min-h-[52px] max-h-[300px] resize-y scrollbar-thin scrollbar-thumb-purple-500/30"
                   disabled={loading}
+                  rows="1"
                 />
               </div>
 
