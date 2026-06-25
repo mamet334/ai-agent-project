@@ -1043,17 +1043,30 @@ serve(async (req) => {
           let detectedSpaceId = null;
           const lowerMsg = message.toLowerCase();
           
-          if (lowerMsg.includes('workspace') || lowerMsg.includes('ruang') || lowerMsg.includes('space')) {
-             const { data: spaces } = await supabaseClient.from('knowledge_spaces').select('id, name').eq('user_id', userId);
-             if (spaces && spaces.length > 0) {
+          const { data: spaces } = await supabaseClient.from('knowledge_spaces').select('id, name, space_type').eq('user_id', userId);
+          if (spaces && spaces.length > 0) {
+             const isWorkspaceQuery = lowerMsg.includes('workspace') || lowerMsg.includes('ruang') || lowerMsg.includes('space');
+             
+             if (isWorkspaceQuery) {
                 // Urutkan dari nama terpanjang agar "Observasi Pasar Freelance" dievaluasi sebelum "Observasi Pasar"
-                spaces.sort((a: any, b: any) => b.name.length - a.name.length);
-                for (const space of spaces) {
+                const workspaceSpaces = spaces.filter((s: any) => s.space_type === 'WORKSPACE').sort((a: any, b: any) => b.name.length - a.name.length);
+                for (const space of workspaceSpaces) {
                    if (lowerMsg.includes(space.name.toLowerCase())) {
                       detectedSpaceId = space.id;
                       processingSteps.push(`🔍 [RAG] Boundary Locked: "${space.name}"`);
                       break;
                    }
+                }
+             }
+
+             // --- PREVENT RAG GLOBAL LEAKAGE ---
+             // Jika bukan kueri workspace spesifik, ATAU workspace tidak ditemukan, kunci ke CORE.
+             // Jangan biarkan p_space_id = null karena akan menyebabkan Global Vector Search menembus semua workspace!
+             if (!detectedSpaceId) {
+                const coreSpace = spaces.find((s: any) => s.space_type === 'CORE');
+                if (coreSpace) {
+                   detectedSpaceId = coreSpace.id;
+                   processingSteps.push(`🔍 [RAG] Default Boundary: CORE Knowledge`);
                 }
              }
           }
@@ -1330,6 +1343,12 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
       }
 
       // --- PATCH: Mencegah error (p.task).substring is not a function ---
+      // Jika LLM (Coordinator) memberikan object tunggal (halusinasi struktur), bungkus ke dalam Array
+      if (plan && !Array.isArray(plan) && typeof plan === 'object') {
+          console.warn("[Mamet Healer] Coordinator returned an object instead of array. Coercing to Array.");
+          plan = [plan];
+      }
+
       // Jika LLM (Coordinator) memberikan object pada field task (halusinasi struktur), konversi ke string.
       if (Array.isArray(plan)) {
         plan = plan.map(p => {
