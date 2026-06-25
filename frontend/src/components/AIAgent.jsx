@@ -1961,7 +1961,7 @@ export default function AIAgent() {
 
         {/* Sidebar */}
         <div className={`
-          fixed inset-y-0 left-0 z-50 w-72 bg-slate-950 border-r border-purple-500/20 flex flex-col overflow-hidden transition-transform duration-300 ease-in-out
+          fixed inset-y-0 left-0 z-50 w-[280px] shrink-0 bg-slate-950 border-r border-purple-500/20 flex flex-col overflow-hidden transition-transform duration-300 ease-in-out
           md:relative md:translate-x-0 md:bg-slate-900/50 md:backdrop-blur-md md:z-auto
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         `}>
@@ -2913,8 +2913,20 @@ export default function AIAgent() {
           </>
           )}
         </div>
-      </div>
 
+        {/* Right Panel (Inspector) */}
+        <div className="hidden xl:flex w-[320px] shrink-0 bg-slate-950 border-l border-purple-500/20 flex-col overflow-hidden z-30">
+          <div className="h-16 px-4 border-b border-purple-500/20 flex items-center justify-between bg-slate-900/50 backdrop-blur-md shrink-0">
+            <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <Activity className="w-4 h-4 text-purple-400" /> Inspector
+            </h2>
+          </div>
+          <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center justify-center text-slate-500 text-sm text-center">
+            <AlertTriangle className="w-10 h-10 mb-4 opacity-50" />
+            <p>Panel Audit & Inspector sedang dalam masa pembangunan untuk Phase 2.</p>
+          </div>
+        </div>
+      </div>
       {/* Cron Settings Modal */}
       {isCronModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
