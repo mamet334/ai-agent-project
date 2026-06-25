@@ -4,30 +4,47 @@ import { chunkText, getGeminiEmbeddingWithRetry } from '../lib/vector_utils.ts';
 
 export const knowledgeManagerPlugin = {
   name: 'knowledge_manager',
-  description: 'Gunakan untuk CRUD Workspace/Knowledge Space (buat ruang, simpan ke ruang, hapus ruang, tampilkan semua ruang, update summary ruang, dan tampilkan statistik). Contoh perintah user: "Buat workspace Saham", "Simpan ke workspace A", "Tampilkan semua workspace". Parameter JSON Wajib: "action" (ENUM: CREATE_WORKSPACE, SAVE_TO_WORKSPACE, DELETE_WORKSPACE, LIST_WORKSPACES, GET_WORKSPACE_STATS, UPDATE_WORKSPACE_SUMMARY), "space_name" (nama ruang, jika dibutuhkan), "content" (teks yang akan disimpan, jika SAVE_TO_WORKSPACE).',
+  description: 'Gunakan untuk CRUD Workspace/Knowledge Space (buat, simpan, hapus, list, update summary, statistik, ringkasan, dan daftar dokumen). Parameter JSON Wajib: "action" (ENUM: CREATE_WORKSPACE, SAVE_TO_WORKSPACE, DELETE_WORKSPACE, LIST_WORKSPACES, GET_WORKSPACE_STATS, UPDATE_WORKSPACE_SUMMARY, GET_WORKSPACE_SUMMARY, LIST_DOCUMENTS), "space_name" (nama ruang, WAJIB jika bukan LIST_WORKSPACES), "content" (teks jika SAVE_TO_WORKSPACE).',
   execute: async (context: any) => {
     const { task, env, userId, accumulatedContext } = context;
     
     // Asumsi LLM memasukkan config ke dalam task, atau kita extract via LLM lokal
-    const taskLower = task.toLowerCase();
     let action = 'LIST_WORKSPACES';
-    if (task.includes('CREATE_WORKSPACE') || taskLower.includes('buat')) action = 'CREATE_WORKSPACE';
-    else if (task.includes('SAVE_TO_WORKSPACE') || taskLower.includes('simpan')) action = 'SAVE_TO_WORKSPACE';
-    else if (task.includes('DELETE_WORKSPACE') || taskLower.includes('hapus')) action = 'DELETE_WORKSPACE';
-    else if (task.includes('GET_WORKSPACE_STATS') || taskLower.includes('statistik')) action = 'GET_WORKSPACE_STATS';
-    else if (task.includes('UPDATE_WORKSPACE_SUMMARY')) action = 'UPDATE_WORKSPACE_SUMMARY';
-    else if (task.includes('GET_WORKSPACE_SUMMARY') || taskLower.includes('ringkasan') || taskLower.includes('pola') || taskLower.includes('kesimpulan') || taskLower.includes('tren') || taskLower.includes('insight')) action = 'GET_WORKSPACE_SUMMARY';
-    else if (task.includes('LIST_DOCUMENTS') || taskLower.includes('semua dokumen') || taskLower.includes('daftar dokumen') || taskLower.includes('isi workspace') || taskLower.includes('seluruh dokumen')) action = 'LIST_DOCUMENTS';
-    
-    // Ekstrak nama space (Cari string setelah kata kunci "workspace", "ruang", "space")
     let spaceName = '';
-    const nameMatch = task.match(/(?:workspace|ruang|space) ["']?([a-zA-Z0-9_ -]+)["']?/i);
-    if (nameMatch && nameMatch[1]) {
-      spaceName = nameMatch[1].trim();
-    } else {
-       // Coba ekstrak yang ada di dalam kutip
-       const quoteMatch = task.match(/["'](.*?)["']/);
-       if (quoteMatch) spaceName = quoteMatch[1].trim();
+    
+    // Check if task is a JSON string (from the Coordinator array)
+    try {
+        if (task.trim().startsWith('{')) {
+            const parsed = JSON.parse(task);
+            if (parsed.action) action = parsed.action;
+            if (parsed.space_name) spaceName = parsed.space_name;
+            if (parsed.workspace) spaceName = parsed.workspace; // fallback
+        }
+    } catch(e) {}
+
+    const taskLower = task.toLowerCase();
+    
+    // Fallback if action is missing or stringified JSON didn't include it properly
+    if (action === 'LIST_WORKSPACES' && !task.includes('LIST_WORKSPACES')) {
+        if (task.includes('CREATE_WORKSPACE') || taskLower.includes('buat')) action = 'CREATE_WORKSPACE';
+        else if (task.includes('SAVE_TO_WORKSPACE') || taskLower.includes('simpan')) action = 'SAVE_TO_WORKSPACE';
+        else if (task.includes('DELETE_WORKSPACE') || taskLower.includes('hapus')) action = 'DELETE_WORKSPACE';
+        else if (task.includes('GET_WORKSPACE_STATS') || taskLower.includes('statistik')) action = 'GET_WORKSPACE_STATS';
+        else if (task.includes('UPDATE_WORKSPACE_SUMMARY')) action = 'UPDATE_WORKSPACE_SUMMARY';
+        else if (task.includes('GET_WORKSPACE_SUMMARY') || taskLower.includes('ringkasan') || taskLower.includes('pola') || taskLower.includes('kesimpulan') || taskLower.includes('tren') || taskLower.includes('insight')) action = 'GET_WORKSPACE_SUMMARY';
+        else if (task.includes('LIST_DOCUMENTS') || taskLower.includes('semua dokumen') || taskLower.includes('daftar dokumen') || taskLower.includes('isi workspace') || taskLower.includes('seluruh dokumen')) action = 'LIST_DOCUMENTS';
+    }
+    
+    if (!spaceName) {
+        // Ekstrak nama space (Cari string setelah kata kunci "workspace", "ruang", "space")
+        const nameMatch = task.match(/(?:workspace|ruang|space) ["']?([a-zA-Z0-9_ -]+)["']?/i);
+        if (nameMatch && nameMatch[1]) {
+          spaceName = nameMatch[1].trim();
+        } else {
+           // Coba ekstrak yang ada di dalam kutip
+           const quoteMatch = task.match(/["'](.*?)["']/);
+           if (quoteMatch) spaceName = quoteMatch[1].trim();
+        }
     }
 
     if (!spaceName && ['CREATE_WORKSPACE', 'SAVE_TO_WORKSPACE', 'DELETE_WORKSPACE', 'UPDATE_WORKSPACE_SUMMARY', 'GET_WORKSPACE_SUMMARY', 'LIST_DOCUMENTS'].includes(action)) {
