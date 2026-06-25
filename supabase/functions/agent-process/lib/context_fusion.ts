@@ -1,31 +1,29 @@
+/**
+ * Context Fusion Layer (Minimalist Edition)
+ * Structures input context to improve readability and probabilistic interpretation.
+ * Uses lightweight semantic XML-like blocks.
+ * OMITTED: HISTORY and USER_INPUT are intentionally excluded from this prompt builder
+ * because they are handled natively via the LLM API's message array in index.ts (Token duplication prevention).
+ */
+
 export function buildStructuredContext({ memoryArray = [], ragArray = [], message = '', basePrompts = '', ctx = null }) {
-  // 1. Process Memory (ALWAYS INJECTED / NON-COMPETITIVE)
+  // 1. Process Memory
   const finalMemory = [];
   const seenContent = new Set();
-  let currentChars = basePrompts.length;
 
   const validMemory = memoryArray
-    .map(m => ({ ...m, content: m.content || m.summary || '' }))
+    .map(m => ({ ...m, content: m.content || m.summary || '', memory_state: m.memory_state || 'ACTIVE' }))
     .filter(m => m.content.trim() !== '');
 
   for (const item of validMemory) {
     const lower = item.content.toLowerCase();
-    let isConflict = false;
-    for (const seen of seenContent) {
-      if (lower.includes(seen) || seen.includes(lower)) {
-        isConflict = true;
-        break;
-      }
-    }
-    if (!isConflict) {
-      if (currentChars + item.content.length > 10000) break; // Emergency safety cap
+    if (!seenContent.has(lower)) {
       finalMemory.push(item);
       seenContent.add(lower);
-      currentChars += item.content.length;
     }
   }
 
-  // 2. Process RAG (APPENDED WITHOUT COMPETING FOR SLOTS)
+  // 2. Process RAG
   const finalRag = [];
   const validRag = ragArray
     .map(r => ({ ...r, content: r.content || '' }))
@@ -33,80 +31,56 @@ export function buildStructuredContext({ memoryArray = [], ragArray = [], messag
 
   for (const item of validRag) {
     const lower = item.content.toLowerCase();
-    let isConflict = false;
-    
-    // Cegah RAG mengulang fakta yang sudah ada di Memory
-    for (const seen of seenContent) {
-      if (lower.includes(seen) || seen.includes(lower)) {
-        isConflict = true;
-        break;
-      }
-    }
-    
-    if (!isConflict) {
-      if (currentChars + item.content.length > 15000) break; // Secondary safety cap
+    if (!seenContent.has(lower)) {
       finalRag.push(item);
       seenContent.add(lower);
-      currentChars += item.content.length;
     }
   }
 
-  const structuredContext = {
+  return {
     basePrompts,
-    memory: {
-      items: finalMemory,
-      summary: finalMemory.length > 0 ? `${finalMemory.length} memory items retrieved.` : null
-    },
-    rag: {
-      documents: finalRag,
-      summary: finalRag.length > 0 ? `${finalRag.length} document chunks retrieved.` : null
-    },
-    user: {
-      intent: message ? message.substring(0, 100) : 'unknown',
-      riskFlags: ctx ? Object.keys(ctx.security).filter(k => k.includes('Risk') && ctx.security[k]) : []
-    },
-    execution: {
-      mode: ctx ? ctx.mode : 'UNKNOWN',
-      ragTopK: ctx ? ctx.rag.topK : finalRag.length
-    }
+    memory: { items: finalMemory },
+    rag: { documents: finalRag },
+    user: { intent: message ? message.substring(0, 100) : 'unknown' },
+    execution: { mode: ctx ? ctx.mode : 'UNKNOWN', ragTopK: ctx && ctx.rag ? ctx.rag.topK : finalRag.length }
   };
-
-  return structuredContext;
 }
 
-export function buildFinalPrompt(structuredContext) {
+export function buildFinalPrompt(structuredContext: any): string {
   if (!structuredContext) return '';
 
-  let finalContext = structuredContext.basePrompts || '';
+  const parts: string[] = [];
 
-  if (structuredContext.memory && structuredContext.memory.items.length > 0) {
-    finalContext += '\n\n[MEMORY CONTEXT]\n';
-    finalContext += structuredContext.memory.items.map(m => {
-       const stateTag = m.memory_state === 'HISTORICAL' ? '[HISTORICAL] ' : '';
-       return `- ${stateTag}${m.content}`;
-    }).join('\n');
+  // 1. SYSTEM BLOCK
+  if (structuredContext.basePrompts) {
+    parts.push('<SYSTEM>\n' + structuredContext.basePrompts + '\n</SYSTEM>');
   }
 
-  if (structuredContext.rag && structuredContext.rag.documents.length > 0) {
-    finalContext += '\n\n[RAG CONTEXT]\nBerikut adalah data dokumen milik user. JIKA RELEVAN dengan pertanyaan user, gunakan data ini. Jika tidak relevan, abaikan saja:\n';
-    finalContext += structuredContext.rag.documents.map(r => `- ${r.content}`).join('\n');
+  // Trace Block
+  const mode = structuredContext.execution?.mode || 'UNKNOWN';
+  const ragTopK = structuredContext.execution?.ragTopK || 0;
+  parts.push(`<EXECUTION_TRACE mode="${mode}" ragTopK="${ragTopK}" />`);
+  parts.push(`<POLICY>Relevance between Memory and RAG depends on user query context and is not globally fixed.</POLICY>`);
+
+  // 2. MEMORY BLOCK
+  if (structuredContext.memory?.items?.length > 0) {
+    const memoryStrings = structuredContext.memory.items.map((m: any) => {
+       const prefix = m.memory_state === 'HISTORICAL' ? '[HISTORICAL] ' : '';
+       return `${prefix}${m.content}`;
+    });
+    parts.push(`<MEMORY>\n${memoryStrings.join('\n')}\n</MEMORY>`);
   }
 
-  // EXECUTION CONTEXT TRACE
-  if (structuredContext.execution && structuredContext.execution.mode !== 'UNKNOWN') {
-    finalContext += `\n\n[EXECUTION CONTEXT]\nmode: ${structuredContext.execution.mode}\nragTopK: ${structuredContext.execution.ragTopK}\n`;
+  // 3. RAG BLOCK
+  if (structuredContext.rag?.documents?.length > 0) {
+    const ragStrings = structuredContext.rag.documents.map((r: any) => r.content);
+    parts.push(`<RAG>\n${ragStrings.join('\n')}\n</RAG>`);
   }
 
-  if (structuredContext.memory && structuredContext.memory.items.length > 0 && 
-      structuredContext.rag && structuredContext.rag.documents.length > 0) {
-    finalContext += '\n\n[INSTRUCTION BLOCK]\n- Memory has higher priority than RAG for user preferences or facts.\n- Resolve contradictions deterministically (ikuti MEMORY).\n';
-  }
-
-  return finalContext;
+  return parts.join('\n\n');
 }
 
-// Backward-compatible wrapper
-export function buildContextFusion(args) {
+export function buildContextFusion(args: any) {
   const structuredContext = buildStructuredContext(args);
   const finalContext = buildFinalPrompt(structuredContext);
 
