@@ -223,6 +223,11 @@ Karena *Control Plane* (CEBL & CSEL) dan *Execution Engine* (Subgraph Extractor)
 - Auto-updater infrastructure masih parsial.
 - API proxy backend belum sepenuhnya terisolasi dari frontend.
 
+### 10. UI/UX DENSITY & FLEXBOX MIGRATION (25 Juni 2026)
+- ✅ **Density Optimization:** Mengurangi *padding* struktural pada Composer secara ekstrem untuk mencapai kepadatan visual level-pro (seperti Cursor IDE / Claude).
+- ✅ **Native Flexbox Migration:** Membongkar arsitektur *Composer* dari `absolute bottom-0` (Overlay Architecture) dan memigrasikannya menjadi `relative shrink-0` di dalam *parent* `flex-col`.
+- ✅ **Zero-Overlap Bug Fix:** Menghapus *static/dynamic padding* (`pb-40`) pada *scroll container* chat. Mengandalkan hukum fisika Flexbox murni di mana *Composer* secara fisik akan mendesak area pesan ke atas saat membesar (karena *paste* prompt panjang), memastikan 100% pesan terakhir tidak akan pernah tertelan/tertutup antarmuka *input*.
+
 ---
 
 > Catatan: Semua fitur di atas sudah diimplementasikan dalam kode (bukan rencana). Mametlite Lite telah bergeser dari arsitektur berbasis orchestrator ke model eksekusi stateless direct-call, dengan pemilihan tool yang disederhanakan dan overhead pre-processing yang diminimalkan.
