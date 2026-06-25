@@ -522,6 +522,8 @@ export default function AIAgent() {
     const stored = localStorage.getItem('ai_agent_rag_enabled');
     return stored !== null ? stored === 'true' : true;
   });
+  const [inspectorFocusedId, setInspectorFocusedId] = useState(null);
+  const [openInspectorSection, setOpenInspectorSection] = useState(null);
   const [inspectorTab, setInspectorTab] = useState('Execution');
 
   useEffect(() => {
@@ -864,8 +866,13 @@ export default function AIAgent() {
     };
   };
 
-  const latestAgentMessage = getLatestAgentMessage(messages);
-  const inspectorData = getInspectorData(latestAgentMessage);
+  const inspectorMessage = inspectorFocusedId 
+    ? messages.find(m => m.id === inspectorFocusedId) || getLatestAgentMessage(messages)
+    : getLatestAgentMessage(messages);
+  const inspectorData = getInspectorData(inspectorMessage);
+  const inspectorParsedContent = inspectorData && inspectorData.rawJson 
+    ? parseThinkingContent(inspectorData.rawJson.content) 
+    : { thinking: null, answer: '', isThinkingComplete: true };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -2636,6 +2643,21 @@ export default function AIAgent() {
                           : 'bg-slate-800/50 backdrop-blur rounded-2xl rounded-tl-sm border border-purple-500/30 pb-10'
                       } px-3 md:px-5 py-2.5 md:py-3.5`}
                     >
+                      {/* Reasoning Shortcut */}
+                      {message.type === 'agent' && !message.isStreaming && message.content && (
+                        <div className="flex justify-end mb-2">
+                          <button 
+                            onClick={() => {
+                              setInspectorFocusedId(message.id);
+                              setOpenInspectorSection('reasoning');
+                            }}
+                            className="text-[11px] text-slate-500 hover:text-slate-300 flex items-center gap-1.5 border border-white/5 rounded-md px-2.5 py-1.5 bg-[#0A0A0A]/50 transition-colors w-max shadow-sm"
+                          >
+                            <Brain className="w-3 h-3 opacity-70" /> View Reasoning
+                          </button>
+                        </div>
+                      )}
+
                       {/* DeepSeek-style Chain-of-Thought (parsed from <think> tags + real backend steps) */}
                       {message.type === 'agent' && (() => {
                         const { thinking, isThinkingComplete } = parseThinkingContent(message.content);
@@ -2939,10 +2961,10 @@ export default function AIAgent() {
         </div>
 
         {/* Right Panel (Inspector) */}
-        <div className="hidden xl:flex w-[320px] shrink-0 bg-slate-950 border-l border-purple-500/20 flex-col overflow-hidden z-30">
-          <div className="h-16 px-4 border-b border-purple-500/20 flex items-center justify-between bg-slate-900/50 backdrop-blur-md shrink-0">
-            <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-              <Activity className="w-4 h-4 text-purple-400" /> Inspector
+        <div className="hidden xl:flex w-[260px] shrink-0 bg-[#0A0A0A] border-l border-white/5 flex-col overflow-hidden z-30 font-sans text-slate-300">
+          <div className="h-14 px-4 border-b border-white/5 flex items-center justify-between bg-[#0A0A0A] shrink-0">
+            <h2 className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+              Inspector
             </h2>
             {inspectorData && inspectorData.isStreaming && (
               <span className="flex h-2 w-2 relative">
@@ -2952,92 +2974,169 @@ export default function AIAgent() {
             )}
           </div>
           
-          <div className="flex-1 overflow-y-auto bg-slate-950 flex flex-col">
+          <div className="flex-1 overflow-y-auto bg-[#0A0A0A] flex flex-col scrollbar-thin scrollbar-thumb-white/10">
             {inspectorData ? (
-              <>
-                {/* Tabs */}
-                <div className="flex items-center gap-1 p-2 border-b border-purple-500/20 shrink-0 overflow-x-auto scrollbar-none">
-                  {['Execution', 'RAG', 'Debug'].map(tab => (
-                    <button
-                      key={tab}
-                      onClick={() => setInspectorTab(tab)}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                        inspectorTab === tab
-                          ? 'bg-purple-500/20 text-purple-300'
-                          : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
-                      }`}
-                    >
-                      {tab}
-                    </button>
-                  ))}
+              <div className="flex flex-col">
+                
+                {/* EXECUTION CARD (Sticky) */}
+                <div className="sticky top-0 z-10 bg-[#0A0A0A] border-b border-white/5 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-[11px] font-medium text-slate-400">Execution</h3>
+                    <div className="flex items-center gap-1.5">
+                      {inspectorData.isStreaming ? (
+                        <>
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          <span className="text-[10px] text-emerald-500 font-medium tracking-wider uppercase">Live</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-blue-500 text-[10px]">✓</span>
+                          <span className="text-[10px] text-slate-500 font-medium tracking-wider uppercase">Complete</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-slate-500">Duration</span>
+                    <span className="text-[11px] font-mono text-slate-300">{inspectorData.duration}s</span>
+                  </div>
+
+                  {inspectorData.execution.length > 0 && (
+                    <div>
+                      <span className="text-[10px] text-slate-500 uppercase tracking-wider mb-1.5 block">Processing Steps</span>
+                      <div className="space-y-1.5">
+                        {inspectorData.execution.map((step, idx) => (
+                          <div key={idx} className="flex items-start gap-1.5 text-[11px] text-slate-300 leading-snug">
+                            <span className="text-blue-500 mt-0.5 opacity-70">✓</span>
+                            <span>{step}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* Content */}
-                <div className="p-4 flex-1 overflow-y-auto">
-                  {inspectorTab === 'Execution' && (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded-xl shadow-inner">
-                        <span className="text-xs text-slate-400">Thinking Duration</span>
-                        <span className="text-xs font-mono text-emerald-400">{inspectorData.duration}s</span>
-                      </div>
-                      
-                      <div>
-                        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Processing Steps</h3>
-                        {inspectorData.execution.length > 0 ? (
-                          <div className="space-y-2">
-                            {inspectorData.execution.map((step, idx) => (
-                              <div key={idx} className="flex items-start gap-2 text-xs text-slate-300 bg-slate-900/50 p-2 rounded-lg border border-slate-800/50">
-                                <span className="text-blue-500 mt-0.5">✓</span>
-                                <span className="leading-relaxed">{step}</span>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="text-xs text-slate-500 italic">No execution steps logged.</div>
-                        )}
-                      </div>
+                {/* REASONING CARD */}
+                {(inspectorParsedContent.thinking || inspectorData.execution.length > 0) && (
+                  <details 
+                    className="group border-b border-white/5" 
+                    open={openInspectorSection === 'reasoning'}
+                  >
+                    <summary className="text-[11px] font-medium text-slate-400 p-4 cursor-pointer select-none flex items-center gap-1.5 outline-none transition-colors hover:text-slate-300">
+                      <Brain className="w-3 h-3 opacity-70" /> Reasoning
+                      <svg className="w-2.5 h-2.5 ml-auto group-open:rotate-180 transition-transform opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </summary>
+                    <div className="px-4 pb-4">
+                      <ThinkingBlock 
+                        thinking={inspectorParsedContent.thinking} 
+                        processingSteps={inspectorData.execution} 
+                        duration={inspectorData.duration}
+                        isThinkingComplete={!inspectorData.isStreaming || inspectorParsedContent.isThinkingComplete}
+                      />
                     </div>
-                  )}
+                  </details>
+                )}
 
-                  {inspectorTab === 'RAG' && (
-                    <div className="space-y-4">
-                      <div>
-                        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Active Knowledge Base</h3>
-                        {knowledgeBase.length > 0 ? (
-                          <div className="space-y-2">
-                            {knowledgeBase.map(doc => (
-                              <div key={doc.id} className="flex items-center gap-2 p-2.5 rounded-lg bg-slate-900 border border-slate-800/50 group">
-                                <Database className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                                <span className="text-xs text-slate-300 truncate" title={doc.title}>{doc.title}</span>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="text-xs text-slate-500 italic p-3 bg-slate-900/50 rounded-lg border border-slate-800/50">Knowledge Base kosong.</div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {inspectorTab === 'Debug' && (
-                    <details className="group border border-slate-800/50 rounded-xl bg-slate-900/30">
-                      <summary className="text-xs font-semibold text-slate-400 p-3 cursor-pointer select-none flex items-center justify-between hover:text-slate-300">
-                        <span>Raw JSON Response</span>
-                        <svg className="w-3 h-3 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                {/* KNOWLEDGE BASE CARD */}
+                <div className="border-b border-white/5 p-4 space-y-2">
+                  <h3 className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
+                    <Database className="w-3 h-3 opacity-70" /> Knowledge Base
+                  </h3>
+                  <div className="text-[11px] text-slate-300">
+                    {knowledgeBase.length} Files Loaded
+                  </div>
+                  {knowledgeBase.length > 0 && (
+                    <details className="group cursor-pointer">
+                      <summary className="text-[10px] text-slate-500 hover:text-slate-300 select-none flex items-center gap-1 mt-1 transition-colors outline-none">
+                        <svg className="w-2.5 h-2.5 group-open:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                        View Details
                       </summary>
-                      <div className="p-3 border-t border-slate-800/50 overflow-x-auto">
-                        <pre className="text-[10px] text-emerald-300/80 font-mono leading-relaxed">
-                          {JSON.stringify(inspectorData.rawJson, null, 2)}
-                        </pre>
+                      <div className="mt-2 space-y-1.5 pl-3 border-l border-white/5">
+                        {knowledgeBase.map(doc => (
+                          <div key={doc.id} className="text-[10px] text-slate-400 truncate" title={doc.title}>
+                            {doc.title}
+                          </div>
+                        ))}
                       </div>
                     </details>
                   )}
                 </div>
-              </>
+
+                {/* AUDIT CARD */}
+                <div className="border-b border-white/5 p-4 space-y-2">
+                  <h3 className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
+                    <AlertTriangle className="w-3 h-3 opacity-70" /> Audit
+                  </h3>
+                  <div className="text-[11px] text-slate-500 italic">
+                    No audit data available
+                  </div>
+                </div>
+
+                {/* ADVANCED SECTION */}
+                <div className="p-4">
+                  <details className="group cursor-pointer">
+                    <summary className="text-[11px] font-medium text-slate-400 hover:text-slate-300 select-none flex items-center gap-1.5 outline-none transition-colors">
+                      <Settings className="w-3 h-3 opacity-70" /> Advanced
+                      <svg className="w-2.5 h-2.5 ml-auto group-open:rotate-180 transition-transform opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </summary>
+                    <div className="mt-3 space-y-3 pl-1">
+                      
+                      <details className="group/sub cursor-pointer">
+                        <summary className="text-[11px] text-slate-500 hover:text-slate-400 select-none flex items-center gap-1 outline-none">
+                          <svg className="w-2.5 h-2.5 group-open/sub:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                          Tools
+                        </summary>
+                        <div className="mt-1.5 pl-4 text-[10px] text-slate-500">
+                          {inspectorData.tools.length > 0 ? inspectorData.tools.join(', ') : 'No tools used'}
+                        </div>
+                      </details>
+
+                      <details className="group/sub cursor-pointer">
+                        <summary className="text-[11px] text-slate-500 hover:text-slate-400 select-none flex items-center gap-1 outline-none">
+                          <svg className="w-2.5 h-2.5 group-open/sub:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                          Subagents
+                        </summary>
+                        <div className="mt-1.5 pl-4 text-[10px] text-slate-500 italic">No subagents active</div>
+                      </details>
+
+                      <details className="group/sub cursor-pointer">
+                        <summary className="text-[11px] text-slate-500 hover:text-slate-400 select-none flex items-center gap-1 outline-none">
+                          <svg className="w-2.5 h-2.5 group-open/sub:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                          Memory
+                        </summary>
+                        <div className="mt-1.5 pl-4 text-[10px] text-slate-500 italic">No memory accessed</div>
+                      </details>
+
+                      <details className="group/sub cursor-pointer">
+                        <summary className="text-[11px] text-slate-500 hover:text-slate-400 select-none flex items-center gap-1 outline-none">
+                          <svg className="w-2.5 h-2.5 group-open/sub:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                          Workspace
+                        </summary>
+                        <div className="mt-1.5 pl-4 text-[10px] text-slate-500 italic">No workspace context</div>
+                      </details>
+
+                      <details className="group/sub cursor-pointer">
+                        <summary className="text-[11px] text-slate-500 hover:text-slate-400 select-none flex items-center gap-1 outline-none">
+                          <svg className="w-2.5 h-2.5 group-open/sub:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                          Debug JSON
+                        </summary>
+                        <div className="mt-2 pl-2">
+                          <pre className="text-[9px] text-slate-500 font-mono bg-white/5 p-2 rounded overflow-x-auto max-h-40">
+                            {JSON.stringify(inspectorData.rawJson, null, 2)}
+                          </pre>
+                        </div>
+                      </details>
+                      
+                    </div>
+                  </details>
+                </div>
+
+              </div>
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center p-6 text-slate-500 text-center">
-                <Activity className="w-10 h-10 mb-4 opacity-50" />
-                <p className="text-sm">Menunggu respons agen...</p>
+              <div className="flex-1 flex flex-col items-center justify-center p-6 text-slate-600 text-center">
+                <Activity className="w-8 h-8 mb-3 opacity-30" />
+                <p className="text-[11px]">Waiting for agent response...</p>
               </div>
             )}
           </div>
