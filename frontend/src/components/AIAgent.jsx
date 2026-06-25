@@ -1965,11 +1965,11 @@ export default function AIAgent() {
         <div className="absolute bottom-40 right-20 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse delay-700"></div>
         <div className="z-10 bg-slate-900/80 backdrop-blur-xl p-8 rounded-3xl border border-purple-500/30 w-full max-w-md shadow-2xl">
           <div className="flex justify-center mb-6">
-            <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/30">
+            <div className="w-16 h-16 bg-slate-800/80 border border-white/10 rounded-2xl flex items-center justify-center shadow-lg text-purple-400">
               <Zap className="w-8 h-8 text-white" />
             </div>
           </div>
-          <h2 className="text-2xl font-bold text-center mb-2 bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">AI Agent Platform</h2>
+          <h2 className="text-2xl font-bold text-center mb-2 text-slate-100">AI Agent Platform</h2>
           <p className="text-center text-slate-400 mb-8 text-sm">{isLoginMode ? 'Login untuk menyimpan memori AI Anda' : 'Buat akun untuk memulai'}</p>
           
           <form onSubmit={handleAuth} className="space-y-4">
@@ -1988,7 +1988,7 @@ export default function AIAgent() {
               </div>
             </div>
             {authError && <div className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 p-2.5 rounded-lg">{authError}</div>}
-            <button type="submit" disabled={authLoading} className="w-full py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-semibold text-sm transition-all shadow-lg shadow-purple-500/30">
+            <button type="submit" disabled={authLoading} className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-sm transition-all shadow-lg shadow-purple-500/30 border border-white/10">
               {authLoading ? 'Memproses...' : (isLoginMode ? 'Sign In' : 'Sign Up')}
             </button>
           </form>
@@ -2004,7 +2004,7 @@ export default function AIAgent() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-900 to-slate-950 text-white">
+    <div className="min-h-screen bg-[#0A0A0A] text-slate-200">
       {/* Animated background elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-10 w-72 h-72 bg-purple-500/20 rounded-full blur-3xl animate-pulse"></div>
@@ -2101,18 +2101,18 @@ export default function AIAgent() {
 
         {/* Sidebar */}
         <div className={`
-          fixed inset-y-0 left-0 z-50 w-[280px] md:w-[var(--left-width)] shrink-0 bg-slate-950 border-r border-purple-500/20 flex flex-col overflow-hidden transition-transform duration-300 ease-in-out
-          md:relative md:translate-x-0 md:bg-slate-900/50 md:backdrop-blur-md md:z-auto
+          fixed inset-y-0 left-0 z-50 w-[280px] md:w-[var(--left-width)] shrink-0 bg-[#0A0A0A] border-r border-white/5 flex flex-col overflow-hidden transition-transform duration-300 ease-in-out
+          md:relative md:translate-x-0 md:bg-[#0A0A0A] md:z-auto
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         `}>
           {/* Header */}
           <div className="p-6 border-b border-purple-500/20 flex items-center justify-between">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center">
+                <div className="w-10 h-10 bg-slate-800/80 border border-white/10 rounded-lg flex items-center justify-center text-purple-400">
                   <Zap className="w-6 h-6" />
                 </div>
-                <h1 className="text-xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
+                <h1 className="text-xl font-bold text-slate-100">
                   AI Agent
                 </h1>
               </div>
@@ -2132,7 +2132,7 @@ export default function AIAgent() {
           <div className="p-4 border-b border-purple-500/20 space-y-2">
             <button 
               onClick={handleNewChat}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-semibold transition-all shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 text-sm"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold transition-all shadow-lg shadow-purple-500/20 text-sm border border-white/10"
             >
               <Plus className="w-4 h-4" />
               Percakapan Baru
@@ -2347,7 +2347,7 @@ export default function AIAgent() {
                     onClick={() => toggleTool(tool)}
                     className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm ${
                       selectedTools.includes(tool)
-                        ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/50'
+                        ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/30 border border-white/10'
                         : 'bg-slate-800/40 text-slate-400 hover:bg-slate-700/50'
                     }`}
                   >
@@ -2538,7 +2538,7 @@ export default function AIAgent() {
         {/* Main Chat Area */}
         <div className="flex-1 flex flex-col overflow-hidden w-full relative">
           {/* Top Bar Header (Desktop & Mobile) */}
-          <div className="flex items-center justify-between px-6 py-4 bg-slate-900/40 backdrop-blur border-b border-purple-500/20">
+          <div className="flex items-center justify-between px-6 py-4 bg-[#0A0A0A] border-b border-white/5">
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setSidebarOpen(true)}
@@ -2548,7 +2548,7 @@ export default function AIAgent() {
               </button>
               <Zap className="w-5 h-5 text-purple-400 font-semibold" />
               <div className="flex flex-col">
-                <span className="font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent leading-tight">AI Agent</span>
+                <span className="font-bold text-slate-100 leading-tight">AI Agent</span>
                 <span className="text-[10px] text-slate-500 font-medium tracking-wider">powered by mametdev@™</span>
               </div>
             </div>
@@ -2648,7 +2648,7 @@ export default function AIAgent() {
           ) : activeView === 'work' ? (
             <WorkDashboard />
           ) : activeView === 'cron' ? (
-            <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-900/50">
+            <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-[#0A0A0A]">
               <div className="max-w-4xl mx-auto">
                 <div className="flex items-center justify-between mb-8">
                   <div>
@@ -2729,7 +2729,7 @@ export default function AIAgent() {
                 <div className="max-w-6xl mx-auto w-full min-h-full flex flex-col space-y-6">
                   {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center">
-                <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center mb-6 shadow-2xl">
+                <div className="w-20 h-20 bg-slate-800/80 border border-white/10 rounded-2xl flex items-center justify-center mb-6 shadow-2xl text-purple-400">
                   <Zap className="w-10 h-10" />
                 </div>
                 <h2 className="text-3xl font-bold mb-2">Selamat datang di AI Agent</h2>
@@ -2755,7 +2755,7 @@ export default function AIAgent() {
                     <div
                       className={`relative max-w-[95%] md:max-w-4xl ${
                         message.type === 'user'
-                          ? 'bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl rounded-tr-sm'
+                          ? 'bg-slate-800 border border-white/5 rounded-2xl rounded-tr-sm text-slate-200'
                           : 'bg-slate-800/50 backdrop-blur rounded-2xl rounded-tl-sm border border-purple-500/30 pb-10'
                       } px-3 md:px-5 py-2.5 md:py-3.5`}
                     >
@@ -2981,7 +2981,7 @@ export default function AIAgent() {
           </div>
 
           {/* Input Area */}
-          <div className="relative shrink-0 w-full border-t border-purple-500/20 bg-slate-900/20 backdrop-blur-sm p-2 md:py-3 md:px-4 z-20">
+          <div className="relative shrink-0 w-full border-t border-purple-500/30 bg-slate-900/80 backdrop-blur-md p-2 md:py-3 md:px-4 z-20">
             <div className="max-w-6xl mx-auto w-full">
             
             {/* File attachment preview */}
@@ -3072,7 +3072,7 @@ export default function AIAgent() {
                 <button
                   onClick={handleSendMessage}
                   disabled={loading || (!input.trim() && !attachedFile)}
-                  className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 disabled:from-slate-600 disabled:to-slate-600 text-white rounded-xl px-5 py-2 font-medium flex items-center gap-2 transition-all shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 disabled:shadow-none"
+                  className="bg-purple-600 hover:bg-purple-500 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-xl px-5 py-2 font-medium flex items-center gap-2 transition-all shadow-lg shadow-purple-500/20 disabled:shadow-none border border-white/10"
                 >
                   <Send className="w-4 h-4" />
                   <span className="hidden sm:inline">Send</span>
