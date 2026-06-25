@@ -316,3 +316,9 @@ P3
 - **Knowledge Manager Sub-Agent:** Mamet memiliki kemampuan otonom merespons instruksi "Simpan ke ruang X", "Buat workspace Y" langsung via chat menggunakan plugin `knowledge_manager.ts`.
 - **Quality Filter Guardrail:** Fitur penyaring basa-basi sebelum vektorisasi untuk menjamin RAG bebas polusi (*noise-free*). Filter dapat dinonaktifkan per-*workspace*.
 - **Workspace Summaries:** Penambahan tabel `workspace_summaries` untuk mempercepat Mamet merangkum keseluruhan data di satu *space* tanpa memuat ribuan vektor sekaligus.
+
+#### 9. ADVANCED RETRIEVAL STABILIZATION (v2.1.0 - 26 Juni 2026)
+- **RAG Identity Separation (MametLite vs AI):** Memisahkan parameter `TopK` secara tegas. LITE mengekstrak 10 dokumen (untuk bacaan holistik & riset ASN luas), sedangkan AI 5 dokumen (efisiensi memory chat). LITE diproteksi *Strict Read-Only Identity* tanpa akses tulis/baca ke memori personal `user_memories`.
+- **Context Fusion Limits & Semantic Overlap:** Mencabut *hard truncation* (`break`) yang memenggal paksa kepingan RAG/Memory, diganti fungsi *skip* tanpa mematikan loop. `chunkText` di `vector_utils.ts` diberi *250 char semantic overlap* (mendeteksi titik/paragraf terdekat) guna menyelamatkan konteks antar-kepingan hukum.
+- **Deduplication & Hybrid Re-Ranking Layer:** Memasang *post-RAG deduplication* berbasis *Cosine Similarity* pada *Edge Function* untuk membunuh salinan ganda. Tumpukan dokumen kemudian di- *re-rank* secara *Hybrid* (70% similarity, 20% position weight, 10% query word coverage).
+- **Web vs RAG Comparison Contract:** Di mode LITE, instruksi validasi silang (Web vs RAG) tak lagi diserahkan ke ilusi agen. Kontrak diwajibkan via *Regex Intent Detector* (`webHint = HIGH_PRIORITY`), memaksa perbandingan kebaruan data secara eksplisit.
