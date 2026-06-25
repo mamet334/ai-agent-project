@@ -246,7 +246,7 @@ serve(async (req) => {
       mode: "AI" | "LITE";
       security: { decision: "ALLOW" | "ALLOW_WITH_LIMIT" | "BLOCK"; toolsEnabled: boolean; injectionRisk: boolean; abuseRisk: boolean; };
       rag: { topK: number; threshold: number; allowLongDocs: boolean; compressionLevel: "low" | "high"; };
-      execution: { memoryPriority: "memory_first" | "balanced"; webSearchEnabled: boolean; subAgentEnabled: boolean; };
+      execution: { memoryPriority: "memory_first" | "balanced"; webSearchEnabled: boolean; subAgentEnabled: boolean; webHint?: string; };
       trace: { riskScore: number; retrievalStrategy: string; timestamp: number; };
     };
 
@@ -254,11 +254,21 @@ serve(async (req) => {
       const mode = input.desktopOSMode ? "AI" : "LITE";
       const isRagEnabled = input.ragEnabled !== false;
       
+      const qLen = (input.message || '').length;
+      let dynamicThreshold = 0.60;
+      if (qLen < 20) dynamicThreshold = 0.60;
+      else if (qLen >= 20 && qLen <= 80) dynamicThreshold = 0.65;
+      else dynamicThreshold = 0.68;
+
+      const lowerMsg = (input.message || '').toLowerCase();
+      const needsWeb = /terbaru|update|berita|2024|2025|revisi|perubahan|aturan baru/.test(lowerMsg);
+      const webHint = needsWeb ? "HIGH_PRIORITY" : "NORMAL";
+      
       const ctx: UnifiedExecutionContext = {
         mode,
         security: { decision: "ALLOW", toolsEnabled: true, injectionRisk: false, abuseRisk: false },
-        rag: { topK: mode === "LITE" ? 10 : 5, threshold: 0.60, allowLongDocs: true, compressionLevel: "low" },
-        execution: { memoryPriority: "memory_first", webSearchEnabled: true, subAgentEnabled: true },
+        rag: { topK: mode === "LITE" ? 10 : 5, threshold: dynamicThreshold, allowLongDocs: true, compressionLevel: "low" },
+        execution: { memoryPriority: "memory_first", webSearchEnabled: true, subAgentEnabled: true, webHint },
         trace: { riskScore: 0, retrievalStrategy: isRagEnabled ? "hybrid" : "none", timestamp: Date.now() }
       };
 
@@ -1149,7 +1159,61 @@ serve(async (req) => {
           }
 
           if (matchedDocs && matchedDocs.length > 0) {
-            ragArray = matchedDocs.map((doc: any) => ({ type: 'rag', content: `[Dari file "${doc.title}"]: "${doc.content}"`, score: 2 }));
+            // 1. DEDUPLICATION LAYER (POST-RAG)
+            const calculateCosineSimilarity = (strA: string, strB: string) => {
+              const getWords = (s: string) => s.toLowerCase().match(/\w+/g) || [];
+              const wordsA = getWords(strA);
+              const wordsB = getWords(strB);
+              const dict = new Set([...wordsA, ...wordsB]);
+              let dotProduct = 0; let normA = 0; let normB = 0;
+              dict.forEach(w => {
+                const countA = wordsA.filter(x => x === w).length;
+                const countB = wordsB.filter(x => x === w).length;
+                dotProduct += countA * countB;
+                normA += countA * countA;
+                normB += countB * countB;
+              });
+              if (normA === 0 || normB === 0) return 0;
+              return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+            };
+
+            const deduplicatedDocs = [];
+            for (const doc of matchedDocs) {
+              let isDuplicate = false;
+              for (const savedDoc of deduplicatedDocs) {
+                if (calculateCosineSimilarity(doc.content, savedDoc.content) > 0.92) {
+                  if (doc.similarity > savedDoc.similarity) {
+                     savedDoc.content = doc.content;
+                     savedDoc.similarity = doc.similarity;
+                  }
+                  isDuplicate = true;
+                  break;
+                }
+              }
+              if (!isDuplicate) deduplicatedDocs.push(doc);
+            }
+
+            // 2. CONTEXT RE-RANKING LAYER
+            const queryWords = message.toLowerCase().match(/\w+/g) || [];
+            const validQueryWords = queryWords.filter((w: string) => w.length > 3);
+            
+            deduplicatedDocs.forEach((doc: any, idx: number) => {
+              const vector_similarity = doc.similarity || 0;
+              const position_weight = 1.0 - (idx / deduplicatedDocs.length);
+              
+              const docWordsStr = doc.content.toLowerCase();
+              let matchCount = 0;
+              for(const qw of validQueryWords) {
+                 if (docWordsStr.includes(qw)) matchCount++;
+              }
+              const query_coverage_score = validQueryWords.length > 0 ? Math.min(1.0, matchCount / validQueryWords.length) : 0;
+              
+              doc.hybrid_score = (vector_similarity * 0.7) + (position_weight * 0.2) + (query_coverage_score * 0.1);
+            });
+
+            deduplicatedDocs.sort((a: any, b: any) => b.hybrid_score - a.hybrid_score);
+
+            ragArray = deduplicatedDocs.map((doc: any) => ({ type: 'rag', content: `[Dari file "${doc.title}"]: "${doc.content}"`, score: doc.hybrid_score }));
           }
         }
       } catch (err: any) {
@@ -1260,7 +1324,10 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
       console.log(`[MEMORY_GATEWAY] Edge Function hanya validasi auth dan memproses LLM. Tidak ada auto-save sembunyi.`);
     }
 
-    const basePrompts = agentIdentityPrompt + userContextPrompt + memoryPrompt;
+    let basePrompts = agentIdentityPrompt + userContextPrompt + memoryPrompt;
+    if (ctx.execution.webHint === "HIGH_PRIORITY") {
+      basePrompts += `\n[WEB vs RAG COMPARISON CONTRACT]: Jika terdapat perbedaan antara dokumen RAG internal dan Web/Internet, identifikasi mana yang lebih baru secara eksplisit.`;
+    }
     
     const resolved = buildContextFusion({
       memoryArray,

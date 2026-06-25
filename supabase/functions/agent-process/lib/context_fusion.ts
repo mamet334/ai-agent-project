@@ -10,6 +10,7 @@ export function buildStructuredContext({ memoryArray = [], ragArray = [], messag
   // 1. Process Memory
   const finalMemory = [];
   const seenContent = new Set();
+  let currentCharsMemory = basePrompts.length;
 
   const validMemory = memoryArray
     .map(m => ({ ...m, content: m.content || m.summary || '', memory_state: m.memory_state || 'ACTIVE' }))
@@ -18,13 +19,17 @@ export function buildStructuredContext({ memoryArray = [], ragArray = [], messag
   for (const item of validMemory) {
     const lower = item.content.toLowerCase();
     if (!seenContent.has(lower)) {
-      finalMemory.push(item);
-      seenContent.add(lower);
+      if (currentCharsMemory + item.content.length <= 10000) {
+        finalMemory.push(item);
+        seenContent.add(lower);
+        currentCharsMemory += item.content.length;
+      }
     }
   }
 
   // 2. Process RAG
   const finalRag = [];
+  let currentCharsRag = currentCharsMemory;
   const validRag = ragArray
     .map(r => ({ ...r, content: r.content || '' }))
     .filter(r => r.content.trim() !== '');
@@ -32,8 +37,11 @@ export function buildStructuredContext({ memoryArray = [], ragArray = [], messag
   for (const item of validRag) {
     const lower = item.content.toLowerCase();
     if (!seenContent.has(lower)) {
-      finalRag.push(item);
-      seenContent.add(lower);
+      if (currentCharsRag + item.content.length <= 15000) {
+        finalRag.push(item);
+        seenContent.add(lower);
+        currentCharsRag += item.content.length;
+      }
     }
   }
 
