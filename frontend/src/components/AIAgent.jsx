@@ -2389,7 +2389,7 @@ export default function AIAgent() {
         </div>
 
         {/* Main Chat Area */}
-        <div className="flex-1 flex flex-col overflow-hidden w-full">
+        <div className="flex-1 flex flex-col overflow-hidden w-full relative">
           {/* Top Bar Header (Desktop & Mobile) */}
           <div className="flex items-center justify-between px-6 py-4 bg-slate-900/40 backdrop-blur border-b border-purple-500/20">
             <div className="flex items-center gap-2">
@@ -2817,7 +2817,7 @@ export default function AIAgent() {
           </div>
 
           {/* Input Area */}
-          <div className="absolute bottom-0 left-0 w-full border-t border-purple-500/20 bg-slate-900/30 backdrop-blur-lg p-4 md:p-6 z-20">
+          <div className="absolute bottom-0 left-0 w-full border-t border-purple-500/20 bg-slate-900/20 backdrop-blur-sm p-4 md:p-6 z-20">
             
             {/* File attachment preview */}
             {attachedFile && (
