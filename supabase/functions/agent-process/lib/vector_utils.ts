@@ -11,7 +11,18 @@ export function chunkText(text: string, maxLength: number = 4500): string[] {
       }
     }
     chunks.push(text.substring(i, end).trim());
-    i = end;
+    if (end >= text.length) break;
+
+    let nextI = end - 250;
+    let bLine = text.lastIndexOf('\n', end);
+    let bDot = text.lastIndexOf('. ', end);
+    let boundary = bLine >= end - 150 ? bLine : (bDot >= end - 150 ? bDot : -1);
+    
+    if (boundary > nextI && boundary < end) {
+      nextI = boundary + 1;
+    }
+    if (nextI <= i) nextI = end;
+    i = nextI;
   }
   return chunks.filter(c => c.length > 0);
 }
