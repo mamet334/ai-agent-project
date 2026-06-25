@@ -96,6 +96,12 @@ export const knowledgeManagerPlugin = {
         case 'SAVE_TO_WORKSPACE': {
           // Cari space
           let { data: space } = await supabase.from('knowledge_spaces').select('*').eq('user_id', userId).eq('name', spaceName).single();
+          
+          // --- PREVENT CORE OVERWRITE LEAKAGE ---
+          if (space && space.space_type === 'CORE') {
+             return { output: `Akses Ditolak: "${spaceName}" adalah Core Knowledge yang bersifat System-Managed. Tidak bisa melakukan manual save via Workspace Manager.`, sources: [] };
+          }
+
           if (!space) {
              // Otomatis buat jika belum ada
              const { data: newSpace, error: createErr } = await supabase.from('knowledge_spaces').insert([{ user_id: userId, name: spaceName, space_type: 'WORKSPACE' }]).select().single();
