@@ -116,3 +116,14 @@ LAST UPDATE SNAPSHOT Phase 10 (Knowledge Workspace Integration):
 - Status: RAG Architecture berevolusi dari Flat-Hierarchy ke Knowledge Spaces (CORE vs WORKSPACE). Menambahkan Sub-agent `knowledge_manager` dan Guardrail `knowledge_quality_filter.ts`.
 - Pipeline Truth: Otonomi Chat to RAG berhasil diaktifkan dengan proteksi ketat 'CORE' Read-Only bagi agen AI. Database dimigrasi dengan ON DELETE CASCADE.
 - Risk notes: Peningkatan latency saat operasi RAG Write dari obrolan telah dimitigasi dengan filter awal agar dokumen kosong tidak dikirim.
+
+============================================================
+LAST UPDATE SNAPSHOT v84a9dc9:
+- Timestamp: 2026-06-25 08:21:44 UTC
+- Changed modules: supabase/schema_reference.md
+- Memory layer changes: None
+- Decision engine changes: None
+- Behavior layer changes: None
+- Pipeline changes: None
+- Risk notes: Schema changed in supabase/schema_reference.md - requires Supabase sync verification
+- System status: ACTIVE - Auto-compiled and verified.
