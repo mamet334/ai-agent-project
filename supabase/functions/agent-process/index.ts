@@ -1336,6 +1336,11 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
           if (p && typeof p.task !== 'string') {
             p.task = typeof p.task === 'object' ? JSON.stringify(p.task) : String(p.task || "");
           }
+          // --- PATCH: Mencegah error res.subagent.toUpperCase() is not a function ---
+          if (p && !p.subagent) {
+             console.warn(`[Mamet Healer] Missing subagent key detected in LLM output. Forcing to "UNKNOWN".`);
+             p.subagent = 'UNKNOWN';
+          }
           return p;
         });
       }
@@ -1511,8 +1516,9 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
             for (const outcome of tierResults) {
                 if (outcome.status === 'fulfilled') {
                     const res = outcome.value;
-                    subagentRuns.push({ subagent: res.subagent, task: res.task, output: res.subagentResText, sources: res.subagentSources, toolExecution: res.subagentToolExec });
-                    accumulatedContext += `--- Hasil Sub-Agent [${res.subagent.toUpperCase()}]: ---\nTugas: ${res.task}\nOutput: ${res.subagentResText}\n\n`;
+                    const safeSubagent = String(res.subagent || "UNKNOWN");
+                    subagentRuns.push({ subagent: safeSubagent, task: res.task, output: res.subagentResText, sources: res.subagentSources, toolExecution: res.subagentToolExec });
+                    accumulatedContext += `--- Hasil Sub-Agent [${safeSubagent.toUpperCase()}]: ---\nTugas: ${res.task}\nOutput: ${res.subagentResText}\n\n`;
                 }
             }
             
