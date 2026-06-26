@@ -6,7 +6,7 @@ export const knowledgeManagerPlugin = {
   name: 'knowledge_manager',
   description: 'Gunakan untuk CRUD Workspace/Knowledge Space (buat, simpan, hapus, list, update summary, statistik, ringkasan, dan daftar dokumen). Parameter JSON Wajib: "action" (ENUM: CREATE_WORKSPACE, SAVE_TO_WORKSPACE, DELETE_WORKSPACE, LIST_WORKSPACES, GET_WORKSPACE_STATS, UPDATE_WORKSPACE_SUMMARY, GET_WORKSPACE_SUMMARY, LIST_DOCUMENTS), "space_name" (nama ruang, WAJIB jika bukan LIST_WORKSPACES), "content" (teks jika SAVE_TO_WORKSPACE).',
   execute: async (context: any) => {
-    const { task, env, userId, accumulatedContext } = context;
+    const { task, env, userId, accumulatedContext, policy } = context;
     
     // Asumsi LLM memasukkan config ke dalam task, atau kita extract via LLM lokal
     let action = 'LIST_WORKSPACES';
@@ -57,6 +57,11 @@ export const knowledgeManagerPlugin = {
     );
 
     try {
+      const writeActions = ['CREATE_WORKSPACE', 'SAVE_TO_WORKSPACE', 'DELETE_WORKSPACE', 'UPDATE_WORKSPACE_SUMMARY'];
+      if (writeActions.includes(action) && policy && !policy.canWriteKnowledge) {
+          return { output: `Akses Ditolak (MametLite): Fitur modifikasi workspace (Write/Delete) dinonaktifkan.`, sources: [] };
+      }
+      
       switch (action) {
         case 'CREATE_WORKSPACE': {
           const { error } = await supabase.from('knowledge_spaces').insert([{
