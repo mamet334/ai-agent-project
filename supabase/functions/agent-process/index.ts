@@ -275,7 +275,6 @@ serve(async (req) => {
       if (!POLICY_LAYER_ENABLED) return ctx;
 
       let riskScore = 0;
-      const lowerMsg = (input.message || '').toLowerCase();
       
       // 1. INJECTION DETECTION (HIGH RISK)
       const injectionPatterns = ["ignore previous instructions", "system prompt", "developer mode", "reveal memory", "bypass"];
