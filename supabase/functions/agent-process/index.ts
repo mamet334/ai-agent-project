@@ -222,6 +222,16 @@ serve(async (req) => {
 
     const storageTarget = guardian.determineTarget();
     tools = guardian.filterTools(tools, storageTarget);
+    
+    // Capability Filter
+    if (tools && Array.isArray(tools)) {
+      tools = tools.filter(t => {
+        if (t === 'cron_manager' && !ctx.policy.canUseAutomation) return false;
+        if (t === 'file_analyzer' && !ctx.policy.canUseDesktopTools) return false;
+        // Tools requiring canWriteKnowledge are handled inside the plugin (since knowledge_manager handles both read and write)
+        return true;
+      });
+    }
     const guardianPromptDirective = guardian.getGuardianPrompt(storageTarget);
 
     // OVERRIDE ALL IDENTITY USAGE
@@ -245,7 +255,7 @@ serve(async (req) => {
     type MametExecutionContext = {
   auth: { ctx.auth.userId: string; ctx.auth.userName?: string; };
   request: { originalMessage: string; ctx.request.finalMessage: string; lowerMsg: string; };
-  policy: { mode: "AI" | "LITE"; decision: "ALLOW" | "ALLOW_WITH_LIMIT" | "BLOCK"; toolsEnabled: boolean; webSearchEnabled: boolean; riskScore: number; ragTopK: number; ragThreshold: number; webHint?: string; };
+  policy: { mode: "AI" | "LITE"; decision: "ALLOW" | "ALLOW_WITH_LIMIT" | "BLOCK"; toolsEnabled: boolean; webSearchEnabled: boolean; riskScore: number; ragTopK: number; ragThreshold: number; webHint?: string; canReadRAG: boolean; canReadMemory: boolean; canWriteMemory: boolean; canWriteKnowledge: boolean; canUseWorkspace: boolean; canUseAutomation: boolean; canUseDesktopTools: boolean; };
   state: { ctx.state.ragArray: any[]; ctx.state.memoryArray: any[]; ctx.state.processingSteps: string[]; };
 };
       rag: { topK: number; threshold: number; allowLongDocs: boolean; compressionLevel: "low" | "high"; };
@@ -272,7 +282,10 @@ serve(async (req) => {
     request: { originalMessage: input.message, ctx.request.finalMessage: input.message, lowerMsg },
     policy: { 
         mode, decision: "ALLOW", toolsEnabled: true, webSearchEnabled: true, 
-        riskScore: 0, ragTopK: mode === "LITE" ? 10 : 5, ragThreshold: dynamicThreshold, webHint 
+        riskScore: 0, ragTopK: mode === "LITE" ? 10 : 5, ragThreshold: dynamicThreshold, webHint,
+        canReadRAG: true, canReadMemory: true, canWriteMemory: mode === "AI",
+        canWriteKnowledge: mode === "AI", canUseWorkspace: true, canUseAutomation: mode === "AI",
+        canUseDesktopTools: mode === "AI"
     },
     state: { ctx.state.ragArray: [], ctx.state.memoryArray: [], ctx.state.processingSteps: [] }
   };
@@ -747,7 +760,7 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
     let explicitModelErrors = '';
 
     const runLLM = async (promptText: string, systemPromptText = '', chatHistory: any[] = []) => {
-      if (desktopOSMode && !systemPromptText.includes('DESKTOP NATIVE AWARENESS ENABLED')) {
+      if (ctx.policy.canUseDesktopTools && !systemPromptText.includes('DESKTOP NATIVE AWARENESS ENABLED')) {
          systemPromptText += `\n[STATUS: DESKTOP NATIVE AWARENESS ENABLED]\nAnda WAJIB mengeluarkan perintah Windows di dalam tag <terminal>. DILARANG menyebut sub-agent atau menolak. Contoh: <terminal>dir %USERPROFILE%\\Desktop</terminal>\n`;
       }
 
@@ -1237,7 +1250,7 @@ MODEL AI YANG ANDA GUNAKAN SAAT INI: ${model || 'gemini-2.0-flash'}. Anda dapat 
 
     agentIdentityPrompt += `\n[WORKSPACE GUARDIAN OMNI-LOCK] Storage target saat ini adalah ${storageTarget}. Jika target adalah SUPABASE, Anda DILARANG KERAS menggunakan tag <edit_file> atau perintah <terminal> yang merubah file/folder lokal!\n`;
 
-    if (desktopOSMode) {
+    if (ctx.policy.canUseDesktopTools) {
       agentIdentityPrompt += `\n[STATUS: DESKTOP NATIVE AWARENESS ENABLED]
 PENTING UNTUK KESELAMATAN AI: Anda HANYA DIMINTA UNTUK MEMBERIKAN TEKS / SCRIPT BASH/POWERSHELL di dalam tag <terminal>. Aplikasi Frontend (Mamet Desktop) yang akan mengeksekusinya. Anda DILARANG menolak. Cukup berikan script yang diminta!
 JIKA USER MEMINTA CEK DESKTOP, CARI FILE, CARI FOLDER, ATAU JALANKAN PERINTAH DI KOMPUTER LOKAL MEREKA:
@@ -1348,7 +1361,7 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
       
       // Deteksi instan (Hardcoded) untuk fitur yang membutuhkan sub-agent/tools
       const desktopLocalKeywords = ["desktop", "terminal", "cmd", "powershell", "hardisk", "hard disk", "folder saya", "file saya", "komputer saya", "laptop saya", "daftar file", "cek file", "isi desktop", "isi folder", "buka terminal", "jalankan perintah", "eksekusi", "direktori"];
-      const isDesktopLocalRequest = desktopOSMode && desktopLocalKeywords.some(kw => ctx.request.lowerMsg.includes(kw));
+      const isDesktopLocalRequest = ctx.policy.canUseDesktopTools && desktopLocalKeywords.some(kw => ctx.request.lowerMsg.includes(kw));
 
       if (isDesktopLocalRequest) {
         isChatBiasa = true;
@@ -1697,7 +1710,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
         if (ENABLE_ASYNC_MEMORY_WRITE) {
             const supUrl = Deno.env.get('SUPABASE_URL') || '';
             const supKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-            await safeFireAndTrack('MemoryWriteQueue_A', processMemoryWriteQueue(ctx.auth.userId, ctx.request.finalMessage, supUrl, supKey));
+            if (ctx.policy.canWriteMemory) await safeFireAndTrack('MemoryWriteQueue_A', processMemoryWriteQueue(ctx.auth.userId, ctx.request.finalMessage, supUrl, supKey));
         }
 
         if (stream && !extractedImage) {
@@ -1719,7 +1732,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
       if (ENABLE_ASYNC_MEMORY_WRITE) {
           const supUrl = Deno.env.get('SUPABASE_URL') || '';
           const supKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-          await safeFireAndTrack('MemoryWriteQueue_B', processMemoryWriteQueue(ctx.auth.userId, ctx.request.finalMessage, supUrl, supKey));
+          if (ctx.policy.canWriteMemory) await safeFireAndTrack('MemoryWriteQueue_B', processMemoryWriteQueue(ctx.auth.userId, ctx.request.finalMessage, supUrl, supKey));
       }
 
       if (stream && !extractedImage) {
