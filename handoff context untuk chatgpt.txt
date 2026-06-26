@@ -134,3 +134,10 @@ LAST UPDATE SNAPSHOT Phase 11 (Advanced RAG Stabilization v2.1.0):
 - Status: Mamet AI v2.1.0 dirilis dengan arsitektur Retrieval yang distabilisasi (Deduplication, Hybrid Re-ranking, Context Limits, Semantic Chunking Overlap, Adaptive Threshold).
 - Pipeline Truth: RAG memroses TopK secara berbeda untuk AI (5) vs LITE (10). LITE 100% Read-Only tanpa akses ke memori personal. Web vs RAG Comparison dipaksa lewat Regex Intent Detector (`webHint`).
 - Risk notes: Beban RAM dan CPU Edge Function dapat sedikit meningkat karena proses Hybrid Scoring dan Deduplication (Cosine Similarity loop), tapi dijamin O(n^2) minimal karena berjalan hanya di atas himpunan 10 item.
+
+============================================================
+LAST UPDATE SNAPSHOT Phase 12 (Capability Permission Architecture):
+- Timestamp: 2026-06-27 00:30:00 WIB
+- Status: Transisi otorisasi dari Mode-based ke Capability-based (Explicit Permissions). MametLite digembok dari semua kemampuan WRITE (Memory & Knowledge) dan eksekusi Alat Administratif, namun tetap mempertahankan kemampuan READ.
+- Pipeline Truth: `ctx.policy` kini menyimpan flag akses granular (`canWriteMemory`, `canWriteKnowledge`). `knowledge_manager` merespons penolakan jika menerima JSON action tipe WRITE (CREATE, SAVE, DELETE) pada mode LITE tanpa merusak operasi pencarian dokumen.
+- Risk notes: None. Keamanan batas produk telah disegel.
