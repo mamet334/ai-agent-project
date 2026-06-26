@@ -1300,7 +1300,7 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
     let userContextPrompt = ctx.auth.userName ? `\nInformasi Akun: User login dengan email/nama "${ctx.auth.userName}". Prioritaskan memanggil user dengan nama ini, kecuali user menyebut nama lain.` : '';
     
     // --- MEMORY MANAGER (RETRIEVAL) ---
-    ctx.state.memoryArray = ctx.policy.mode === "LITE" ? [] : await retrieveMemories(ctx.request.finalMessage, ctx.auth.userId, Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', GEMINI_API_KEY);
+    ctx.state.memoryArray = await retrieveMemories(ctx.request.finalMessage, ctx.auth.userId, Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', GEMINI_API_KEY);
     if (!Array.isArray(ctx.state.memoryArray)) ctx.state.memoryArray = [];
     
     const memoryPrompt = globalMemory ? `\n\n[MEMORI GLOBAL & PREFERENSI USER]:\n${globalMemory}\n(Patuhi instruksi/ingatan di atas secara ketat di setiap jawaban Anda!)` : '';
@@ -1697,7 +1697,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
         if (ENABLE_ASYNC_MEMORY_WRITE) {
             const supUrl = Deno.env.get('SUPABASE_URL') || '';
             const supKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-            if (ctx.policy.mode !== "LITE") await safeFireAndTrack('MemoryWriteQueue_A', processMemoryWriteQueue(ctx.auth.userId, ctx.request.finalMessage, supUrl, supKey));
+            await safeFireAndTrack('MemoryWriteQueue_A', processMemoryWriteQueue(ctx.auth.userId, ctx.request.finalMessage, supUrl, supKey));
         }
 
         if (stream && !extractedImage) {
@@ -1719,7 +1719,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
       if (ENABLE_ASYNC_MEMORY_WRITE) {
           const supUrl = Deno.env.get('SUPABASE_URL') || '';
           const supKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-          if (ctx.policy.mode !== "LITE") await safeFireAndTrack('MemoryWriteQueue_B', processMemoryWriteQueue(ctx.auth.userId, ctx.request.finalMessage, supUrl, supKey));
+          await safeFireAndTrack('MemoryWriteQueue_B', processMemoryWriteQueue(ctx.auth.userId, ctx.request.finalMessage, supUrl, supKey));
       }
 
       if (stream && !extractedImage) {
