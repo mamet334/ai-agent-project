@@ -225,9 +225,9 @@ serve(async (req) => {
     const guardianPromptDirective = guardian.getGuardianPrompt(storageTarget);
 
     // OVERRIDE ALL IDENTITY USAGE
-    let userId = AUTH_USER_ID;
+    ctx.auth.userId = AUTH_USER_ID;
 
-    console.log("[L1] auth binding", { providedUserId: _clientUserId, actualAuthId: userId, message: message ? message.substring(0, 50) + '...' : null });
+    console.log("[L1] auth binding", { providedUserId: _clientUserId, actualAuthId: ctx.auth.userId, message: message ? message.substring(0, 50) + '...' : null });
 
     // ANTI-HALLUCINATION: Bersihkan history agar LLM tidak melihat/mempelajari tag fiktif dari chat masa lalu
     if (history && Array.isArray(history)) {
@@ -242,99 +242,88 @@ serve(async (req) => {
     // === UNIFIED EXECUTION POLICY LAYER (FASE 4C) ===
     const POLICY_LAYER_ENABLED = true;
     
-    type UnifiedExecutionContext = {
-      mode: "AI" | "LITE";
-      security: { decision: "ALLOW" | "ALLOW_WITH_LIMIT" | "BLOCK"; toolsEnabled: boolean; injectionRisk: boolean; abuseRisk: boolean; };
+    type MametExecutionContext = {
+  auth: { ctx.auth.userId: string; ctx.auth.userName?: string; };
+  request: { originalMessage: string; ctx.request.finalMessage: string; lowerMsg: string; };
+  policy: { mode: "AI" | "LITE"; decision: "ALLOW" | "ALLOW_WITH_LIMIT" | "BLOCK"; toolsEnabled: boolean; webSearchEnabled: boolean; riskScore: number; ragTopK: number; ragThreshold: number; webHint?: string; };
+  state: { ctx.state.ragArray: any[]; ctx.state.memoryArray: any[]; ctx.state.processingSteps: string[]; };
+};
       rag: { topK: number; threshold: number; allowLongDocs: boolean; compressionLevel: "low" | "high"; };
       execution: { memoryPriority: "memory_first" | "balanced"; webSearchEnabled: boolean; subAgentEnabled: boolean; webHint?: string; };
       trace: { riskScore: number; retrievalStrategy: string; timestamp: number; };
     };
 
-    function buildUnifiedExecutionContext(input: { message: string, desktopOSMode?: boolean, tools?: string[], ragEnabled?: boolean }): UnifiedExecutionContext {
-      const mode = input.desktopOSMode ? "AI" : "LITE";
-      const isRagEnabled = input.ragEnabled !== false;
-      
-      const qLen = (input.message || '').length;
-      let dynamicThreshold = 0.60;
-      if (qLen < 20) dynamicThreshold = 0.60;
-      else if (qLen >= 20 && qLen <= 80) dynamicThreshold = 0.65;
-      else dynamicThreshold = 0.68;
+    function buildUnifiedExecutionContext(input: { message: string, desktopOSMode?: boolean, tools?: string[], ragEnabled?: boolean, ctx.auth.userId: string, ctx.auth.userName?: string }): MametExecutionContext {
+  const mode = input.desktopOSMode ? "AI" : "LITE";
+  const isRagEnabled = input.ragEnabled !== false;
+  
+  const qLen = (input.message || '').length;
+  let dynamicThreshold = 0.60;
+  if (qLen < 20) dynamicThreshold = 0.60;
+  else if (qLen >= 20 && qLen <= 80) dynamicThreshold = 0.65;
+  else dynamicThreshold = 0.68;
 
-      const lowerMsg = (input.message || '').toLowerCase();
-      const needsWeb = /terbaru|update|berita|2024|2025|revisi|perubahan|aturan baru/.test(lowerMsg);
-      const webHint = needsWeb ? "HIGH_PRIORITY" : "NORMAL";
-      
-      const ctx: UnifiedExecutionContext = {
-        mode,
-        security: { decision: "ALLOW", toolsEnabled: true, injectionRisk: false, abuseRisk: false },
-        rag: { topK: mode === "LITE" ? 10 : 5, threshold: dynamicThreshold, allowLongDocs: true, compressionLevel: "low" },
-        execution: { memoryPriority: "memory_first", webSearchEnabled: true, subAgentEnabled: true, webHint },
-        trace: { riskScore: 0, retrievalStrategy: isRagEnabled ? "hybrid" : "none", timestamp: Date.now() }
-      };
+  const lowerMsg = (input.message || '').toLowerCase();
+  const needsWeb = /terbaru|update|berita|2024|2025|revisi|perubahan|aturan baru/.test(lowerMsg);
+  const webHint = needsWeb ? "HIGH_PRIORITY" : "NORMAL";
+  
+  const ctx: MametExecutionContext = {
+    auth: { ctx.auth.userId: input.userId, ctx.auth.userName: input.userName },
+    request: { originalMessage: input.message, ctx.request.finalMessage: input.message, lowerMsg },
+    policy: { 
+        mode, decision: "ALLOW", toolsEnabled: true, webSearchEnabled: true, 
+        riskScore: 0, ragTopK: mode === "LITE" ? 10 : 5, ragThreshold: dynamicThreshold, webHint 
+    },
+    state: { ctx.state.ragArray: [], ctx.state.memoryArray: [], ctx.state.processingSteps: [] }
+  };
 
-      if (!POLICY_LAYER_ENABLED) return ctx;
+  if (!POLICY_LAYER_ENABLED) return ctx;
 
-      let riskScore = 0;
-      
-      // 1. INJECTION DETECTION (HIGH RISK)
-      const injectionPatterns = ["ignore previous instructions", "system prompt", "developer mode", "reveal memory", "bypass"];
-      if (injectionPatterns.some(p => lowerMsg.includes(p))) {
-        riskScore += 3;
-        ctx.security.injectionRisk = true;
-      }
-      
-      // 2. TOOL ABUSE DETECTION (MEDIUM RISK)
-      const toolAbusePatterns = ["recursive agent requests", "infinite search loops", "mass retrieval requests"];
-      if (toolAbusePatterns.some(p => lowerMsg.includes(p))) {
-        riskScore += 2;
-        ctx.security.abuseRisk = true;
-      }
-      
-      // 3. OVER-RETRIEVAL DETECTION
-      const overRetrievalPatterns = ["all data", "dump all", "entire database"];
-      if (overRetrievalPatterns.some(p => lowerMsg.includes(p))) {
-        riskScore += 2;
-      }
-      
-      // 4. MALFORMED INPUT CHECK
-      if (lowerMsg.length > 5000) riskScore += 1;
-      const words = lowerMsg.split(/[\\s\\p{P}]+/);
-      const uniqueWords = new Set(words);
-      if (words.length > 100 && uniqueWords.size < words.length * 0.1) riskScore += 1;
-      
-      ctx.trace.riskScore = riskScore;
-      
-      // 5. EVALUATE POLICY
-      if (riskScore >= 4) {
-        ctx.security.decision = "BLOCK";
-        ctx.security.toolsEnabled = false;
-        ctx.rag.topK = 0;
-        ctx.execution.webSearchEnabled = false;
-        ctx.execution.subAgentEnabled = false;
-      } else if (riskScore >= 2) {
-        ctx.security.decision = "ALLOW_WITH_LIMIT";
-        ctx.security.toolsEnabled = false;
-        ctx.rag.topK = 2;
-        ctx.execution.webSearchEnabled = false;
-        ctx.execution.subAgentEnabled = false;
-      }
-      
-      return ctx;
-    }
+  let riskScore = 0;
+  const injectionPatterns = ["ignore previous instructions", "system prompt", "developer mode", "reveal memory", "bypass"];
+  if (injectionPatterns.some(p => lowerMsg.includes(p))) { riskScore += 3; }
+  
+  const toolAbusePatterns = ["recursive agent requests", "infinite search loops", "mass retrieval requests"];
+  if (toolAbusePatterns.some(p => lowerMsg.includes(p))) { riskScore += 2; }
+  
+  const overRetrievalPatterns = ["all data", "dump all", "entire database"];
+  if (overRetrievalPatterns.some(p => lowerMsg.includes(p))) { riskScore += 2; }
+  
+  if (lowerMsg.length > 5000) riskScore += 1;
+  const words = lowerMsg.split(/[\s\p{P}]+/);
+  const uniqueWords = new Set(words);
+  if (words.length > 100 && uniqueWords.size < words.length * 0.1) riskScore += 1;
+  
+  ctx.policy.riskScore = riskScore;
+  
+  if (riskScore >= 4) {
+    ctx.policy.decision = "BLOCK";
+    ctx.policy.toolsEnabled = false;
+    ctx.policy.ragTopK = 0;
+    ctx.policy.webSearchEnabled = false;
+  } else if (riskScore >= 2) {
+    ctx.policy.decision = "ALLOW_WITH_LIMIT";
+    ctx.policy.toolsEnabled = false;
+    ctx.policy.ragTopK = 2;
+    ctx.policy.webSearchEnabled = false;
+  }
+  
+  return ctx;
+}
 
-    const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEnabled });
-    const isRagEnabled = ctx.trace.retrievalStrategy !== "none";
+const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEnabled, ctx.auth.userId, ctx.auth.userName });
+    const isRagEnabled = ctx.policy.ragTopK > 0;
 
     console.log("[UNIFIED TRACE]", {
-      mode: ctx.mode,
-      decision: ctx.security.decision,
-      ragTopK: ctx.rag.topK,
-      riskScore: ctx.trace.riskScore
+      mode: ctx.policy.mode,
+      decision: ctx.policy.decision,
+      ragTopK: ctx.policy.ragTopK,
+      riskScore: ctx.policy.riskScore
     });
     
     // ENFORCEMENT BLOCK
-    if (ctx.security.decision === "BLOCK") {
-      console.warn(`[EXECUTION POLICY] Blocked request from user ${userId} due to HIGH risk. Trace:`, ctx.trace);
+    if (ctx.policy.decision === "BLOCK") {
+      console.warn(`[EXECUTION POLICY] Blocked request from user ${ctx.auth.userId} due to HIGH risk. Trace:`, ctx.trace);
       const blockMsg = "Permintaan ditolak oleh Sistem Kebijakan Eksekusi. Deteksi injeksi atau pola berbahaya.";
       if (!stream) {
         return new Response(JSON.stringify({ message: blockMsg }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -350,27 +339,27 @@ serve(async (req) => {
       }
     }
     
-    if (ctx.security.decision === "ALLOW_WITH_LIMIT") {
-      console.warn(`[EXECUTION POLICY] Applied limits to user ${userId} due to MEDIUM risk. Trace:`, ctx.trace);
+    if (ctx.policy.decision === "ALLOW_WITH_LIMIT") {
+      console.warn(`[EXECUTION POLICY] Applied limits to user ${ctx.auth.userId} due to MEDIUM risk. Trace:`, ctx.trace);
     }
 
-    let effectiveRagMatchCount = ctx.rag.topK;
-    let effectiveRagThreshold = ctx.rag.threshold;
-    if (!ctx.security.toolsEnabled && tools && Array.isArray(tools)) {
+    let effectiveRagMatchCount = ctx.policy.ragTopK;
+    let effectiveRagThreshold = ctx.policy.ragThreshold;
+    if (!ctx.policy.toolsEnabled && tools && Array.isArray(tools)) {
        tools = []; // Menerapkan kebijakan secara eksplisit
     }
 
     // === CIRCUIT BREAKER (FASE 4B) ===
     // Mengecek apakah user sudah melewati batas harian token sebelum AI merespons.
-    if (userId) {
+    if (ctx.auth.userId) {
       try {
         const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
-        const { data: currentCost, error: quotaError } = await supClient.rpc('check_daily_quota', { target_user_id: userId });
+        const { data: currentCost, error: quotaError } = await supClient.rpc('check_daily_quota', { target_user_id: ctx.auth.userId });
         
         if (!quotaError && currentCost !== null) {
           const DAILY_LIMIT = 0.50; // $0.50 per hari (setara ~Rp8.000)
           if (Number(currentCost) >= DAILY_LIMIT) {
-             console.warn(`[CIRCUIT BREAKER] User ${userId} exceeded daily quota: $${currentCost}`);
+             console.warn(`[CIRCUIT BREAKER] User ${ctx.auth.userId} exceeded daily quota: $${currentCost}`);
              
              // Tolak request jika sudah mencapai limit (mode teks)
              if (!stream) {
@@ -397,7 +386,7 @@ serve(async (req) => {
 
     // === TOKEN TRACKER ESTIMATOR (FASE 4A) ===
     const logApiUsage = (provider: string, modelName: string, inputText: string, outputText: string) => {
-      if (!userId) return;
+      if (!ctx.auth.userId) return;
       safeFireAndTrack('LogAPIUsage', (async () => {
         // Estimasi kasar: 1 token = 4 karakter
         const inputTokens = Math.ceil(inputText.length / 4);
@@ -410,7 +399,7 @@ serve(async (req) => {
         const totalCost = ((inputTokens / 1000) * costIn) + ((outputTokens / 1000) * costOut);
         const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
         await supClient.from('api_usage').insert([{ 
-           user_id: userId, provider, model: modelName,
+           user_id: ctx.auth.userId, provider, model: modelName,
            input_tokens: inputTokens, output_tokens: outputTokens, cost_usd: totalCost
         }]);
       })());
@@ -419,7 +408,7 @@ serve(async (req) => {
     const logAgentEvent = (eventType: string, provider: string, logMessage: string) => {
       safeFireAndTrack('LogAgentEvent', (async () => {
         const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
-        await supClient.from('agent_logs').insert([{ user_id: userId || null, event_type: eventType, provider, message: logMessage }]);
+        await supClient.from('agent_logs').insert([{ user_id: ctx.auth.userId || null, event_type: eventType, provider, message: logMessage }]);
       })());
     };
 
@@ -435,7 +424,7 @@ serve(async (req) => {
     }
 
     let extractedImage = null;
-    let finalMessage = message;
+    ctx.request.ctx.request.finalMessage = ctx.request.originalMessage;
 
     if (file && file.data) {
       const filename = file.name.toLowerCase();
@@ -444,14 +433,14 @@ serve(async (req) => {
       if (file.mimeType.startsWith('image/')) {
         extractedImage = { mimeType: file.mimeType, data: file.data };
       } else if (filename.endsWith('.txt') || filename.endsWith('.csv') || filename.endsWith('.md')) {
-        finalMessage = `Permintaan User: ${message}\n\n[DOKUMEN TERLAMPIR: ${file.name}]\nIsi Dokumen:\n${new TextDecoder().decode(buffer).substring(0, 50000)}`;
+        ctx.request.finalMessage = `Permintaan User: ${message}\n\n[DOKUMEN TERLAMPIR: ${file.name}]\nIsi Dokumen:\n${new TextDecoder().decode(buffer).substring(0, 50000)}`;
       } else {
         // Fallback PDF/DOCX yang kompleks dialihkan
-        finalMessage = `Permintaan User: ${message}\n\n[DOKUMEN TERLAMPIR: ${file.name}]\n(Catatan: Edge Function saat ini memprioritaskan teks/gambar. PDF akan dibaca secara ringkas jika memungkinkan)`;
+        ctx.request.finalMessage = `Permintaan User: ${message}\n\n[DOKUMEN TERLAMPIR: ${file.name}]\n(Catatan: Edge Function saat ini memprioritaskan teks/gambar. PDF akan dibaca secara ringkas jika memungkinkan)`;
       }
     }
 
-    if (!finalMessage || !Array.isArray(tools)) {
+    if (!ctx.request.finalMessage || !Array.isArray(tools)) {
       return new Response(JSON.stringify({ error: 'Invalid request' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -797,7 +786,7 @@ serve(async (req) => {
     let groundingSources: any[] = [];
     let toolExecution = null;
     let subagentRuns: any[] = [];
-    let processingSteps: string[] = [];
+    
 
     const getStreamResponse = (promptText: string, systemPromptText = '', chatHistory: any[] = [], metaData: any = {}) => {
       const safeMeta = { ...metaData };
@@ -1094,8 +1083,8 @@ serve(async (req) => {
     };
     
     // --- RAG KNOWLEDGE BASE SEARCH ---
-    let ragArray: any[] = [];
-    if (userId && isRagEnabled) {
+    
+    if (ctx.auth.userId && isRagEnabled) {
       try {
         const queryEmbedding = await getGeminiEmbedding(message, GEMINI_API_KEY);
         if (queryEmbedding.length > 0) {
@@ -1110,16 +1099,17 @@ serve(async (req) => {
               reason_code: "DEFAULT_ROUTING"
           };
 
-          const { data: spaces } = await supabaseClient.from('knowledge_spaces').select('id, name, space_type').eq('user_id', userId);
+          const { data: spaces } = await supabaseClient.from('knowledge_spaces').select('id, name, space_type').eq('user_id', ctx.auth.userId);
           if (spaces && spaces.length > 0) {
              const coreSpace = spaces.find((s: any) => s.space_type === 'CORE');
              routingDecision.workspace_id = coreSpace ? coreSpace.id : null;
 
-             const isWorkspaceQuery = lowerMsg.includes('workspace') || lowerMsg.includes('ruang') || lowerMsg.includes('space');
+             ctx.request.lowerMsg = (ctx.request.finalMessage || '').toLowerCase();
+             const isWorkspaceQuery = ctx.request.lowerMsg.includes('workspace') || ctx.request.lowerMsg.includes('ruang') || ctx.request.lowerMsg.includes('space');
              if (isWorkspaceQuery) {
                 const workspaceSpaces = spaces.filter((s: any) => s.space_type === 'WORKSPACE').sort((a: any, b: any) => b.name.length - a.name.length);
                 for (const space of workspaceSpaces) {
-                   if (lowerMsg.includes(space.name.toLowerCase())) {
+                   if (ctx.request.lowerMsg.includes(space.name.toLowerCase())) {
                       routingDecision = {
                           scope: "WORKSPACE",
                           workspace_id: space.id,
@@ -1143,13 +1133,13 @@ serve(async (req) => {
              console.log(`[RAG_SCOPE_USED]: ${routingDecision.scope} | [WORKSPACE_ID]: ${routingDecision.workspace_id} | [IS_ISOLATED]: true`);
           }
           
-          processingSteps.push(`🔍 [Routing Decider] Scope: ${routingDecision.scope} (${routingDecision.reason_code})`);
+          ctx.state.processingSteps.push(`🔍 [Routing Decider] Scope: ${routingDecision.scope} (${routingDecision.reason_code})`);
 
           const { data: matchedDocs, error: matchError } = await supabaseClient.rpc('match_documents', {
             query_embedding: queryEmbedding,
             match_threshold: effectiveRagThreshold,
             match_count: effectiveRagMatchCount,
-            p_user_id: userId,
+            p_user_id: ctx.auth.userId,
             p_space_id: routingDecision.workspace_id
           });
 
@@ -1212,7 +1202,7 @@ serve(async (req) => {
 
             deduplicatedDocs.sort((a: any, b: any) => b.hybrid_score - a.hybrid_score);
 
-            ragArray = deduplicatedDocs.map((doc: any) => ({ type: 'rag', content: `[Dari file "${doc.title}"]: "${doc.content}"`, score: doc.hybrid_score }));
+            ctx.state.ragArray = deduplicatedDocs.map((doc: any) => ({ type: 'rag', content: `[Dari file "${doc.title}"]: "${doc.content}"`, score: doc.hybrid_score }));
           }
         }
       } catch (err: any) {
@@ -1222,11 +1212,11 @@ serve(async (req) => {
         }
       }
     }
-    console.log(`[RAG CONTEXT GENERATED] ragArray size=${ragArray.length}`);
-    processingSteps.push(`[RAG CONTEXT GENERATED] ragArray size=${ragArray.length}`);
+    console.log(`[RAG CONTEXT GENERATED] ctx.state.ragArray size=${ctx.state.ragArray.length}`);
+    ctx.state.processingSteps.push(`[RAG CONTEXT GENERATED] ctx.state.ragArray size=${ctx.state.ragArray.length}`);
 
-    if (finalMessage.toLowerCase().includes('zip')) {
-      finalMessage += `\n\n[PERINTAH SANGAT PENTING DARI SISTEM]: User meminta file ZIP. Anda DILARANG menggunakan blok kode biasa seperti \`\`\`html. ANDA WAJIB MENGGUNAKAN format \`\`\`xml_zip. 
+    if (ctx.request.finalMessage.toLowerCase().includes('zip')) {
+      ctx.request.finalMessage += `\n\n[PERINTAH SANGAT PENTING DARI SISTEM]: User meminta file ZIP. Anda DILARANG menggunakan blok kode biasa seperti \`\`\`html. ANDA WAJIB MENGGUNAKAN format \`\`\`xml_zip. 
 Contoh Jawaban Anda yang BENAR:
 Baik, ini file zip-nya:
 \`\`\`xml_zip
@@ -1307,31 +1297,31 @@ Only system backend performs memory persistence.
 If [MEMORY_SYSTEM_ACK] is MISSING, you MUST NOT state that memory is saved. Instead, just acknowledge the user's message conversationally (e.g., "Baik, saya mengerti", "Terima kasih informasinya"). NEVER OUTPUT AN EMPTY RESPONSE.
 
 Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika user menanyakan jumlah atau nama sub-agent Anda, sebutkan nama-nama di atas.`;
-    let userContextPrompt = userName ? `\nInformasi Akun: User login dengan email/nama "${userName}". Prioritaskan memanggil user dengan nama ini, kecuali user menyebut nama lain.` : '';
+    let userContextPrompt = ctx.auth.userName ? `\nInformasi Akun: User login dengan email/nama "${ctx.auth.userName}". Prioritaskan memanggil user dengan nama ini, kecuali user menyebut nama lain.` : '';
     
     // --- MEMORY MANAGER (RETRIEVAL) ---
-    let memoryArray = mode === "LITE" ? [] : await retrieveMemories(finalMessage, userId, Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', GEMINI_API_KEY);
-    if (!Array.isArray(memoryArray)) memoryArray = [];
+    ctx.state.memoryArray = ctx.policy.mode === "LITE" ? [] : await retrieveMemories(ctx.request.finalMessage, ctx.auth.userId, Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', GEMINI_API_KEY);
+    if (!Array.isArray(ctx.state.memoryArray)) ctx.state.memoryArray = [];
     
     const memoryPrompt = globalMemory ? `\n\n[MEMORI GLOBAL & PREFERENSI USER]:\n${globalMemory}\n(Patuhi instruksi/ingatan di atas secara ketat di setiap jawaban Anda!)` : '';
-    console.log(`[MEMORY PROMPT GENERATED] memoryPrompt="${memoryPrompt.trim()}" memoryArray size=${memoryArray.length}`);
-    processingSteps.push(`[MEMORY PROMPT GENERATED] memoryPrompt="${memoryPrompt.trim()}" memoryArray size=${memoryArray.length}`);
+    console.log(`[MEMORY PROMPT GENERATED] memoryPrompt="${memoryPrompt.trim()}" ctx.state.memoryArray size=${ctx.state.memoryArray.length}`);
+    ctx.state.processingSteps.push(`[MEMORY PROMPT GENERATED] memoryPrompt="${memoryPrompt.trim()}" ctx.state.memoryArray size=${ctx.state.memoryArray.length}`);
 
     // --- SINGLE GATEWAY: ANTI DUPLICATE MEMORY (TIER 1 & 2) ---
     // Dipanggil TEPAT SEBELUM membangun final context.
-    if (userId && message && typeof message === 'string' && message.trim().length > 0) {
+    if (ctx.auth.userId && ctx.request.finalMessage && typeof ctx.request.finalMessage === 'string' && ctx.request.finalMessage.trim().length > 0) {
       console.log(`[MEMORY_GATEWAY] Edge Function hanya validasi auth dan memproses LLM. Tidak ada auto-save sembunyi.`);
     }
 
     let basePrompts = agentIdentityPrompt + userContextPrompt + memoryPrompt;
-    if (ctx.execution.webHint === "HIGH_PRIORITY") {
+    if (ctx.policy.webHint === "HIGH_PRIORITY") {
       basePrompts += `\n[WEB vs RAG COMPARISON CONTRACT]: Jika terdapat perbedaan antara dokumen RAG internal dan Web/Internet, identifikasi mana yang lebih baru secara eksplisit.`;
     }
     
     const resolved = buildContextFusion({
-      memoryArray,
-      ragArray,
-      message: finalMessage,
+      ctx.state.memoryArray,
+      ctx.state.ragArray,
+      message: ctx.request.finalMessage,
       basePrompts,
       ctx
     });
@@ -1346,23 +1336,23 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
     });
 
     console.log(`[SYSTEM CONTEXT FINAL] fullSystemContext="${fullSystemContext.substring(fullSystemContext.length - 300)}"`);
-    processingSteps.push(`[SYSTEM CONTEXT FINAL] fullSystemContext="${fullSystemContext.substring(fullSystemContext.length - 300)}"`);
+    ctx.state.processingSteps.push(`[SYSTEM CONTEXT FINAL] fullSystemContext="${fullSystemContext.substring(fullSystemContext.length - 300)}"`);
 
     // Gateway already moved up.
 
     if (tools && tools.length > 0) {
       // --- INTENT ROUTER (Pemotong Kompas Cerdas) ---
       let isChatBiasa = false;
-      const lowerMessage = finalMessage.toLowerCase();
-      processingSteps.push('🔍 Menganalisis permintaan user...');
+      ctx.request.lowerMsg = ctx.request.finalMessage.toLowerCase();
+      ctx.state.processingSteps.push('🔍 Menganalisis permintaan user...');
       
       // Deteksi instan (Hardcoded) untuk fitur yang membutuhkan sub-agent/tools
       const desktopLocalKeywords = ["desktop", "terminal", "cmd", "powershell", "hardisk", "hard disk", "folder saya", "file saya", "komputer saya", "laptop saya", "daftar file", "cek file", "isi desktop", "isi folder", "buka terminal", "jalankan perintah", "eksekusi", "direktori"];
-      const isDesktopLocalRequest = desktopOSMode && desktopLocalKeywords.some(kw => lowerMessage.includes(kw));
+      const isDesktopLocalRequest = desktopOSMode && desktopLocalKeywords.some(kw => ctx.request.lowerMsg.includes(kw));
 
       if (isDesktopLocalRequest) {
         isChatBiasa = true;
-        processingSteps.push('🖥️ Intent Router: Tugas lokal Desktop terdeteksi → Mamet langsung menangani (bypass Sub-Agent)');
+        ctx.state.processingSteps.push('🖥️ Intent Router: Tugas lokal Desktop terdeteksi → Mamet langsung menangani (bypass Sub-Agent)');
         console.log("Intent Router: Desktop local request detected. Forcing CHAT_BIASA to let main LLM handle via <terminal> tags.");
       } else {
       const actionKeywords = [
@@ -1381,17 +1371,17 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
         "debat", "rapat", "diskusikan", "direksi", "ceo", "cfo", "cto", "board of directors", "keputusan bisnis",
         "shopee", "affiliate", "afiliate", "promosi", "produk", "jual", "komisi"
       ];
-      const containsActionKeyword = actionKeywords.some(kw => lowerMessage.includes(kw));
+      const containsActionKeyword = actionKeywords.some(kw => ctx.request.lowerMsg.includes(kw));
 
       if (containsActionKeyword) {
         isChatBiasa = false;
-        processingSteps.push('🎯 Intent Router: Mendeteksi kata kunci aksi → Butuh Sub-Agent');
+        ctx.state.processingSteps.push('🎯 Intent Router: Mendeteksi kata kunci aksi → Butuh Sub-Agent');
         console.log("Intent Router: Mendeteksi kata kunci aksi. Bypass LLM check -> BUTUH_AGENT");
       } else {
         try {
-          processingSteps.push('🧠 Intent Router: Mengklasifikasi jenis permintaan...');
+          ctx.state.processingSteps.push('🧠 Intent Router: Mengklasifikasi jenis permintaan...');
           const intentCheckPrompt = `Analisis apakah input user berikut membutuhkan pencarian internet (web search), kunjungan website, analisis mendalam, penulisan/eksekusi kode, pemanggilan API, atau pembuatan jadwal/cron.
-Pesan user: "${finalMessage}"
+Pesan user: "${ctx.request.finalMessage}"
 
 Kriteria:
 - Jawab "CHAT_BIASA" jika pesan HANYA berupa sapaan (halo, pagi), obrolan santai (apa kabar, kamu siapa), ucapan terima kasih, atau pernyataan/pertanyaan umum yang bisa dijawab tanpa info luar/terkini/koding.
@@ -1401,10 +1391,10 @@ Jawab HANYA dengan satu kata: "CHAT_BIASA" atau "BUTUH_AGENT".`;
           const intentResult = await runCoordinatorLLM(intentCheckPrompt, "Anda adalah router intent super ringan. Jawab HANYA satu kata.", true);
           if (intentResult.toUpperCase().includes("CHAT_BIASA")) {
              isChatBiasa = true;
-             processingSteps.push('💬 Keputusan: Obrolan biasa → Jawab langsung tanpa sub-agent');
+             ctx.state.processingSteps.push('💬 Keputusan: Obrolan biasa → Jawab langsung tanpa sub-agent');
              console.log("Intent Router: Ini chat biasa. Bypass logika Sub-Agent untuk menghemat waktu dan kuota.");
           } else {
-             processingSteps.push('⚡ Keputusan: Butuh aksi → Mempersiapkan sub-agent...');
+             ctx.state.processingSteps.push('⚡ Keputusan: Butuh aksi → Mempersiapkan sub-agent...');
           }
         } catch (err) {
           console.warn("Intent router error, mengabaikan intent check:", err);
@@ -1413,17 +1403,17 @@ Jawab HANYA dengan satu kata: "CHAT_BIASA" atau "BUTUH_AGENT".`;
       } // close desktopLocalRequest else
 
       if (isChatBiasa) {
-        processingSteps.push('✍️ Menghubungi Model AI untuk menjawab langsung...');
+        ctx.state.processingSteps.push('✍️ Menghubungi Model AI untuk menjawab langsung...');
         
         // --- MEMORY MANAGER (BACKGROUND SAVE) ---
         // Kita hanya mengambil 'message' murni (tanpa embel-embel dokumen 50rb karakter) agar token Groq tidak meledak
         // --- [REMOVED] MEMORY MANAGER DUPLICATE CALL ---
 
         if (stream && !extractedImage) {
-          const streamRes = getStreamResponse(finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps });
+          const streamRes = getStreamResponse(ctx.request.finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, ctx.state.processingSteps });
           if (streamRes) return streamRes;
         }
-        replyMessage = await runLLM(finalMessage, fullSystemContext, history);
+        replyMessage = await runLLM(ctx.request.finalMessage, fullSystemContext, history);
       } else {
         let coordinatorSystemPrompt = `Tugas Anda adalah menganalisis permintaan user dan memilih sub-agent yang tepat.
 Anda memiliki tim Sub-Agent nyata berikut ini:
@@ -1449,14 +1439,14 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
       let planText = '[]';
       let plan: any[] = [];
       try {
-        processingSteps.push('🤖 Kepala Agent (Coordinator): Merencanakan strategi...');
-        planText = await runCoordinatorLLM(`Permintaan User: "${finalMessage}"`, coordinatorSystemPrompt);
+        ctx.state.processingSteps.push('🤖 Kepala Agent (Coordinator): Merencanakan strategi...');
+        planText = await runCoordinatorLLM(`Permintaan User: "${ctx.request.finalMessage}"`, coordinatorSystemPrompt);
         planText = planText.replace(/```json/g, '').replace(/```/g, '').trim();
         plan = JSON.parse(planText);
         if (plan.length > 0) {
-          processingSteps.push(`📋 Rencana: ${plan.length} sub-agent akan ditugaskan → ${plan.map((p: any) => p.subagent).join(', ')}`);
+          ctx.state.processingSteps.push(`📋 Rencana: ${plan.length} sub-agent akan ditugaskan → ${plan.map((p: any) => p.subagent).join(', ')}`);
         } else {
-          processingSteps.push('📋 Coordinator memutuskan tidak ada sub-agent yang diperlukan');
+          ctx.state.processingSteps.push('📋 Coordinator memutuskan tidak ada sub-agent yang diperlukan');
         }
       } catch (err) {
         console.error("Mamet Healer: Mendeteksi format JSON rusak. Memperbaiki...");
@@ -1510,12 +1500,12 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
 
       if (contractValidation.status === "REJECTED") {
           plan = []; // Block execution pipeline
-          processingSteps.push(`❌ [Execution Contract] Skema ditolak: ${contractValidation.reason_code}`);
+          ctx.state.processingSteps.push(`❌ [Execution Contract] Skema ditolak: ${contractValidation.reason_code}`);
       } else {
           console.log(`[Execution Contract] VALIDATED OK. Starting execution loop.`);
       }
 
-      let accumulatedContext = `Permintaan awal user: "${finalMessage}"\n\n`;
+      let accumulatedContext = `Permintaan awal user: "${ctx.request.finalMessage}"\n\n`;
 
       if (plan && plan.length > 0) {
         // --- PHASE 4: DEPENDENCY-AWARE EXECUTION GRAPH BUILDER ---
@@ -1555,7 +1545,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
         const PER_PLUGIN_TIMEOUT_MS = 12000;
         const orchestrationStartTime = Date.now();
 
-        processingSteps.push(`🧠 Orchestrator: Membangun graph dengan ${executionTiers.length} tier eksekusi.`);
+        ctx.state.processingSteps.push(`🧠 Orchestrator: Membangun graph dengan ${executionTiers.length} tier eksekusi.`);
 
         for (let tierIdx = 0; tierIdx < executionTiers.length; tierIdx++) {
             const tierTasks = executionTiers[tierIdx];
@@ -1563,7 +1553,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
             // Check Global Budget
             if (Date.now() - orchestrationStartTime > GLOBAL_TIMEOUT_MS) {
                 console.warn(`[BUDGET_ENFORCER] Global Orchestration Budget Exceeded! Sisa tugas dibatalkan.`);
-                processingSteps.push(`⚠️ Eksekusi dibatalkan karena melebihi total waktu budget (24s).`);
+                ctx.state.processingSteps.push(`⚠️ Eksekusi dibatalkan karena melebihi total waktu budget (24s).`);
                 break;
             }
 
@@ -1576,17 +1566,17 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
                
                const plugin = getPluginByName(subagent);
                if (!plugin) {
-                   processingSteps.push(`⚠️ Sub-Agent "${subagent}" tidak ditemukan`);
+                   ctx.state.processingSteps.push(`⚠️ Sub-Agent "${subagent}" tidak ditemukan`);
                    return { subagent, task, subagentResText: `Sub-agent '${subagent}' tidak ditemukan di sistem plugin.`, subagentSources, subagentToolExec };
                }
                
-               processingSteps.push(`🚀 Eksekusi [Tier ${tierIdx+1}]: Sub-Agent "${subagent}"`);
+               ctx.state.processingSteps.push(`🚀 Eksekusi [Tier ${tierIdx+1}]: Sub-Agent "${subagent}"`);
                
                const env = { 
                   GEMINI_API_KEY, GROQ_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY, 
                   APIFY_API_TOKEN: Deno.env.get('APIFY_API_TOKEN') || '', allGeminiKeys 
                };
-               const fullTask = `Tugas Spesifik Anda: ${task}\n\nPermintaan Asli User: "${finalMessage}"\n\nKonteks Tambahan (Hasil Tier Sebelumnya):\n${accumulatedContext}`;
+               const fullTask = `Tugas Spesifik Anda: ${task}\n\nPermintaan Asli User: "${ctx.request.finalMessage}"\n\nKonteks Tambahan (Hasil Tier Sebelumnya):\n${accumulatedContext}`;
                
                const customRunLLM = async (prompt: string, sys: string, hist: any[]) => {
                   const originalModel = model;
@@ -1623,7 +1613,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
                   const executeContext = { 
                       task: fullTask, cleanTask: task, accumulatedContext, 
                       env: { ...env, signal: abortController.signal, fetch: controlledFetch }, 
-                      runLLM: customRunLLM, userId, signal: abortController.signal 
+                      runLLM: customRunLLM, ctx.auth.userId, signal: abortController.signal 
                   };
 
                   const isolatedExecutionPromise = (async () => {
@@ -1661,7 +1651,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
                   
                   const durationMs = Date.now() - startTime;
                   const outputPreview = (subagentResText || '').substring(0, 80).replace(/\n/g, ' ');
-                  processingSteps.push(`✅ [Tier ${tierIdx+1}] "${subagent}" selesai (${durationMs}ms)${subagentSources.length > 0 ? ` → ${subagentSources.length} sumber referensi` : ''} → "${outputPreview}..."`);
+                  ctx.state.processingSteps.push(`✅ [Tier ${tierIdx+1}] "${subagent}" selesai (${durationMs}ms)${subagentSources.length > 0 ? ` → ${subagentSources.length} sumber referensi` : ''} → "${outputPreview}..."`);
                } catch (err: any) {
                   const durationMs = Date.now() - startTime;
                   const status = err.message === 'HARD_TIMEOUT_REACHED' ? 'timeout' : 'fail';
@@ -1670,10 +1660,10 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
                   
                   if (status === 'timeout') {
                     subagentResText = `[SISTEM DILINDUNGI OLEH MAMET HEALER]: Eksekusi sub-agent "${subagent}" dibatalkan permanen (Hard Timeout ${PER_PLUGIN_TIMEOUT_MS/1000}s).`;
-                    processingSteps.push(`⏳ [Tier ${tierIdx+1}] "${subagent}" tereliminasi (Hard Timeout Gated)`);
+                    ctx.state.processingSteps.push(`⏳ [Tier ${tierIdx+1}] "${subagent}" tereliminasi (Hard Timeout Gated)`);
                   } else {
                     subagentResText = `[SISTEM DILINDUNGI OLEH MAMET HEALER]: Eksekusi sub-agent gagal pada mode terisolasi (${err.message || 'Unknown'}).`;
-                    processingSteps.push(`❌ [Tier ${tierIdx+1}] "${subagent}" gagal terisolasi: ${err.message || 'Unknown'}`);
+                    ctx.state.processingSteps.push(`❌ [Tier ${tierIdx+1}] "${subagent}" gagal terisolasi: ${err.message || 'Unknown'}`);
                   }
                }
                return { subagent, task, subagentResText, subagentSources, subagentToolExec };
@@ -1698,29 +1688,29 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
             }
         }
 
-        const synthesisPrompt = `Anda telah menugaskan beberapa sub-agent.${fullSystemContext}\n\nPermintaan Awal User: "${finalMessage}"\n\nRiwayat pekerjaan sub-agent:\n${accumulatedContext}\n\nJAWABLAH pesan/pertanyaan user dengan ramah dan natural berdasarkan informasi dari sub-agent di atas. \n\nPENTING: \n- JANGAN gunakan format kaku seperti "Laporan Hasil Kerja". Bersikaplah seperti manusia biasa (asisten yang ramah bernama Mamet).\n- Langsung berikan jawaban, sapaan balik, atau solusi tanpa perlu panjang lebar menjelaskan proses sub-agent (kecuali user secara spesifik bertanya tentang prosesnya).\n- Jika pada riwayat pekerjaan sub-agent terdapat bagian "Gambar Terkait" (dalam format Markdown ![Gambar](url)), Anda WAJIB menyertakan gambar-gambar tersebut di bagian paling akhir jawaban Anda untuk memberikan visualisasi kepada user.\n- Jika Sub-Agent mengembalikan pesan ERROR atau GAGAL, sampaikan kepada user dengan sopan bahwa tugas tersebut gagal. Jangan pernah mengarang data palsu!\n- Gunakan format Tabel Markdown HANYA jika menyajikan data terstruktur, statistik, harga, atau perbandingan.\n- DILARANG KERAS menggunakan blok \`\`\`mermaid\`\`\` KECUALI user secara tertulis meminta "buatkan diagram" atau "gambarkan flowchart". Jika user tidak meminta diagram, JANGAN pernah memakainya!`;
+        const synthesisPrompt = `Anda telah menugaskan beberapa sub-agent.${fullSystemContext}\n\nPermintaan Awal User: "${ctx.request.finalMessage}"\n\nRiwayat pekerjaan sub-agent:\n${accumulatedContext}\n\nJAWABLAH pesan/pertanyaan user dengan ramah dan natural berdasarkan informasi dari sub-agent di atas. \n\nPENTING: \n- JANGAN gunakan format kaku seperti "Laporan Hasil Kerja". Bersikaplah seperti manusia biasa (asisten yang ramah bernama Mamet).\n- Langsung berikan jawaban, sapaan balik, atau solusi tanpa perlu panjang lebar menjelaskan proses sub-agent (kecuali user secara spesifik bertanya tentang prosesnya).\n- Jika pada riwayat pekerjaan sub-agent terdapat bagian "Gambar Terkait" (dalam format Markdown ![Gambar](url)), Anda WAJIB menyertakan gambar-gambar tersebut di bagian paling akhir jawaban Anda untuk memberikan visualisasi kepada user.\n- Jika Sub-Agent mengembalikan pesan ERROR atau GAGAL, sampaikan kepada user dengan sopan bahwa tugas tersebut gagal. Jangan pernah mengarang data palsu!\n- Gunakan format Tabel Markdown HANYA jika menyajikan data terstruktur, statistik, harga, atau perbandingan.\n- DILARANG KERAS menggunakan blok \`\`\`mermaid\`\`\` KECUALI user secara tertulis meminta "buatkan diagram" atau "gambarkan flowchart". Jika user tidak meminta diagram, JANGAN pernah memakainya!`;
         
-        processingSteps.push('📝 Merangkum dan menyintesis jawaban akhir...');
+        ctx.state.processingSteps.push('📝 Merangkum dan menyintesis jawaban akhir...');
         
         // --- MEMORY MANAGER (BACKGROUND SAVE) ---
         const ENABLE_ASYNC_MEMORY_WRITE = Deno.env.get('ENABLE_ASYNC_MEMORY_WRITE') !== 'false';
         if (ENABLE_ASYNC_MEMORY_WRITE) {
             const supUrl = Deno.env.get('SUPABASE_URL') || '';
             const supKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-            if (mode !== "LITE") await safeFireAndTrack('MemoryWriteQueue_A', processMemoryWriteQueue(userId, finalMessage, supUrl, supKey));
+            if (ctx.policy.mode !== "LITE") await safeFireAndTrack('MemoryWriteQueue_A', processMemoryWriteQueue(ctx.auth.userId, ctx.request.finalMessage, supUrl, supKey));
         }
 
         if (stream && !extractedImage) {
-          const streamRes = getStreamResponse(synthesisPrompt, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps, auditMode, routingDecision, contractValidation });
+          const streamRes = getStreamResponse(synthesisPrompt, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, ctx.state.processingSteps, auditMode, routingDecision, contractValidation });
           if (streamRes) return streamRes;
         }
         replyMessage = await runLLM(synthesisPrompt, fullSystemContext, history);
       } else {
         if (stream && !extractedImage) {
-          const streamRes = getStreamResponse(finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps, auditMode, routingDecision, contractValidation });
+          const streamRes = getStreamResponse(ctx.request.finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, ctx.state.processingSteps, auditMode, routingDecision, contractValidation });
           if (streamRes) return streamRes;
         }
-        replyMessage = await runLLM(finalMessage, fullSystemContext, history);
+        replyMessage = await runLLM(ctx.request.finalMessage, fullSystemContext, history);
       }
       }
     } else {
@@ -1729,15 +1719,15 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
       if (ENABLE_ASYNC_MEMORY_WRITE) {
           const supUrl = Deno.env.get('SUPABASE_URL') || '';
           const supKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-          if (mode !== "LITE") await safeFireAndTrack('MemoryWriteQueue_B', processMemoryWriteQueue(userId, finalMessage, supUrl, supKey));
+          if (ctx.policy.mode !== "LITE") await safeFireAndTrack('MemoryWriteQueue_B', processMemoryWriteQueue(ctx.auth.userId, ctx.request.finalMessage, supUrl, supKey));
       }
 
       if (stream && !extractedImage) {
-        processingSteps.push('✍️ Menjawab langsung (tanpa tools)...');
-        const streamRes = getStreamResponse(finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps, auditMode, routingDecision, contractValidation });
+        ctx.state.processingSteps.push('✍️ Menjawab langsung (tanpa tools)...');
+        const streamRes = getStreamResponse(ctx.request.finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, ctx.state.processingSteps, auditMode, routingDecision, contractValidation });
         if (streamRes) return streamRes;
       }
-      replyMessage = await runLLM(finalMessage, fullSystemContext, history);
+      replyMessage = await runLLM(ctx.request.finalMessage, fullSystemContext, history);
     }
 
     // Phase 5: Guarantee async delivery before sending JSON response
@@ -1751,9 +1741,9 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
       groundingSources,
       toolExecution,
       subagentRuns,
-      processingSteps,
+      ctx.state.processingSteps,
       timestamp: new Date(),
-      userId
+      ctx.auth.userId
     };
 
     return new Response(JSON.stringify(aiResponse), {
