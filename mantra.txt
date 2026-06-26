@@ -322,3 +322,8 @@ P3
 - **Context Fusion Limits & Semantic Overlap:** Mencabut *hard truncation* (`break`) yang memenggal paksa kepingan RAG/Memory, diganti fungsi *skip* tanpa mematikan loop. `chunkText` di `vector_utils.ts` diberi *250 char semantic overlap* (mendeteksi titik/paragraf terdekat) guna menyelamatkan konteks antar-kepingan hukum.
 - **Deduplication & Hybrid Re-Ranking Layer:** Memasang *post-RAG deduplication* berbasis *Cosine Similarity* pada *Edge Function* untuk membunuh salinan ganda. Tumpukan dokumen kemudian di- *re-rank* secara *Hybrid* (70% similarity, 20% position weight, 10% query word coverage).
 - **Web vs RAG Comparison Contract:** Di mode LITE, instruksi validasi silang (Web vs RAG) tak lagi diserahkan ke ilusi agen. Kontrak diwajibkan via *Regex Intent Detector* (`webHint = HIGH_PRIORITY`), memaksa perbandingan kebaruan data secara eksplisit.
+
+#### 10. EXPLICIT CAPABILITY ARCHITECTURE (27 Juni 2026)
+- **Capability-Based Permission:** Migrasi dari filter berbasis "Mode" (AI vs LITE) menjadi Otorisasi Kapabilitas Eksplisit (`canWriteMemory`, `canWriteKnowledge`, `canUseAutomation`, dll). 
+- **MametLite Read-Only Gating:** MametLite kini terisolasi total dari kemampuan mutasi (menulis/menghapus) pada `knowledge_manager` dan antrean memori, namun tetap memiliki akses penuh untuk membaca (Semantic Search, RAG, Web).
+- **Workspace Guardian Patch:** Perbaikan celah di mana guardian sebelumnya memaksakan penyisipan `knowledge_manager` (yang memiliki kapabilitas Tulis) tanpa memandang hak akses klien. Filter akhir kini dijaga ketat oleh `ctx.policy`.
