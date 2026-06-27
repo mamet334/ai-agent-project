@@ -1,0 +1,8 @@
+feat: Phase 2 - Engineer policy boundary and ADR
+
+- Add ENGINEER mode to MametCapabilityMode (AI / LITE / ENGINEER)
+- Add appSource: engineer routing in buildUnifiedExecutionContext
+- Engineer policy: read-only memory, no automation, no desktop tools
+- Add ADR-0003: Engineer Capability Mode
+- Add TASK-0007: Engineer Policy Boundary (Done)
+- Deploy agent-process to Supabase (BrainBox AI)
