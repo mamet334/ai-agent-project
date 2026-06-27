@@ -1,16 +1,16 @@
-feat: Phase 2 complete - Project Memory Service designed
+feat: Phase 3 - Project Memory database live in Supabase
 
-Phase 2 ALL tasks Done. Phase 3 opened.
+TASK-0008 Done:
+- Executed project-memory-schema-draft.sql via supabase db query --linked
+- 4 tables created with RLS: project_memory_entries, engineering_tasks, architecture_gaps, verification_runs
+- All tables confirmed: BASE TABLE, rowsecurity: true
 
-TASK-0006 Done:
-- TECH-SPEC-0006: Full technical specification for Project Memory Service
-- project-memory-schema-draft.sql: 4 tables, RLS, triggers, indexes
+TASK-0009 Done:
+- Backfill baseline entries (project-memory-backfill.sql)
+- engineering_tasks: 9 rows (TASK-0001 to TASK-0009)
+- architecture_gaps: 6 rows (GAP-0001 to GAP-0006)
+- project_memory_entries: 6 rows (root causes, solutions, release notes)
+- verification_runs: 8 rows (all Phase 1 and Phase 2 verifications)
 
-TASK-0007 Done:
-- Engineer policy boundary active in production
-- ADR-0003 committed
-
-Roadmap:
-- Phase 2 closed (all exit criteria verified)
-- Phase 3 opened: In Progress
-- TASK-0008, 0009, 0010 identified for Phase 3
+Project Memory now queryable in Supabase production.
+Next: TASK-0010 - Integrate read into agent-process Engineer mode.

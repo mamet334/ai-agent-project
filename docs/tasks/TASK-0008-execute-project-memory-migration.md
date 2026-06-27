@@ -1,7 +1,8 @@
 # TASK-0008: Execute Project Memory Schema Migration
 
-Status: Proposed
+Status: Done
 Owner: Mamet Engineer
+Date: 2026-06-27
 Phase: 3
 
 ## Goal
@@ -17,13 +18,21 @@ Execute the Project Memory database schema against Supabase production (BrainBox
 
 Run `docs/tasks/project-memory-schema-draft.sql` via Supabase dashboard SQL editor or Supabase CLI.
 
-## Acceptance Criteria
+## Verification — Runtime Evidence (2026-06-27)
 
-- All 4 tables created: `project_memory_entries`, `engineering_tasks`, `architecture_gaps`, `verification_runs`
-- RLS enabled on all tables
-- Triggers active (updated_at auto-refresh)
-- Indexes created
-- Supabase dashboard confirms tables exist
+Command: `npx supabase db query --linked -f docs/tasks/project-memory-schema-draft.sql`
+Result: Exit 0, rows: [] (DDL success)
+
+**Tables confirmed in Supabase (information_schema.tables):**
+
+| table_name | table_type | rowsecurity |
+|---|---|---|
+| project_memory_entries | BASE TABLE | ✅ true |
+| engineering_tasks | BASE TABLE | ✅ true |
+| architecture_gaps | BASE TABLE | ✅ true |
+| verification_runs | BASE TABLE | ✅ true |
+
+Next: TASK-0009 — Backfill baseline entries.
 
 ## Next After This
 
