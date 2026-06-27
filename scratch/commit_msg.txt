@@ -1,8 +1,16 @@
-feat: Phase 2 - Engineer policy boundary and ADR
+feat: Phase 2 complete - Project Memory Service designed
 
-- Add ENGINEER mode to MametCapabilityMode (AI / LITE / ENGINEER)
-- Add appSource: engineer routing in buildUnifiedExecutionContext
-- Engineer policy: read-only memory, no automation, no desktop tools
-- Add ADR-0003: Engineer Capability Mode
-- Add TASK-0007: Engineer Policy Boundary (Done)
-- Deploy agent-process to Supabase (BrainBox AI)
+Phase 2 ALL tasks Done. Phase 3 opened.
+
+TASK-0006 Done:
+- TECH-SPEC-0006: Full technical specification for Project Memory Service
+- project-memory-schema-draft.sql: 4 tables, RLS, triggers, indexes
+
+TASK-0007 Done:
+- Engineer policy boundary active in production
+- ADR-0003 committed
+
+Roadmap:
+- Phase 2 closed (all exit criteria verified)
+- Phase 3 opened: In Progress
+- TASK-0008, 0009, 0010 identified for Phase 3
