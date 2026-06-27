@@ -207,3 +207,14 @@ LAST UPDATE SNAPSHOT v99dbae5:
 - Pipeline changes: None
 - Risk notes: Schema changed in scratch/check.sql - requires Supabase sync verification; Schema changed in scratch/update_pm_14.sql - requires Supabase sync verification
 - System status: ACTIVE - Auto-compiled and verified.
+
+============================================================
+LAST UPDATE SNAPSHOT v76de39a:
+- Timestamp: 2026-06-27 15:41:40 UTC
+- Changed modules: General Project Updates
+- Memory layer changes: None
+- Decision engine changes: None
+- Behavior layer changes: None
+- Pipeline changes: None
+- Risk notes: Schema changed in scratch/update_pm_15.sql - requires Supabase sync verification
+- System status: ACTIVE - Auto-compiled and verified.
