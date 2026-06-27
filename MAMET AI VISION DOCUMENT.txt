@@ -438,13 +438,16 @@ Engineer memahami Repository.
 Phase 6
 
 Engineer menjadi Reviewer.
-Konteks wajib: Task + git diff + ADR + Coding Rule.
-AI tidak boleh me-review tanpa memahami alasan (Project Memory).
+Alur review wajib berbasis ruang lingkup:
+Task → Affected Files → Git Diff → Relevant ADR → Relevant Coding Rules
+Engineer tidak membaca seluruh Project Memory untuk perubahan kecil.
+AI tidak boleh me-review tanpa menerima git diff dari user.
 
 Phase 7
 
 Engineer menjadi Implementer.
 Alur aman wajib: Generate Patch → Self Verification (syntax, arch, rules, dep) → User Review → Apply.
+Self Verification bukan formalitas — Engineer wajib menjelaskan alasan setiap PASS/FAIL.
 
 Phase 8
 
@@ -453,9 +456,14 @@ Tidak sekadar baca log. AI memonitor kesehatan proyek:
 - Architecture Gaps
 - Verification History
 - Failed Tasks
-- Deprecated ADR
+- Deprecated ADR (sebagai sejarah, bukan larangan)
 - Dependency Changes
 - Test Results
+
+Prinsip Deprecated ADR:
+Deprecated ≠ Forbidden
+Deprecated ADR tetap berguna sebagai konteks sejarah.
+Engineer hanya memuatnya saat ada konflik atau topik yang relevan.
 
 ---
 
@@ -463,23 +471,41 @@ Tidak sekadar baca log. AI memonitor kesehatan proyek:
 
 Ini adalah filter kejujuran Mamet AI.
 
-Sebelum Engineer memberi rekomendasi atau patch, ia wajib menyatakan tingkat keyakinan (Confidence).
+Confidence memiliki DUA dimensi:
 
-Contoh:
+Coverage   → sumber informasi apa saja yang tersedia.
+Evidence   → seberapa kuat bukti dari sumber tersebut.
 
-Confidence: 95%
-Reason:
-- Membaca TASK
-- Membaca ADR
-- Membaca Repository
-- Membaca Project Memory
+Hanya memenuhi checklist bukan berarti evidence kuat.
 
-Contoh 2:
+Contoh output Engineer:
 
-Confidence: 42%
-Reason:
-- Repository belum cukup dipahami.
-- Tidak ada referensi ADR terkait.
+Engineering Confidence
+Coverage:
+- [✓] TASK: TASK-0014
+- [✓] git diff: tersedia
+- [✓] ADR: ADR-0004
+- [✓] Coding Rules: ditemukan
+- [✗] Test Result: belum tersedia
+
+Evidence Strength: STRONG
+Reason: diff selaras dengan TASK-0014, diatur oleh ADR-0004, tidak ada pelanggaran aturan.
+
+Recommendation: Layak direview. Verifikasi runtime tetap diperlukan.
+
+Contoh confidence rendah:
+
+Engineering Confidence
+Coverage:
+- [✓] git diff: tersedia
+- [✗] TASK: tidak ditemukan
+- [✗] ADR: tidak ada yang terkait modul ini
+- [✗] Coding Rules: tidak ditemukan
+
+Evidence Strength: WEAK
+Reason: diff tersedia tetapi tidak ada ADR yang mengatur modul ini. Penilaian hanya berdasarkan pola umum.
+
+Recommendation: Minta konteks tambahan sebelum memberikan review.
 
 Confidence Score membantu User memutuskan apakah hasil AI layak dipercaya atau perlu instruksi tambahan.
 

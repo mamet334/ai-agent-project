@@ -1368,68 +1368,100 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
       console.log(`[MEMORY_GATEWAY] Edge Function hanya validasi auth dan memproses LLM. Tidak ada auto-save sembunyi.`);
     }
 
-    // --- ENGINEER CONTEXT (TASK-0010) ---
+    // --- ENGINEER CONTEXT (TASK-0010, refined by Phase 6-8 audit) ---
     let engineerContextPrompt = '';
     if (ctx.policy.mode === 'ENGINEER') {
       try {
         const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
-        const [tasksRes, gapsRes, entriesRes, deprecatedADRRes] = await Promise.all([
+        
+        // Detect if user is asking about conflict, deprecated patterns, or history
+        // Deprecated ADRs are LAZY-LOADED — only when relevant to avoid token waste
+        const lowerMsgForEngineer = (message || '').toLowerCase();
+        const needsDeprecatedADR = /deprecated|konflik|conflict|history|lama|diganti|obsolete|pola lama/.test(lowerMsgForEngineer);
+
+        const baseQueries: Promise<any>[] = [
           supClient.from('engineering_tasks').select('task_number, title, status').in('status', ['Proposed', 'InProgress']).order('created_at', { ascending: false }).limit(5),
           supClient.from('architecture_gaps').select('gap_number, title, status').in('status', ['Open', 'InProgress']).order('created_at', { ascending: false }).limit(5),
-          supClient.from('project_memory_entries').select('entry_type, title, status, content').in('status', ['Verified', 'InProgress']).order('created_at', { ascending: false }).limit(8),
-          supClient.from('project_memory_entries').select('entry_type, title, content').eq('status', 'Deprecated').order('updated_at', { ascending: false }).limit(5)
-        ]);
+          supClient.from('project_memory_entries').select('entry_type, title, status, content').in('status', ['Verified', 'InProgress']).order('created_at', { ascending: false }).limit(8)
+        ];
+
+        const [tasksRes, gapsRes, entriesRes] = await Promise.all(baseQueries);
+
+        // Lazy-load Deprecated ADRs only when needed (Phase 8 / conflict detection)
+        let deprecatedContext = '';
+        if (needsDeprecatedADR) {
+          const depRes = await supClient.from('project_memory_entries').select('entry_type, title, content').eq('status', 'Deprecated').order('updated_at', { ascending: false }).limit(5);
+          if (depRes.data && depRes.data.length > 0) {
+            deprecatedContext = `=== Historical ADRs (Deprecated — context only, not forbidden) ===\n`;
+            deprecatedContext += `NOTE: Deprecated ADRs are historical context. They explain WHY a decision was made, not a current rule.\n`;
+            deprecatedContext += depRes.data.map((e: any) => `- [DEPRECATED] ${e.title}`).join('\n') + '\n';
+          }
+        }
 
         engineerContextPrompt = `\n\n[MAMET ENGINEER CONTEXT]\n`;
         engineerContextPrompt += `=== Active Tasks ===\n${tasksRes.data?.map((t: any) => `- ${t.task_number} (${t.status}): ${t.title}`).join('\n') || 'None'}\n`;
-        engineerContextPrompt += `=== Active Gaps ===\n${gapsRes.data?.map((g: any) => `- ${g.gap_number} (${g.status}): ${g.title}`).join('\n') || 'None'}\n`;
-        engineerContextPrompt += `=== Project Memory (Verified) ===\n${entriesRes.data?.map((e: any) => `- [${e.entry_type}] ${e.title}: ${e.content}`).join('\n') || 'None'}\n`;
-        engineerContextPrompt += `=== Deprecated ADRs (Health Monitor) ===\n${deprecatedADRRes.data?.map((e: any) => `- [DEPRECATED] ${e.title}`).join('\n') || 'None'}\n`;
+        engineerContextPrompt += `=== Active Architecture Gaps ===\n${gapsRes.data?.map((g: any) => `- ${g.gap_number} (${g.status}): ${g.title}`).join('\n') || 'None'}\n`;
+        engineerContextPrompt += `=== Project Memory (Active) ===\n${entriesRes.data?.map((e: any) => `- [${e.entry_type}] ${e.title}: ${e.content}`).join('\n') || 'None'}\n`;
+        if (deprecatedContext) engineerContextPrompt += deprecatedContext;
 
-        // --- PHASE 6-8: ENGINEER RULES (ADR-0004, ADR-0005) ---
+        // --- PHASE 6-8: ENGINEER RULES (ADR-0004, ADR-0005) — Vision-aligned ---
         engineerContextPrompt += `
 [ENGINEER RULES - MAEF COMPLIANCE REQUIRED]
-You are Mamet Engineer. You MUST follow ALL rules below without exception.
+You are Mamet Engineer. Follow ALL rules without exception.
 
-RULE 1 - CODE REVIEW (Phase 6):
-When asked to review code, you MUST use ALL FOUR context pillars. If any pillar is missing, explicitly state it and ask the user to provide it BEFORE giving a review.
-  [1] TASK    - What was the purpose? (from Active Tasks above)
-  [2] DIFF    - What exactly changed? (user must provide git diff in their message)
-  [3] ADR     - Which architectural decision governs this? (from Project Memory above)
-  [4] RULES   - Does the change follow established coding patterns?
+RULE 1 - SCOPED CODE REVIEW (Phase 6):
+Before reviewing, establish scope using this pipeline:
+  Task → Affected Files → Git Diff → Relevant ADR → Relevant Coding Rules
+Do NOT read the entire Project Memory for a small single-file change.
+If any of these four pillars is missing, state which one and ask for it BEFORE reviewing:
+  [1] TASK        - What is the purpose? (from Active Tasks above)
+  [2] DIFF        - What changed? (user MUST provide git diff in their message)
+  [3] ADR         - Which architecture decision governs this scope? (filter from Memory above)
+  [4] RULES       - Does the change violate established coding patterns?
 
-RULE 2 - ENGINEERING CONFIDENCE (mandatory on ALL recommendations):
-Output this block FIRST before any response:
-Engineering Confidence: XX%
-Context used:
-- [yes/no] TASK: TASK-xxx
-- [yes/no] git diff: provided / not provided
-- [yes/no] ADR: ADR-xxx
-- [yes/no] Coding Rules: found / not found
-- [yes/no] Project Memory: N entries read
-(80-100%: proceed | 40-79%: state gaps | <40%: ask user for more context first)
+RULE 2 - TWO-DIMENSIONAL CONFIDENCE (mandatory on ALL recommendations):
+Confidence has two dimensions — not a simple count:
+  Coverage    : which sources are available (checklist)
+  Evidence    : how strong/complete the evidence is from those sources
 
-RULE 3 - CODE IMPLEMENTATION (Phase 7):
-When generating a code patch, output this Self Verification block BEFORE asking User Review:
+Output this block FIRST:
+---
+Engineering Confidence
+Coverage:
+- [✓/✗] TASK: TASK-xxx (title)
+- [✓/✗] git diff: provided / not provided
+- [✓/✗] ADR: ADR-xxx / none found for this scope
+- [✓/✗] Coding Rules: found / not found
+- [✓/✗] Affected Files: identified / unknown
+
+Evidence Strength: [STRONG / MODERATE / WEAK]
+Reason: [explain WHY evidence is strong or weak — not just "all boxes checked"]
+Example of WEAK evidence: "diff provided but no ADR covers this module. Judgment is based on general patterns only."
+Example of STRONG evidence: "diff aligns with TASK-0014, governed by ADR-0004, no rule violations found."
+
+Recommendation: [proceed / state gaps / request more context]
+---
+
+RULE 3 - IMPLEMENTATION SAFETY FLOW (Phase 7):
+When generating a code patch, output Self Verification BEFORE User Review:
 Self Verification:
 - Syntax        : PASS/FAIL - [reason]
 - Architecture  : PASS/FAIL - [MAEF compliant / violation: reason]
 - Coding Rules  : PASS/FAIL - [reason]
-- Dependencies  : PASS/FAIL - [no new deps / added: xxx]
-Then output: "Awaiting User Review before Apply."
+- Dependencies  : PASS/FAIL - [no new / added: list them]
+→ "Awaiting User Review before Apply."
 
-RULE 4 - SELF MAINTENANCE (Phase 8):
-When performing health checks, output a Project Health Report covering ALL dimensions:
+RULE 4 - PROJECT HEALTH REPORT (Phase 8):
+When performing maintenance, output a health report covering:
 - Architecture Gaps     : [count open] HEALTHY / WARNING / CRITICAL
-- Verification History  : [last verification date + result]
-- Failed Tasks          : [any InProgress tasks stalled]
-- Deprecated ADRs       : [from Deprecated ADRs section above]
-- Dependency Changes    : [flag if any patch introduced new deps]
-- Test Results          : [from Verification entries in Project Memory]
+- Verification History  : [most recent result from Memory above]
+- Failed/Stalled Tasks  : [any InProgress tasks without recent update]
+- Deprecated ADRs       : [only if loaded — note: these are history, not forbidden]
+- Dependency Changes    : [flag any patch introducing new deps]
+- Test Results          : [from Verification entries in Memory]
 
 Violating any rule above is a breach of Mamet AI Engineering Framework (MAEF).
 `;
-        
       } catch (err) {
         console.error("Failed to fetch engineer context:", err);
       }
