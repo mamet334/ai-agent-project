@@ -89,7 +89,7 @@ Exit Criteria:
 
 ## Phase 4: Capability Separation
 
-Status: In Progress
+Status: Done
 
 Goal:
 
@@ -97,20 +97,20 @@ Make Assistant, MametLite, and Engineer separate policy modes inside one Mamet A
 
 Tasks:
 
-- Define capability enum.
-- Add policy matrix.
-- Route requests by capability.
-- Keep shared services controlled by capability permissions.
+- Define capability enum. (Done)
+- Add policy matrix. (Done)
+- Route requests by capability. (Done)
+- Keep shared services controlled by capability permissions. (Done)
 
 Exit Criteria:
 
-- Assistant can use User Memory + Knowledge RAG.
-- MametLite is lightweight and read-oriented.
-- Engineer can use Project Memory and repository context.
+- Assistant can use User Memory + Knowledge RAG. (Verified)
+- MametLite is lightweight and read-oriented. (Verified)
+- Engineer can use Project Memory and repository context. (Verified)
 
 ## Phase 5: UI And Observability
 
-Status: Proposed
+Status: In Progress
 
 Goal:
 
