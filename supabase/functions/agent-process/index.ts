@@ -238,10 +238,13 @@ serve(async (req) => {
     // === UNIFIED EXECUTION POLICY LAYER (FASE 4C) ===
     const POLICY_LAYER_ENABLED = true;
     
+    // MAEF Capability Model (Bab 10) — mode enum
+    type MametCapabilityMode = "AI" | "LITE" | "ENGINEER";
+
     type MametExecutionContext = {
       auth: { userId: string; userName?: string; appSource: string; };
       request: { originalMessage: string; finalMessage: string; lowerMsg: string; };
-      policy: { mode: "AI" | "LITE"; decision: "ALLOW" | "ALLOW_WITH_LIMIT" | "BLOCK"; toolsEnabled: boolean; webSearchEnabled: boolean; riskScore: number; ragTopK: number; ragThreshold: number; webHint?: string; canReadRAG: boolean; canReadMemory: boolean; canWriteMemory: boolean; canWriteKnowledge: boolean; canUseWorkspace: boolean; canUseAutomation: boolean; canUseDesktopTools: boolean; };
+      policy: { mode: MametCapabilityMode; decision: "ALLOW" | "ALLOW_WITH_LIMIT" | "BLOCK"; toolsEnabled: boolean; webSearchEnabled: boolean; riskScore: number; ragTopK: number; ragThreshold: number; webHint?: string; canReadRAG: boolean; canReadMemory: boolean; canWriteMemory: boolean; canWriteKnowledge: boolean; canUseWorkspace: boolean; canUseAutomation: boolean; canUseDesktopTools: boolean; };
       state: { ragArray: any[]; memoryArray: any[]; processingSteps: string[]; };
       rag: { topK: number; threshold: number; allowLongDocs: boolean; compressionLevel: "low" | "high"; };
       execution: { memoryPriority: "memory_first" | "balanced"; webSearchEnabled: boolean; subAgentEnabled: boolean; webHint?: string; };
@@ -249,8 +252,15 @@ serve(async (req) => {
     };
 
     function buildUnifiedExecutionContext(input: { message: string, desktopOSMode?: boolean, tools?: string[], ragEnabled?: boolean, userId: string, userName?: string, appSource?: string }): MametExecutionContext {
+  // === MAEF Capability Model — appSource routing ===
   const isMametLite = input.appSource === 'mametlite';
-  const mode = isMametLite ? "LITE" : (input.desktopOSMode ? "AI" : "LITE");
+  const isMametEngineer = input.appSource === 'engineer';
+
+  // Mode resolution: ENGINEER > AI > LITE
+  const mode: MametCapabilityMode = isMametEngineer ? "ENGINEER"
+    : isMametLite ? "LITE"
+    : (input.desktopOSMode ? "AI" : "LITE");
+
   const isRagEnabled = input.ragEnabled !== false;
   
   const qLen = (input.message || '').length;
@@ -262,19 +272,37 @@ serve(async (req) => {
   const lowerMsg = (input.message || '').toLowerCase();
   const needsWeb = /terbaru|update|berita|2024|2025|revisi|perubahan|aturan baru/.test(lowerMsg);
   const webHint = needsWeb ? "HIGH_PRIORITY" : "NORMAL";
+
+  // === Engineer Policy (MAMET-ENGINEER-BLUEPRINT Stage 2) ===
+  // Engineer: full reasoning, no automation, no uncontrolled memory writes
+  const engineerPolicy = isMametEngineer ? {
+    canReadRAG: true,
+    canReadMemory: true,      // Engineer needs to read context
+    canWriteMemory: false,    // No uncontrolled User Memory writes
+    canWriteKnowledge: false, // Knowledge writes require explicit action
+    canUseWorkspace: true,
+    canUseAutomation: false,  // BLOCK: cron_manager, uncontrolled automation
+    canUseDesktopTools: false // BLOCK: no OS exec from Engineer mode
+  } : null;
   
   const ctx: MametExecutionContext = {
     auth: { userId: input.userId, userName: input.userName, appSource: input.appSource || 'assistant' },
     request: { originalMessage: input.message, finalMessage: input.message, lowerMsg },
-    policy: { 
-        mode, decision: "ALLOW", toolsEnabled: true, webSearchEnabled: true, 
-        riskScore: 0, ragTopK: mode === "LITE" ? 10 : 5, ragThreshold: dynamicThreshold, webHint,
-        canReadRAG: true, canReadMemory: !isMametLite, canWriteMemory: mode === "AI" && !isMametLite,
-        canWriteKnowledge: mode === "AI" && !isMametLite, canUseWorkspace: !isMametLite, canUseAutomation: mode === "AI" && !isMametLite,
-        canUseDesktopTools: mode === "AI"
+    policy: {
+        mode, decision: "ALLOW", toolsEnabled: true, webSearchEnabled: true,
+        riskScore: 0,
+        ragTopK: mode === "LITE" ? 10 : 5,
+        ragThreshold: dynamicThreshold, webHint,
+        canReadRAG: engineerPolicy?.canReadRAG ?? true,
+        canReadMemory: engineerPolicy?.canReadMemory ?? !isMametLite,
+        canWriteMemory: engineerPolicy?.canWriteMemory ?? (mode === "AI" && !isMametLite),
+        canWriteKnowledge: engineerPolicy?.canWriteKnowledge ?? (mode === "AI" && !isMametLite),
+        canUseWorkspace: engineerPolicy?.canUseWorkspace ?? !isMametLite,
+        canUseAutomation: engineerPolicy?.canUseAutomation ?? (mode === "AI" && !isMametLite),
+        canUseDesktopTools: engineerPolicy?.canUseDesktopTools ?? (mode === "AI")
     },
     state: { ragArray: [], memoryArray: [], processingSteps: [] },
-    rag: { topK: mode === "LITE" ? 10 : 5, threshold: dynamicThreshold, allowLongDocs: mode === "AI", compressionLevel: mode === "AI" ? "low" : "high" },
+    rag: { topK: mode === "LITE" ? 10 : 5, threshold: dynamicThreshold, allowLongDocs: mode !== "LITE", compressionLevel: mode === "LITE" ? "high" : "low" },
     execution: { memoryPriority: isMametLite ? "balanced" : "memory_first", webSearchEnabled: true, subAgentEnabled: mode === "AI", webHint },
     trace: { riskScore: 0, retrievalStrategy: isRagEnabled ? "rag_enabled" : "rag_disabled", timestamp: Date.now() }
   };
