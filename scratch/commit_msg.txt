@@ -1,14 +1,6 @@
-fix: engineer system audit - error handling & state fixes
+docs: update mantra with security audit TASK-0013
 
-SECURITY-AUDIT-2026-06-27 saved to docs/tasks.
-
-EngineerDashboard.jsx fixes:
-- Added explicit DB-level error surfacing via supabase error destructuring
-- Added setError state and error UI panel with Retry button
-- Fixed silent failure: previously catch block only logged to console,
-  now surfaces error message to user
-- Restored missing loading/lastUpdated state declarations lost in previous edit
-- Added empty state "No tasks found" message for panels with zero data
-
-Frontend build: v2.2.0 - Exit code 0
-Edge Function: agent-process re-deployed to uuyzdjifhdfyyvpxsofu
+- Logged completion of Post-Baseline Security Audit (TASK-0013)
+- Documented HIGH risk capability spoofing resolution
+- Documented MEDIUM risk orchestrator tool gate addition
+- Documented dashboard resiliency improvements
