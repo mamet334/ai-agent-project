@@ -1,6 +1,6 @@
-docs: update mantra with security audit TASK-0013
+docs: update vision document for Phase 6, 7, 8 and Engineering Confidence
 
-- Logged completion of Post-Baseline Security Audit (TASK-0013)
-- Documented HIGH risk capability spoofing resolution
-- Documented MEDIUM risk orchestrator tool gate addition
-- Documented dashboard resiliency improvements
+- Expanded Phase 6: Reviewer context requires Task + Diff + ADR + Coding Rule.
+- Expanded Phase 7: Implementer requires Generate Patch -> Self Verification -> User Review -> Apply.
+- Expanded Phase 8: Self Maintenance monitors architecture gaps, history, tasks, ADRs, test results.
+- Added Engineering Confidence section to enforce honest recommendation scores based on understood context.
