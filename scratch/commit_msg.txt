@@ -1,5 +1,6 @@
-feat: enforce Engineering Confidence and Reviewer Context in LLM
+feat: enforce Phase 7 (Implementer) & Phase 8 (Self Maintenance) rules
 
-- Implemented ADR-0004 rules directly into the `agent-process` Edge Function.
-- Added strict system prompt instructions for `ENGINEER` mode to enforce CODE REVIEW requirements (must correlate with Task, ADR, and Coding Rules).
-- Enforced the `Confidence` score output format for all engineering recommendations to prevent hallucination.
+- Created ADR-0005 defining the safety flow for Code Implementation (Generate Patch -> Self Verification -> User Review -> Apply).
+- Logged TASK-0015 and ADR-0005 to Supabase Project Memory.
+- Updated `agent-process` system prompt to strictly enforce Phase 7 (Self Verification checks for Syntax, Architecture, Coding Rules, Dependencies) and Phase 8 (Self Maintenance checks against Project Health).
+- Bound these rules under the MAEF compliance clause in the `ENGINEER` execution mode.
