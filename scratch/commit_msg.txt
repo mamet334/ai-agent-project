@@ -1,16 +1,11 @@
-feat: Phase 3 - Project Memory database live in Supabase
+feat: Phase 3 complete - Project Memory read integration
 
-TASK-0008 Done:
-- Executed project-memory-schema-draft.sql via supabase db query --linked
-- 4 tables created with RLS: project_memory_entries, engineering_tasks, architecture_gaps, verification_runs
-- All tables confirmed: BASE TABLE, rowsecurity: true
+TASK-0010 Done:
+- Added `ENGINEER CONTEXT` injection to `agent-process/index.ts`.
+- Fetches active engineering tasks, architecture gaps, and recent memory entries directly from Supabase tables using `service_role` key when `mode === 'ENGINEER'`.
+- Deployed to Supabase BrainBox AI.
 
-TASK-0009 Done:
-- Backfill baseline entries (project-memory-backfill.sql)
-- engineering_tasks: 9 rows (TASK-0001 to TASK-0009)
-- architecture_gaps: 6 rows (GAP-0001 to GAP-0006)
-- project_memory_entries: 6 rows (root causes, solutions, release notes)
-- verification_runs: 8 rows (all Phase 1 and Phase 2 verifications)
-
-Project Memory now queryable in Supabase production.
-Next: TASK-0010 - Integrate read into agent-process Engineer mode.
+Roadmap:
+- Phase 1 marked as Done (was still marked In Progress).
+- Phase 3 marked as Done.
+- Phase 4 marked as In Progress.

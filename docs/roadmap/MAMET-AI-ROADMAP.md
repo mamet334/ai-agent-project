@@ -23,7 +23,7 @@ Deliverables:
 
 ## Phase 1: Stabilize Core Runtime
 
-Status: In Progress
+Status: Done
 
 Goal:
 
@@ -65,7 +65,7 @@ Exit Criteria — Verified:
 
 ## Phase 3: Project Memory Service
 
-Status: In Progress
+Status: Done
 
 Goal:
 
@@ -73,9 +73,9 @@ Move Project Memory from docs-only baseline toward structured database storage q
 
 Tasks:
 
-- TASK-0008: Execute schema migration (Proposed).
-- TASK-0009: Backfill existing Project Memory docs to database (Proposed).
-- TASK-0010: Integrate Project Memory read into agent-process Engineer mode (Proposed).
+- TASK-0008: Execute schema migration (Done).
+- TASK-0009: Backfill existing Project Memory docs to database (Done).
+- TASK-0010: Integrate Project Memory read into agent-process Engineer mode (Done).
 
 Design artifacts available:
 
@@ -89,7 +89,7 @@ Exit Criteria:
 
 ## Phase 4: Capability Separation
 
-Status: Proposed
+Status: In Progress
 
 Goal:
 
