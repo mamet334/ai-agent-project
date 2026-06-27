@@ -141,3 +141,14 @@ LAST UPDATE SNAPSHOT Phase 12 (Capability Permission Architecture):
 - Status: Transisi otorisasi dari Mode-based ke Capability-based (Explicit Permissions). MametLite digembok dari semua kemampuan WRITE (Memory & Knowledge) dan eksekusi Alat Administratif, namun tetap mempertahankan kemampuan READ.
 - Pipeline Truth: `ctx.policy` kini menyimpan flag akses granular (`canWriteMemory`, `canWriteKnowledge`). `knowledge_manager` merespons penolakan jika menerima JSON action tipe WRITE (CREATE, SAVE, DELETE) pada mode LITE tanpa merusak operasi pencarian dokumen.
 - Risk notes: None. Keamanan batas produk telah disegel.
+
+============================================================
+LAST UPDATE SNAPSHOT va3a9e75:
+- Timestamp: 2026-06-27 14:13:34 UTC
+- Changed modules: docs/tasks/project-memory-schema-draft.sql
+- Memory layer changes: None
+- Decision engine changes: None
+- Behavior layer changes: None
+- Pipeline changes: None
+- Risk notes: Schema changed in docs/tasks/project-memory-schema-draft.sql - requires Supabase sync verification
+- System status: ACTIVE - Auto-compiled and verified.
