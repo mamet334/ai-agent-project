@@ -204,7 +204,17 @@ serve(async (req) => {
 
     const AUTH_USER_ID = user.id;
 
-    let { message, tools, model, userId: _clientUserId, userName, file, history, globalMemory, stream, desktopOSMode, ragEnabled, appSource = 'assistant', workspaceTarget = 'AUTO', localWorkspaceEnabled = false, auditMode = 'OFF' } = await req.json();
+    let { message, tools, model, userId: _clientUserId, userName, file, history, globalMemory, stream, desktopOSMode, ragEnabled, appSource: clientAppSource = 'assistant', workspaceTarget = 'AUTO', localWorkspaceEnabled = false, auditMode = 'OFF' } = await req.json();
+
+    // === [SECURITY FIX] SERVER-AUTHORITATIVE APP SOURCE ===
+    // appSource dari client TIDAK DAPAT DIPERCAYA karena bisa dimanipulasi.
+    // Prioritas: user_metadata (JWT server-side) > clientAppSource
+    // Engineer mode hanya bisa diaktifkan jika user punya metadata 'app_source: engineer'
+    const jwtAppSource = user.user_metadata?.app_source as string | undefined;
+    const ALLOWED_CLIENT_SOURCES = ['assistant', 'mametlite'];
+    const resolvedAppSource: string = jwtAppSource ?? (ALLOWED_CLIENT_SOURCES.includes(clientAppSource) ? clientAppSource : 'assistant');
+    const appSource = resolvedAppSource;
+    console.log(`[SECURITY] appSource resolved: client='${clientAppSource}' jwt='${jwtAppSource}' final='${appSource}'`);
     
     let routingDecision: any = null;
     let contractValidation: any = null;
@@ -345,12 +355,13 @@ serve(async (req) => {
 const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEnabled, userId: AUTH_USER_ID, userName, appSource });
     console.log("[L1] auth binding", { providedUserId: _clientUserId, actualAuthId: ctx.auth.userId, appSource: ctx.auth.appSource, message: message ? message.substring(0, 50) + '...' : null });
 
-    // Capability Filter
+    // Capability Filter — Orchestrator Level (Security Fix)
     if (tools && Array.isArray(tools)) {
       tools = tools.filter(t => {
-        if (t === 'cron_manager' && !ctx.policy.canUseAutomation) return false;
-        if (t === 'file_analyzer' && !ctx.policy.canUseDesktopTools) return false;
-        // Tools requiring canWriteKnowledge are handled inside the plugin (since knowledge_manager handles both read and write)
+        if (t === 'cron_manager' && !ctx.policy.canUseAutomation) { console.warn(`[CAPABILITY_BLOCK] Tool '${t}' blocked: canUseAutomation=false (mode=${ctx.policy.mode})`); return false; }
+        if (t === 'file_analyzer' && !ctx.policy.canUseDesktopTools) { console.warn(`[CAPABILITY_BLOCK] Tool '${t}' blocked: canUseDesktopTools=false (mode=${ctx.policy.mode})`); return false; }
+        // [SECURITY FIX] knowledge_manager enforced at orchestrator, not delegated to plugin
+        if (t === 'knowledge_manager' && !ctx.policy.canWriteKnowledge) { console.warn(`[CAPABILITY_BLOCK] Tool '${t}' blocked at orchestrator: canWriteKnowledge=false (mode=${ctx.policy.mode})`); return false; }
         return true;
       });
     }

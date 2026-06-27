@@ -1,4 +1,15 @@
-chore: bump version to 2.2.0
+security: fix HIGH + MEDIUM capability spoofing vulnerabilities (TASK-0013)
 
-- Bump frontend package.json version to 2.2.0 to trigger GitHub Actions release.
-- Includes Phase 5 Observability updates in the new desktop executable.
+[SECURITY FIX HIGH] Server-Authoritative appSource
+- Previously, `appSource` was accepted from the client JSON payload, allowing
+  any user to spoof Engineer or AI mode by modifying the HTTP request body.
+- Fix: `appSource` is now resolved server-side from `user.user_metadata.app_source`
+  (set server-side via Supabase Auth) as the primary authority.
+- Client-provided values are only allowed for the safe list: ['assistant', 'mametlite'].
+- Any unrecognized or spoofed value defaults to 'assistant', preventing privilege escalation.
+
+[SECURITY FIX MEDIUM] Orchestrator-Level knowledge_manager Gate
+- Previously, `knowledge_manager` tool filtering was delegated to the plugin itself.
+- Fix: `knowledge_manager` is now explicitly blocked at the orchestrator (Capability Filter)
+  if `ctx.policy.canWriteKnowledge === false`.
+- All capability violations are now logged via `[CAPABILITY_BLOCK]` warnings.
