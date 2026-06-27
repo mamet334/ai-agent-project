@@ -10,17 +10,26 @@ Dalam mewujudkan Visi "AI Operating System", Mamet Engineer harus bisa bertindak
 
 ## Decision
 
-1. **Phase 6 - Engineer Reviewer:**
-   Mamet Engineer akan diekstensi kemampuannya untuk melakukan *Code Review*. Namun, tidak seperti AI checker biasa yang hanya melihat `git diff`, Mamet Engineer diwajibkan untuk mengumpulkan empat pilar konteks sebelum memberikan tinjauan:
-   *   **Task:** Apa tujuan perubahan?
-   *   **Git Diff:** Apa yang berubah?
-   *   **ADR Terkait:** Keputusan arsitektur apa yang menaungi perubahan ini?
-   *   **Coding Rules:** Apakah melanggar aturan sintaks atau pola yang telah disepakati?
+1. **Phase 6 - Scoped Engineer Review:**
+   Review bukan sekadar membaca keseluruhan Project Memory. Engineer menggunakan alur berbasis ruang lingkup:
+   ```
+   Task → Affected Files → Git Diff → Relevant ADR → Relevant Coding Rules
+   ```
+   Empat pilar wajib — jika salah satu tidak ada, Engineer **harus meminta** sebelum melanjutkan:
+   *   **[1] Task:** Apa tujuan perubahan ini?
+   *   **[2] Git Diff:** Apa yang berubah secara konkret? (diberikan oleh user)
+   *   **[3] ADR terkait scope:** Keputusan arsitektur mana yang mengatur scope perubahan ini?
+   *   **[4] Coding Rules:** Apakah melanggar pola yang telah disepakati?
 
-2. **Engineering Confidence (Filter Kejujuran):**
-   Setiap kali Engineer memberikan rekomendasi (review, solusi, atau usulan tugas), ia **wajib** mendeklarasikan skor *Confidence* (Misal: 95%). 
-   *   Skor ini harus dijustifikasi berdasarkan kelengkapan konteks yang dibaca (seperti: "Membaca TASK", "Membaca ADR", "Membaca Repository").
-   *   Jika data tidak cukup, Engineer wajib memberikan *Confidence* rendah (Misal: 42%) dengan alasan ketidaktahuan, bukan mencoba menebak.
+2. **Engineering Confidence — Dua Dimensi:**
+   Confidence bukan skor angka tunggal. Confidence memiliki dua dimensi terpisah:
+   *   **Coverage:** Sumber apa saja yang tersedia (checklist `✓/✗`).
+   *   **Evidence Strength:** Seberapa kuat bukti dari sumber tersebut (`STRONG / MODERATE / WEAK`) — dengan penjelasan *mengapa*.
+   
+   Contoh STRONG: *"diff selaras dengan TASK-0014, diatur ADR-0004, tidak ada pelanggaran aturan."*
+   Contoh WEAK: *"diff tersedia tetapi tidak ada ADR yang mengatur modul ini. Penilaian hanya berdasarkan pola umum."*
+   
+   Engineer wajib menyertakan blok Confidence ini **sebelum** memberikan rekomendasi apapun.
 
 ## Consequences
 
