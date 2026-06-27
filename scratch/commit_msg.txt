@@ -1,6 +1,5 @@
-docs: update vision document for Phase 6, 7, 8 and Engineering Confidence
+docs: add ADR-0004 for Engineer Reviewer & Confidence
 
-- Expanded Phase 6: Reviewer context requires Task + Diff + ADR + Coding Rule.
-- Expanded Phase 7: Implementer requires Generate Patch -> Self Verification -> User Review -> Apply.
-- Expanded Phase 8: Self Maintenance monitors architecture gaps, history, tasks, ADRs, test results.
-- Added Engineering Confidence section to enforce honest recommendation scores based on understood context.
+- Defined Phase 6 integration rules requiring Task, Diff, ADR, and Coding Rules context before generating reviews.
+- Introduced Engineering Confidence metric to measure and expose the certainty level of AI recommendations based on retrieved context.
+- Logged TASK-0014 and ADR-0004 to Supabase Project Memory.
