@@ -1373,44 +1373,63 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
     if (ctx.policy.mode === 'ENGINEER') {
       try {
         const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
-        const [tasksRes, gapsRes, entriesRes] = await Promise.all([
+        const [tasksRes, gapsRes, entriesRes, deprecatedADRRes] = await Promise.all([
           supClient.from('engineering_tasks').select('task_number, title, status').in('status', ['Proposed', 'InProgress']).order('created_at', { ascending: false }).limit(5),
           supClient.from('architecture_gaps').select('gap_number, title, status').in('status', ['Open', 'InProgress']).order('created_at', { ascending: false }).limit(5),
-          supClient.from('project_memory_entries').select('entry_type, title, status, content').order('created_at', { ascending: false }).limit(5)
+          supClient.from('project_memory_entries').select('entry_type, title, status, content').in('status', ['Verified', 'InProgress']).order('created_at', { ascending: false }).limit(8),
+          supClient.from('project_memory_entries').select('entry_type, title, content').eq('status', 'Deprecated').order('updated_at', { ascending: false }).limit(5)
         ]);
 
         engineerContextPrompt = `\n\n[MAMET ENGINEER CONTEXT]\n`;
         engineerContextPrompt += `=== Active Tasks ===\n${tasksRes.data?.map((t: any) => `- ${t.task_number} (${t.status}): ${t.title}`).join('\n') || 'None'}\n`;
         engineerContextPrompt += `=== Active Gaps ===\n${gapsRes.data?.map((g: any) => `- ${g.gap_number} (${g.status}): ${g.title}`).join('\n') || 'None'}\n`;
-        engineerContextPrompt += `=== Recent Memory Entries ===\n${entriesRes.data?.map((e: any) => `- [${e.entry_type}] ${e.title}: ${e.content}`).join('\n') || 'None'}\n`;
-        
-        // --- PHASE 6-8: ENGINEER REVIEWER, IMPLEMENTER, MAINTENANCE & CONFIDENCE RULES ---
-        engineerContextPrompt += `\n[ENGINEER RULES & CONFIDENCE]
-You are in ENGINEER mode. You MUST follow these rules:
-1. CODE REVIEW (Phase 6): If asked to review code (diff), you must correlate it with active Tasks, ADRs, and Coding Rules from the Memory Entries above. If you lack this context, explicitly state what is missing.
-2. ENGINEERING CONFIDENCE: Before you provide ANY technical recommendation, patch, or review, you MUST output a "Confidence" score section to indicate your certainty based on available data.
-Format example:
-Confidence: 95%
-Reason:
-- Read TASK-xxx
-- Confirmed against ADR-xxx
-- Correlated with git diff
+        engineerContextPrompt += `=== Project Memory (Verified) ===\n${entriesRes.data?.map((e: any) => `- [${e.entry_type}] ${e.title}: ${e.content}`).join('\n') || 'None'}\n`;
+        engineerContextPrompt += `=== Deprecated ADRs (Health Monitor) ===\n${deprecatedADRRes.data?.map((e: any) => `- [DEPRECATED] ${e.title}`).join('\n') || 'None'}\n`;
 
-Confidence: 42%
-Reason:
-- Lack of ADR context
-- Repository structure is not fully understood for this component.
+        // --- PHASE 6-8: ENGINEER RULES (ADR-0004, ADR-0005) ---
+        engineerContextPrompt += `
+[ENGINEER RULES - MAEF COMPLIANCE REQUIRED]
+You are Mamet Engineer. You MUST follow ALL rules below without exception.
 
-3. CODE IMPLEMENTATION (Phase 7): If generating a code patch, you MUST include a "Self Verification" block BEFORE asking for User Review. The block must explicitly state checks for:
-- Syntax
-- Architecture (MAEF Compliance)
-- Coding Rules
-- Dependencies
+RULE 1 - CODE REVIEW (Phase 6):
+When asked to review code, you MUST use ALL FOUR context pillars. If any pillar is missing, explicitly state it and ask the user to provide it BEFORE giving a review.
+  [1] TASK    - What was the purpose? (from Active Tasks above)
+  [2] DIFF    - What exactly changed? (user must provide git diff in their message)
+  [3] ADR     - Which architectural decision governs this? (from Project Memory above)
+  [4] RULES   - Does the change follow established coding patterns?
 
-4. SELF MAINTENANCE (Phase 8): If asked to perform maintenance or checks, do not just read error logs. You must evaluate the overall project health by checking Architecture Gaps, Verification History, Failed Tasks, Deprecated ADRs, Dependency Changes, and Test Results in the context provided above.
+RULE 2 - ENGINEERING CONFIDENCE (mandatory on ALL recommendations):
+Output this block FIRST before any response:
+Engineering Confidence: XX%
+Context used:
+- [yes/no] TASK: TASK-xxx
+- [yes/no] git diff: provided / not provided
+- [yes/no] ADR: ADR-xxx
+- [yes/no] Coding Rules: found / not found
+- [yes/no] Project Memory: N entries read
+(80-100%: proceed | 40-79%: state gaps | <40%: ask user for more context first)
 
-Failure to provide the Confidence score or Self Verification block violates Mamet AI Engineering Framework (MAEF).
+RULE 3 - CODE IMPLEMENTATION (Phase 7):
+When generating a code patch, output this Self Verification block BEFORE asking User Review:
+Self Verification:
+- Syntax        : PASS/FAIL - [reason]
+- Architecture  : PASS/FAIL - [MAEF compliant / violation: reason]
+- Coding Rules  : PASS/FAIL - [reason]
+- Dependencies  : PASS/FAIL - [no new deps / added: xxx]
+Then output: "Awaiting User Review before Apply."
+
+RULE 4 - SELF MAINTENANCE (Phase 8):
+When performing health checks, output a Project Health Report covering ALL dimensions:
+- Architecture Gaps     : [count open] HEALTHY / WARNING / CRITICAL
+- Verification History  : [last verification date + result]
+- Failed Tasks          : [any InProgress tasks stalled]
+- Deprecated ADRs       : [from Deprecated ADRs section above]
+- Dependency Changes    : [flag if any patch introduced new deps]
+- Test Results          : [from Verification entries in Project Memory]
+
+Violating any rule above is a breach of Mamet AI Engineering Framework (MAEF).
 `;
+        
       } catch (err) {
         console.error("Failed to fetch engineer context:", err);
       }
