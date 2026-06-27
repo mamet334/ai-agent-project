@@ -7,6 +7,7 @@ import MemoryHealthDashboard from './MemoryHealthDashboard';
 import WorkDashboard from './WorkDashboard';
 import BillingDashboard from './BillingDashboard';
 import ShopeeDashboard from './ShopeeDashboard';
+import EngineerDashboard from './EngineerDashboard';
 import MainOrchestrator from '../lib/mainOrchestrator';
 // Lazy loaded imports for heavy libraries
 
@@ -2472,6 +2473,12 @@ export default function AIAgent() {
                       >
                         <Briefcase className="w-4 h-4" /> Work Track
                       </button>
+                      <button
+                        onClick={() => setActiveView('engineer')}
+                        className={`w-full py-2 border rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${activeView === 'engineer' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-600 hover:text-white'}`}
+                      >
+                        <Terminal className="w-4 h-4" /> Engineer
+                      </button>
                   </div>
                 </div>
               </>
@@ -2647,6 +2654,8 @@ export default function AIAgent() {
             <MemoryHealthDashboard />
           ) : activeView === 'work' ? (
             <WorkDashboard />
+          ) : activeView === 'engineer' ? (
+            <EngineerDashboard userId={user?.id} />
           ) : activeView === 'cron' ? (
             <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-[#0A0A0A]">
               <div className="max-w-4xl mx-auto">
