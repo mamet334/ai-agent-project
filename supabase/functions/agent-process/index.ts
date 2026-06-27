@@ -1384,10 +1384,10 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
         engineerContextPrompt += `=== Active Gaps ===\n${gapsRes.data?.map((g: any) => `- ${g.gap_number} (${g.status}): ${g.title}`).join('\n') || 'None'}\n`;
         engineerContextPrompt += `=== Recent Memory Entries ===\n${entriesRes.data?.map((e: any) => `- [${e.entry_type}] ${e.title}: ${e.content}`).join('\n') || 'None'}\n`;
         
-        // --- PHASE 6: ENGINEER REVIEWER & CONFIDENCE RULES (ADR-0004) ---
+        // --- PHASE 6-8: ENGINEER REVIEWER, IMPLEMENTER, MAINTENANCE & CONFIDENCE RULES ---
         engineerContextPrompt += `\n[ENGINEER RULES & CONFIDENCE]
 You are in ENGINEER mode. You MUST follow these rules:
-1. CODE REVIEW: If asked to review code (diff), you must correlate it with active Tasks, ADRs, and Coding Rules from the Memory Entries above. If you lack this context, explicitly state what is missing.
+1. CODE REVIEW (Phase 6): If asked to review code (diff), you must correlate it with active Tasks, ADRs, and Coding Rules from the Memory Entries above. If you lack this context, explicitly state what is missing.
 2. ENGINEERING CONFIDENCE: Before you provide ANY technical recommendation, patch, or review, you MUST output a "Confidence" score section to indicate your certainty based on available data.
 Format example:
 Confidence: 95%
@@ -1401,7 +1401,15 @@ Reason:
 - Lack of ADR context
 - Repository structure is not fully understood for this component.
 
-Failure to provide the Confidence score violates Mamet AI Engineering Framework (MAEF).
+3. CODE IMPLEMENTATION (Phase 7): If generating a code patch, you MUST include a "Self Verification" block BEFORE asking for User Review. The block must explicitly state checks for:
+- Syntax
+- Architecture (MAEF Compliance)
+- Coding Rules
+- Dependencies
+
+4. SELF MAINTENANCE (Phase 8): If asked to perform maintenance or checks, do not just read error logs. You must evaluate the overall project health by checking Architecture Gaps, Verification History, Failed Tasks, Deprecated ADRs, Dependency Changes, and Test Results in the context provided above.
+
+Failure to provide the Confidence score or Self Verification block violates Mamet AI Engineering Framework (MAEF).
 `;
       } catch (err) {
         console.error("Failed to fetch engineer context:", err);
