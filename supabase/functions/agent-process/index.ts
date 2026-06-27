@@ -204,7 +204,7 @@ serve(async (req) => {
 
     const AUTH_USER_ID = user.id;
 
-    let { message, tools, model, userId: _clientUserId, userName, file, history, globalMemory, stream, desktopOSMode, ragEnabled, workspaceTarget = 'AUTO', localWorkspaceEnabled = false, auditMode = 'OFF' } = await req.json();
+    let { message, tools, model, userId: _clientUserId, userName, file, history, globalMemory, stream, desktopOSMode, ragEnabled, appSource = 'assistant', workspaceTarget = 'AUTO', localWorkspaceEnabled = false, auditMode = 'OFF' } = await req.json();
     
     let routingDecision: any = null;
     let contractValidation: any = null;
@@ -223,21 +223,7 @@ serve(async (req) => {
     const storageTarget = guardian.determineTarget();
     tools = guardian.filterTools(tools, storageTarget);
     
-    // Capability Filter
-    if (tools && Array.isArray(tools)) {
-      tools = tools.filter(t => {
-        if (t === 'cron_manager' && !ctx.policy.canUseAutomation) return false;
-        if (t === 'file_analyzer' && !ctx.policy.canUseDesktopTools) return false;
-        // Tools requiring canWriteKnowledge are handled inside the plugin (since knowledge_manager handles both read and write)
-        return true;
-      });
-    }
     const guardianPromptDirective = guardian.getGuardianPrompt(storageTarget);
-
-    // OVERRIDE ALL IDENTITY USAGE
-    ctx.auth.userId = AUTH_USER_ID;
-
-    console.log("[L1] auth binding", { providedUserId: _clientUserId, actualAuthId: ctx.auth.userId, message: message ? message.substring(0, 50) + '...' : null });
 
     // ANTI-HALLUCINATION: Bersihkan history agar LLM tidak melihat/mempelajari tag fiktif dari chat masa lalu
     if (history && Array.isArray(history)) {
@@ -253,18 +239,18 @@ serve(async (req) => {
     const POLICY_LAYER_ENABLED = true;
     
     type MametExecutionContext = {
-  auth: { ctx.auth.userId: string; ctx.auth.userName?: string; };
-  request: { originalMessage: string; ctx.request.finalMessage: string; lowerMsg: string; };
-  policy: { mode: "AI" | "LITE"; decision: "ALLOW" | "ALLOW_WITH_LIMIT" | "BLOCK"; toolsEnabled: boolean; webSearchEnabled: boolean; riskScore: number; ragTopK: number; ragThreshold: number; webHint?: string; canReadRAG: boolean; canReadMemory: boolean; canWriteMemory: boolean; canWriteKnowledge: boolean; canUseWorkspace: boolean; canUseAutomation: boolean; canUseDesktopTools: boolean; };
-  state: { ctx.state.ragArray: any[]; ctx.state.memoryArray: any[]; ctx.state.processingSteps: string[]; };
-};
+      auth: { userId: string; userName?: string; appSource: string; };
+      request: { originalMessage: string; finalMessage: string; lowerMsg: string; };
+      policy: { mode: "AI" | "LITE"; decision: "ALLOW" | "ALLOW_WITH_LIMIT" | "BLOCK"; toolsEnabled: boolean; webSearchEnabled: boolean; riskScore: number; ragTopK: number; ragThreshold: number; webHint?: string; canReadRAG: boolean; canReadMemory: boolean; canWriteMemory: boolean; canWriteKnowledge: boolean; canUseWorkspace: boolean; canUseAutomation: boolean; canUseDesktopTools: boolean; };
+      state: { ragArray: any[]; memoryArray: any[]; processingSteps: string[]; };
       rag: { topK: number; threshold: number; allowLongDocs: boolean; compressionLevel: "low" | "high"; };
       execution: { memoryPriority: "memory_first" | "balanced"; webSearchEnabled: boolean; subAgentEnabled: boolean; webHint?: string; };
       trace: { riskScore: number; retrievalStrategy: string; timestamp: number; };
     };
 
-    function buildUnifiedExecutionContext(input: { message: string, desktopOSMode?: boolean, tools?: string[], ragEnabled?: boolean, ctx.auth.userId: string, ctx.auth.userName?: string }): MametExecutionContext {
-  const mode = input.desktopOSMode ? "AI" : "LITE";
+    function buildUnifiedExecutionContext(input: { message: string, desktopOSMode?: boolean, tools?: string[], ragEnabled?: boolean, userId: string, userName?: string, appSource?: string }): MametExecutionContext {
+  const isMametLite = input.appSource === 'mametlite';
+  const mode = isMametLite ? "LITE" : (input.desktopOSMode ? "AI" : "LITE");
   const isRagEnabled = input.ragEnabled !== false;
   
   const qLen = (input.message || '').length;
@@ -278,16 +264,19 @@ serve(async (req) => {
   const webHint = needsWeb ? "HIGH_PRIORITY" : "NORMAL";
   
   const ctx: MametExecutionContext = {
-    auth: { ctx.auth.userId: input.userId, ctx.auth.userName: input.userName },
-    request: { originalMessage: input.message, ctx.request.finalMessage: input.message, lowerMsg },
+    auth: { userId: input.userId, userName: input.userName, appSource: input.appSource || 'assistant' },
+    request: { originalMessage: input.message, finalMessage: input.message, lowerMsg },
     policy: { 
         mode, decision: "ALLOW", toolsEnabled: true, webSearchEnabled: true, 
         riskScore: 0, ragTopK: mode === "LITE" ? 10 : 5, ragThreshold: dynamicThreshold, webHint,
-        canReadRAG: true, canReadMemory: true, canWriteMemory: mode === "AI",
-        canWriteKnowledge: mode === "AI", canUseWorkspace: true, canUseAutomation: mode === "AI",
+        canReadRAG: true, canReadMemory: !isMametLite, canWriteMemory: mode === "AI" && !isMametLite,
+        canWriteKnowledge: mode === "AI" && !isMametLite, canUseWorkspace: !isMametLite, canUseAutomation: mode === "AI" && !isMametLite,
         canUseDesktopTools: mode === "AI"
     },
-    state: { ctx.state.ragArray: [], ctx.state.memoryArray: [], ctx.state.processingSteps: [] }
+    state: { ragArray: [], memoryArray: [], processingSteps: [] },
+    rag: { topK: mode === "LITE" ? 10 : 5, threshold: dynamicThreshold, allowLongDocs: mode === "AI", compressionLevel: mode === "AI" ? "low" : "high" },
+    execution: { memoryPriority: isMametLite ? "balanced" : "memory_first", webSearchEnabled: true, subAgentEnabled: mode === "AI", webHint },
+    trace: { riskScore: 0, retrievalStrategy: isRagEnabled ? "rag_enabled" : "rag_disabled", timestamp: Date.now() }
   };
 
   if (!POLICY_LAYER_ENABLED) return ctx;
@@ -303,11 +292,12 @@ serve(async (req) => {
   if (overRetrievalPatterns.some(p => lowerMsg.includes(p))) { riskScore += 2; }
   
   if (lowerMsg.length > 5000) riskScore += 1;
-  const words = lowerMsg.split(/[\s\p{P}]+/);
+  const words = lowerMsg.split(/[\s\p{P}]+/u);
   const uniqueWords = new Set(words);
   if (words.length > 100 && uniqueWords.size < words.length * 0.1) riskScore += 1;
   
   ctx.policy.riskScore = riskScore;
+  ctx.trace.riskScore = riskScore;
   
   if (riskScore >= 4) {
     ctx.policy.decision = "BLOCK";
@@ -324,7 +314,18 @@ serve(async (req) => {
   return ctx;
 }
 
-const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEnabled, ctx.auth.userId, ctx.auth.userName });
+const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEnabled, userId: AUTH_USER_ID, userName, appSource });
+    console.log("[L1] auth binding", { providedUserId: _clientUserId, actualAuthId: ctx.auth.userId, appSource: ctx.auth.appSource, message: message ? message.substring(0, 50) + '...' : null });
+
+    // Capability Filter
+    if (tools && Array.isArray(tools)) {
+      tools = tools.filter(t => {
+        if (t === 'cron_manager' && !ctx.policy.canUseAutomation) return false;
+        if (t === 'file_analyzer' && !ctx.policy.canUseDesktopTools) return false;
+        // Tools requiring canWriteKnowledge are handled inside the plugin (since knowledge_manager handles both read and write)
+        return true;
+      });
+    }
     const isRagEnabled = ctx.policy.ragTopK > 0;
 
     console.log("[UNIFIED TRACE]", {
@@ -437,7 +438,7 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
     }
 
     let extractedImage = null;
-    ctx.request.ctx.request.finalMessage = ctx.request.originalMessage;
+    ctx.request.finalMessage = ctx.request.originalMessage;
 
     if (file && file.data) {
       const filename = file.name.toLowerCase();
@@ -1313,7 +1314,9 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
     let userContextPrompt = ctx.auth.userName ? `\nInformasi Akun: User login dengan email/nama "${ctx.auth.userName}". Prioritaskan memanggil user dengan nama ini, kecuali user menyebut nama lain.` : '';
     
     // --- MEMORY MANAGER (RETRIEVAL) ---
-    ctx.state.memoryArray = await retrieveMemories(ctx.request.finalMessage, ctx.auth.userId, Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', GEMINI_API_KEY);
+    ctx.state.memoryArray = ctx.policy.canReadMemory
+      ? await retrieveMemories(ctx.request.finalMessage, ctx.auth.userId, Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '')
+      : [];
     if (!Array.isArray(ctx.state.memoryArray)) ctx.state.memoryArray = [];
     
     const memoryPrompt = globalMemory ? `\n\n[MEMORI GLOBAL & PREFERENSI USER]:\n${globalMemory}\n(Patuhi instruksi/ingatan di atas secara ketat di setiap jawaban Anda!)` : '';
@@ -1332,8 +1335,8 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
     }
     
     const resolved = buildContextFusion({
-      ctx.state.memoryArray,
-      ctx.state.ragArray,
+      memoryArray: ctx.state.memoryArray,
+      ragArray: ctx.state.ragArray,
       message: ctx.request.finalMessage,
       basePrompts,
       ctx
@@ -1423,7 +1426,7 @@ Jawab HANYA dengan satu kata: "CHAT_BIASA" atau "BUTUH_AGENT".`;
         // --- [REMOVED] MEMORY MANAGER DUPLICATE CALL ---
 
         if (stream && !extractedImage) {
-          const streamRes = getStreamResponse(ctx.request.finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, ctx.state.processingSteps });
+          const streamRes = getStreamResponse(ctx.request.finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps: ctx.state.processingSteps });
           if (streamRes) return streamRes;
         }
         replyMessage = await runLLM(ctx.request.finalMessage, fullSystemContext, history);
@@ -1626,7 +1629,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
                   const executeContext = { 
                       task: fullTask, cleanTask: task, accumulatedContext, 
                       env: { ...env, signal: abortController.signal, fetch: controlledFetch }, 
-                      runLLM: customRunLLM, ctx.auth.userId, signal: abortController.signal 
+                      runLLM: customRunLLM, userId: ctx.auth.userId, signal: abortController.signal 
                   };
 
                   const isolatedExecutionPromise = (async () => {
@@ -1714,13 +1717,13 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
         }
 
         if (stream && !extractedImage) {
-          const streamRes = getStreamResponse(synthesisPrompt, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, ctx.state.processingSteps, auditMode, routingDecision, contractValidation });
+          const streamRes = getStreamResponse(synthesisPrompt, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps: ctx.state.processingSteps, auditMode, routingDecision, contractValidation });
           if (streamRes) return streamRes;
         }
         replyMessage = await runLLM(synthesisPrompt, fullSystemContext, history);
       } else {
         if (stream && !extractedImage) {
-          const streamRes = getStreamResponse(ctx.request.finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, ctx.state.processingSteps, auditMode, routingDecision, contractValidation });
+          const streamRes = getStreamResponse(ctx.request.finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps: ctx.state.processingSteps, auditMode, routingDecision, contractValidation });
           if (streamRes) return streamRes;
         }
         replyMessage = await runLLM(ctx.request.finalMessage, fullSystemContext, history);
@@ -1737,7 +1740,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
 
       if (stream && !extractedImage) {
         ctx.state.processingSteps.push('✍️ Menjawab langsung (tanpa tools)...');
-        const streamRes = getStreamResponse(ctx.request.finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, ctx.state.processingSteps, auditMode, routingDecision, contractValidation });
+        const streamRes = getStreamResponse(ctx.request.finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps: ctx.state.processingSteps, auditMode, routingDecision, contractValidation });
         if (streamRes) return streamRes;
       }
       replyMessage = await runLLM(ctx.request.finalMessage, fullSystemContext, history);
@@ -1754,9 +1757,9 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
       groundingSources,
       toolExecution,
       subagentRuns,
-      ctx.state.processingSteps,
+      processingSteps: ctx.state.processingSteps,
       timestamp: new Date(),
-      ctx.auth.userId
+      userId: ctx.auth.userId
     };
 
     return new Response(JSON.stringify(aiResponse), {

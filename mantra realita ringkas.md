@@ -236,4 +236,53 @@ Karena *Control Plane* (CEBL & CSEL) dan *Execution Engine* (Subgraph Extractor)
 
 ---
 
+## 🏛️ MAEF FRAMEWORK — GOVERNANCE BASELINE (27 Juni 2026)
+
+### Status: ✅ Phase 0 DONE | ✅ Phase 1 DONE
+
+Proyek Mamet AI kini beroperasi di bawah konstitusi resmi **MAEF (Mamet AI Engineering Framework) v1.0.0**.
+
+**MAEF adalah sumber kebenaran tertinggi.** Repository mengikuti MAEF, bukan sebaliknya.
+
+### Hierarki Otoritas (MAEF Bab 5):
+```
+MAEF → Vision → Master Architecture Index → System Architecture
+→ ADR → Technical Specification → Development Standard
+→ Engineering Blueprint → Roadmap → Repository → Runtime
+```
+
+### Struktur Dokumentasi Resmi (dibuat oleh Codex):
+- `mamet ai engineering framework(MAEF).md` — Konstitusi utama
+- `docs/architecture/MASTER-ARCHITECTURE-INDEX.md` — Index arsitektur
+- `docs/architecture/ARCHITECTURE-GAPS.md` — Register gap aktif
+- `docs/adr/` — Architecture Decision Records
+- `docs/tasks/` — Task registry (TASK-0001 s/d TASK-0006)
+- `docs/project-memory/PROJECT-MEMORY.md` — Project Memory resmi
+- `docs/roadmap/MAMET-AI-ROADMAP.md` — Roadmap 5 fase
+
+### Phase 0: Governance Foundation ✅ DONE
+- MAEF Final Baseline ditetapkan
+- Seluruh dokumentasi tata kelola dibuat
+- ADR, Task, Project Memory, Roadmap tersedia
+
+### Phase 1: Stabilize Core Runtime ✅ DONE (27 Juni 2026)
+
+| Item | Status | Evidence |
+|---|---|---|
+| `agent-process` context repair | ✅ Done | tsc clean, deployed v246 |
+| MametLite source boundary | ✅ Done | `appSource: 'mametlite'` enforced |
+| MametLite tidak baca/tulis User Memory | ✅ Done | Policy aktif di v246 |
+| Frontend build | ✅ Done | Built in 17.48s, exit 0 |
+| MametLite build | ✅ Done | Built in 627ms, exit 0 |
+| Deploy ke Supabase (BrainBox AI) | ✅ Done | v246 ACTIVE, CORS confirmed |
+
+### Next Mission — Phase 2: Mamet Engineer Foundation
+- Formalisasi Mamet Engineer sebagai workflow terkontrol
+- Setiap perubahan kode harus traceable ke Task, Verification, dan Project Memory
+- Lihat: `docs/roadmap/MAMET-AI-ROADMAP.md` Phase 2
+
+---
+
 > Catatan: Semua fitur di atas sudah diimplementasikan dalam kode (bukan rencana). Mametlite Lite telah bergeser dari arsitektur berbasis orchestrator ke model eksekusi stateless direct-call, dengan pemilihan tool yang disederhanakan dan overhead pre-processing yang diminimalkan.
+>
+> Sejak 27 Juni 2026, proyek beroperasi di bawah MAEF. Seluruh pengembangan wajib mengikuti Engineering Flow: Vision → Architecture → ADR → Tech Spec → Task → Implementation → Testing → Project Memory → Release.
