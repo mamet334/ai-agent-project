@@ -1,9 +1,5 @@
-feat: Phase 5 - Implement Engineer Dashboard
+docs: update mantra with Phase 5 completion
 
-TASK-0012 Done:
-- Updated Supabase RLS policies via `update_rls_auth.sql` to allow `authenticated` users to read Project Memory tables.
-- Created `EngineerDashboard.jsx` featuring dynamic fetches of `engineering_tasks`, `architecture_gaps`, `project_memory_entries`, and `verification_runs`.
-- Integrated `EngineerDashboard` into `AIAgent.jsx` sidebar layout.
-- Verified frontend build passes (`npm run build`).
-
-Phase 5 UI Observability is now active.
+- Added Phase 5 (UI And Observability) as DONE.
+- Updated Next Mission to "Post-Baseline Evolution".
+- All MAEF Baseline phases (0 to 5) are now completed and documented.
