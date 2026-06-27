@@ -582,12 +582,16 @@ Hanya memenuhi checklist bukan berarti evidence kuat.
 Contoh output Engineer:
 
 Engineering Confidence
-Coverage:
-- [✓] TASK: TASK-0014
-- [✓] git diff: tersedia
+Coverage (BRAIN 1 - Static):
 - [✓] ADR: ADR-0004
 - [✓] Coding Rules: ditemukan
-- [✗] Test Result: belum tersedia
+- [✓] Architecture/Lessons: 3 entries
+
+Coverage (BRAIN 2 - Dynamic):
+- [✓] TASK: TASK-0014 (Scoped Review Integration)
+- [✓] git diff: tersedia
+- [✗] Verification: belum tersedia
+- [✓] Affected Files: index.ts
 
 Evidence Strength: STRONG
 Reason: diff selaras dengan TASK-0014, diatur oleh ADR-0004, tidak ada pelanggaran aturan.
@@ -597,11 +601,16 @@ Recommendation: Layak direview. Verifikasi runtime tetap diperlukan.
 Contoh confidence rendah:
 
 Engineering Confidence
-Coverage:
-- [✓] git diff: tersedia
-- [✗] TASK: tidak ditemukan
+Coverage (BRAIN 1 - Static):
 - [✗] ADR: tidak ada yang terkait modul ini
 - [✗] Coding Rules: tidak ditemukan
+- [✓] Architecture/Lessons: 1 entry (general)
+
+Coverage (BRAIN 2 - Dynamic):
+- [✗] TASK: tidak ditemukan
+- [✓] git diff: tersedia
+- [✗] Verification: tidak ada
+- [✗] Affected Files: unknown
 
 Evidence Strength: WEAK
 Reason: diff tersedia tetapi tidak ada ADR yang mengatur modul ini. Penilaian hanya berdasarkan pola umum.

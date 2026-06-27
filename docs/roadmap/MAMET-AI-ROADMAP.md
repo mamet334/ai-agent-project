@@ -110,7 +110,7 @@ Exit Criteria:
 
 ## Phase 5: UI And Observability
 
-Status: In Progress
+Status: Done
 
 Goal:
 
@@ -118,13 +118,91 @@ Expose the system's growth and engineering state to the owner.
 
 Tasks:
 
-- Add Engineer dashboard.
-- Show open architecture gaps.
-- Show Project Memory entries.
-- Show verification history.
-- Show roadmap phase status.
+- Add Engineer dashboard. (Done — TASK-0012)
+- Show open architecture gaps. (Done)
+- Show Project Memory entries. (Done)
+- Show verification history. (Done)
+- Show roadmap phase status. (Done)
 
 Exit Criteria:
 
-- Owner can see what Mamet AI knows, what changed, and what is next.
+- Owner can see what Mamet AI knows, what changed, and what is next. ✅
+
+## Phase 6: Engineer as Reviewer
+
+Status: Done
+
+Goal:
+
+Engineer can review code changes with full architectural context.
+
+Deliverables:
+
+- ADR-0004: Scoped Review + Two-Dimensional Confidence. Done.
+- TASK-0014: Integrate 4-pillar review context into system prompt. Done.
+- Review pipeline: Task → Affected Files → Git Diff → Relevant ADR → Relevant Coding Rules. Done.
+- Engineer must request git diff from user before reviewing. Done.
+
+Exit Criteria:
+
+- Engineer refuses to review without git diff. ✅
+- Confidence output has Coverage + Evidence Strength. ✅
+
+## Phase 7: Engineer as Implementer
+
+Status: Done
+
+Goal:
+
+Engineer can generate code patches with safety verification before apply.
+
+Deliverables:
+
+- ADR-0005: Implementer Safety Flow. Done.
+- TASK-0015: Self Verification block mandatory before User Review. Done.
+- Safety flow: Generate Patch → Self Verification (syntax, arch, rules, dep) → User Review → Apply. Done.
+
+Exit Criteria:
+
+- Every patch includes Self Verification block. ✅
+- AI outputs "Awaiting User Review before Apply." ✅
+
+## Phase 8: Self Maintenance
+
+Status: Done
+
+Goal:
+
+Engineer can monitor overall project health, not just error logs.
+
+Deliverables:
+
+- Health Report covers both BRAIN 1 (Static) and BRAIN 2 (Dynamic). Done.
+- Deprecated ADR lazy-loaded only on conflict/history keywords. Done.
+- Monitoring dimensions: Gaps, Tasks, Verifications, Dependencies, Tests. Done.
+
+Exit Criteria:
+
+- Health report output covers 6+ dimensions. ✅
+- Deprecated ADR loaded only when relevant. ✅
+
+## Post-Baseline: Observability Layer
+
+Status: Done
+
+Goal:
+
+Provide structured context separation and measurable engineering metrics.
+
+Deliverables:
+
+- ADR-0006: Two-Brain Context Model (Static Knowledge vs Dynamic Context). Done.
+- ADR-0007: Engineering Metrics as Derived Queries. Done.
+- TASK-0016: 6 derived metrics defined with SQL queries. Done.
+- Health Snapshot query verified against live Supabase data. Done.
+
+Exit Criteria:
+
+- Engineer prompt explicitly labels BRAIN 1 and BRAIN 2 sources. ✅
+- All 6 metrics can be computed from existing tables without schema changes. ✅
 
