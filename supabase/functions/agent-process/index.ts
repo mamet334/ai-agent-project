@@ -1383,7 +1383,26 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
         engineerContextPrompt += `=== Active Tasks ===\n${tasksRes.data?.map((t: any) => `- ${t.task_number} (${t.status}): ${t.title}`).join('\n') || 'None'}\n`;
         engineerContextPrompt += `=== Active Gaps ===\n${gapsRes.data?.map((g: any) => `- ${g.gap_number} (${g.status}): ${g.title}`).join('\n') || 'None'}\n`;
         engineerContextPrompt += `=== Recent Memory Entries ===\n${entriesRes.data?.map((e: any) => `- [${e.entry_type}] ${e.title}: ${e.content}`).join('\n') || 'None'}\n`;
-        engineerContextPrompt += `(You are in ENGINEER mode. Read the context above to understand the current engineering state.)\n`;
+        
+        // --- PHASE 6: ENGINEER REVIEWER & CONFIDENCE RULES (ADR-0004) ---
+        engineerContextPrompt += `\n[ENGINEER RULES & CONFIDENCE]
+You are in ENGINEER mode. You MUST follow these rules:
+1. CODE REVIEW: If asked to review code (diff), you must correlate it with active Tasks, ADRs, and Coding Rules from the Memory Entries above. If you lack this context, explicitly state what is missing.
+2. ENGINEERING CONFIDENCE: Before you provide ANY technical recommendation, patch, or review, you MUST output a "Confidence" score section to indicate your certainty based on available data.
+Format example:
+Confidence: 95%
+Reason:
+- Read TASK-xxx
+- Confirmed against ADR-xxx
+- Correlated with git diff
+
+Confidence: 42%
+Reason:
+- Lack of ADR context
+- Repository structure is not fully understood for this component.
+
+Failure to provide the Confidence score violates Mamet AI Engineering Framework (MAEF).
+`;
       } catch (err) {
         console.error("Failed to fetch engineer context:", err);
       }
