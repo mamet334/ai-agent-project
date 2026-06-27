@@ -9,9 +9,11 @@ export default function EngineerDashboard({ userId }) {
   const [verifications, setVerifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [error, setError] = useState(null);
 
   const fetchData = async () => {
     setLoading(true);
+    setError(null);
     try {
       const [tasksRes, gapsRes, memRes, verRes] = await Promise.all([
         supabase.from('engineering_tasks').select('*').order('created_at', { ascending: false }).limit(20),
@@ -19,13 +21,17 @@ export default function EngineerDashboard({ userId }) {
         supabase.from('project_memory_entries').select('*').order('created_at', { ascending: false }).limit(20),
         supabase.from('verification_runs').select('*').order('created_at', { ascending: false }).limit(20)
       ]);
+      // Surface DB-level errors explicitly
+      const dbError = tasksRes.error || gapsRes.error || memRes.error || verRes.error;
+      if (dbError) { setError(`DB Error: ${dbError.message}`); setLoading(false); return; }
       if (tasksRes.data) setTasks(tasksRes.data);
       if (gapsRes.data) setGaps(gapsRes.data);
       if (memRes.data) setMemoryEntries(memRes.data);
       if (verRes.data) setVerifications(verRes.data);
       setLastUpdated(new Date());
-    } catch (error) {
-      console.error("Failed to fetch engineer data:", error);
+    } catch (err) {
+      console.error("Failed to fetch engineer data:", err);
+      setError(`Network Error: ${err.message}`);
     }
     setLoading(false);
   };
@@ -50,6 +56,18 @@ export default function EngineerDashboard({ userId }) {
         return 'text-slate-400 bg-slate-500/10 border-slate-500/20';
     }
   };
+
+  if (error) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-slate-950 p-6">
+        <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm max-w-md text-center">
+          <p className="font-semibold mb-1">⚠️ Engineer Data Unavailable</p>
+          <p className="text-xs text-red-300/70">{error}</p>
+          <button onClick={fetchData} className="mt-3 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 rounded-lg text-xs transition-colors">Retry</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-full flex flex-col bg-slate-950 p-6 overflow-y-auto custom-scrollbar">
@@ -85,6 +103,7 @@ export default function EngineerDashboard({ userId }) {
             <span className="ml-auto text-xs font-mono text-slate-500">{tasks.length} items</span>
           </div>
           <div className="overflow-y-auto custom-scrollbar pr-2 space-y-3">
+            {tasks.length === 0 && !loading && <p className="text-xs text-slate-600 text-center pt-4">No tasks found.</p>}
             {tasks.map(task => (
               <div key={task.id} className="p-4 rounded-xl bg-slate-950/50 border border-slate-800/80 hover:border-blue-500/30 transition-colors group">
                 <div className="flex justify-between items-start mb-2">
