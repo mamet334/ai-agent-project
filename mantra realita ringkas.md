@@ -299,6 +299,11 @@ MAEF → Vision → Master Architecture Index → System Architecture
 - Supabase RLS dibuka secara read-only untuk user `authenticated`.
 - Real-time observability: Active Tasks, Architecture Gaps, Memory Feed, dan Verification Log aktif termonitor langsung dari database Supabase.
 
+### Post-Baseline Security Audit (TASK-0013) ✅ DONE
+- **Capability Spoofing Resolved (HIGH):** `appSource` kini diverifikasi secara *server-authoritative* melalui JWT metadata Supabase (`user.user_metadata.app_source`), memblokir eskalasi hak istimewa klien.
+- **Orchestrator Tool Gate (MEDIUM):** Filter `knowledge_manager` sekarang diotorisasi ketat pada level orchestrator, bukan mendelegasikan ke plugin.
+- **Dashboard Resiliency:** Memperbaiki *silent failures* di EngineerDashboard, kini merender UI *error state* bila koneksi/DB gagal.
+
 ### Next Mission — Post-Baseline Evolution
 - Seluruh fase MAEF Baseline (Phase 0 - 5) telah berhasil diselesaikan.
 - Sistem kini siap untuk fitur eksperimental, sub-agent baru, atau arsitektur level berikutnya sesuai arahan User.
