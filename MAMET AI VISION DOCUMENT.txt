@@ -332,6 +332,194 @@ Verified
 
 Deprecated
 
+
+
 ↓
 
-Rejecte
+Rejected
+
+Hanya knowledge yang sudah terverifikasi yang menjadi pedoman utama.
+
+---
+
+# PERAN VENDOR
+
+GitHub
+
+Tempat Source Code.
+
+Supabase
+
+Tempat Data, Memory, RAG, dan Project Memory.
+
+OpenRouter
+
+Reasoning Engine Provider.
+
+Vercel
+
+Hosting.
+
+Semua vendor dapat diganti.
+
+Mamet AI tetap sama.
+
+---
+
+# FILOSOFI ENGINEER
+
+Engineer tidak bergantung pada satu model AI.
+
+Engineer hanya mengenal:
+
+Reasoning Interface
+
+↓
+
+OpenRouter
+
+↓
+
+Model AI apa pun.
+
+Hari ini Claude.
+
+Besok GPT.
+
+Lusa DeepSeek.
+
+Engineer tetap sama.
+
+---
+
+# TUJUAN PROJECT MEMORY
+
+Membuat Engineer lahir dengan pengetahuan dasar.
+
+Bukan lahir kosong.
+
+Engineer melakukan onboarding seperti engineer manusia.
+
+Mempelajari:
+
+- Filosofi
+- Struktur
+- Workflow
+- Arsitektur
+- Coding Rules
+- Bug History
+
+Baru kemudian bekerja.
+
+---
+
+# ROADMAP
+
+Phase 1
+
+Stabilkan Mamet AI.
+
+Phase 2
+
+Rapikan Knowledge.
+
+Phase 3
+
+Bangun Project Memory.
+
+Phase 4
+
+Engineer membaca Project Memory.
+
+Phase 5
+
+Engineer memahami Repository.
+
+Phase 6
+
+Engineer menjadi Reviewer.
+Konteks wajib: Task + git diff + ADR + Coding Rule.
+AI tidak boleh me-review tanpa memahami alasan (Project Memory).
+
+Phase 7
+
+Engineer menjadi Implementer.
+Alur aman wajib: Generate Patch → Self Verification (syntax, arch, rules, dep) → User Review → Apply.
+
+Phase 8
+
+Engineer melakukan Self Maintenance.
+Tidak sekadar baca log. AI memonitor kesehatan proyek:
+- Architecture Gaps
+- Verification History
+- Failed Tasks
+- Deprecated ADR
+- Dependency Changes
+- Test Results
+
+---
+
+# ENGINEERING CONFIDENCE
+
+Ini adalah filter kejujuran Mamet AI.
+
+Sebelum Engineer memberi rekomendasi atau patch, ia wajib menyatakan tingkat keyakinan (Confidence).
+
+Contoh:
+
+Confidence: 95%
+Reason:
+- Membaca TASK
+- Membaca ADR
+- Membaca Repository
+- Membaca Project Memory
+
+Contoh 2:
+
+Confidence: 42%
+Reason:
+- Repository belum cukup dipahami.
+- Tidak ada referensi ADR terkait.
+
+Confidence Score membantu User memutuskan apakah hasil AI layak dipercaya atau perlu instruksi tambahan.
+
+---
+
+# TUJUAN AKHIR
+
+Mamet AI menjadi platform AI pribadi yang:
+
+- seluruh knowledge dimiliki sendiri.
+- seluruh workflow dimiliki sendiri.
+- seluruh identitas dimiliki sendiri.
+- seluruh perkembangan dipahami oleh Engineer.
+
+LLM hanyalah mesin reasoning.
+
+Vendor hanyalah penyedia layanan.
+
+Project Memory adalah aset.
+
+Engineer adalah bengkel resmi.
+
+Mamet AI adalah identitas.
+
+Pemilik tetap menjadi pengendali utama seluruh sistem.
+
+---
+
+# DNA MAMET AI
+
+"Bangun aset.
+
+Pinjam kemampuan.
+
+Kendalikan sistem.
+
+Biarkan knowledge berkembang.
+
+Jangan bergantung pada vendor.
+
+Biarkan AI berganti.
+
+Mamet AI tetap menjadi dirinya sendiri."
