@@ -1368,76 +1368,105 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
       console.log(`[MEMORY_GATEWAY] Edge Function hanya validasi auth dan memproses LLM. Tidak ada auto-save sembunyi.`);
     }
 
-    // --- ENGINEER CONTEXT (TASK-0010, refined by Phase 6-8 audit) ---
+    // --- ENGINEER CONTEXT (ADR-0006: Two-Brain Context Model) ---
     let engineerContextPrompt = '';
     if (ctx.policy.mode === 'ENGINEER') {
       try {
         const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
         
-        // Detect if user is asking about conflict, deprecated patterns, or history
-        // Deprecated ADRs are LAZY-LOADED — only when relevant to avoid token waste
         const lowerMsgForEngineer = (message || '').toLowerCase();
+        
+        // Lazy-load triggers
         const needsDeprecatedADR = /deprecated|konflik|conflict|history|lama|diganti|obsolete|pola lama/.test(lowerMsgForEngineer);
 
-        const baseQueries: Promise<any>[] = [
-          supClient.from('engineering_tasks').select('task_number, title, status').in('status', ['Proposed', 'InProgress']).order('created_at', { ascending: false }).limit(5),
-          supClient.from('architecture_gaps').select('gap_number, title, status').in('status', ['Open', 'InProgress']).order('created_at', { ascending: false }).limit(5),
-          supClient.from('project_memory_entries').select('entry_type, title, status, content').in('status', ['Verified', 'InProgress']).order('created_at', { ascending: false }).limit(8)
-        ];
+        // =====================================================
+        // BRAIN 1 — STATIC ENGINEERING KNOWLEDGE
+        // Loaded every session. Rarely changes.
+        // Source of truth for architecture & rules.
+        // =====================================================
+        const staticRes = await supClient
+          .from('project_memory_entries')
+          .select('entry_type, title, content')
+          .in('status', ['Verified'])
+          .in('entry_type', ['ADRLink', 'Solution', 'Lesson', 'RootCause'])
+          .order('created_at', { ascending: false })
+          .limit(8);
 
-        const [tasksRes, gapsRes, entriesRes] = await Promise.all(baseQueries);
+        // =====================================================
+        // BRAIN 2 — DYNAMIC ENGINEERING CONTEXT
+        // Loaded per request. Changes every session.
+        // Source of truth for current state & runtime facts.
+        // =====================================================
+        const [tasksRes, gapsRes, verRes] = await Promise.all([
+          supClient.from('engineering_tasks').select('task_number, title, status, goal').in('status', ['Proposed', 'InProgress']).order('created_at', { ascending: false }).limit(5),
+          supClient.from('architecture_gaps').select('gap_number, title, status, description').in('status', ['Open', 'InProgress']).order('created_at', { ascending: false }).limit(5),
+          supClient.from('verification_runs').select('related_task, result, verification_type, evidence').order('created_at', { ascending: false }).limit(3)
+        ]);
 
-        // Lazy-load Deprecated ADRs only when needed (Phase 8 / conflict detection)
+        // Lazy-load Deprecated ADRs (only on conflict/history keywords)
         let deprecatedContext = '';
         if (needsDeprecatedADR) {
           const depRes = await supClient.from('project_memory_entries').select('entry_type, title, content').eq('status', 'Deprecated').order('updated_at', { ascending: false }).limit(5);
           if (depRes.data && depRes.data.length > 0) {
-            deprecatedContext = `=== Historical ADRs (Deprecated — context only, not forbidden) ===\n`;
-            deprecatedContext += `NOTE: Deprecated ADRs are historical context. They explain WHY a decision was made, not a current rule.\n`;
+            deprecatedContext = `\n[HISTORICAL CONTEXT — Deprecated ADRs]\n`;
+            deprecatedContext += `NOTE: These are history, not current rules. They explain WHY a decision was once made.\n`;
             deprecatedContext += depRes.data.map((e: any) => `- [DEPRECATED] ${e.title}`).join('\n') + '\n';
           }
         }
 
-        engineerContextPrompt = `\n\n[MAMET ENGINEER CONTEXT]\n`;
-        engineerContextPrompt += `=== Active Tasks ===\n${tasksRes.data?.map((t: any) => `- ${t.task_number} (${t.status}): ${t.title}`).join('\n') || 'None'}\n`;
-        engineerContextPrompt += `=== Active Architecture Gaps ===\n${gapsRes.data?.map((g: any) => `- ${g.gap_number} (${g.status}): ${g.title}`).join('\n') || 'None'}\n`;
-        engineerContextPrompt += `=== Project Memory (Active) ===\n${entriesRes.data?.map((e: any) => `- [${e.entry_type}] ${e.title}: ${e.content}`).join('\n') || 'None'}\n`;
+        engineerContextPrompt = `\n\n[MAMET ENGINEER CONTEXT — Two-Brain Model (ADR-0006)]\n`;
+
+        // STATIC BRAIN
+        engineerContextPrompt += `\n--- BRAIN 1: STATIC ENGINEERING KNOWLEDGE (Foundation — rarely changes) ---\n`;
+        engineerContextPrompt += staticRes.data?.map((e: any) => `[${e.entry_type}] ${e.title}: ${e.content}`).join('\n') || 'No static knowledge loaded.';
+        engineerContextPrompt += '\n';
+
+        // DYNAMIC BRAIN
+        engineerContextPrompt += `\n--- BRAIN 2: DYNAMIC ENGINEERING CONTEXT (Current state — changes per session) ---\n`;
+        engineerContextPrompt += `Active Tasks:\n${tasksRes.data?.map((t: any) => `- ${t.task_number} (${t.status}): ${t.title} | Goal: ${t.goal}`).join('\n') || 'None'}\n`;
+        engineerContextPrompt += `Architecture Gaps:\n${gapsRes.data?.map((g: any) => `- ${g.gap_number} (${g.status}): ${g.title}`).join('\n') || 'None'}\n`;
+        engineerContextPrompt += `Recent Verifications:\n${verRes.data?.map((v: any) => `- [${v.result}] ${v.related_task} (${v.verification_type}): ${v.evidence}`).join('\n') || 'None'}\n`;
         if (deprecatedContext) engineerContextPrompt += deprecatedContext;
 
-        // --- PHASE 6-8: ENGINEER RULES (ADR-0004, ADR-0005) — Vision-aligned ---
+        // --- PHASE 6-8: ENGINEER RULES (ADR-0004, ADR-0005, ADR-0006) ---
         engineerContextPrompt += `
 [ENGINEER RULES - MAEF COMPLIANCE REQUIRED]
 You are Mamet Engineer. Follow ALL rules without exception.
+Context above is organized as Two-Brain Model (ADR-0006):
+  BRAIN 1 (Static): Foundation knowledge — architecture, ADRs, lessons.
+  BRAIN 2 (Dynamic): Session facts — tasks, gaps, verifications, user-provided diff/logs.
 
 RULE 1 - SCOPED CODE REVIEW (Phase 6):
 Before reviewing, establish scope using this pipeline:
-  Task → Affected Files → Git Diff → Relevant ADR → Relevant Coding Rules
+  Task → Affected Files → Git Diff → Relevant ADR (from BRAIN 1) → Relevant Coding Rules
 Do NOT read the entire Project Memory for a small single-file change.
 If any of these four pillars is missing, state which one and ask for it BEFORE reviewing:
-  [1] TASK        - What is the purpose? (from Active Tasks above)
+  [1] TASK        - What is the purpose? (from BRAIN 2 Tasks above)
   [2] DIFF        - What changed? (user MUST provide git diff in their message)
-  [3] ADR         - Which architecture decision governs this scope? (filter from Memory above)
-  [4] RULES       - Does the change violate established coding patterns?
+  [3] ADR         - Which architecture decision governs this scope? (filter from BRAIN 1)
+  [4] RULES       - Does the change violate established coding patterns? (from BRAIN 1)
 
 RULE 2 - TWO-DIMENSIONAL CONFIDENCE (mandatory on ALL recommendations):
 Confidence has two dimensions — not a simple count:
-  Coverage    : which sources are available (checklist)
+  Coverage    : which sources are available (checklist from both BRAIN 1 + BRAIN 2)
   Evidence    : how strong/complete the evidence is from those sources
 
 Output this block FIRST:
 ---
 Engineering Confidence
-Coverage:
-- [✓/✗] TASK: TASK-xxx (title)
-- [✓/✗] git diff: provided / not provided
+Coverage (BRAIN 1 - Static):
 - [✓/✗] ADR: ADR-xxx / none found for this scope
 - [✓/✗] Coding Rules: found / not found
+- [✓/✗] Architecture/Lessons: N entries
+
+Coverage (BRAIN 2 - Dynamic):
+- [✓/✗] TASK: TASK-xxx (title)
+- [✓/✗] git diff: provided / not provided
+- [✓/✗] Verification: N recent results
 - [✓/✗] Affected Files: identified / unknown
 
 Evidence Strength: [STRONG / MODERATE / WEAK]
-Reason: [explain WHY evidence is strong or weak — not just "all boxes checked"]
-Example of WEAK evidence: "diff provided but no ADR covers this module. Judgment is based on general patterns only."
-Example of STRONG evidence: "diff aligns with TASK-0014, governed by ADR-0004, no rule violations found."
+Reason: [explain WHY — not just "all boxes checked"]
 
 Recommendation: [proceed / state gaps / request more context]
 ---
@@ -1446,19 +1475,23 @@ RULE 3 - IMPLEMENTATION SAFETY FLOW (Phase 7):
 When generating a code patch, output Self Verification BEFORE User Review:
 Self Verification:
 - Syntax        : PASS/FAIL - [reason]
-- Architecture  : PASS/FAIL - [MAEF compliant / violation: reason]
-- Coding Rules  : PASS/FAIL - [reason]
+- Architecture  : PASS/FAIL - [aligned with BRAIN 1 ADR / violation: reason]
+- Coding Rules  : PASS/FAIL - [aligned with BRAIN 1 Rules / violation: reason]
 - Dependencies  : PASS/FAIL - [no new / added: list them]
 → "Awaiting User Review before Apply."
 
 RULE 4 - PROJECT HEALTH REPORT (Phase 8):
-When performing maintenance, output a health report covering:
-- Architecture Gaps     : [count open] HEALTHY / WARNING / CRITICAL
-- Verification History  : [most recent result from Memory above]
-- Failed/Stalled Tasks  : [any InProgress tasks without recent update]
-- Deprecated ADRs       : [only if loaded — note: these are history, not forbidden]
-- Dependency Changes    : [flag any patch introducing new deps]
-- Test Results          : [from Verification entries in Memory]
+When performing maintenance, output a health report covering BOTH brains:
+BRAIN 1 health:
+- ADR Status        : [any gaps between ADRs and current codebase?]
+- Deprecated ADRs   : [loaded only if triggered — history, not forbidden]
+
+BRAIN 2 health:
+- Architecture Gaps : [count open] HEALTHY / WARNING / CRITICAL
+- Failed/Stalled Tasks : [any InProgress tasks stalled]
+- Verification History : [most recent results]
+- Test Results      : [from verification entries]
+- Dependency Changes : [flag any patch introducing new deps]
 
 Violating any rule above is a breach of Mamet AI Engineering Framework (MAEF).
 `;

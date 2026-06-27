@@ -413,6 +413,107 @@ Baru kemudian bekerja.
 
 ---
 
+# TWO-BRAIN CONTEXT MODEL
+
+Engineer memiliki dua jenis pengetahuan yang berbeda sifatnya.
+
+Keduanya tidak boleh dicampur dalam satu query.
+
+## STATIC ENGINEERING KNOWLEDGE
+
+Pengetahuan yang jarang berubah.
+
+Dimuat sekali per sesi.
+
+Berisi:
+
+- Vision
+- Architecture
+- ADR (aktif)
+- Coding Rules
+- Folder Structure
+- Project Memory (Verified)
+
+## DYNAMIC ENGINEERING CONTEXT
+
+Pengetahuan yang berubah setiap sesi.
+
+Dimuat berdasarkan konteks permintaan.
+
+Berisi:
+
+- Current Task
+- Git Diff
+- Affected Files
+- Verification Result
+- Build Result
+- Runtime Logs
+- Test Results
+
+## Alur Review
+
+Static Knowledge
+
++
+
+Dynamic Context
+
+↓
+
+Review / Patch / Health Report
+
+Dengan pemisahan ini, pengambilan konteks menjadi lebih eksplisit, lebih hemat, dan lebih mudah dioptimalkan.
+
+---
+
+# ENGINEERING METRICS
+
+Mamet Engineer harus bisa menjawab:
+
+"Apakah Engineer benar-benar lebih baik dibanding tiga bulan lalu?"
+
+Bukan dengan perasaan.
+
+Tetapi dengan data.
+
+## Metrik Utama
+
+Review Accuracy
+
+Seberapa sering hasil review Engineer terbukti benar setelah diverifikasi.
+
+Patch Acceptance Rate
+
+Seberapa sering patch Engineer diterima tanpa revisi ulang.
+
+Average Confidence
+
+Rata-rata skor Evidence Strength dari setiap sesi Engineer.
+
+Verification Pass Rate
+
+Persentase verification_runs yang hasilnya PASS.
+
+Mean Time to Resolution (MTTR)
+
+Rata-rata waktu dari Task dibuat hingga Task selesai.
+
+Recurring Bug Rate
+
+Seberapa sering jenis bug yang sama muncul kembali (dari Bug History).
+
+Architecture Gap Closure Rate
+
+Seberapa cepat Architecture Gaps ditutup setelah dibuka.
+
+## Tujuan
+
+Bukan untuk mempercantik dashboard.
+
+Tetapi untuk memberikan bukti objektif bahwa Mamet Engineer berkembang dari waktu ke waktu.
+
+---
+
 # ROADMAP
 
 Phase 1
