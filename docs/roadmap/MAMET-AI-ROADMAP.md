@@ -45,39 +45,42 @@ Exit Criteria:
 
 ## Phase 2: Mamet Engineer Foundation
 
-Status: Proposed
+Status: Done
 
 Goal:
 
 Turn Mamet Engineer from a concept into a controlled engineering workflow.
 
-Tasks:
+Deliverables:
 
-- Adopt `docs/blueprints/MAMET-ENGINEER-BLUEPRINT.md`.
-- Add Engineer policy boundary.
-- Add Project Memory update requirement to all engineering tasks.
-- Add structured task and ADR conventions.
+- TASK-0005: Mamet Engineer Blueprint adopted. Done.
+- TASK-0006: Project Memory Service designed. Done.
+- TASK-0007: Engineer policy boundary (`appSource: "engineer"`) active in production. Done.
+- ADR-0003: Engineer Capability Mode documented. Done.
 
-Exit Criteria:
+Exit Criteria — Verified:
 
-- Every code change can be traced to task, verification, and Project Memory.
-- Engineer capability has a clear runtime policy plan.
+- Every code change is traced to task, verification, and Project Memory. ✅
+- Engineer capability has a clear runtime policy plan. ✅
 
 ## Phase 3: Project Memory Service
 
-Status: Proposed
+Status: In Progress
 
 Goal:
 
-Move Project Memory from docs-only baseline toward structured storage.
+Move Project Memory from docs-only baseline toward structured database storage queryable by Mamet Engineer.
 
 Tasks:
 
-- Design database schema.
-- Add RLS/security model.
-- Add read/write API or Supabase functions.
-- Add migration SQL.
-- Backfill baseline docs as initial records.
+- TASK-0008: Execute schema migration (Proposed).
+- TASK-0009: Backfill existing Project Memory docs to database (Proposed).
+- TASK-0010: Integrate Project Memory read into agent-process Engineer mode (Proposed).
+
+Design artifacts available:
+
+- `docs/tasks/TECH-SPEC-0006-project-memory-service.md`
+- `docs/tasks/project-memory-schema-draft.sql`
 
 Exit Criteria:
 
