@@ -1,14 +1,4 @@
-feat: Phase 4 complete - Capability Separation verified
+docs: update mantra with Phase 2, 3, 4 completion
 
-TASK-0011 Done:
-- Verified `MametCapabilityMode` enum is active in production.
-- Verified capability routing via `appSource`.
-- Verified shared services respect capability permissions via policy matrix.
-- Phase 4 natively fulfilled by prior architecture updates (Phases 1 & 2).
-
-Roadmap:
-- Phase 4 marked as Done.
-- Phase 5 (UI And Observability) marked as In Progress.
-
-Project Memory:
-- Logged TASK-0010 and TASK-0011 to live database.
+- Added Phase 2, Phase 3, and Phase 4 completion status to mantra.
+- Updated Next Mission to Phase 5 (UI And Observability).

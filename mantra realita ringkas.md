@@ -276,10 +276,27 @@ MAEF → Vision → Master Architecture Index → System Architecture
 | MametLite build | ✅ Done | Built in 627ms, exit 0 |
 | Deploy ke Supabase (BrainBox AI) | ✅ Done | v246 ACTIVE, CORS confirmed |
 
-### Next Mission — Phase 2: Mamet Engineer Foundation
-- Formalisasi Mamet Engineer sebagai workflow terkontrol
-- Setiap perubahan kode harus traceable ke Task, Verification, dan Project Memory
-- Lihat: `docs/roadmap/MAMET-AI-ROADMAP.md` Phase 2
+### Phase 2: Mamet Engineer Foundation ✅ DONE
+- Blueprint Engineer (TASK-0005) diadopsi
+- Engineer Policy Boundary (TASK-0007) aktif (`appSource: 'engineer'`)
+- Capability Mode (ADR-0003) didokumentasikan
+- Proyek resmi menggunakan workflow berbasis MAEF & Project Memory
+
+### Phase 3: Project Memory Service ✅ DONE
+- Skema Database Project Memory dirancang (TASK-0006)
+- Migrasi Skema ke Supabase (TASK-0008) dieksekusi (4 tabel dengan RLS)
+- Backfill Baseline Project Memory (TASK-0009) dimasukkan ke database
+- Integrasi baca memori proyek ke `agent-process` (TASK-0010)
+
+### Phase 4: Capability Separation ✅ DONE
+- Pemisahan `MametCapabilityMode` (AI, LITE, ENGINEER) terverifikasi (TASK-0011)
+- LITE = Read-oriented, ringan, diblokir dari edit User Memory.
+- ENGINEER = Fokus Project Memory, full reasoning, diblokir dari automasi.
+- AI = Full access untuk keseharian user.
+
+### Next Mission — Phase 5: UI And Observability
+- Menambahkan Engineer Dashboard di frontend
+- Menampilkan Gaps, Tasks, dan Verifications langsung dari database.
 
 ---
 
