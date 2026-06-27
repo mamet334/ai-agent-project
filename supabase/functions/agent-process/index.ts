@@ -1357,7 +1357,28 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
       console.log(`[MEMORY_GATEWAY] Edge Function hanya validasi auth dan memproses LLM. Tidak ada auto-save sembunyi.`);
     }
 
-    let basePrompts = agentIdentityPrompt + userContextPrompt + memoryPrompt;
+    // --- ENGINEER CONTEXT (TASK-0010) ---
+    let engineerContextPrompt = '';
+    if (ctx.policy.mode === 'ENGINEER') {
+      try {
+        const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+        const [tasksRes, gapsRes, entriesRes] = await Promise.all([
+          supClient.from('engineering_tasks').select('task_number, title, status').in('status', ['Proposed', 'InProgress']).order('created_at', { ascending: false }).limit(5),
+          supClient.from('architecture_gaps').select('gap_number, title, status').in('status', ['Open', 'InProgress']).order('created_at', { ascending: false }).limit(5),
+          supClient.from('project_memory_entries').select('entry_type, title, status, content').order('created_at', { ascending: false }).limit(5)
+        ]);
+
+        engineerContextPrompt = `\n\n[MAMET ENGINEER CONTEXT]\n`;
+        engineerContextPrompt += `=== Active Tasks ===\n${tasksRes.data?.map((t: any) => `- ${t.task_number} (${t.status}): ${t.title}`).join('\n') || 'None'}\n`;
+        engineerContextPrompt += `=== Active Gaps ===\n${gapsRes.data?.map((g: any) => `- ${g.gap_number} (${g.status}): ${g.title}`).join('\n') || 'None'}\n`;
+        engineerContextPrompt += `=== Recent Memory Entries ===\n${entriesRes.data?.map((e: any) => `- [${e.entry_type}] ${e.title}: ${e.content}`).join('\n') || 'None'}\n`;
+        engineerContextPrompt += `(You are in ENGINEER mode. Read the context above to understand the current engineering state.)\n`;
+      } catch (err) {
+        console.error("Failed to fetch engineer context:", err);
+      }
+    }
+
+    let basePrompts = agentIdentityPrompt + userContextPrompt + memoryPrompt + engineerContextPrompt;
     if (ctx.policy.webHint === "HIGH_PRIORITY") {
       basePrompts += `\n[WEB vs RAG COMPARISON CONTRACT]: Jika terdapat perbedaan antara dokumen RAG internal dan Web/Internet, identifikasi mana yang lebih baru secara eksplisit.`;
     }
