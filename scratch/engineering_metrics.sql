@@ -52,19 +52,29 @@ GROUP BY DATE_TRUNC('month', created_at)
 ORDER BY month DESC
 LIMIT 6;
 
--- 6. HEALTH SNAPSHOT (gabungan semua dimensi)
+-- 6. HEALTH SNAPSHOT (gabungan semua dimensi) — BENAR: scalar subquery, bukan cross join
 SELECT
-  ROUND(COUNT(t.*) FILTER (WHERE t.status = 'Done') * 100.0 / NULLIF(COUNT(t.*), 0), 1)
-    AS task_completion_pct,
-  COUNT(t.*) FILTER (WHERE t.status = 'InProgress') AS tasks_in_progress,
-  COUNT(g.*) FILTER (WHERE g.status = 'Open') AS gaps_open,
-  ROUND(COUNT(g.*) FILTER (WHERE g.status = 'Resolved') * 100.0 / NULLIF(COUNT(g.*), 0), 1)
-    AS gap_closure_pct,
-  ROUND(COUNT(v.*) FILTER (WHERE v.result IN ('Pass', 'PASS')) * 100.0 / NULLIF(COUNT(v.*), 0), 1)
-    AS verification_pass_pct,
-  COUNT(m.*) FILTER (WHERE m.status = 'Verified') AS verified_memory_entries
-FROM
-  engineering_tasks t,
-  architecture_gaps g,
-  verification_runs v,
-  project_memory_entries m;
+  -- Task Health
+  (SELECT ROUND(COUNT(*) FILTER (WHERE status = 'Done') * 100.0 / NULLIF(COUNT(*), 0), 1)
+    FROM engineering_tasks) AS task_completion_pct,
+  (SELECT COUNT(*) FROM engineering_tasks WHERE status = 'InProgress')
+    AS tasks_in_progress,
+  (SELECT COUNT(*) FROM engineering_tasks WHERE status = 'Proposed')
+    AS tasks_proposed,
+
+  -- Gap Health
+  (SELECT COUNT(*) FROM architecture_gaps WHERE status = 'Open')
+    AS gaps_open,
+  (SELECT ROUND(COUNT(*) FILTER (WHERE status = 'Resolved') * 100.0 / NULLIF(COUNT(*), 0), 1)
+    FROM architecture_gaps) AS gap_closure_pct,
+
+  -- Verification Health
+  (SELECT ROUND(COUNT(*) FILTER (WHERE result IN ('Pass', 'PASS')) * 100.0 / NULLIF(COUNT(*), 0), 1)
+    FROM verification_runs) AS verification_pass_pct,
+  (SELECT COUNT(*) FROM verification_runs) AS total_verifications,
+
+  -- Knowledge Health
+  (SELECT COUNT(*) FROM project_memory_entries WHERE status = 'Verified')
+    AS verified_memory_entries,
+  (SELECT COUNT(*) FROM project_memory_entries WHERE status = 'Deprecated')
+    AS deprecated_entries;

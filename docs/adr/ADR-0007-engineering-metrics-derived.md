@@ -122,26 +122,29 @@ LIMIT 6;
 ```sql
 SELECT
   -- Task Health
-  COUNT(t.*) FILTER (WHERE t.status = 'Done') * 100.0 / NULLIF(COUNT(t.*), 0)
-    AS task_completion_pct,
-  COUNT(t.*) FILTER (WHERE t.status = 'InProgress') AS tasks_in_progress,
+  (SELECT ROUND(COUNT(*) FILTER (WHERE status = 'Done') * 100.0 / NULLIF(COUNT(*), 0), 1)
+    FROM engineering_tasks) AS task_completion_pct,
+  (SELECT COUNT(*) FROM engineering_tasks WHERE status = 'InProgress')
+    AS tasks_in_progress,
+  (SELECT COUNT(*) FROM engineering_tasks WHERE status = 'Proposed')
+    AS tasks_proposed,
 
   -- Gap Health
-  COUNT(g.*) FILTER (WHERE g.status = 'Open') AS gaps_open,
-  COUNT(g.*) FILTER (WHERE g.status = 'Resolved') * 100.0 / NULLIF(COUNT(g.*), 0)
-    AS gap_closure_pct,
+  (SELECT COUNT(*) FROM architecture_gaps WHERE status = 'Open')
+    AS gaps_open,
+  (SELECT ROUND(COUNT(*) FILTER (WHERE status = 'Resolved') * 100.0 / NULLIF(COUNT(*), 0), 1)
+    FROM architecture_gaps) AS gap_closure_pct,
 
   -- Verification Health
-  COUNT(v.*) FILTER (WHERE v.result IN ('Pass', 'PASS')) * 100.0 / NULLIF(COUNT(v.*), 0)
-    AS verification_pass_pct,
+  (SELECT ROUND(COUNT(*) FILTER (WHERE result IN ('Pass', 'PASS')) * 100.0 / NULLIF(COUNT(*), 0), 1)
+    FROM verification_runs) AS verification_pass_pct,
+  (SELECT COUNT(*) FROM verification_runs) AS total_verifications,
 
   -- Knowledge Health
-  COUNT(m.*) FILTER (WHERE m.status = 'Verified') AS verified_memory_entries
-FROM
-  engineering_tasks t,
-  architecture_gaps g,
-  verification_runs v,
-  project_memory_entries m;
+  (SELECT COUNT(*) FROM project_memory_entries WHERE status = 'Verified')
+    AS verified_memory_entries,
+  (SELECT COUNT(*) FROM project_memory_entries WHERE status = 'Deprecated')
+    AS deprecated_entries;
 ```
 
 ---
