@@ -313,3 +313,43 @@ MAEF → Vision → Master Architecture Index → System Architecture
 > Catatan: Semua fitur di atas sudah diimplementasikan dalam kode (bukan rencana). Mametlite Lite telah bergeser dari arsitektur berbasis orchestrator ke model eksekusi stateless direct-call, dengan pemilihan tool yang disederhanakan dan overhead pre-processing yang diminimalkan.
 >
 > Sejak 27 Juni 2026, proyek beroperasi di bawah MAEF. Seluruh pengembangan wajib mengikuti Engineering Flow: Vision → Architecture → ADR → Tech Spec → Task → Implementation → Testing → Project Memory → Release.
+
+### 12. POST-BASELINE EVOLUTION — ENGINEER AUTONOMY (27 Juni 2026)
+
+#### Phase 6: Scoped Code Review (ADR-0004) ✅ DONE
+- Engineer kini wajib menggunakan **4 pilar konteks** sebelum review: Task + Git Diff + ADR + Coding Rules.
+- Review berbasis **ruang lingkup**: `Task → Affected Files → Git Diff → Relevant ADR → Relevant Coding Rules`.
+- Engineer tidak membaca seluruh Project Memory untuk perubahan kecil satu file.
+- Jika git diff tidak disediakan user, Engineer **wajib memintanya** sebelum melanjutkan.
+
+#### Phase 7: Implementer Safety Flow (ADR-0005) ✅ DONE
+- Alur aman wajib: **Generate Patch → Self Verification → User Review → Apply**.
+- Self Verification mencakup 4 aspek: Syntax, Architecture (MAEF), Coding Rules, Dependencies.
+- Engineer wajib menjelaskan alasan setiap PASS/FAIL, bukan formalitas.
+
+#### Phase 8: Self Maintenance ✅ DONE
+- Health Report memonitor 6 dimensi: Gaps, Tasks, Verifications, Deprecated ADR, Dependencies, Test Results.
+- **Prinsip Deprecated ADR**: Deprecated ≠ Forbidden. ADR lama dimuat lazy (hanya saat ada kata kunci konflik/sejarah).
+
+#### Two-Brain Context Model (ADR-0006) ✅ DONE
+- Engineer memiliki dua kategori konteks terpisah secara eksplisit:
+  - **BRAIN 1 (Static)**: ADR, Lessons, Solutions, RootCause — jarang berubah.
+  - **BRAIN 2 (Dynamic)**: Tasks, Gaps, Verifications — berubah setiap sesi.
+- Query database kini terpisah per Brain dengan label eksplisit di prompt.
+
+#### Two-Dimensional Confidence ✅ DONE
+- Confidence bukan skor tunggal. Memiliki dua dimensi:
+  - **Coverage**: sumber apa saja yang tersedia (checklist per Brain).
+  - **Evidence Strength**: STRONG / MODERATE / WEAK + alasan mengapa.
+- AI tidak boleh mengklaim confidence tinggi hanya karena semua kotak tercentang.
+
+#### Engineering Metrics — Derived (ADR-0007) ✅ DONE
+- 6 metrik didefinisikan sebagai derived query dari tabel yang sudah ada:
+  1. Verification Pass Rate (`verification_runs`)
+  2. Task Completion Rate (`engineering_tasks`)
+  3. MTTR (`engineering_tasks`)
+  4. Architecture Gap Closure Rate (`architecture_gaps`)
+  5. Knowledge Growth Rate (`project_memory_entries`)
+  6. Health Snapshot (gabungan semua tabel)
+- Tabel `engineering_metrics` **ditunda** sampai ada kebutuhan nyata (performa/histori/trend).
+- SQL queries tersedia di `scratch/engineering_metrics.sql`.
