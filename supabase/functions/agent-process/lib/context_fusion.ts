@@ -50,7 +50,7 @@ export function buildStructuredContext({ memoryArray = [], ragArray = [], messag
     memory: { items: finalMemory },
     rag: { documents: finalRag },
     user: { intent: message ? message.substring(0, 100) : 'unknown' },
-    execution: { mode: ctx ? ctx.mode : 'UNKNOWN', ragTopK: ctx && ctx.rag ? ctx.rag.topK : finalRag.length }
+    execution: { mode: ctx?.policy?.mode || 'UNKNOWN', ragTopK: ctx?.policy?.ragTopK ?? finalRag.length }
   };
 }
 

@@ -1270,6 +1270,7 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
 
     if (ctx.request.finalMessage.toLowerCase().includes('zip')) {
       ctx.request.finalMessage += `\n\n[PERINTAH SANGAT PENTING DARI SISTEM]: User meminta file ZIP. Anda DILARANG menggunakan blok kode biasa seperti \`\`\`html. ANDA WAJIB MENGGUNAKAN format \`\`\`xml_zip. 
+<EXAMPLES>
 Contoh Jawaban Anda yang BENAR:
 Baik, ini file zip-nya:
 \`\`\`xml_zip
@@ -1278,6 +1279,7 @@ Baik, ini file zip-nya:
 <!-- isi html -->
 </file>
 \`\`\`
+</EXAMPLES>
 Wajib ikuti struktur persis seperti contoh di atas!`;
     }
 
@@ -1296,6 +1298,7 @@ PENTING UNTUK KESELAMATAN AI: Anda HANYA DIMINTA UNTUK MEMBERIKAN TEKS / SCRIPT 
 JIKA USER MEMINTA CEK DESKTOP, CARI FILE, CARI FOLDER, ATAU JALANKAN PERINTAH DI KOMPUTER LOKAL MEREKA:
 - DILARANG KERAS menyebut atau memanggil "sub-agent file_analyzer" atau sub-agent apapun! Anda yang mengerjakan sendiri!
 - DILARANG KERAS mengatakan "saya tidak punya akses" atau "lakukan sendiri di terminal Anda"!
+<EXAMPLES>
 - ANDA WAJIB langsung mengeluarkan perintah di dalam tag <terminal>perintah_windows_disini</terminal>
 - Contoh: <terminal>dir %USERPROFILE%\\Desktop</terminal>
 - Untuk cari file: <terminal>dir /s /b C:\\Users\\*nama_file*</terminal>
@@ -1304,6 +1307,7 @@ JIKA USER MEMINTA CEK DESKTOP, CARI FILE, CARI FOLDER, ATAU JALANKAN PERINTAH DI
 - JIKA USER MEMINTA JALANKAN AIRDROP / BROWSER STEALTH / BOT WEB3:
   Keluarkan tag: <run_airdrop task="nama_task_airdrop"></run_airdrop>
   Contoh: <run_airdrop task="test_stealth"></run_airdrop>
+</EXAMPLES>
 INGAT: Ini adalah Windows OS. Gunakan perintah Windows (dir, cd, type, copy) BUKAN Linux (ls, cat, cp)!\n`;
     }
 
@@ -1322,11 +1326,14 @@ User menanyakan model AI open source tercanggih saat ini. Hari ini adalah 2 Juni
 Hingga batas pengetahuan saya (akhir 2024)...
 
 FITUR GRAFIK INTERAKTIF: Jika user meminta untuk membuat grafik (bar/pie/line chart) berdasarkan data, outputkan data tersebut DALAM BENTUK BLOK KODE seperti ini:
+<EXAMPLES>
 \`\`\`json_chart
 { "title": "Judul Grafik", "type": "bar", "data": [{"name": "A", "value": 10}], "xKey": "name", "yKey": "value" }
 \`\`\`
+</EXAMPLES>
 Pilih type "bar", "pie", atau "line" sesuai kebutuhan.
 FITUR ZIP GENERATOR: Jika user meminta Anda membuat file zip (project kodingan), outputkan data DALAM BENTUK BLOK KODE seperti ini (wajib persis):
+<EXAMPLES>
 \`\`\`xml_zip
 <filename>nama_bebas.zip</filename>
 <file name="index.html">
@@ -1336,7 +1343,11 @@ FITUR ZIP GENERATOR: Jika user meminta Anda membuat file zip (project kodingan),
 console.log('hi');
 </file>
 \`\`\`
+</EXAMPLES>
 DILARANG KERAS MENGGUNAKAN PYTHON ATAU "TOOL_CODE". JANGAN PERNAH MENULISKAN KODE PYTHON UNTUK MENGEKSEKUSI TOOL. JAWABLAH DENGAN TEKS BIASA.
+
+[ANTI-HALLUCINATION CONTRACT]
+Jika blok <RAG> dan <MEMORY> kosong, ANDA DILARANG KERAS mengarang fakta, nama file, histori, atau contoh kodingan. Jawab saja bahwa data tidak ditemukan di database internal. Semua yang ada di dalam tag <EXAMPLES> hanyalah panduan format, BUKAN FAKTA RUNTIME!
 
 ATURAN MEMORI (SANGAT PENTING): 
 Semua proses penyimpanan memori/fakta dilakukan SECARA OTOMATIS di latar belakang (background) oleh sistem sebelum Anda menjawab. 
@@ -1452,6 +1463,7 @@ Confidence has two dimensions — not a simple count:
   Evidence    : how strong/complete the evidence is from those sources
 
 Output this block FIRST:
+<EXAMPLES>
 ---
 Engineering Confidence
 Coverage (BRAIN 1 - Static):
@@ -1470,18 +1482,22 @@ Reason: [explain WHY — not just "all boxes checked"]
 
 Recommendation: [proceed / state gaps / request more context]
 ---
+</EXAMPLES>
 
 RULE 3 - IMPLEMENTATION SAFETY FLOW (Phase 7):
 When generating a code patch, output Self Verification BEFORE User Review:
+<EXAMPLES>
 Self Verification:
 - Syntax        : PASS/FAIL - [reason]
 - Architecture  : PASS/FAIL - [aligned with BRAIN 1 ADR / violation: reason]
 - Coding Rules  : PASS/FAIL - [aligned with BRAIN 1 Rules / violation: reason]
 - Dependencies  : PASS/FAIL - [no new / added: list them]
 → "Awaiting User Review before Apply."
+</EXAMPLES>
 
 RULE 4 - PROJECT HEALTH REPORT (Phase 8):
 When performing maintenance, output a health report covering BOTH brains:
+<EXAMPLES>
 BRAIN 1 health:
 - ADR Status        : [any gaps between ADRs and current codebase?]
 - Deprecated ADRs   : [loaded only if triggered — history, not forbidden]
@@ -1492,6 +1508,7 @@ BRAIN 2 health:
 - Verification History : [most recent results]
 - Test Results      : [from verification entries]
 - Dependency Changes : [flag any patch introducing new deps]
+</EXAMPLES>
 
 Violating any rule above is a breach of Mamet AI Engineering Framework (MAEF).
 `;
