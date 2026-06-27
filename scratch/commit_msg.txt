@@ -1,5 +1,5 @@
-docs: add ADR-0004 for Engineer Reviewer & Confidence
+feat: enforce Engineering Confidence and Reviewer Context in LLM
 
-- Defined Phase 6 integration rules requiring Task, Diff, ADR, and Coding Rules context before generating reviews.
-- Introduced Engineering Confidence metric to measure and expose the certainty level of AI recommendations based on retrieved context.
-- Logged TASK-0014 and ADR-0004 to Supabase Project Memory.
+- Implemented ADR-0004 rules directly into the `agent-process` Edge Function.
+- Added strict system prompt instructions for `ENGINEER` mode to enforce CODE REVIEW requirements (must correlate with Task, ADR, and Coding Rules).
+- Enforced the `Confidence` score output format for all engineering recommendations to prevent hallucination.
