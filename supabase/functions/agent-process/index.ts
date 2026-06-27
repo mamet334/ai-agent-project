@@ -1381,6 +1381,11 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
 
     // --- ENGINEER CONTEXT (ADR-0006: Two-Brain Context Model) ---
     let engineerContextPrompt = '';
+    let brain1Ids: string[] = [];
+    let brain2Tasks: string[] = [];
+    let brain2Gaps: string[] = [];
+    let brain2Verifications: string[] = [];
+
     if (ctx.policy.mode === 'ENGINEER') {
       try {
         const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
@@ -1403,6 +1408,8 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
           .order('created_at', { ascending: false })
           .limit(8);
 
+        brain1Ids = staticRes.data?.map((e: any) => e.title) || [];
+
         // =====================================================
         // BRAIN 2 — DYNAMIC ENGINEERING CONTEXT
         // Loaded per request. Changes every session.
@@ -1413,6 +1420,10 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
           supClient.from('architecture_gaps').select('gap_number, title, status, description').in('status', ['Open', 'InProgress']).order('created_at', { ascending: false }).limit(5),
           supClient.from('verification_runs').select('related_task, result, verification_type, evidence').order('created_at', { ascending: false }).limit(3)
         ]);
+
+        brain2Tasks = tasksRes.data?.map((t: any) => t.task_number) || [];
+        brain2Gaps = gapsRes.data?.map((g: any) => g.gap_number) || [];
+        brain2Verifications = verRes.data?.map((v: any) => v.related_task) || [];
 
         // Lazy-load Deprecated ADRs (only on conflict/history keywords)
         let deprecatedContext = '';
@@ -1530,7 +1541,51 @@ Violating any rule above is a breach of Mamet AI Engineering Framework (MAEF).
       ctx
     });
     
-    const fullSystemContext = resolved.finalContext;
+    let fullSystemContext = resolved.finalContext;
+    
+    // === RUNTIME EVIDENCE CONTRACT ===
+    const ragIds = ctx.state.ragArray.map((r: any) => {
+       const match = r.content?.match(/\[Dari file "([^"]+)"\]/);
+       return match ? match[1] : 'unknown_doc';
+    });
+    const memoryCount = ctx.state.memoryArray.length;
+    
+    const isBrain1Empty = brain1Ids.length === 0;
+    const isBrain2Empty = brain2Tasks.length === 0 && brain2Gaps.length === 0 && brain2Verifications.length === 0;
+    
+    let evidenceContract = `\n\n[RUNTIME EVIDENCE CONTRACT]\n`;
+    evidenceContract += `Capability: ${ctx.policy.mode}\n`;
+    evidenceContract += `Workspace: ${storageTarget}\n`;
+    
+    let totalEvidence = brain1Ids.length + brain2Tasks.length + brain2Gaps.length + brain2Verifications.length + ragIds.length + memoryCount;
+    
+    if (totalEvidence === 0) {
+       evidenceContract += `Status: Evidence tidak tersedia pada runtime context.\n`;
+    } else {
+       if (!isBrain1Empty) evidenceContract += `Brain 1 Documents: ${brain1Ids.join(', ')}\n`;
+       if (!isBrain2Empty) {
+          if (brain2Tasks.length > 0) evidenceContract += `Brain 2 Tasks: ${brain2Tasks.join(', ')}\n`;
+          if (brain2Gaps.length > 0) evidenceContract += `Brain 2 Gaps: ${brain2Gaps.join(', ')}\n`;
+          if (brain2Verifications.length > 0) evidenceContract += `Brain 2 Verifications: ${brain2Verifications.join(', ')}\n`;
+       }
+       if (ragIds.length > 0) evidenceContract += `RAG Documents: ${ragIds.join(', ')}\n`;
+       if (memoryCount > 0) evidenceContract += `Memory Nodes: ${memoryCount} loaded\n`;
+    }
+    
+    evidenceContract += `\nCRITICAL CONTRACT: Anda DILARANG KERAS menggunakan informasi engineering (ADR, Vision, MAEF, TASK, GAP, Verification) yang tidak terdaftar di atas. `;
+    if (isBrain1Empty) evidenceContract += `Jangan sebut ADR, Vision, atau MAEF. `;
+    if (isBrain2Empty) evidenceContract += `Jangan sebut TASK, GAP, atau Verification. `;
+    
+    fullSystemContext += evidenceContract;
+
+    // LOGGING
+    console.log(`[RUNTIME EVIDENCE CONTRACT AUDIT]`, {
+       brain1Loaded: brain1Ids.length,
+       brain2Loaded: brain2Tasks.length + brain2Gaps.length + brain2Verifications.length,
+       ragLoaded: ragIds.length,
+       memoryLoaded: memoryCount,
+       totalEvidenceSent: totalEvidence
+    });
     
     console.log("[MAMET BRAIN v2]", {
       memoryUsed: resolved.memory.length,
