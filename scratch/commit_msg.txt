@@ -1,5 +1,4 @@
-docs: update mantra with Phase 5 completion
+chore: bump version to 2.2.0
 
-- Added Phase 5 (UI And Observability) as DONE.
-- Updated Next Mission to "Post-Baseline Evolution".
-- All MAEF Baseline phases (0 to 5) are now completed and documented.
+- Bump frontend package.json version to 2.2.0 to trigger GitHub Actions release.
+- Includes Phase 5 Observability updates in the new desktop executable.
