@@ -1,0 +1,74 @@
+# MAMET AI — RUNTIME PIPELINE AUDIT
+Status: PHASE 2 (Knowledge OS)
+============================================================
+
+Request
+   ↓
+[Capability Policy]
+   Status: PASS
+   Decision: Mode=ENGINEER, RiskScore=0
+   ↓
+[Workspace Guardian]
+   Status: PASS
+   Decision: SUPABASE Context (File_Analyzer Blocked)
+   ↓
+[Brain 1 Loader]
+   Status: ACTIVE
+   Action: Query project_memory_entries
+   Filter: governance_status IN ('ACTIVE','APPROVED','VERIFIED') AND is_current=TRUE
+   Result: 12 item loaded
+   Skipped: 3 item (SUPERSEDED / DEPRECATED)
+   ↓
+[Brain 2 Loader]
+   Status: ACTIVE
+   Action: Query engineering_tasks, architecture_gaps, verification_runs
+   Result: 4 item loaded
+   ↓
+[Memory Manager]
+   Status: ACTIVE
+   Action: Semantic Search User Memory
+   Result: 8 item loaded
+   ↓
+[RAG Engine]
+   Status: ACTIVE
+   Action: Vector Search over Workspace/Core
+   Result: 3 item loaded
+   ↓
+[Evidence Gate]
+   Status: PASS
+   Total Evidence: 27
+   Rule Hit: Default (PASSED)
+   LLM Blocked: FALSE
+   ↓
+[Conflict Resolver]
+   Status: ACTIVE
+   Action: Query knowledge_conflicts WHERE status='OPEN'
+   Result: 1 active conflict found
+   ↓
+[Confidence Engine]
+   Status: GENERATED
+   Base Score: 50
+   Evidence Bonus: +40 (Max)
+   Conflict Penalty: -15
+   Version Bonus: +10
+   Verification Bonus: +10
+   Final Confidence: 95 - 15 = 80% (Grade B)
+   ↓
+[Universal Contract]
+   Status: GENERATED
+   Format: 6-Blok Terpadu (Identity, Runtime, Memory, Knowledge, Constraint, Output)
+   ↓
+[LLM Cascade]
+   Status: CALLED
+   Provider: OpenRouter (Claude 3.5 Sonnet) / Gemini / Groq
+   (Format payload dijamin IDENTIK apapun providernya)
+   ↓
+[Source Trace]
+   Status: GENERATED
+   Action: Append trace ke akhir jawaban
+   ↓
+Response
+   ↓
+[Evidence Audit Log]
+   Status: RECORDED
+   Action: Insert ke background tabel Supabase

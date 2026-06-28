@@ -1,0 +1,17 @@
+# ACCEPTANCE TEST SUITE - PHASE 2.5
+Knowledge OS Governance & Deterministic Engine
+
+| Test ID  | Skenario Pengujian | Hasil yang Diharapkan (Expected) | Status Sistem Saat Ini |
+| :--- | :--- | :--- | :--- |
+| **TEST_001** | Query masuk dengan Mode ENGINEER, namun `totalEvidence` = 0. | **Backend berhenti** sebelum memanggil LLM (Hard Block), mengirim stream "Pipeline Blocked". LLM sama sekali tidak dipanggil. | ✅ **PASS** (via `evidence_validator.ts` & `index.ts` baris 1630) |
+| **TEST_002** | Query memicu ADR lama yang statusnya `SUPERSEDED` atau `is_current = false`. | **Brain 1 skip** ADR tersebut. Log mencetak "Skipped 1 entries: ADR-lama". | ✅ **PASS** (via Governance filter Supabase di `index.ts` baris 1409) |
+| **TEST_003** | Terdapat 2 (dua) `knowledge_conflicts` yang statusnya `OPEN` di database. | Nilai **Confidence turun 30 poin** (-15 poin per konflik) secara deterministik di backend. | ✅ **PASS** (via query real-time dan hitungan di `confidence_engine.ts`) |
+| **TEST_004** | Struktur teks prompt Payload LLM diperiksa. | Terdapat persis **6 Blok Terpadu** (Identity, Runtime, Memory, Knowledge, Constraint, Output) di dalam `fullSystemContext`. | ✅ **PASS** (via `universal_evidence_contract.ts` builder) |
+| **TEST_005** | Mengubah target vendor LLM dari Claude → GPT → Gemini di pengaturan user. | Teks Payload system prompt (**SHA256 Hash**) dijamin **IDENTIK 100%**. | ✅ **PASS** (Format diseragamkan sebelum branching API LLM Cascade) |
+| **TEST_006** | Membuat dummy data konflik berstatus `OPEN` ke Supabase, lalu akses `/knowledge-health`. | Nilai dashboard (Health Score) **turun**, peringatan jumlah konflik OPEN muncul di frontend. | ✅ **PASS** (via perbaikan array `entryIds` di API Health) |
+| **TEST_007** | Query berhasil dengan Confidence Score di atas batas pemblokiran (Engineer mode). | Log **Source Trace** wajib tercetak di bagian paling akhir dari respon LLM, merujuk ke evidence. | ✅ **PASS** (Klausa wajib diletakkan di Output Contract) |
+| **TEST_008** | Kondisi sama dengan TEST_001 (Evidence = 0, LLM Blocked). | **Evidence Audit Log** ke tabel `evidence_audit_logs` harus **tetap tersimpan** dengan status `BLOCKED`. | ✅ **PASS** (Audit log di-fire di background *sebelum* klausa blokir berhenti) |
+
+---
+**Kesimpulan Audit Teknis:**
+Seluruh pilar deterministik (Policy Engine, Confidence Engine, Universal Contract, Governance Schema) beroperasi secara berurutan tanpa tumpang tindih. *Phase 2.5 Acceptance Test dinyatakan LULUS (PASS).*
