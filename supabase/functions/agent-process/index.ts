@@ -1662,6 +1662,22 @@ Violating any rule above is a breach of Mamet AI Engineering Framework (MAEF).
       return match ? match[1] : 'rag_doc';
     });
 
+    let activeConflictsCount = 0;
+    const currentEntryIds = brain1EntriesForConf.map((e: any) => e.id).filter(Boolean);
+    if (currentEntryIds.length > 0) {
+      try {
+        const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+        const { count, error } = await supClient
+          .from('knowledge_conflicts')
+          .select('*', { count: 'exact', head: true })
+          .eq('resolution_status', 'OPEN')
+          .in('entry_a_id', currentEntryIds);
+        if (!error && count) activeConflictsCount = count;
+      } catch (e) {
+        console.error('[CONFIDENCE_ENGINE] Error querying conflicts:', e);
+      }
+    }
+
     const confidenceReport = calculateConfidence({
       mode: ctx.policy.mode,
       brain1Ids,
@@ -1671,7 +1687,7 @@ Violating any rule above is a breach of Mamet AI Engineering Framework (MAEF).
       brain2Verifications,
       ragDocs: ragDocTitles,
       memoryCount: ctx.state.memoryArray.length,
-      activeConflicts: 0, // TODO: query knowledge_conflicts setelah SQL di-deploy
+      activeConflicts: activeConflictsCount, // Berasal dari runtime Supabase
       hasVerification: brain2Verifications.length > 0,
       allCurrent: brain1EntriesForConf.every((e: any) => e.is_current !== false),
     });
@@ -1684,33 +1700,77 @@ Violating any rule above is a breach of Mamet AI Engineering Framework (MAEF).
     });
     ctx.state.processingSteps.push(`[CONFIDENCE] ${confidenceReport.score}% Grade:${confidenceReport.grade} | ${confidenceReport.label}`);
 
-    // Inject confidence summary ke system context
-    fullSystemContext += confidenceReport.summaryText;
-
-    // === UNIVERSAL EVIDENCE CONTRACT ===
+    // === PHASE 2: UNIVERSAL EVIDENCE CONTRACT ===
     // Build contract 6-blok yang sama formatnya untuk semua LLM provider
+    let policyConstraintText = '';
+    const activeConstraints: string[] = [];
+    const forbidden: string[] = [];
+    
     if (ctx.policy.mode === 'ENGINEER') {
-      // Pisahkan bagian-bagian context untuk contract builder
       const policyCtx = {
         mode: ctx.policy.mode as any,
         evidenceCount: evidenceReport.totalEvidence,
         riskScore: ctx.policy.riskScore,
         appSource: ctx.auth.appSource,
-        hasActiveConflicts: false,
+        hasActiveConflicts: activeConflictsCount > 0,
       };
 
-      const callLLMDecision = PolicyEngine.evaluate('CALL_LLM', policyCtx);
-      const webDecision = PolicyEngine.evaluate('USE_WEB_SEARCH', policyCtx);
       const allDecisions = PolicyEngine.evaluateAll(policyCtx);
-      const policyConstraintText = PolicyEngine.buildConstraintPrompt(allDecisions);
-
+      policyConstraintText = PolicyEngine.buildConstraintPrompt(allDecisions);
+      
+      for (const [action, decision] of Object.entries(allDecisions)) {
+        if (decision.allow && decision.constraints.length > 0) activeConstraints.push(...decision.constraints);
+        if (!decision.allow) forbidden.push(`Melakukan: ${action} (${decision.reason})`);
+      }
       if (policyConstraintText) {
-        fullSystemContext += policyConstraintText;
         ctx.state.processingSteps.push(`[POLICY] Constraints injected: ${policyConstraintText.length} chars`);
       }
-
-      console.log('[POLICY_ENGINE] CALL_LLM:', callLLMDecision.severity, '| WEB:', webDecision.severity);
     }
+
+    // Ekstrak blok-blok dari resolved context fusion
+    const memoryContextText = resolved.memory?.length > 0 
+      ? resolved.memory.map((m: any) => m.content).join('\n') : '';
+    const ragContextText = resolved.rag?.length > 0 
+      ? resolved.rag.map((r: any) => r.content).join('\n') : '';
+    
+    // Brain 1 context text build
+    const brain1ContextText = brain1EntriesForConf.map((e: any) => `[${e.entry_type}] ${e.title}: ${e.content}`).join('\n');
+    let brain2ContextText = '';
+    if (brain2Tasks.length > 0) brain2ContextText += `Active Tasks: ${brain2Tasks.join(', ')}\n`;
+    if (brain2Gaps.length > 0) brain2ContextText += `Architecture Gaps: ${brain2Gaps.join(', ')}\n`;
+    if (brain2Verifications.length > 0) brain2ContextText += `Recent Verifications: ${brain2Verifications.join(', ')}\n`;
+
+    // Gabung instruksi inti (Identity, Sub-Agents, Zip, Web Hint)
+    let systemBasePrompt = agentIdentityPrompt + userContextPrompt + memoryPrompt;
+    if (ctx.policy.webHint === "HIGH_PRIORITY") {
+      systemBasePrompt += `\n[WEB vs RAG COMPARISON CONTRACT]: Jika terdapat perbedaan antara dokumen RAG internal dan Web/Internet, identifikasi mana yang lebih baru secara eksplisit.`;
+    }
+
+    const universalContract = buildUniversalContract({
+      mode: ctx.policy.mode,
+      appSource: ctx.auth.appSource,
+      userId: ctx.auth.userId,
+      evidenceReport,
+      confidenceReport,
+      brain1Entries: brain1EntriesForConf,
+      brain2Tasks,
+      brain2Gaps,
+      brain2Verifications,
+      ragArray: ctx.state.ragArray,
+      memoryArray: ctx.state.memoryArray,
+      memoryContextText,
+      brain1ContextText,
+      brain2ContextText,
+      ragContextText,
+      policyConstraints: activeConstraints,
+      policyForbidden: forbidden,
+      systemBasePrompt,
+      activeConflicts: activeConflictsCount
+    });
+
+    // SOURCE OF TRUTH PAYLOAD: Universal Contract
+    fullSystemContext = universalContract.asSystemPromptText();
+
 
     console.log("[MAMET BRAIN v2]", {
       memoryUsed: resolved.memory.length,

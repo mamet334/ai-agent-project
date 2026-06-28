@@ -63,10 +63,11 @@ serve(async (req) => {
     // ── 1. Knowledge Governance Status ──
     const { data: govData } = await supabase
       .from('project_memory_entries')
-      .select('governance_status, is_current, entry_type, version_major, version_minor, version_patch')
+      .select('id, governance_status, is_current, entry_type, version_major, version_minor, version_patch')
       .eq('user_id', userId);
 
     const entries = govData || [];
+    const entryIds = entries.map((e: any) => e.id).filter(Boolean);
 
     const statusCounts: Record<string, number> = {};
     let currentCount = 0;
@@ -96,10 +97,14 @@ serve(async (req) => {
     };
 
     // ── 2. Knowledge Conflicts ──
-    const { data: conflictsData } = await supabase
-      .from('knowledge_conflicts')
-      .select('resolution_status, severity')
-      .eq('entry_a_id', userId); // simplified - should join via user
+    let conflictsData: any[] | null = [];
+    if (entryIds.length > 0) {
+      const { data } = await supabase
+        .from('knowledge_conflicts')
+        .select('resolution_status, severity')
+        .in('entry_a_id', entryIds);
+      conflictsData = data;
+    }
 
     const conflicts = conflictsData || [];
     const openConflicts = conflicts.filter(c => c.resolution_status === 'OPEN').length;
