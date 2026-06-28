@@ -8,6 +8,9 @@ import { runSelfHealingLoopAsync } from './plugins/self_healing.ts';
 import { processMemoryWriteQueue } from './memory_write_worker.ts';
 import { WorkspaceGuardian } from './lib/workspace_guardian.ts';
 import { validateEvidence, buildBlockedResponse } from './lib/evidence_validator.ts';
+import { PolicyEngine } from './lib/policy_engine.ts';
+import { calculateConfidence } from './lib/confidence_engine.ts';
+import { buildUniversalContract } from './lib/universal_evidence_contract.ts';
 
 async function getGeminiEmbedding(text: string, geminiKey: string): Promise<number[]> {
   try {
@@ -1399,18 +1402,32 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
 
         // =====================================================
         // BRAIN 1 — STATIC ENGINEERING KNOWLEDGE
-        // Loaded every session. Rarely changes.
+        // Governance-aware: hanya load ACTIVE/APPROVED/VERIFIED + is_current
         // Source of truth for architecture & rules.
         // =====================================================
         const staticRes = await supClient
           .from('project_memory_entries')
-          .select('entry_type, title, content')
-          .in('status', ['Verified'])
+          .select('id, entry_type, title, content, governance_status, version_major, version_minor, version_patch, is_current')
+          .in('governance_status', ['ACTIVE', 'APPROVED', 'VERIFIED'])
+          .eq('is_current', true)
           .in('entry_type', ['ADRLink', 'Solution', 'Lesson', 'RootCause'])
           .order('created_at', { ascending: false })
           .limit(8);
 
-        brain1Ids = staticRes.data?.map((e: any) => e.title) || [];
+        // Log governance filter untuk audit
+        const skippedEntries = (staticRes.data || []).filter((e: any) =>
+          e.governance_status === 'SUPERSEDED' || e.governance_status === 'DEPRECATED'
+        );
+        if (skippedEntries.length > 0) {
+          console.log(`[GOVERNANCE] Skipped ${skippedEntries.length} entries: ${skippedEntries.map((e: any) => `${e.title}(${e.governance_status})`).join(', ')}`);
+        }
+
+        const brain1Entries = staticRes.data || [];
+        brain1Ids = brain1Entries.map((e: any) =>
+          `${e.title} [v${e.version_major || 1}.${e.version_minor || 0}.${e.version_patch || 0}]`
+        );
+        // Simpan raw entries untuk confidence engine
+        (ctx as any).brain1Entries = brain1Entries;
 
         // =====================================================
         // BRAIN 2 — DYNAMIC ENGINEERING CONTEXT
@@ -1636,6 +1653,64 @@ Violating any rule above is a breach of Mamet AI Engineering Framework (MAEF).
 
     // Inject EVIDENCE_GATE_VERDICT ke system context (LLM tahu status evidencenya)
     fullSystemContext += evidenceReport.gateVerdictText;
+
+    // === PHASE 2: CONFIDENCE ENGINE + UNIVERSAL CONTRACT ===
+    // Hitung confidence dari backend (deterministic) — bukan dari LLM
+    const brain1EntriesForConf = (ctx as any).brain1Entries || [];
+    const ragDocTitles = ctx.state.ragArray.map((r: any) => {
+      const match = r.content?.match(/\[Dari file "([^"]+)"\]/);
+      return match ? match[1] : 'rag_doc';
+    });
+
+    const confidenceReport = calculateConfidence({
+      mode: ctx.policy.mode,
+      brain1Ids,
+      brain1Entries: brain1EntriesForConf,
+      brain2Tasks,
+      brain2Gaps,
+      brain2Verifications,
+      ragDocs: ragDocTitles,
+      memoryCount: ctx.state.memoryArray.length,
+      activeConflicts: 0, // TODO: query knowledge_conflicts setelah SQL di-deploy
+      hasVerification: brain2Verifications.length > 0,
+      allCurrent: brain1EntriesForConf.every((e: any) => e.is_current !== false),
+    });
+
+    console.log('[CONFIDENCE_ENGINE]', {
+      score: confidenceReport.score,
+      grade: confidenceReport.grade,
+      label: confidenceReport.label,
+      evidenceCount: confidenceReport.signals.evidenceCount,
+    });
+    ctx.state.processingSteps.push(`[CONFIDENCE] ${confidenceReport.score}% Grade:${confidenceReport.grade} | ${confidenceReport.label}`);
+
+    // Inject confidence summary ke system context
+    fullSystemContext += confidenceReport.summaryText;
+
+    // === UNIVERSAL EVIDENCE CONTRACT ===
+    // Build contract 6-blok yang sama formatnya untuk semua LLM provider
+    if (ctx.policy.mode === 'ENGINEER') {
+      // Pisahkan bagian-bagian context untuk contract builder
+      const policyCtx = {
+        mode: ctx.policy.mode as any,
+        evidenceCount: evidenceReport.totalEvidence,
+        riskScore: ctx.policy.riskScore,
+        appSource: ctx.auth.appSource,
+        hasActiveConflicts: false,
+      };
+
+      const callLLMDecision = PolicyEngine.evaluate('CALL_LLM', policyCtx);
+      const webDecision = PolicyEngine.evaluate('USE_WEB_SEARCH', policyCtx);
+      const allDecisions = PolicyEngine.evaluateAll(policyCtx);
+      const policyConstraintText = PolicyEngine.buildConstraintPrompt(allDecisions);
+
+      if (policyConstraintText) {
+        fullSystemContext += policyConstraintText;
+        ctx.state.processingSteps.push(`[POLICY] Constraints injected: ${policyConstraintText.length} chars`);
+      }
+
+      console.log('[POLICY_ENGINE] CALL_LLM:', callLLMDecision.severity, '| WEB:', webDecision.severity);
+    }
 
     console.log("[MAMET BRAIN v2]", {
       memoryUsed: resolved.memory.length,
