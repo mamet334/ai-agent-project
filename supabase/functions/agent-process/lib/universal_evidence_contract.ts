@@ -87,6 +87,7 @@ export interface UniversalEvidenceContract {
   runtime: RuntimeBlock;
   constraint: ConstraintBlock;
   outputContract: OutputContractBlock;
+  systemBasePrompt: string; // Instruksi dasar (Identity, Sub-Agents, Fitur Zip/Chart)
   // Full text rendition — siap dikirim ke LLM
   asSystemPromptText: () => string;
 }
@@ -113,6 +114,7 @@ export function buildUniversalContract(params: {
   ragContextText: string;
   policyConstraints: string[];
   policyForbidden: string[];
+  systemBasePrompt: string;
   activeConflicts?: number;
 }): UniversalEvidenceContract {
   const {
@@ -120,7 +122,7 @@ export function buildUniversalContract(params: {
     brain1Entries, brain2Tasks, brain2Gaps, brain2Verifications,
     ragArray, memoryArray, memoryContextText, brain1ContextText,
     brain2ContextText, ragContextText, policyConstraints, policyForbidden,
-    activeConflicts = 0,
+    systemBasePrompt, activeConflicts = 0,
   } = params;
 
   // ── IDENTITY BLOCK ──
@@ -217,6 +219,7 @@ export function buildUniversalContract(params: {
     runtime,
     constraint,
     outputContract,
+    systemBasePrompt,
     asSystemPromptText: () => renderContractAsText(contract, confidenceReport),
   };
 
@@ -231,9 +234,9 @@ function renderContractAsText(
   contract: UniversalEvidenceContract,
   confidenceReport: ConfidenceReport
 ): string {
-  const { identity, memory, knowledge, runtime, constraint, outputContract } = contract;
+  const { identity, memory, knowledge, runtime, constraint, outputContract, systemBasePrompt } = contract;
 
-  let text = '';
+  let text = systemBasePrompt + '\n';
 
   // ── IDENTITY ──
   text += `\n\n${'═'.repeat(60)}\n`;
