@@ -7,6 +7,7 @@ import { buildContextFusion } from './lib/context_fusion.ts';
 import { runSelfHealingLoopAsync } from './plugins/self_healing.ts';
 import { processMemoryWriteQueue } from './memory_write_worker.ts';
 import { WorkspaceGuardian } from './lib/workspace_guardian.ts';
+import { validateEvidence, buildBlockedResponse } from './lib/evidence_validator.ts';
 
 async function getGeminiEmbedding(text: string, geminiKey: string): Promise<number[]> {
   try {
@@ -1543,55 +1544,103 @@ Violating any rule above is a breach of Mamet AI Engineering Framework (MAEF).
     
     let fullSystemContext = resolved.finalContext;
     
-    // === RUNTIME EVIDENCE CONTRACT ===
+    // === EVIDENCE VALIDATOR — Hard Gate Layer ===
+    // Ini adalah "hakim" yang memutuskan apakah LLM boleh dipanggil.
+    // Filosofi: jika evidence = 0 di Engineer mode → STOP, jangan kirim ke LLM.
     const ragIds = ctx.state.ragArray.map((r: any) => {
        const match = r.content?.match(/\[Dari file "([^"]+)"\]/);
        return match ? match[1] : 'unknown_doc';
     });
     const memoryCount = ctx.state.memoryArray.length;
-    
-    const isBrain1Empty = brain1Ids.length === 0;
-    const isBrain2Empty = brain2Tasks.length === 0 && brain2Gaps.length === 0 && brain2Verifications.length === 0;
-    
-    let evidenceContract = `\n\n[RUNTIME EVIDENCE CONTRACT]\n`;
-    evidenceContract += `Capability: ${ctx.policy.mode}\n`;
-    evidenceContract += `Workspace: ${storageTarget}\n`;
-    
-    let totalEvidence = brain1Ids.length + brain2Tasks.length + brain2Gaps.length + brain2Verifications.length + ragIds.length + memoryCount;
-    
-    if (totalEvidence === 0) {
-       evidenceContract += `Status: Evidence tidak tersedia pada runtime context.\n`;
-    } else {
-       if (!isBrain1Empty) evidenceContract += `Brain 1 Documents: ${brain1Ids.join(', ')}\n`;
-       if (!isBrain2Empty) {
-          if (brain2Tasks.length > 0) evidenceContract += `Brain 2 Tasks: ${brain2Tasks.join(', ')}\n`;
-          if (brain2Gaps.length > 0) evidenceContract += `Brain 2 Gaps: ${brain2Gaps.join(', ')}\n`;
-          if (brain2Verifications.length > 0) evidenceContract += `Brain 2 Verifications: ${brain2Verifications.join(', ')}\n`;
-       }
-       if (ragIds.length > 0) evidenceContract += `RAG Documents: ${ragIds.join(', ')}\n`;
-       if (memoryCount > 0) evidenceContract += `Memory Nodes: ${memoryCount} loaded\n`;
-    }
-    
-    evidenceContract += `\nCRITICAL CONTRACT: Anda DILARANG KERAS menggunakan informasi engineering (ADR, Vision, MAEF, TASK, GAP, Verification) yang tidak terdaftar di atas. `;
-    if (isBrain1Empty) evidenceContract += `Jangan sebut ADR, Vision, atau MAEF. `;
-    if (isBrain2Empty) evidenceContract += `Jangan sebut TASK, GAP, atau Verification. `;
-    
-    fullSystemContext += evidenceContract;
 
-    // LOGGING
-    console.log(`[RUNTIME EVIDENCE CONTRACT AUDIT]`, {
-       brain1Loaded: brain1Ids.length,
-       brain2Loaded: brain2Tasks.length + brain2Gaps.length + brain2Verifications.length,
-       ragLoaded: ragIds.length,
-       memoryLoaded: memoryCount,
-       totalEvidenceSent: totalEvidence
+    const evidenceReport = validateEvidence({
+      userId: ctx.auth.userId,
+      mode: ctx.policy.mode,
+      brain1Ids,
+      brain2Tasks,
+      brain2Gaps,
+      brain2Verifications,
+      ragArray: ctx.state.ragArray,
+      memoryArray: ctx.state.memoryArray,
     });
-    
+
+    // LOGGING Evidence Report
+    console.log(`[EVIDENCE_GATE]`, {
+      verdict: evidenceReport.verdict,
+      mode: evidenceReport.mode,
+      brain1: evidenceReport.brain1Count,
+      brain2: evidenceReport.brain2Count,
+      rag: evidenceReport.ragCount,
+      memory: evidenceReport.memoryCount,
+      total: evidenceReport.totalEvidence,
+      blocked: !evidenceReport.isValid,
+      blockReason: evidenceReport.blockReason
+    });
+    ctx.state.processingSteps.push(`[EVIDENCE_GATE] Verdict=${evidenceReport.verdict} | total=${evidenceReport.totalEvidence}`);
+
+    // Background: Simpan audit log ke Supabase
+    safeFireAndTrack('EvidenceAuditLog', (async () => {
+      try {
+        const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+        await supClient.from('evidence_audit_logs').insert([{
+          request_id: evidenceReport.requestId,
+          user_id: ctx.auth.userId,
+          mode: evidenceReport.mode,
+          app_source: ctx.auth.appSource,
+          brain1_count: evidenceReport.brain1Count,
+          brain2_count: evidenceReport.brain2Count,
+          rag_count: evidenceReport.ragCount,
+          memory_count: evidenceReport.memoryCount,
+          total_evidence: evidenceReport.totalEvidence,
+          brain1_ids: brain1Ids,
+          brain2_tasks: brain2Tasks,
+          brain2_gaps: brain2Gaps,
+          rag_docs: ragIds,
+          verdict: evidenceReport.verdict,
+          block_reason: evidenceReport.blockReason,
+          llm_called: evidenceReport.isValid,
+          message_preview: (ctx.request.finalMessage || '').substring(0, 100),
+          routing_scope: routingDecision?.scope || null,
+          workspace_id: routingDecision?.workspace_id || null,
+        }]);
+      } catch (auditErr) {
+        console.error('[EVIDENCE_AUDIT_LOG_FAIL]', auditErr);
+      }
+    })());
+
+    // === HARD BLOCK: Jika verdict BLOCKED, hentikan pipeline di sini ===
+    if (!evidenceReport.isValid) {
+      const blockedMsg = buildBlockedResponse(evidenceReport, ctx.request.finalMessage);
+      console.warn(`[EVIDENCE_GATE BLOCKED] User=${ctx.auth.userId} Mode=${ctx.policy.mode} Reason=${evidenceReport.blockReason}`);
+
+      if (stream) {
+        const blockedStream = new ReadableStream({
+          start(controller) {
+            const encoder = new TextEncoder();
+            const data = JSON.stringify({ choices: [{ delta: { content: blockedMsg } }] });
+            controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+            controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
+            controller.close();
+          }
+        });
+        return new Response(blockedStream, {
+          headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' }
+        });
+      } else {
+        return new Response(JSON.stringify({ message: blockedMsg }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    // Inject EVIDENCE_GATE_VERDICT ke system context (LLM tahu status evidencenya)
+    fullSystemContext += evidenceReport.gateVerdictText;
+
     console.log("[MAMET BRAIN v2]", {
       memoryUsed: resolved.memory.length,
       ragUsed: resolved.rag.length,
       contextSize: fullSystemContext.length,
-      structuredContextKeys: resolved.structuredContext ? Object.keys(resolved.structuredContext) : []
+      evidenceVerdict: evidenceReport.verdict,
     });
 
     console.log(`[SYSTEM CONTEXT FINAL] fullSystemContext="${fullSystemContext.substring(fullSystemContext.length - 300)}"`);
