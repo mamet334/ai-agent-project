@@ -491,7 +491,6 @@ orphans AS (
   FROM project_memory_entries pme
   WHERE pme.governance_status = 'ACTIVE'
     AND NOT EXISTS (SELECT 1 FROM knowledge_relationships kr WHERE kr.from_id = pme.id OR kr.to_id = pme.id)
-    AND NOT EXISTS (SELECT 1 FROM engineering_tasks et WHERE et.related_memory_id = pme.id)
 )
 SELECT
   b.active_count,
