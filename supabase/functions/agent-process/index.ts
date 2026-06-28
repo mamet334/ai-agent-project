@@ -385,7 +385,8 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
         const streamRes = new ReadableStream({
           start(controller) {
             const data = JSON.stringify({ choices: [{ delta: { content: blockMsg } }] });
-            controller.enqueue(new TextEncoder().encode(`data: ${data}\\n\\n`));
+            controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
+            controller.enqueue(new TextEncoder().encode(`data: [DONE]\n\n`));
             controller.close();
           }
         });
