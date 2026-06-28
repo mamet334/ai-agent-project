@@ -11,6 +11,7 @@ import { validateEvidence, buildBlockedResponse } from './lib/evidence_validator
 import { PolicyEngine } from './lib/policy_engine.ts';
 import { calculateConfidence } from './lib/confidence_engine.ts';
 import { buildUniversalContract } from './lib/universal_evidence_contract.ts';
+import { VerificationEngine, logVerificationReport, logVerificationAudit } from './lib/verification_engine.ts';
 
 async function getGeminiEmbedding(text: string, geminiKey: string): Promise<number[]> {
   try {
@@ -1858,6 +1859,102 @@ Jawab HANYA dengan satu kata: "CHAT_BIASA" atau "BUTUH_AGENT".`;
           if (streamRes) return streamRes;
         }
         replyMessage = await runLLM(ctx.request.finalMessage, fullSystemContext, history);
+        
+        // --- PHASE 3B: SOURCE TRACE EXTRACTION LAYER ---
+        const extractSourceTrace = (msg: string): { replyWithoutTrace: string; sourceTrace?: string } => {
+          const lines = msg.split('\n');
+          const formatRegex = /[A-Z]{2,3}-\d{4}/;
+          const keywordRegex = /^(?:\W|_)*(?:source\s*trace|sources?|referensi)\b/i;
+          
+          const scanLimit = Math.max(0, lines.length - 15);
+          let headerIndex = -1;
+          let firstIdIndex = -1;
+          
+          for (let i = scanLimit; i < lines.length; i++) {
+             const line = lines[i].trim();
+             if (headerIndex === -1 && keywordRegex.test(line)) headerIndex = i;
+             if (firstIdIndex === -1 && formatRegex.test(line)) firstIdIndex = i;
+          }
+          
+          let startIndex = -1;
+          if (headerIndex !== -1) {
+             let hasId = false;
+             for (let i = headerIndex; i < lines.length; i++) {
+                if (formatRegex.test(lines[i])) { hasId = true; break; }
+             }
+             if (hasId) startIndex = headerIndex;
+             else if (firstIdIndex !== -1) startIndex = firstIdIndex;
+          } else if (firstIdIndex !== -1) {
+             startIndex = firstIdIndex;
+          }
+          
+          if (startIndex !== -1) {
+             return {
+                replyWithoutTrace: lines.slice(0, startIndex).join('\n').trim(),
+                sourceTrace: lines.slice(startIndex).join('\n').trim()
+             };
+          }
+          
+          return { replyWithoutTrace: msg, sourceTrace: undefined };
+        };
+
+        const { replyWithoutTrace, sourceTrace } = extractSourceTrace(replyMessage);
+
+        // --- PHASE 3: VERIFICATION ENGINE SKELETON ---
+        const vContext = {
+          responseText: replyWithoutTrace,
+          sourceTrace: sourceTrace,
+          confidenceReport: confidenceReport,
+          evidenceReport: evidenceReport,
+          runtimeContext: ctx.state
+        };
+        const vReport = VerificationEngine.verify(vContext);
+        
+        console.log(`========================\nVERIFICATION DECISION\nDecision : ${vReport.decision}\nStatus   : ${vReport.status}\nScore    : ${vReport.score}\n========================`);
+        logVerificationReport(vReport);
+
+        // TASK 015 & 016: Audit Object & Logger
+        const auditRecord = VerificationEngine.createAuditRecord(vReport, vContext);
+        logVerificationAudit(auditRecord);
+
+        // TASK 019: Verification Audit Persistence
+        safeFireAndTrack('VerificationAuditLog', (async () => {
+          try {
+            const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+            await supClient.from('verification_audit_logs').insert([{
+              timestamp: auditRecord.timestamp,
+              provider: auditRecord.provider,
+              model: auditRecord.model,
+              decision: auditRecord.decision,
+              status: auditRecord.status,
+              score: auditRecord.score,
+              execution_time_ms: auditRecord.executionTimeMs,
+              checks: auditRecord.checks,
+              failures: auditRecord.failures,
+              source_trace: auditRecord.sourceTrace,
+              confidence: auditRecord.confidence,
+              evidence: auditRecord.evidence,
+              request_id: ctx.state.runtimeContext?.requestId || null,
+              user_id: ctx.auth.userId || null
+            }]);
+          } catch (auditErr) {
+            console.error('[VERIFICATION_AUDIT_LOG_FAIL]', auditErr);
+          }
+        })());
+
+        // TASK 018: Hard Response Gate
+        switch (vReport.decision) {
+          case "PASS":
+            console.log("[HARD GATE] PASSED. Membuka blokir respons.");
+            break;
+          case "FAIL":
+            console.warn(`[HARD GATE] BLOCKED. Keputusan verifikasi gagal (Skor: ${vReport.score}).`);
+            return new Response(JSON.stringify({ message: "Verification Failed" }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        }
+        // ---------------------------------------------
+        
       } else {
         let coordinatorSystemPrompt = `Tugas Anda adalah menganalisis permintaan user dan memilih sub-agent yang tepat.
 Anda memiliki tim Sub-Agent nyata berikut ini:
