@@ -2,9 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { Buffer } from 'node:buffer';
 import { getPluginPromptList, getPluginByName } from './plugins/registry.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { loadEngineerContext } from './lib/rag/engineer_context.ts';
-import { loadProjectMemory } from './lib/rag/project_memory.ts';
-import { buildContextPipeline } from './lib/rag/context_pipeline.ts';
+import { executeRagPipeline } from './lib/rag/rag_pipeline.ts';
 import { runSelfHealingLoopAsync } from './plugins/self_healing.ts';
 import { processMemoryWriteQueue } from './memory_write_worker.ts';
 import { WorkspaceGuardian } from './lib/workspace_guardian.ts';
@@ -23,8 +21,7 @@ import {
   clearAllCooldowns, runLLM, runCoordinatorLLM
 } from './lib/llm_orchestrator.ts';
 import { getStreamResponse, corsHeaders } from './lib/stream_handler.ts';
-import { generateEmbedding } from './lib/rag/embedding.ts';
-import { searchDocuments } from './lib/rag/document_search.ts';
+
 
 
 
@@ -466,80 +463,7 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
     
 
     // --- RAG KNOWLEDGE BASE SEARCH ---
-    
-    if (ctx.auth.userId && isRagEnabled) {
-      try {
-        const queryEmbedding = await generateEmbedding(ctx.request.finalMessage, rctx);
-        if (queryEmbedding.length > 0) {
-          const supabaseClient = createClient(
-            rctx.env.supabaseUrl,
-            rctx.env.supabaseServiceKey
-          );
-          // 🧭 STEP 2: ROUTING DECIDER LAYER (EXPLICIT CONTROL)
-          routingDecision = {
-              scope: "CORE",
-              workspace_id: null as string | null,
-              reason_code: "DEFAULT_ROUTING"
-          };
-
-          const { data: spaces } = await supabaseClient.from('knowledge_spaces').select('id, name, space_type').eq('user_id', ctx.auth.userId);
-          if (spaces && spaces.length > 0) {
-             const coreSpace = spaces.find((s: any) => s.space_type === 'CORE');
-             routingDecision.workspace_id = coreSpace ? coreSpace.id : null;
-
-             ctx.request.lowerMsg = (ctx.request.finalMessage || '').toLowerCase();
-             const isWorkspaceQuery = ctx.request.lowerMsg.includes('workspace') || ctx.request.lowerMsg.includes('ruang') || ctx.request.lowerMsg.includes('space');
-             if (isWorkspaceQuery) {
-                const workspaceSpaces = spaces.filter((s: any) => s.space_type === 'WORKSPACE').sort((a: any, b: any) => b.name.length - a.name.length);
-                for (const space of workspaceSpaces) {
-                   if (ctx.request.lowerMsg.includes(space.name.toLowerCase())) {
-                      routingDecision = {
-                          scope: "WORKSPACE",
-                          workspace_id: space.id,
-                          reason_code: "EXPLICIT_WORKSPACE_MENTION_DETECTED"
-                      };
-                      break;
-                   }
-                }
-             }
-
-             if (routingDecision.scope === "CORE") {
-                 routingDecision.reason_code = isWorkspaceQuery ? "WORKSPACE_NOT_FOUND_FALLBACK_TO_CORE" : "NO_EXPLICIT_WORKSPACE_DETECTED";
-             }
-          }
-
-          // 🧱 STEP 3: RAG HARD ISOLATION LAYER (LIGHT ENFORCEMENT)
-          // NO hidden fallback to GLOBAL RAG
-          if (!routingDecision.workspace_id) {
-             console.warn(`[RAG HARD ISOLATION] workspace_id is null. GLOBAL FALLBACK IS BLOCKED.`);
-          } else {
-             console.log(`[RAG_SCOPE_USED]: ${routingDecision.scope} | [WORKSPACE_ID]: ${routingDecision.workspace_id} | [IS_ISOLATED]: true`);
-          }
-          
-          ctx.state.processingSteps.push(`🔍 [Routing Decider] Scope: ${routingDecision.scope} (${routingDecision.reason_code})`);
-
-          const ragDocs = await searchDocuments(
-            queryEmbedding,
-            ctx.request.finalMessage,
-            effectiveRagThreshold,
-            effectiveRagMatchCount,
-            routingDecision,
-            ctx.auth.userId,
-            rctx
-          );
-          if (ragDocs.length > 0) {
-            ctx.state.ragArray = ragDocs;
-          }
-        }
-      } catch (err: any) {
-        console.error("RAG Search Error:", err);
-        if (err.message && err.message.includes("RAG_DB_FAIL")) {
-            throw err; // Lempar ke outer catch agar request putus dan mengirimkan HTTP 500
-        }
-      }
-    }
-    console.log(`[RAG CONTEXT GENERATED] ctx.state.ragArray size=${ctx.state.ragArray.length}`);
-    ctx.state.processingSteps.push(`[RAG CONTEXT GENERATED] ctx.state.ragArray size=${ctx.state.ragArray.length}`);
+    // Dipindahkan ke bawah setelah agentIdentityPrompt dan userContextPrompt terbentuk, diatur melalui executeRagPipeline.
 
     if (ctx.request.finalMessage.toLowerCase().includes('zip')) {
       ctx.request.finalMessage += `\n\n[PERINTAH SANGAT PENTING DARI SISTEM]: User meminta file ZIP. Anda DILARANG menggunakan blok kode biasa seperti \`\`\`html. ANDA WAJIB MENGGUNAKAN format \`\`\`xml_zip. 
@@ -636,17 +560,28 @@ If [MEMORY_SYSTEM_ACK] is MISSING, you MUST NOT state that memory is saved. Inst
 Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika user menanyakan jumlah atau nama sub-agent Anda, sebutkan nama-nama di atas.`;
     let userContextPrompt = ctx.auth.userName ? `\nInformasi Akun: User login dengan email/nama "${ctx.auth.userName}". Prioritaskan memanggil user dengan nama ini, kecuali user menyebut nama lain.` : '';
     
-    // --- MEMORY MANAGER (RETRIEVAL) ---
-    const projectMemResult = await loadProjectMemory(
-      ctx.request.finalMessage,
-      ctx.auth.userId,
+    // --- RAG PIPELINE (FACADE) ---
+    const ragResult = await executeRagPipeline({
+      userId: ctx.auth.userId,
+      query: ctx.request.finalMessage,
       globalMemory,
-      ctx.policy.canReadMemory,
-      rctx
-    );
-    ctx.state.memoryArray = projectMemResult.memoryArray;
-    const memoryPrompt = projectMemResult.memoryPrompt;
-    ctx.state.processingSteps.push(`[MEMORY PROMPT GENERATED] memoryPrompt="${memoryPrompt.trim()}" ctx.state.memoryArray size=${ctx.state.memoryArray.length}`);
+      isRagEnabled,
+      effectiveRagThreshold,
+      effectiveRagMatchCount,
+      canReadMemory: ctx.policy.canReadMemory,
+      mode: ctx.policy.mode,
+      ragTopK: ctx.policy.ragTopK,
+      webHint: ctx.policy.webHint,
+      agentIdentityPrompt,
+      userContextPrompt
+    }, rctx);
+
+    ctx.state.ragArray = ragResult.ragArray;
+    ctx.state.memoryArray = ragResult.memoryArray;
+    ctx.state.processingSteps.push(...ragResult.metadata.processingSteps);
+    if (ragResult.metadata.routingDecision) {
+       routingDecision = ragResult.metadata.routingDecision;
+    }
 
     // --- SINGLE GATEWAY: ANTI DUPLICATE MEMORY (TIER 1 & 2) ---
     // Dipanggil TEPAT SEBELUM membangun final context.
@@ -654,33 +589,16 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
       console.log(`[MEMORY_GATEWAY] Edge Function hanya validasi auth dan memproses LLM. Tidak ada auto-save sembunyi.`);
     }
 
-    // --- ENGINEER CONTEXT (ADR-0006: Two-Brain Context Model) ---
-    const engineerCtx = await loadEngineerContext(ctx.policy.mode, ctx.request.finalMessage, rctx);
+    let brain1Ids = ragResult.engineerContext?.brain1Ids || [];
+    let brain2Tasks = ragResult.engineerContext?.brain2Tasks || [];
+    let brain2Gaps = ragResult.engineerContext?.brain2Gaps || [];
+    let brain2Verifications = ragResult.engineerContext?.brain2Verifications || [];
     
-    let engineerContextPrompt = engineerCtx.engineerContextPrompt;
-    let brain1Ids = engineerCtx.brain1Ids;
-    let brain2Tasks = engineerCtx.brain2Tasks;
-    let brain2Gaps = engineerCtx.brain2Gaps;
-    let brain2Verifications = engineerCtx.brain2Verifications;
-    
-    if (ctx.policy.mode === 'ENGINEER') {
-        (ctx as any).brain1Entries = engineerCtx.brain1Entries;
+    if (ctx.policy.mode === 'ENGINEER' && ragResult.engineerContext) {
+        (ctx as any).brain1Entries = ragResult.engineerContext.brain1Entries;
     }
 
-    const resolved = buildContextPipeline({
-      memoryArray: ctx.state.memoryArray,
-      ragArray: ctx.state.ragArray,
-      message: ctx.request.finalMessage,
-      agentIdentityPrompt,
-      userContextPrompt,
-      memoryPrompt,
-      engineerContextPrompt,
-      webHint: ctx.policy.webHint,
-      mode: ctx.policy.mode,
-      ragTopK: ctx.policy.ragTopK
-    }, rctx);
-    
-    let fullSystemContext = resolved.finalContext;
+    let fullSystemContext = ragResult.finalContext;
     
     // === EVIDENCE VALIDATOR — Hard Gate Layer ===
     // Ini adalah "hakim" yang memutuskan apakah LLM boleh dipanggil.
