@@ -1,8 +1,22 @@
 # Mamet AI Vision
 
+> [!CAUTION]
+> **STATUS: DEPRECATED — Dokumen ini TIDAK LAGI berlaku.**
+>
+> Dokumen ini adalah Vision v1.0 (Draft) dan telah digantikan oleh **Vision Constitution v2.0**.
+>
+> **Source of Truth yang berlaku:**
+> `docs/project-memory/MAMET AI VISION CONSTITUTION V2.md`
+>
+> Jangan gunakan dokumen ini sebagai referensi arsitektur atau capability model. Semua keputusan harus mengacu ke Vision Constitution v2.
+>
+> Deprecated on: 2026-06-29 | Superseded by: Vision Constitution v2.0
+
+---
+
 Version: Draft Vision 1.0
-Status: Baseline
-Source: `MAMET AI VISION DOCUMENT.txt`
+Status: **DEPRECATED** (Superseded by Vision Constitution v2.0)
+Source: `MAMET AI VISION DOCUMENT.txt` (Historical)
 
 ## Philosophy
 
