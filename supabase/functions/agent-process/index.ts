@@ -148,6 +148,14 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  const runtimeEnv = {
+    supabaseUrl: Deno.env.get('SUPABASE_URL') || '',
+    supabaseServiceKey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
+    supabaseAnonKey: Deno.env.get('SUPABASE_ANON_KEY') || '',
+    apifyApiToken: Deno.env.get('APIFY_API_TOKEN') || '',
+    enableAsyncMemoryWrite: Deno.env.get('ENABLE_ASYNC_MEMORY_WRITE') !== 'false'
+  };
+
   const bypassCooldown = req.headers.get('x-bypass-cooldown') === 'true';
   if (bypassCooldown) {
     providerCooldowns.clear();
@@ -156,7 +164,7 @@ serve(async (req) => {
 
   if (req.method === 'GET') {
     try {
-      const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+      const supClient = createClient(runtimeEnv.supabaseUrl, runtimeEnv.supabaseServiceKey);
       const { data: logsData, error: logsError } = await supClient.from('agent_logs').select('*').order('created_at', { ascending: false }).limit(50);
       const { data: memData, error: memError } = await supClient.from('user_memories').select('*').order('created_at', { ascending: false }).limit(50);
       return new Response(JSON.stringify({ logs: logsData, logsError, memories: memData, memError }), {
@@ -172,18 +180,7 @@ serve(async (req) => {
 
   try {
     // === PHASE 5: RELIABLE ASYNC DELIVERY LAYER ===
-    // Melacak semua janji asinkron (background tasks) per-request agar bisa di-await
-    // secara terkendali sebelum stream/koneksi utama benar-benar ditutup.
-    const pendingBackgroundTasks: Promise<any>[] = [];
-    const safeFireAndTrack = (taskName: string, promise: Promise<any>) => {
-      const start = Date.now();
-      const tracked = promise.then(() => {
-        console.log(`[BACKGROUND_TASK_SUCCESS] ${taskName} selesai (${Date.now() - start}ms)`);
-      }).catch(err => {
-        console.error(`[BACKGROUND_TASK_FAILED] ${taskName} gagal:`, err);
-      });
-      pendingBackgroundTasks.push(tracked);
-    };
+    const backgroundTasks = createBackgroundTaskTracker();
 
     // === AUTH BINDING LAYER (HARDENING) ===
     const authHeader = req.headers.get("Authorization");
@@ -196,8 +193,8 @@ serve(async (req) => {
     }
 
     const authSupabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+      runtimeEnv.supabaseUrl,
+      runtimeEnv.supabaseAnonKey
     );
 
     const { data: { user }, error: authError } = await authSupabase.auth.getUser(token);
@@ -413,7 +410,7 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
     // Mengecek apakah user sudah melewati batas harian token sebelum AI merespons.
     if (ctx.auth.userId) {
       try {
-        const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+        const supClient = createClient(runtimeEnv.supabaseUrl, runtimeEnv.supabaseServiceKey);
         const { data: currentCost, error: quotaError } = await supClient.rpc('check_daily_quota', { target_user_id: ctx.auth.userId });
         
         if (!quotaError && currentCost !== null) {
@@ -445,33 +442,6 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
     }
 
     // === TOKEN TRACKER ESTIMATOR (FASE 4A) ===
-    const logApiUsage = (provider: string, modelName: string, inputText: string, outputText: string) => {
-      if (!ctx.auth.userId) return;
-      safeFireAndTrack('LogAPIUsage', (async () => {
-        // Estimasi kasar: 1 token = 4 karakter
-        const inputTokens = Math.ceil(inputText.length / 4);
-        const outputTokens = Math.ceil(outputText.length / 4);
-        
-        let costIn = 0.0001; let costOut = 0.0002; 
-        if (modelName.includes('gpt-4o')) { costIn = 0.005; costOut = 0.015; }
-        else if (modelName.includes('llama')) { costIn = 0.00005; costOut = 0.00008; }
-
-        const totalCost = ((inputTokens / 1000) * costIn) + ((outputTokens / 1000) * costOut);
-        const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
-        await supClient.from('api_usage').insert([{ 
-           user_id: ctx.auth.userId, provider, model: modelName,
-           input_tokens: inputTokens, output_tokens: outputTokens, cost_usd: totalCost
-        }]);
-      })());
-    };
-
-    const logAgentEvent = async (eventType: string, provider: string, logMessage: string) => {
-      safeFireAndTrack('LogAgentEvent', (async () => {
-        const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
-        await supClient.from('agent_logs').insert([{ user_id: ctx.auth.userId || null, event_type: eventType, provider, message: logMessage }]);
-      })());
-    };
-
 
     // --- MAMET HEALER (TERAPIS PIKIRAN) ---
     if (history && history.length > 15) {
@@ -533,10 +503,10 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
       },
       model: { model },
       stream: { isStream: !!stream, extractedImage, desktopOSMode, auditMode },
-      logger: { logApiUsage, logAgentEvent },
-      state: { explicitModelErrors: '', pendingBackgroundTasks },
-      tasks: { fire: safeFireAndTrack, awaitAll: async () => { if (pendingBackgroundTasks.length > 0) await Promise.allSettled(pendingBackgroundTasks); } },
-      env: { supabaseUrl: Deno.env.get('SUPABASE_URL') || '', supabaseServiceKey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', supabaseAnonKey: Deno.env.get('SUPABASE_ANON_KEY') || '' }
+      env: runtimeEnv,
+      logger: createRuntimeLogger(ctx.auth.userId, backgroundTasks, !!stream, runtimeEnv),
+      state: { explicitModelErrors: '' },
+      tasks: backgroundTasks
     };
     if (rctx.keys.allGemini.length === 0 && rctx.keys.gemini) {
       rctx.keys.allGemini.push(rctx.keys.gemini);
@@ -1617,9 +1587,9 @@ Violating any rule above is a breach of Mamet AI Engineering Framework (MAEF).
     ctx.state.processingSteps.push(`[EVIDENCE_GATE] Verdict=${evidenceReport.verdict} | total=${evidenceReport.totalEvidence}`);
 
     // Background: Simpan audit log ke Supabase
-    safeFireAndTrack('EvidenceAuditLog', (async () => {
+    rctx.tasks.fire('EvidenceAuditLog', (async () => {
       try {
-        const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+        const supClient = createClient(rctx.env.supabaseUrl, rctx.env.supabaseServiceKey);
         await supClient.from('evidence_audit_logs').insert([{
           request_id: evidenceReport.requestId,
           user_id: ctx.auth.userId,
@@ -1686,7 +1656,7 @@ Violating any rule above is a breach of Mamet AI Engineering Framework (MAEF).
     const currentEntryIds = brain1EntriesForConf.map((e: any) => e.id).filter(Boolean);
     if (currentEntryIds.length > 0) {
       try {
-        const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+        const supClient = createClient(rctx.env.supabaseUrl, rctx.env.supabaseServiceKey);
         const { count, error } = await supClient
           .from('knowledge_conflicts')
           .select('*', { count: 'exact', head: true })
@@ -1937,9 +1907,9 @@ Jawab HANYA dengan satu kata: "CHAT_BIASA" atau "BUTUH_AGENT".`;
         logVerificationAudit(auditRecord);
 
         // TASK 019: Verification Audit Persistence
-        safeFireAndTrack('VerificationAuditLog', (async () => {
+        rctx.tasks.fire('VerificationAuditLog', (async () => {
           try {
-            const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+            const supClient = createClient(rctx.env.supabaseUrl, rctx.env.supabaseServiceKey);
             await supClient.from('verification_audit_logs').insert([{
               timestamp: auditRecord.timestamp,
               provider: auditRecord.provider,
@@ -2134,7 +2104,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
                
                const env = { 
                   GEMINI_API_KEY, GROQ_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY, 
-                  APIFY_API_TOKEN: Deno.env.get('APIFY_API_TOKEN') || '', allGeminiKeys: rctx.keys.allGemini 
+                  APIFY_API_TOKEN: rctx.env.apifyApiToken, allGeminiKeys: rctx.keys.allGemini 
                };
                const fullTask = `Tugas Spesifik Anda: ${task}\n\nPermintaan Asli User: "${ctx.request.finalMessage}"\n\nKonteks Tambahan (Hasil Tier Sebelumnya):\n${accumulatedContext}`;
                
@@ -2253,11 +2223,10 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
         ctx.state.processingSteps.push('📝 Merangkum dan menyintesis jawaban akhir...');
         
         // --- MEMORY MANAGER (BACKGROUND SAVE) ---
-        const ENABLE_ASYNC_MEMORY_WRITE = Deno.env.get('ENABLE_ASYNC_MEMORY_WRITE') !== 'false';
-        if (ENABLE_ASYNC_MEMORY_WRITE) {
-            const supUrl = Deno.env.get('SUPABASE_URL') || '';
-            const supKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-            if (ctx.policy.canWriteMemory) await safeFireAndTrack('MemoryWriteQueue_A', processMemoryWriteQueue(ctx.auth.userId, ctx.request.finalMessage, supUrl, supKey));
+        if (rctx.env.enableAsyncMemoryWrite) {
+            const supUrl = rctx.env.supabaseUrl;
+            const supKey = rctx.env.supabaseServiceKey;
+            if (ctx.policy.canWriteMemory) await rctx.tasks.fire('MemoryWriteQueue_A', processMemoryWriteQueue(ctx.auth.userId, ctx.request.finalMessage, supUrl, supKey));
         }
 
         if (stream && !extractedImage) {
@@ -2275,11 +2244,10 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
       }
     } else {
       // --- MEMORY MANAGER (BACKGROUND SAVE - DIRECT RESPONSE) ---
-      const ENABLE_ASYNC_MEMORY_WRITE = Deno.env.get('ENABLE_ASYNC_MEMORY_WRITE') !== 'false';
-      if (ENABLE_ASYNC_MEMORY_WRITE) {
-          const supUrl = Deno.env.get('SUPABASE_URL') || '';
-          const supKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-          if (ctx.policy.canWriteMemory) await safeFireAndTrack('MemoryWriteQueue_B', processMemoryWriteQueue(ctx.auth.userId, ctx.request.finalMessage, supUrl, supKey));
+      if (rctx.env.enableAsyncMemoryWrite) {
+          const supUrl = rctx.env.supabaseUrl;
+          const supKey = rctx.env.supabaseServiceKey;
+          if (ctx.policy.canWriteMemory) await rctx.tasks.fire('MemoryWriteQueue_B', processMemoryWriteQueue(ctx.auth.userId, ctx.request.finalMessage, supUrl, supKey));
       }
 
       if (stream && !extractedImage) {
@@ -2291,9 +2259,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
     }
 
     // Phase 5: Guarantee async delivery before sending JSON response
-    if (pendingBackgroundTasks.length > 0) {
-       await Promise.allSettled(pendingBackgroundTasks);
-    }
+    await rctx.tasks.awaitAll();
 
     const aiResponse = {
       message: replyMessage,
