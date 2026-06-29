@@ -10,32 +10,7 @@
  * - Setiap jawaban harus bisa ditelusuri ke evidence yang digunakan
  */
 
-export interface EvidenceReport {
-  requestId: string;
-  userId: string;
-  mode: string;                  // LITE | AI | ENGINEER
-  brain1Count: number;           // Static engineering knowledge (ADR, Lesson, dll)
-  brain2Count: number;           // Dynamic context (Tasks, Gaps, Verifications)
-  ragCount: number;              // RAG documents retrieved
-  memoryCount: number;           // User memory nodes loaded
-  totalEvidence: number;         // Total semua evidence
-  isValid: boolean;              // Apakah boleh lanjut ke LLM?
-  blockReason: string | null;    // Alasan STOP jika isValid = false
-  verdict: 'PASSED' | 'BLOCKED' | 'WARNING'; // Verdict final
-  gateVerdictText: string;       // Teks yang diinjeksikan ke system prompt
-}
-
-interface EvidenceInput {
-  requestId?: string;
-  userId: string;
-  mode: string;
-  brain1Ids: string[];
-  brain2Tasks: string[];
-  brain2Gaps: string[];
-  brain2Verifications: string[];
-  ragArray: any[];
-  memoryArray: any[];
-}
+import { EvidenceReport, EvidenceInput } from './types.ts';
 
 /**
  * Fungsi utama: validasi apakah evidence cukup untuk memanggil LLM.
