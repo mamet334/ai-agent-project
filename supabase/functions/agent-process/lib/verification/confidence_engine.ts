@@ -16,61 +16,7 @@
 // TYPES
 // ============================================================
 
-export interface SourceTraceItem {
-  type: 'ADR' | 'TASK' | 'GAP' | 'VERIFICATION' | 'RAG' | 'MEMORY' | 'LESSON' | 'VISION' | 'MAEF' | 'SOLUTION' | 'OTHER';
-  id: string;           // entry_id atau identifier
-  title: string;        // Judul singkat
-  govStatus?: string;   // governance_status (ACTIVE, DEPRECATED, dll)
-  version?: string;     // "1.2.0"
-  isCurrent?: boolean;
-  relationship?: string; // Hubungan dengan jawaban: "primary", "supporting", "referenced"
-}
-
-export interface ConfidenceReport {
-  score: number;          // 0-100
-  grade: 'A' | 'B' | 'C' | 'D' | 'F';  // A=90+, B=75+, C=60+, D=45+, F=<45
-  breakdown: {
-    baseScore: number;
-    evidenceBonus: number;
-    conflictPenalty: number;
-    versionBonus: number;
-    verificationBonus: number;
-    engineerBrainPenalty: number;
-  };
-  signals: {
-    evidenceCount: number;
-    activeConflicts: number;
-    versionStatus: 'CURRENT' | 'OUTDATED' | 'UNKNOWN';
-    hasVerification: boolean;
-    mode: string;
-  };
-  sourceTrace: SourceTraceItem[];
-  summaryText: string;    // Teks yang diinjeksikan ke system prompt
-  label: string;          // "High Confidence", "Low Confidence", dll
-}
-
-export interface ConfidenceInput {
-  mode: string;
-  brain1Ids: string[];              // Title ADR/Lesson/dll yang di-load
-  brain1Entries?: Array<{           // Detail entry jika tersedia
-    id: string;
-    entry_type: string;
-    title: string;
-    governance_status?: string;
-    version_major?: number;
-    version_minor?: number;
-    version_patch?: number;
-    is_current?: boolean;
-  }>;
-  brain2Tasks: string[];
-  brain2Gaps: string[];
-  brain2Verifications: string[];
-  ragDocs: string[];                // Judul dokumen RAG
-  memoryCount: number;
-  activeConflicts?: number;         // Dari knowledge_conflicts table
-  hasVerification?: boolean;        // Ada verifikasi yang PASS?
-  allCurrent?: boolean;             // Semua knowledge is_current?
-}
+import { SourceTraceItem, ConfidenceReport, ConfidenceInput } from './types.ts';
 
 // ============================================================
 // FUNGSI UTAMA: HITUNG CONFIDENCE

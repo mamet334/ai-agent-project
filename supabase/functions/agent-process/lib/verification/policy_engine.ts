@@ -14,37 +14,7 @@
 // TYPES
 // ============================================================
 
-export type MametMode = 'LITE' | 'AI' | 'ENGINEER';
-export type PolicyAction =
-  | 'CALL_LLM'
-  | 'WRITE_MEMORY'
-  | 'READ_MEMORY'
-  | 'USE_WEB_SEARCH'
-  | 'USE_AUTOMATION'
-  | 'USE_DESKTOP_TOOLS'
-  | 'WRITE_KNOWLEDGE'
-  | 'USE_WORKSPACE'
-  | 'ANSWER_WITHOUT_EVIDENCE'
-  | 'USE_SUB_AGENTS'
-  | 'READ_DEPRECATED_KNOWLEDGE'
-  | 'READ_DRAFT_KNOWLEDGE';
-
-export interface PolicyContext {
-  mode: MametMode;
-  evidenceCount: number;
-  riskScore: number;
-  appSource: string;
-  hasActiveConflicts?: boolean;
-  govStatus?: string; // governance status of knowledge being accessed
-}
-
-export interface PolicyDecision {
-  allow: boolean;
-  reason: string;
-  constraints: string[];  // Batasan tambahan jika allow=true
-  auditNote: string;      // Dicatat ke audit log
-  severity: 'INFO' | 'WARNING' | 'BLOCK';
-}
+import { MametMode, PolicyAction, PolicyContext, PolicyDecision } from './types.ts';
 
 interface PolicyRule {
   id: string;

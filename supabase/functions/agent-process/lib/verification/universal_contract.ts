@@ -14,109 +14,30 @@
  *   6. OUTPUT_CONTRACT — Format output yang diharapkan
  */
 
-import { EvidenceReport } from './evidence_validator.ts';
-import { ConfidenceReport, SourceTraceItem, buildSourceTraceText } from './confidence_engine.ts';
+import { buildSourceTraceText } from './confidence_engine.ts';
 
 // ============================================================
 // TYPES
 // ============================================================
 
-export interface IdentityBlock {
-  name: string;
-  version: string;
-  mode: string;
-  appSource: string;
-  capabilities: string[];
-  restrictions: string[];
-}
-
-export interface MemoryBlock {
-  hasMemory: boolean;
-  memoryCount: number;
-  memoryContext: string;  // Teks ringkasan memory (sudah dibangun di context_fusion)
-}
-
-export interface KnowledgeBlock {
-  hasBrain1: boolean;
-  brain1Count: number;
-  brain1Summary: string;
-  hasBrain2: boolean;
-  brain2Count: number;
-  brain2Summary: string;
-  hasRAG: boolean;
-  ragCount: number;
-  ragSummary: string;
-}
-
-export interface RuntimeBlock {
-  evidenceGateVerdict: 'PASSED' | 'BLOCKED' | 'WARNING';
-  totalEvidence: number;
-  confidenceScore: number;
-  confidenceGrade: string;
-  activeConflicts: number;
-  versionStatus: string;
-  requestId: string;
-  timestamp: string;
-}
-
-export interface ConstraintBlock {
-  canCallLLM: boolean;
-  canWriteMemory: boolean;
-  canReadMemory: boolean;
-  canUseWebSearch: boolean;
-  canUseAutomation: boolean;
-  canUseDesktopTools: boolean;
-  canWriteKnowledge: boolean;
-  activeConstraints: string[];  // Daftar aturan aktif dari Policy Engine
-  forbidden: string[];           // Daftar larangan eksplisit
-}
-
-export interface OutputContractBlock {
-  language: string;
-  expectedFormat: string;
-  requireSourceTrace: boolean;
-  requireConfidenceStatement: boolean;
-  maxResponseLength?: number;
-  forbiddenPatterns: string[];
-}
-
-export interface UniversalEvidenceContract {
-  identity: IdentityBlock;
-  memory: MemoryBlock;
-  knowledge: KnowledgeBlock;
-  runtime: RuntimeBlock;
-  constraint: ConstraintBlock;
-  outputContract: OutputContractBlock;
-  systemBasePrompt: string; // Instruksi dasar (Identity, Sub-Agents, Fitur Zip/Chart)
-  // Full text rendition — siap dikirim ke LLM
-  asSystemPromptText: () => string;
-}
+import {
+  EvidenceReport,
+  ConfidenceReport,
+  IdentityBlock,
+  MemoryBlock,
+  KnowledgeBlock,
+  RuntimeBlock,
+  ConstraintBlock,
+  OutputContractBlock,
+  UniversalEvidenceContract,
+  ContractBuilderInput,
+} from './types.ts';
 
 // ============================================================
 // BUILDER FUNCTION
 // ============================================================
 
-export function buildUniversalContract(params: {
-  mode: string;
-  appSource: string;
-  userId: string;
-  evidenceReport: EvidenceReport;
-  confidenceReport: ConfidenceReport;
-  brain1Entries: any[];
-  brain2Tasks: string[];
-  brain2Gaps: string[];
-  brain2Verifications: string[];
-  ragArray: any[];
-  memoryArray: any[];
-  memoryContextText: string;
-  brain1ContextText: string;
-  brain2ContextText: string;
-  ragContextText: string;
-  policyConstraints: string[];
-  policyForbidden: string[];
-  systemBasePrompt: string;
-  activeConflicts?: number;
-}): UniversalEvidenceContract {
+export function buildUniversalContract(params: ContractBuilderInput): UniversalEvidenceContract {
   const {
     mode, appSource, evidenceReport, confidenceReport,
     brain1Entries, brain2Tasks, brain2Gaps, brain2Verifications,
