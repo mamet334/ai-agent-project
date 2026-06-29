@@ -766,10 +766,10 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
     }
 
     // Ekstrak blok-blok dari resolved context fusion
-    const memoryContextText = resolved.memory?.length > 0 
-      ? resolved.memory.map((m: any) => m.content).join('\n') : '';
-    const ragContextText = resolved.rag?.length > 0 
-      ? resolved.rag.map((r: any) => r.content).join('\n') : '';
+    const memoryContextText = ragResult.memoryArray?.length > 0 
+      ? ragResult.memoryArray.map((m: any) => m.content).join('\n') : '';
+    const ragContextText = ragResult.ragArray?.length > 0 
+      ? ragResult.ragArray.map((r: any) => r.content).join('\n') : '';
     
     // Brain 1 context text build
     const brain1ContextText = brain1EntriesForConf.map((e: any) => `[${e.entry_type}] ${e.title}: ${e.content}`).join('\n');
@@ -779,7 +779,7 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
     if (brain2Verifications.length > 0) brain2ContextText += `Recent Verifications: ${brain2Verifications.join(', ')}\n`;
 
     // Gabung instruksi inti (Identity, Sub-Agents, Zip, Web Hint)
-    let systemBasePrompt = agentIdentityPrompt + userContextPrompt + memoryPrompt;
+    let systemBasePrompt = agentIdentityPrompt + userContextPrompt + ragResult.memoryPrompt;
     if (ctx.policy.webHint === "HIGH_PRIORITY") {
       systemBasePrompt += `\n[WEB vs RAG COMPARISON CONTRACT]: Jika terdapat perbedaan antara dokumen RAG internal dan Web/Internet, identifikasi mana yang lebih baru secara eksplisit.`;
     }
@@ -811,8 +811,8 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
 
 
     console.log("[MAMET BRAIN v2]", {
-      memoryUsed: resolved.memory.length,
-      ragUsed: resolved.rag.length,
+      memoryUsed: ragResult.memoryArray.length,
+      ragUsed: ragResult.ragArray.length,
       contextSize: fullSystemContext.length,
       evidenceVerdict: evidenceReport.verdict,
     });
