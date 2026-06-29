@@ -22,23 +22,9 @@ import {
   clearAllCooldowns, runLLM, runCoordinatorLLM
 } from './lib/llm_orchestrator.ts';
 import { getStreamResponse, corsHeaders } from './lib/stream_handler.ts';
+import { generateEmbedding } from './lib/rag/embedding.ts';
+import { searchDocuments } from './lib/rag/document_search.ts';
 
-async function getGeminiEmbedding(text: string, rctx: RuntimeContext): Promise<number[]> {
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent?key=${rctx.keys.gemini}`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'models/gemini-embedding-2', content: { parts: [{ text }] } })
-    });
-    if (!response.ok) return [];
-    const data = await response.json();
-    return data.embedding?.values || [];
-  } catch (e) {
-    console.error("Embedding API failed", e);
-    return [];
-  }
-}
 
 
 
@@ -482,7 +468,7 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
     
     if (ctx.auth.userId && isRagEnabled) {
       try {
-        const queryEmbedding = await getGeminiEmbedding(ctx.request.finalMessage, rctx);
+        const queryEmbedding = await generateEmbedding(ctx.request.finalMessage, rctx);
         if (queryEmbedding.length > 0) {
           const supabaseClient = createClient(
             rctx.env.supabaseUrl,
@@ -531,74 +517,17 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
           
           ctx.state.processingSteps.push(`🔍 [Routing Decider] Scope: ${routingDecision.scope} (${routingDecision.reason_code})`);
 
-          const { data: matchedDocs, error: matchError } = await supabaseClient.rpc('match_documents', {
-            query_embedding: queryEmbedding,
-            match_threshold: effectiveRagThreshold,
-            match_count: effectiveRagMatchCount,
-            p_user_id: ctx.auth.userId,
-            p_space_id: routingDecision.workspace_id
-          });
-
-          if (matchError) {
-             throw new Error(`RAG_DB_FAIL: ${matchError.message}`);
-          }
-
-          if (matchedDocs && matchedDocs.length > 0) {
-            // 1. DEDUPLICATION LAYER (POST-RAG)
-            const calculateCosineSimilarity = (strA: string, strB: string) => {
-              const getWords = (s: string) => s.toLowerCase().match(/\w+/g) || [];
-              const wordsA = getWords(strA);
-              const wordsB = getWords(strB);
-              const dict = new Set([...wordsA, ...wordsB]);
-              let dotProduct = 0; let normA = 0; let normB = 0;
-              dict.forEach(w => {
-                const countA = wordsA.filter(x => x === w).length;
-                const countB = wordsB.filter(x => x === w).length;
-                dotProduct += countA * countB;
-                normA += countA * countA;
-                normB += countB * countB;
-              });
-              if (normA === 0 || normB === 0) return 0;
-              return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
-            };
-
-            const deduplicatedDocs = [];
-            for (const doc of matchedDocs) {
-              let isDuplicate = false;
-              for (const savedDoc of deduplicatedDocs) {
-                if (calculateCosineSimilarity(doc.content, savedDoc.content) > 0.92) {
-                  if (doc.similarity > savedDoc.similarity) {
-                     savedDoc.content = doc.content;
-                     savedDoc.similarity = doc.similarity;
-                  }
-                  isDuplicate = true;
-                  break;
-                }
-              }
-              if (!isDuplicate) deduplicatedDocs.push(doc);
-            }
-
-            // 2. CONTEXT RE-RANKING LAYER
-            const queryWords = ctx.request.finalMessage.toLowerCase().match(/\w+/g) || [];
-            const validQueryWords = queryWords.filter((w: string) => w.length > 3);
-            
-            deduplicatedDocs.forEach((doc: any, idx: number) => {
-              const vector_similarity = doc.similarity || 0;
-              const position_weight = 1.0 - (idx / deduplicatedDocs.length);
-              
-              const docWordsStr = doc.content.toLowerCase();
-              let matchCount = 0;
-              for(const qw of validQueryWords) {
-                 if (docWordsStr.includes(qw)) matchCount++;
-              }
-              const query_coverage_score = validQueryWords.length > 0 ? Math.min(1.0, matchCount / validQueryWords.length) : 0;
-              
-              doc.hybrid_score = (vector_similarity * 0.7) + (position_weight * 0.2) + (query_coverage_score * 0.1);
-            });
-
-            deduplicatedDocs.sort((a: any, b: any) => b.hybrid_score - a.hybrid_score);
-
-            ctx.state.ragArray = deduplicatedDocs.map((doc: any) => ({ type: 'rag', content: `[Dari file "${doc.title}"]: "${doc.content}"`, score: doc.hybrid_score }));
+          const ragDocs = await searchDocuments(
+            queryEmbedding,
+            ctx.request.finalMessage,
+            effectiveRagThreshold,
+            effectiveRagMatchCount,
+            routingDecision,
+            ctx.auth.userId,
+            rctx
+          );
+          if (ragDocs.length > 0) {
+            ctx.state.ragArray = ragDocs;
           }
         }
       } catch (err: any) {
