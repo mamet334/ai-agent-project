@@ -1,8 +1,22 @@
 # MAMET AI ENGINEERING FRAMEWORK (MAEF)
 
+> [!CAUTION]
+> **STATUS: DEPRECATED — Dokumen ini TIDAK LAGI berlaku.**
+>
+> Dokumen ini adalah MAEF v1.0 dan telah digantikan oleh **MAEF v2.0**.
+>
+> **Source of Truth yang berlaku:**
+> `docs/project-memory/MAEF V2.md`
+>
+> Jangan gunakan dokumen ini sebagai referensi arsitektur. Semua keputusan harus mengacu ke MAEF v2.
+>
+> Deprecated on: 2026-06-29 | Superseded by: MAEF v2.0
+
+---
+
 Version: 1.0.0
-Status: Final Baseline
-Type: Constitution
+Status: **DEPRECATED** (Superseded by MAEF v2.0)
+Type: Constitution (Historical Reference Only)
 Owner: Mamet AI Project
 
 ## Purpose

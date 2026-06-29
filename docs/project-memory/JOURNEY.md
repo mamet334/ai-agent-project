@@ -194,3 +194,152 @@ The next foundation is Mamet Engineer, because Vision defines Engineer as the of
 1. Continue `TASK-0002` until native Supabase/Deno validation passes.
 2. Continue `TASK-0003` with runtime verification of MametLite isolation.
 3. Start `TASK-0006` by designing the Project Memory database schema.
+
+---
+
+## 2026-06-23 to 2026-06-27 — Major Runtime Hardening Phase
+
+Status: Saved (Retroactive entry — previously undocumented)
+
+### Trigger
+
+Multiple sessions focused on hardening Mamet AI's runtime security, observability, and integrity.
+
+### Milestones Completed
+
+#### Auth Binding Layer (2026-06-23)
+
+- Replaced client-provided user IDs with JWT-authenticated identities in `agent-process`
+- Eliminated IDOR vulnerabilities by enforcing server-authoritative auth in `buildUnifiedExecutionContext`
+- Added `IdentityBlock` to `UniversalEvidenceContract`
+
+#### Capability-Based Permission Model (2026-06-26)
+
+- Refactored `agent-process` to use granular capability flags in `ExecutionContext`
+- Introduced `PolicyEngine` with 11 rules (P-001 to P-011)
+- Filtered tool access via capability flags: `canReadMemory`, `canWriteMemory`, `canUseWebSearch`, `canUseDesktopTools`, `canUseAutomation`
+- Isolated MametLite from administrative capabilities
+
+#### Knowledge Workspace Architecture (2026-06-24)
+
+- Implemented universal hierarchical Knowledge Workspace system
+- Migrated DB schema to support `knowledge_spaces` with space-based document ownership
+- Deployed `knowledge_manager` sub-agent for workspace CRUD operations
+- Enforced RAG data integrity via RAG Hard Isolation Layer with `p_space_id` routing
+
+#### Two-Brain Context Model (2026-06-24 to 2026-06-27) — ADR-0006
+
+- Formalized split between Static Engineering Knowledge (Brain 1) and Dynamic Engineering Context (Brain 2)
+- Brain 1: loads `ACTIVE/APPROVED/VERIFIED` entries from `project_memory_entries`
+- Brain 2: loads live `engineering_tasks`, `architecture_gaps`, `verification_runs` per request
+- Governance-aware: SUPERSEDED/DEPRECATED entries blocked from Brain 1
+
+#### Engineering Metrics — ADR-0007
+
+- Defined 6 derived metrics from existing DB tables
+- Documented that 4 of 9 Vision metrics are deferred (Average Confidence, Patch Acceptance Rate, Review Accuracy, Recurring Bug Rate) pending schema additions
+
+#### Runtime Evidence Violations Hardening (2026-06-27)
+
+- Implemented `UniversalEvidenceContract` — 6-block contract enforcing standard payload structure
+- Implemented `ConfidenceEngine` — backend-deterministic scoring (0-100) based on evidence, conflicts, verification
+- Implemented `VerificationEngine` — structural hard gate checking trace format, evidence, confidence presence
+- Implemented `validateEvidence` — evidence count gate for ENGINEER mode (P-001)
+- Added granular telemetry (`EVIDENCE_GATE` log) for audit of evidence delivery to LLM
+
+### Lessons Learned
+
+- `appSource` dari JWT metadata adalah variabel keamanan kritis. Jangan pernah ambil dari payload klien.
+- Two-Brain Model signifikan mengurangi token usage dan meningkatkan relevansi konteks Engineer.
+- VerificationEngine saat ini hanya structural check, bukan content check — ini adalah GAP-NEW-004 yang harus diselesaikan.
+- Policy Engine (`policy_engine.ts`) adalah single source of truth untuk semua capability decisions — pertahankan filosofi ini.
+
+### ADRs Created
+
+- ADR-0003: Auth Binding Layer
+- ADR-0004: Evidence-First Engineering
+- ADR-0005: Unified Execution Policy
+- ADR-0006: Two-Brain Context Model
+- ADR-0007: Engineering Metrics Derived
+
+---
+
+## 2026-06-29 — Constitution v2 Enforcement & Architecture Audit
+
+Status: Saved
+
+### Trigger
+
+Owner menetapkan MAEF v2 dan Vision Constitution v2 sebagai Source of Truth tertinggi dan memerintahkan audit menyeluruh terhadap repository.
+
+### Decision
+
+Tidak ada fitur baru. Fokus pada alignment terhadap konstitusi.
+
+### Process
+
+1. **Tahap 1 — Constitution Review:** Membaca MAEF v2 dan Vision v2 secara menyeluruh. Mengidentifikasi area yang tidak selaras.
+2. **Tahap 2 — Architecture Gap Report:** Membandingkan MAEF → Vision → Repository → Runtime. Menemukan 18 gap total (4 Critical, 6 Major, 4 Minor, 4 Informational).
+3. **Tahap 3 — Roadmap Alignment:** Menyusun 6 gelombang implementasi berdasarkan prinsip risiko rendah, backward compatible, incremental, deterministic.
+4. **Tahap 4 — Implementation Plan:** 10 task dengan scope, test criteria, rollback plan, dan dependensi yang jelas.
+
+### Constitution Review Report
+
+Tersimpan di: `docs/architecture/CONSTITUTION-REVIEW-REPORT-2026-06-29.md`
+
+### Wave 1 Executed (2026-06-29)
+
+Task yang diselesaikan:
+- **TASK-NEW-001:** Deprecated `docs/governance/MAEF.md` dan `docs/governance/VISION.md` — GAP-NEW-001 dan GAP-NEW-002 closed
+- **TASK-NEW-002:** Updated `docs/architecture/MASTER-ARCHITECTURE-INDEX.md` — hirarki dokumen v2 established — GAP-NEW-014 closed
+- **TASK-NEW-003:** Updated `docs/architecture/ARCHITECTURE-GAPS.md` — semua 18 gap disinkronkan — GAP-NEW-006 closed
+- **TASK-NEW-004:** Updated `docs/project-memory/JOURNEY.md` (dokumen ini) — GAP-NEW-012 closed
+- **TASK-NEW-009:** Added `scratch/README.md` — status scratch files jelas — GAP-NEW-013 closed
+
+Files changed in Wave 1:
+
+| File | Perubahan |
+|---|---|
+| `docs/governance/MAEF.md` | Added DEPRECATED header |
+| `docs/governance/VISION.md` | Added DEPRECATED header |
+| `docs/architecture/MASTER-ARCHITECTURE-INDEX.md` | Full rewrite with v2 hierarchy |
+| `docs/architecture/ARCHITECTURE-GAPS.md` | Added 18 gaps from Constitution Review |
+| `docs/project-memory/JOURNEY.md` | Added retroactive + Wave 1 entries |
+| `scratch/README.md` | Created — declares scratch as non-production |
+
+### Gaps Closed in Wave 1
+
+- GAP-NEW-001: ✅ MAEF v1 deprecated
+- GAP-NEW-002: ✅ Vision v1 deprecated
+- GAP-NEW-006: ✅ Architecture Gap Register synced
+- GAP-NEW-012: ✅ JOURNEY.md updated
+- GAP-NEW-013: ✅ Scratch files labeled
+- GAP-NEW-014: ✅ Master Architecture Index v2 established
+
+### Open Gaps Remaining
+
+| Gap | Severity | Wave |
+|---|---|---|
+| GAP-NEW-003 | Critical | Wave 5 |
+| GAP-NEW-004 | Critical | Wave 6 |
+| GAP-NEW-005 | Major | Wave 3 |
+| GAP-NEW-007 | Major | Wave 2 |
+| GAP-NEW-008 | Major | Wave 2 |
+| GAP-NEW-009 | Major | Future |
+| GAP-NEW-010 | Major | Wave 4 |
+| GAP-NEW-011 | Minor | Future |
+| GAP-NEW-015 | Info | Backlog |
+| GAP-NEW-016 | Info | Backlog |
+| GAP-NEW-017 | Info | Backlog |
+| GAP-NEW-018 | Info | Backlog |
+
+### Lessons Learned
+
+- Constitution review yang sistematis menemukan 18 gap yang sebelumnya tidak terdokumentasi — validasi bahwa proses ini diperlukan secara periodik.
+- Gap terbesar bukan di runtime (yang sudah solid) melainkan di governance layer (MAEF dual-version, Project Memory hybrid).
+- Wave 1 (documentation only) bisa diselesaikan tanpa risiko runtime sama sekali dan menutup 6 dari 18 gap.
+
+### Next Steps
+
+Wave 2: Schema migration DB — `confidence_score` dan `patch_accepted` columns.
+
