@@ -2,7 +2,8 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { Buffer } from 'node:buffer';
 import { getPluginPromptList, getPluginByName } from './plugins/registry.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { retrieveMemories } from './plugins/memory_manager_v1.ts';
+import { loadEngineerContext } from './lib/rag/engineer_context.ts';
+import { loadProjectMemory } from './lib/rag/project_memory.ts';
 import { buildContextFusion } from './lib/context_fusion.ts';
 import { runSelfHealingLoopAsync } from './plugins/self_healing.ts';
 import { processMemoryWriteQueue } from './memory_write_worker.ts';
@@ -636,13 +637,15 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
     let userContextPrompt = ctx.auth.userName ? `\nInformasi Akun: User login dengan email/nama "${ctx.auth.userName}". Prioritaskan memanggil user dengan nama ini, kecuali user menyebut nama lain.` : '';
     
     // --- MEMORY MANAGER (RETRIEVAL) ---
-    ctx.state.memoryArray = ctx.policy.canReadMemory
-      ? await retrieveMemories(ctx.request.finalMessage, ctx.auth.userId, rctx.env.supabaseUrl, rctx.env.supabaseServiceKey)
-      : [];
-    if (!Array.isArray(ctx.state.memoryArray)) ctx.state.memoryArray = [];
-    
-    const memoryPrompt = globalMemory ? `\n\n[MEMORI GLOBAL & PREFERENSI USER]:\n${globalMemory}\n(Patuhi instruksi/ingatan di atas secara ketat di setiap jawaban Anda!)` : '';
-    console.log(`[MEMORY PROMPT GENERATED] memoryPrompt="${memoryPrompt.trim()}" ctx.state.memoryArray size=${ctx.state.memoryArray.length}`);
+    const projectMemResult = await loadProjectMemory(
+      ctx.request.finalMessage,
+      ctx.auth.userId,
+      globalMemory,
+      ctx.policy.canReadMemory,
+      rctx
+    );
+    ctx.state.memoryArray = projectMemResult.memoryArray;
+    const memoryPrompt = projectMemResult.memoryPrompt;
     ctx.state.processingSteps.push(`[MEMORY PROMPT GENERATED] memoryPrompt="${memoryPrompt.trim()}" ctx.state.memoryArray size=${ctx.state.memoryArray.length}`);
 
     // --- SINGLE GATEWAY: ANTI DUPLICATE MEMORY (TIER 1 & 2) ---
@@ -652,166 +655,16 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
     }
 
     // --- ENGINEER CONTEXT (ADR-0006: Two-Brain Context Model) ---
-    let engineerContextPrompt = '';
-    let brain1Ids: string[] = [];
-    let brain2Tasks: string[] = [];
-    let brain2Gaps: string[] = [];
-    let brain2Verifications: string[] = [];
-
+    const engineerCtx = await loadEngineerContext(ctx.policy.mode, ctx.request.finalMessage, rctx);
+    
+    let engineerContextPrompt = engineerCtx.engineerContextPrompt;
+    let brain1Ids = engineerCtx.brain1Ids;
+    let brain2Tasks = engineerCtx.brain2Tasks;
+    let brain2Gaps = engineerCtx.brain2Gaps;
+    let brain2Verifications = engineerCtx.brain2Verifications;
+    
     if (ctx.policy.mode === 'ENGINEER') {
-      try {
-        const supClient = createClient(rctx.env.supabaseUrl, rctx.env.supabaseServiceKey);
-        
-        const lowerMsgForEngineer = (ctx.request.finalMessage || '').toLowerCase();
-        
-        // Lazy-load triggers
-        const needsDeprecatedADR = /deprecated|konflik|conflict|history|lama|diganti|obsolete|pola lama/.test(lowerMsgForEngineer);
-
-        // =====================================================
-        // BRAIN 1 — STATIC ENGINEERING KNOWLEDGE
-        // Governance-aware: hanya load ACTIVE/APPROVED/VERIFIED + is_current
-        // Source of truth for architecture & rules.
-        // =====================================================
-        const staticRes = await supClient
-          .from('project_memory_entries')
-          .select('id, entry_type, title, content, governance_status, version_major, version_minor, version_patch, is_current')
-          .in('governance_status', ['ACTIVE', 'APPROVED', 'VERIFIED'])
-          .eq('is_current', true)
-          .in('entry_type', ['ADRLink', 'Solution', 'Lesson', 'RootCause'])
-          .order('created_at', { ascending: false })
-          .limit(8);
-
-        // Log governance filter untuk audit
-        const skippedEntries = (staticRes.data || []).filter((e: any) =>
-          e.governance_status === 'SUPERSEDED' || e.governance_status === 'DEPRECATED'
-        );
-        if (skippedEntries.length > 0) {
-          console.log(`[GOVERNANCE] Skipped ${skippedEntries.length} entries: ${skippedEntries.map((e: any) => `${e.title}(${e.governance_status})`).join(', ')}`);
-        }
-
-        const brain1Entries = staticRes.data || [];
-        brain1Ids = brain1Entries.map((e: any) =>
-          `${e.title} [v${e.version_major || 1}.${e.version_minor || 0}.${e.version_patch || 0}]`
-        );
-        // Simpan raw entries untuk confidence engine
-        (ctx as any).brain1Entries = brain1Entries;
-
-        // =====================================================
-        // BRAIN 2 — DYNAMIC ENGINEERING CONTEXT
-        // Loaded per request. Changes every session.
-        // Source of truth for current state & runtime facts.
-        // =====================================================
-        const [tasksRes, gapsRes, verRes] = await Promise.all([
-          supClient.from('engineering_tasks').select('task_number, title, status, goal').in('status', ['Proposed', 'InProgress']).order('created_at', { ascending: false }).limit(5),
-          supClient.from('architecture_gaps').select('gap_number, title, status, description').in('status', ['Open', 'InProgress']).order('created_at', { ascending: false }).limit(5),
-          supClient.from('verification_runs').select('related_task, result, verification_type, evidence').order('created_at', { ascending: false }).limit(3)
-        ]);
-
-        brain2Tasks = tasksRes.data?.map((t: any) => t.task_number) || [];
-        brain2Gaps = gapsRes.data?.map((g: any) => g.gap_number) || [];
-        brain2Verifications = verRes.data?.map((v: any) => v.related_task) || [];
-
-        // Lazy-load Deprecated ADRs (only on conflict/history keywords)
-        let deprecatedContext = '';
-        if (needsDeprecatedADR) {
-          const depRes = await supClient.from('project_memory_entries').select('entry_type, title, content').eq('status', 'Deprecated').order('updated_at', { ascending: false }).limit(5);
-          if (depRes.data && depRes.data.length > 0) {
-            deprecatedContext = `\n[HISTORICAL CONTEXT — Deprecated ADRs]\n`;
-            deprecatedContext += `NOTE: These are history, not current rules. They explain WHY a decision was once made.\n`;
-            deprecatedContext += depRes.data.map((e: any) => `- [DEPRECATED] ${e.title}`).join('\n') + '\n';
-          }
-        }
-
-        engineerContextPrompt = `\n\n[MAMET ENGINEER CONTEXT — Two-Brain Model (ADR-0006)]\n`;
-
-        // STATIC BRAIN
-        engineerContextPrompt += `\n--- BRAIN 1: STATIC ENGINEERING KNOWLEDGE (Foundation — rarely changes) ---\n`;
-        engineerContextPrompt += staticRes.data?.map((e: any) => `[${e.entry_type}] ${e.title}: ${e.content}`).join('\n') || 'No static knowledge loaded.';
-        engineerContextPrompt += '\n';
-
-        // DYNAMIC BRAIN
-        engineerContextPrompt += `\n--- BRAIN 2: DYNAMIC ENGINEERING CONTEXT (Current state — changes per session) ---\n`;
-        engineerContextPrompt += `Active Tasks:\n${tasksRes.data?.map((t: any) => `- ${t.task_number} (${t.status}): ${t.title} | Goal: ${t.goal}`).join('\n') || 'None'}\n`;
-        engineerContextPrompt += `Architecture Gaps:\n${gapsRes.data?.map((g: any) => `- ${g.gap_number} (${g.status}): ${g.title}`).join('\n') || 'None'}\n`;
-        engineerContextPrompt += `Recent Verifications:\n${verRes.data?.map((v: any) => `- [${v.result}] ${v.related_task} (${v.verification_type}): ${v.evidence}`).join('\n') || 'None'}\n`;
-        if (deprecatedContext) engineerContextPrompt += deprecatedContext;
-
-        // --- PHASE 6-8: ENGINEER RULES (ADR-0004, ADR-0005, ADR-0006) ---
-        engineerContextPrompt += `
-[ENGINEER RULES - MAEF COMPLIANCE REQUIRED]
-You are Mamet Engineer. Follow ALL rules without exception.
-Context above is organized as Two-Brain Model (ADR-0006):
-  BRAIN 1 (Static): Foundation knowledge — architecture, ADRs, lessons.
-  BRAIN 2 (Dynamic): Session facts — tasks, gaps, verifications, user-provided diff/logs.
-
-RULE 1 - SCOPED CODE REVIEW (Phase 6):
-Before reviewing, establish scope using this pipeline:
-  Task → Affected Files → Git Diff → Relevant ADR (from BRAIN 1) → Relevant Coding Rules
-Do NOT read the entire Project Memory for a small single-file change.
-If any of these four pillars is missing, state which one and ask for it BEFORE reviewing:
-  [1] TASK        - What is the purpose? (from BRAIN 2 Tasks above)
-  [2] DIFF        - What changed? (user MUST provide git diff in their message)
-  [3] ADR         - Which architecture decision governs this scope? (filter from BRAIN 1)
-  [4] RULES       - Does the change violate established coding patterns? (from BRAIN 1)
-
-RULE 2 - TWO-DIMENSIONAL CONFIDENCE (mandatory on ALL recommendations):
-Confidence has two dimensions — not a simple count:
-  Coverage    : which sources are available (checklist from both BRAIN 1 + BRAIN 2)
-  Evidence    : how strong/complete the evidence is from those sources
-
-Output this block FIRST:
-<EXAMPLES>
----
-Engineering Confidence
-Coverage (BRAIN 1 - Static):
-- [✓/✗] ADR: ADR-xxx / none found for this scope
-- [✓/✗] Coding Rules: found / not found
-- [✓/✗] Architecture/Lessons: N entries
-
-Coverage (BRAIN 2 - Dynamic):
-- [✓/✗] TASK: TASK-xxx (title)
-- [✓/✗] git diff: provided / not provided
-- [✓/✗] Verification: N recent results
-- [✓/✗] Affected Files: identified / unknown
-
-Evidence Strength: [STRONG / MODERATE / WEAK]
-Reason: [explain WHY — not just "all boxes checked"]
-
-Recommendation: [proceed / state gaps / request more context]
----
-</EXAMPLES>
-
-RULE 3 - IMPLEMENTATION SAFETY FLOW (Phase 7):
-When generating a code patch, output Self Verification BEFORE User Review:
-<EXAMPLES>
-Self Verification:
-- Syntax        : PASS/FAIL - [reason]
-- Architecture  : PASS/FAIL - [aligned with BRAIN 1 ADR / violation: reason]
-- Coding Rules  : PASS/FAIL - [aligned with BRAIN 1 Rules / violation: reason]
-- Dependencies  : PASS/FAIL - [no new / added: list them]
-→ "Awaiting User Review before Apply."
-</EXAMPLES>
-
-RULE 4 - PROJECT HEALTH REPORT (Phase 8):
-When performing maintenance, output a health report covering BOTH brains:
-<EXAMPLES>
-BRAIN 1 health:
-- ADR Status        : [any gaps between ADRs and current codebase?]
-- Deprecated ADRs   : [loaded only if triggered — history, not forbidden]
-
-BRAIN 2 health:
-- Architecture Gaps : [count open] HEALTHY / WARNING / CRITICAL
-- Failed/Stalled Tasks : [any InProgress tasks stalled]
-- Verification History : [most recent results]
-- Test Results      : [from verification entries]
-- Dependency Changes : [flag any patch introducing new deps]
-</EXAMPLES>
-
-Violating any rule above is a breach of Mamet AI Engineering Framework (MAEF).
-`;
-      } catch (err) {
-        console.error("Failed to fetch engineer context:", err);
-      }
+        (ctx as any).brain1Entries = engineerCtx.brain1Entries;
     }
 
     let basePrompts = agentIdentityPrompt + userContextPrompt + memoryPrompt + engineerContextPrompt;
