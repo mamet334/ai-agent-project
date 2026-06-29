@@ -14,9 +14,9 @@ import { buildUniversalContract } from './lib/universal_evidence_contract.ts';
 import { VerificationEngine, logVerificationReport, logVerificationAudit } from './lib/verification_engine.ts';
 import { RuntimeContext, createBackgroundTaskTracker, createRuntimeLogger } from './lib/runtime_context.ts';
 
-async function getGeminiEmbedding(text: string, geminiKey: string): Promise<number[]> {
+async function getGeminiEmbedding(text: string, rctx: RuntimeContext): Promise<number[]> {
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent?key=${geminiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent?key=${rctx.keys.gemini}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -535,7 +535,8 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
       stream: { isStream: !!stream, extractedImage, desktopOSMode, auditMode },
       logger: { logApiUsage, logAgentEvent },
       state: { explicitModelErrors: '', pendingBackgroundTasks },
-      tasks: { fire: safeFireAndTrack, awaitAll: async () => { if (pendingBackgroundTasks.length > 0) await Promise.allSettled(pendingBackgroundTasks); } }
+      tasks: { fire: safeFireAndTrack, awaitAll: async () => { if (pendingBackgroundTasks.length > 0) await Promise.allSettled(pendingBackgroundTasks); } },
+      env: { supabaseUrl: Deno.env.get('SUPABASE_URL') || '', supabaseServiceKey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '', supabaseAnonKey: Deno.env.get('SUPABASE_ANON_KEY') || '' }
     };
     if (rctx.keys.allGemini.length === 0 && rctx.keys.gemini) {
       rctx.keys.allGemini.push(rctx.keys.gemini);
@@ -1163,11 +1164,11 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
     
     if (ctx.auth.userId && isRagEnabled) {
       try {
-        const queryEmbedding = await getGeminiEmbedding(message, GEMINI_API_KEY);
+        const queryEmbedding = await getGeminiEmbedding(ctx.request.finalMessage, rctx);
         if (queryEmbedding.length > 0) {
           const supabaseClient = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+            rctx.env.supabaseUrl,
+            rctx.env.supabaseServiceKey
           );
           // 🧭 STEP 2: ROUTING DECIDER LAYER (EXPLICIT CONTROL)
           routingDecision = {
@@ -1260,7 +1261,7 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
             }
 
             // 2. CONTEXT RE-RANKING LAYER
-            const queryWords = message.toLowerCase().match(/\w+/g) || [];
+            const queryWords = ctx.request.finalMessage.toLowerCase().match(/\w+/g) || [];
             const validQueryWords = queryWords.filter((w: string) => w.length > 3);
             
             deduplicatedDocs.forEach((doc: any, idx: number) => {
@@ -1389,7 +1390,7 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
     
     // --- MEMORY MANAGER (RETRIEVAL) ---
     ctx.state.memoryArray = ctx.policy.canReadMemory
-      ? await retrieveMemories(ctx.request.finalMessage, ctx.auth.userId, Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '')
+      ? await retrieveMemories(ctx.request.finalMessage, ctx.auth.userId, rctx.env.supabaseUrl, rctx.env.supabaseServiceKey)
       : [];
     if (!Array.isArray(ctx.state.memoryArray)) ctx.state.memoryArray = [];
     
@@ -1412,9 +1413,9 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
 
     if (ctx.policy.mode === 'ENGINEER') {
       try {
-        const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+        const supClient = createClient(rctx.env.supabaseUrl, rctx.env.supabaseServiceKey);
         
-        const lowerMsgForEngineer = (message || '').toLowerCase();
+        const lowerMsgForEngineer = (ctx.request.finalMessage || '').toLowerCase();
         
         // Lazy-load triggers
         const needsDeprecatedADR = /deprecated|konflik|conflict|history|lama|diganti|obsolete|pola lama/.test(lowerMsgForEngineer);
