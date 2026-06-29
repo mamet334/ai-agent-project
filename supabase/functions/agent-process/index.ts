@@ -12,6 +12,7 @@ import { PolicyEngine } from './lib/policy_engine.ts';
 import { calculateConfidence } from './lib/confidence_engine.ts';
 import { buildUniversalContract } from './lib/universal_evidence_contract.ts';
 import { VerificationEngine, logVerificationReport, logVerificationAudit } from './lib/verification_engine.ts';
+import { RuntimeContext, createBackgroundTaskTracker, createRuntimeLogger } from './lib/runtime_context.ts';
 
 async function getGeminiEmbedding(text: string, geminiKey: string): Promise<number[]> {
   try {
@@ -464,7 +465,7 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
       })());
     };
 
-    const logAgentEvent = (eventType: string, provider: string, logMessage: string) => {
+    const logAgentEvent = async (eventType: string, provider: string, logMessage: string) => {
       safeFireAndTrack('LogAgentEvent', (async () => {
         const supClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
         await supClient.from('agent_logs').insert([{ user_id: ctx.auth.userId || null, event_type: eventType, provider, message: logMessage }]);
@@ -521,9 +522,28 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
       throw new Error('GEMINI_API_KEY is not set');
     }
 
+    // === ADR-0009 PHASE 5.1: RUNTIMECONTEXT ===
+    const rctx: RuntimeContext = {
+      keys: {
+        gemini: GEMINI_API_KEY,
+        allGemini: getAllKeys('GEMINI_API_KEY'),
+        groq: GROQ_API_KEY,
+        openRouter: OPENROUTER_API_KEY,
+        openAI: OPENAI_API_KEY,
+      },
+      model: { model },
+      stream: { isStream: !!stream, extractedImage, desktopOSMode, auditMode },
+      logger: { logApiUsage, logAgentEvent },
+      state: { explicitModelErrors: '', pendingBackgroundTasks },
+      tasks: { fire: safeFireAndTrack, awaitAll: async () => { if (pendingBackgroundTasks.length > 0) await Promise.allSettled(pendingBackgroundTasks); } }
+    };
+    if (rctx.keys.allGemini.length === 0 && rctx.keys.gemini) {
+      rctx.keys.allGemini.push(rctx.keys.gemini);
+    }
+
     // [REMOVED streamGroqResponse - Replaced by unified getStreamResponse]
 
-    const callGroq = async (promptText: string, systemPromptText = '', chatHistory: any[] = []) => {
+    const callGroq = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], rctx: RuntimeContext) => {
       const messages = [];
       if (systemPromptText) messages.push({ role: 'system', content: systemPromptText });
       
@@ -539,18 +559,18 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
       messages.push({ role: 'user', content: promptText });
       
       let groqModel = 'llama-3.1-8b-instant';
-      if (model && model.startsWith('groq/')) {
-        groqModel = model.replace('groq/', '');
-      } else if (model === 'groq-llama-3.3') {
+      if (rctx.model.model && rctx.model.model.startsWith('groq/')) {
+        groqModel = rctx.model.model.replace('groq/', '');
+      } else if (rctx.model.model === 'groq-llama-3.3') {
         groqModel = 'llama-3.3-70b-versatile';
-      } else if (model === 'groq-llama-3.1') {
+      } else if (rctx.model.model === 'groq-llama-3.1') {
         groqModel = 'llama-3.1-8b-instant';
       }
 
       const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${GROQ_API_KEY}`,
+          'Authorization': `Bearer ${rctx.keys.groq}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -566,7 +586,7 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
       const answer = data.choices?.[0]?.message?.content || '';
       
       // Catat pemakaian
-      if (!stream) logApiUsage('groq', groqModel, promptText + systemPromptText, answer);
+      if (!rctx.stream.isStream) rctx.logger.logApiUsage('groq', groqModel, promptText + systemPromptText, answer);
       
       return answer;
     };
@@ -602,7 +622,7 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
 
     // [REMOVED streamOpenAIResponse - Replaced by unified getStreamResponse]
 
-    const callOpenAI = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], overrideModel?: string) => {
+    const callOpenAI = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], overrideModel: string | undefined, rctx: RuntimeContext) => {
       const messages = [];
       if (systemPromptText) messages.push({ role: 'system', content: systemPromptText });
       if (chatHistory && chatHistory.length > 0) {
@@ -612,11 +632,11 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
       }
       messages.push({ role: 'user', content: promptText });
       
-      const selectedModel = overrideModel || model || 'gpt-4o-mini';
+      const selectedModel = overrideModel || rctx.model.model || 'gpt-4o-mini';
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Authorization': `Bearer ${rctx.keys.openAI}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -629,7 +649,7 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
       const data = await res.json();
       const answer = data.choices?.[0]?.message?.content || '';
       
-      if (!stream) logApiUsage('openai', selectedModel, promptText + systemPromptText, answer);
+      if (!rctx.stream.isStream) rctx.logger.logApiUsage('openai', selectedModel, promptText + systemPromptText, answer);
       return answer;
     };
 
@@ -637,7 +657,7 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
     // [REMOVED streamOpenRouterResponse - Replaced by unified getStreamResponse]
     // ========== AKHIR MODIFIKASI ==========
 
-    const callOpenRouter = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], forceDefaultModel = false) => {
+    const callOpenRouter = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], forceDefaultModel = false, rctx: RuntimeContext) => {
       const messages = [];
       if (systemPromptText) messages.push({ role: 'system', content: systemPromptText });
       if (chatHistory && chatHistory.length > 0) {
@@ -649,11 +669,11 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
       
       let openRouterModel = 'anthropic/claude-sonnet-4.6';
       if (!forceDefaultModel) {
-        if (model && model.startsWith('openrouter/')) {
-          openRouterModel = model.replace('openrouter/', '');
-        } else if (model === 'openrouter-llama-3') {
+        if (rctx.model.model && rctx.model.model.startsWith('openrouter/')) {
+          openRouterModel = rctx.model.model.replace('openrouter/', '');
+        } else if (rctx.model.model === 'openrouter-llama-3') {
           openRouterModel = 'anthropic/claude-sonnet-4.6';
-        } else if (model === 'openrouter-google-gemini-2.0-flash-exp') {
+        } else if (rctx.model.model === 'openrouter-google-gemini-2.0-flash-exp') {
           openRouterModel = 'anthropic/claude-sonnet-4.6';
         }
       }
@@ -661,7 +681,7 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+          'Authorization': `Bearer ${rctx.keys.openRouter}`,
           'HTTP-Referer': 'https://ai-agent-project.vercel.app',
           'X-Title': 'Mamet AI Agent',
           'Content-Type': 'application/json'
@@ -676,18 +696,19 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
       const data = await res.json();
       const answer = data.choices?.[0]?.message?.content || '';
       
-      if (!stream) logApiUsage('openrouter', openRouterModel, promptText + systemPromptText, answer);
+      if (!rctx.stream.isStream) rctx.logger.logApiUsage('openrouter', openRouterModel, promptText + systemPromptText, answer);
       return answer;
     };
 
-    const allGeminiKeys = getAllKeys('GEMINI_API_KEY');
+    // allGeminiKeys initialization was moved to rctx
 
     const callLLMWithCascade = async (
       promptText: string,
       systemPromptText = '',
       chatHistory: any[] = [],
       preferredProvider: 'gemini' | 'groq' = 'gemini',
-      extractedImage: { mimeType: string; data: string } | null = null
+      extractedImage: { mimeType: string; data: string } | null = null,
+      rctx: RuntimeContext
     ): Promise<string> => {
       clearExpiredCooldowns();
 
@@ -730,16 +751,16 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
         
         try {
           if (provider === 'gemini') {
-            if (allGeminiKeys.length === 0) {
+            if (rctx.keys.allGemini.length === 0) {
               console.log('⏭️  Gemini: No keys available, skipping');
               lastError += ' [gemini]: No keys available;';
               continue;
             }
             console.log('🔷 Calling Gemini...');
-            const data = await callGeminiWithRetry(payload, 'gemini-2.0-flash', allGeminiKeys);
+            const data = await callGeminiWithRetry(payload, 'gemini-2.0-flash', rctx.keys.allGemini);
             if (data) {
               const answer = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-              if (!stream) logApiUsage('gemini', 'gemini-2.0-flash', promptText + systemPromptText, answer);
+              if (!rctx.stream.isStream) rctx.logger.logApiUsage('gemini', 'gemini-2.0-flash', promptText + systemPromptText, answer);
               console.log('✅ Gemini succeeded');
               return answer;
             }
@@ -749,15 +770,15 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
           }
 
           if (provider === 'openrouter') {
-            if (!OPENROUTER_API_KEY) {
+            if (!rctx.keys.openRouter) {
               console.log('⏭️  OpenRouter: No API key available, skipping');
               lastError += ' [openrouter]: No API key;';
               continue;
             }
             console.log('🟠 Calling OpenRouter...');
-            const answer = await callOpenRouter(promptText, systemPromptText, chatHistory, true);
+            const answer = await callOpenRouter(promptText, systemPromptText, chatHistory, true, rctx);
             if (answer) {
-              if (!stream) logApiUsage('openrouter', 'google/gemini-2.0-flash-lite-preview-02-05:free', promptText + systemPromptText, answer);
+              if (!rctx.stream.isStream) rctx.logger.logApiUsage('openrouter', 'google/gemini-2.0-flash-lite-preview-02-05:free', promptText + systemPromptText, answer);
               console.log('✅ OpenRouter succeeded');
               return answer;
             }
@@ -767,15 +788,15 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
           }
 
           if (provider === 'groq') {
-            if (!GROQ_API_KEY) {
+            if (!rctx.keys.groq) {
               console.log('⏭️  Groq: No API key available, skipping');
               lastError += ' [groq]: No API key;';
               continue;
             }
             console.log('🟣 Calling Groq (Fallback Utama)...');
-            const answer = await callGroq(promptText, systemPromptText, chatHistory);
+            const answer = await callGroq(promptText, systemPromptText, chatHistory, rctx);
             if (answer) {
-              if (!stream) logApiUsage('groq', 'llama-3.1-8b-instant', promptText + systemPromptText, answer);
+              if (!rctx.stream.isStream) rctx.logger.logApiUsage('groq', 'llama-3.1-8b-instant', promptText + systemPromptText, answer);
               console.log('✅ Groq succeeded');
               return answer;
             }
@@ -791,54 +812,53 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
           if (isRateLimit) {
             console.log(`🚫 Provider ${provider} hit rate limit (429), locking for ${PROVIDER_COOLDOWN_DURATIONS[provider]}ms`);
             lockProvider(provider);
-            await logAgentEvent('RATE_LIMIT_HIT', provider, `429 Error: ${message.substring(0, 200)}`);
+            await rctx.logger.logAgentEvent('RATE_LIMIT_HIT', provider, `429 Error: ${message.substring(0, 200)}`);
           } else {
-            await logAgentEvent('FALLBACK_TRIGGERED', provider, `Error: ${message.substring(0, 200)}`);
+            await rctx.logger.logAgentEvent('FALLBACK_TRIGGERED', provider, `Error: ${message.substring(0, 200)}`);
           }
           console.warn(`❌ Provider ${provider} failed: ${message}`);
         }
       }
 
-      throw new Error('Semua provider AI sedang limit/gangguan. Detail error:' + explicitModelErrors + lastError);
+      throw new Error('Semua provider AI sedang limit/gangguan. Detail error:' + rctx.state.explicitModelErrors + lastError);
     };
-    if (allGeminiKeys.length === 0 && GEMINI_API_KEY) allGeminiKeys.push(GEMINI_API_KEY);
 
     let explicitModelErrors = '';
 
-    const runLLM = async (promptText: string, systemPromptText = '', chatHistory: any[] = []) => {
+    const runLLM = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], rctx: RuntimeContext) => {
       if (ctx.policy.canUseDesktopTools && !systemPromptText.includes('DESKTOP NATIVE AWARENESS ENABLED')) {
          systemPromptText += `\n[STATUS: DESKTOP NATIVE AWARENESS ENABLED]\nAnda WAJIB mengeluarkan perintah Windows di dalam tag <terminal>. DILARANG menyebut sub-agent atau menolak. Contoh: <terminal>dir %USERPROFILE%\\Desktop</terminal>\n`;
       }
 
       // === PRIORITAS USER-EXPLICIT MODEL SELECTION ===
-      if (!extractedImage) {
-        if (model && model.includes('gpt') && !model.includes('openrouter') && OPENAI_API_KEY) {
-          try { return await callOpenAI(promptText, systemPromptText, chatHistory); } catch(e: any) { console.warn('OpenAI failed:', e); explicitModelErrors += ` [openai]: ${e.message || e};`; }
-        } else if (model && (model.includes('openrouter') || model.startsWith('openrouter/')) && OPENROUTER_API_KEY) {
-          try { return await callOpenRouter(promptText, systemPromptText, chatHistory); } catch(e: any) { console.warn('OpenRouter failed:', e); explicitModelErrors += ` [openrouter]: ${e.message || e};`; }
-        } else if (model && model.startsWith('groq/') && GROQ_API_KEY) {
-          try { return await callGroq(promptText, systemPromptText, chatHistory); } catch(e: any) { console.warn('Groq failed:', e); explicitModelErrors += ` [groq-explicit]: ${e.message || e};`; }
+      if (!rctx.stream.extractedImage) {
+        if (rctx.model.model && rctx.model.model.includes('gpt') && !rctx.model.model.includes('openrouter') && rctx.keys.openAI) {
+          try { return await callOpenAI(promptText, systemPromptText, chatHistory, undefined, rctx); } catch(e: any) { console.warn('OpenAI failed:', e); rctx.state.explicitModelErrors += ` [openai]: ${e.message || e};`; }
+        } else if (rctx.model.model && (rctx.model.model.includes('openrouter') || rctx.model.model.startsWith('openrouter/')) && rctx.keys.openRouter) {
+          try { return await callOpenRouter(promptText, systemPromptText, chatHistory, false, rctx); } catch(e: any) { console.warn('OpenRouter failed:', e); rctx.state.explicitModelErrors += ` [openrouter]: ${e.message || e};`; }
+        } else if (rctx.model.model && rctx.model.model.startsWith('groq/') && rctx.keys.groq) {
+          try { return await callGroq(promptText, systemPromptText, chatHistory, rctx); } catch(e: any) { console.warn('Groq failed:', e); rctx.state.explicitModelErrors += ` [groq-explicit]: ${e.message || e};`; }
         }
       }
 
       // === DEFAULT CASCADE: Gemini -> OpenRouter -> Groq ===
       // Ignore complexity score, use default provider order
       console.log(`🔄 Using default cascade: Gemini -> OpenRouter -> Groq`);
-      return await callLLMWithCascade(promptText, systemPromptText, chatHistory, 'gemini', extractedImage);
+      return await callLLMWithCascade(promptText, systemPromptText, chatHistory, 'gemini', rctx.stream.extractedImage, rctx);
     };
 
     // --- OTAK KHUSUS KEPALA AGENT (HEMAT KUOTA) + ANTI-LIMIT ---
-    const runCoordinatorLLM = async (promptText: string, systemPromptText = '', preferFast = false) => {
+    const runCoordinatorLLM = async (promptText: string, systemPromptText = '', preferFast = false, rctx: RuntimeContext) => {
       // === NOTE: Groq is temporarily disabled, so preferFast will use default cascade ===
-      // if (preferFast && GROQ_API_KEY && !isProviderLocked('groq')) {
+      // if (preferFast && rctx.keys.groq && !isProviderLocked('groq')) {
       //   try {
       //     console.log("Mamet Traffic Light: Memutar tugas ringan (Intent Router) ke Groq...");
-      //     return await callGroq(promptText, systemPromptText, []);
+      //     return await callGroq(promptText, systemPromptText, [], rctx);
       //   } catch(e) { console.warn('Traffic Light Groq failed, cascading to Gemini...', e); }
       // }
 
       // Always use default cascade: Gemini -> OpenRouter
-      return await callLLMWithCascade(promptText, systemPromptText, [], 'gemini');
+      return await callLLMWithCascade(promptText, systemPromptText, [], 'gemini', null, rctx);
     };
 
     let replyMessage = 'Gagal memproses jawaban dari AI.';
@@ -847,7 +867,7 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
     let subagentRuns: any[] = [];
     
 
-    const getStreamResponse = (promptText: string, systemPromptText = '', chatHistory: any[] = [], metaData: any = {}) => {
+    const getStreamResponse = (promptText: string, systemPromptText = '', chatHistory: any[] = [], metaData: any = {}, rctx: RuntimeContext) => {
       const safeMeta = { ...metaData };
       if (safeMeta.subagentRuns) safeMeta.subagentRuns = safeMeta.subagentRuns.map((r: any) => ({ ...r, output: '[Omitted to save header space]' }));
 
@@ -863,7 +883,7 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
           console.log("[SSE EARLY INIT] Streaming started before LLM calls");
           enqueueStr(""); // Send first chunk immediately to prevent hanging HTTP request
 
-          if (desktopOSMode && !systemPromptText.includes('DESKTOP NATIVE AWARENESS ENABLED')) {
+          if (rctx.stream.desktopOSMode && !systemPromptText.includes('DESKTOP NATIVE AWARENESS ENABLED')) {
              systemPromptText += `\n[STATUS: DESKTOP NATIVE AWARENESS ENABLED]\nAnda WAJIB mengeluarkan perintah Windows di dalam tag <terminal>. DILARANG menyebut sub-agent atau menolak. Contoh: <terminal>dir %USERPROFILE%\\Desktop</terminal>\n`;
           }
 
@@ -934,7 +954,7 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
           };
 
           // Format messages
-          const oaiMessages = [];
+          const oaiMessages: any[] = [];
           const geminiContents = [];
           if (systemPromptText) {
              oaiMessages.push({ role: 'system', content: systemPromptText });
@@ -948,7 +968,7 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
           oaiMessages.push({ role: 'user', content: promptText });
           
           const userParts: any[] = [{ text: promptText }];
-          if (extractedImage) userParts.push({ inlineData: { mimeType: extractedImage.mimeType, data: extractedImage.data } });
+          if (rctx.stream.extractedImage) userParts.push({ inlineData: { mimeType: rctx.stream.extractedImage.mimeType, data: rctx.stream.extractedImage.data } });
           geminiContents.push({ role: 'user', parts: userParts });
 
           const geminiPayload: any = { contents: geminiContents };
@@ -958,13 +978,13 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
           let currentError = '';
 
           const tryGroq = async (fallbackNote = '') => {
-            if (!GROQ_API_KEY) throw new Error("No Groq Key");
+            if (!rctx.keys.groq) throw new Error("No Groq Key");
             let groqModel = 'llama-3.1-8b-instant';
-            if (model && model.startsWith('groq/')) groqModel = model.replace('groq/', '');
+            if (rctx.model.model && rctx.model.model.startsWith('groq/')) groqModel = rctx.model.model.replace('groq/', '');
             console.log("[Stream] Trying Groq:", groqModel);
             const res = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
               method: 'POST',
-              headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
+              headers: { 'Authorization': `Bearer ${rctx.keys.groq}`, 'Content-Type': 'application/json' },
               body: JSON.stringify({ model: groqModel, messages: oaiMessages, temperature: 0.1, stream: true })
             });
             if (!res.ok) throw new Error(`Groq HTTP ${res.status}: ${await res.text()}`);
@@ -973,13 +993,13 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
           };
 
           const tryOpenRouter = async (fallbackNote = '') => {
-            if (!OPENROUTER_API_KEY) throw new Error("No OpenRouter Key");
+            if (!rctx.keys.openRouter) throw new Error("No OpenRouter Key");
             let orModel = 'meta-llama/llama-3.1-8b-instruct:free';
-            if (model && model.startsWith('openrouter/')) orModel = model.replace('openrouter/', '');
+            if (rctx.model.model && rctx.model.model.startsWith('openrouter/')) orModel = rctx.model.model.replace('openrouter/', '');
             console.log("[Stream] Trying OpenRouter:", orModel);
             const res = await fetchWithTimeout('https://openrouter.ai/api/v1/chat/completions', {
               method: 'POST',
-              headers: { 'Authorization': `Bearer ${OPENROUTER_API_KEY}`, 'HTTP-Referer': 'https://ai-agent-project.vercel.app', 'X-Title': 'Mamet AI Agent', 'Content-Type': 'application/json' },
+              headers: { 'Authorization': `Bearer ${rctx.keys.openRouter}`, 'HTTP-Referer': 'https://ai-agent-project.vercel.app', 'X-Title': 'Mamet AI Agent', 'Content-Type': 'application/json' },
               body: JSON.stringify({ model: orModel, messages: oaiMessages, temperature: 0.1, stream: true })
             });
             if (!res.ok) throw new Error(`OpenRouter HTTP ${res.status}: ${await res.text()}`);
@@ -988,20 +1008,20 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
           };
 
           const tryGemini = async (fallbackNote = '') => {
-             if (allGeminiKeys.length === 0) throw new Error("No Gemini Keys");
-             const geminiModel = model && model.includes('gemini') ? model : 'gemini-2.0-flash';
+             if (rctx.keys.allGemini.length === 0) throw new Error("No Gemini Keys");
+             const geminiModel = rctx.model.model && rctx.model.model.includes('gemini') ? rctx.model.model : 'gemini-2.0-flash';
              console.log("[Stream] Trying Gemini:", geminiModel);
              
              let res: Response | null = null;
              let lastErr = '';
-             for (let ki = 0; ki < allGeminiKeys.length; ki++) {
-               const key = allGeminiKeys[(geminiKeyIndex + ki) % allGeminiKeys.length];
+             for (let ki = 0; ki < rctx.keys.allGemini.length; ki++) {
+               const key = rctx.keys.allGemini[(geminiKeyIndex + ki) % rctx.keys.allGemini.length];
                try {
                  const attempt = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:streamGenerateContent?alt=sse&key=${key}`, {
                    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(geminiPayload)
                  }, 15000);
                  if (attempt.ok) {
-                   geminiKeyIndex = (geminiKeyIndex + ki + 1) % allGeminiKeys.length;
+                   geminiKeyIndex = (geminiKeyIndex + ki + 1) % rctx.keys.allGemini.length;
                    res = attempt;
                    break;
                  }
@@ -1020,11 +1040,11 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
           };
 
           const tryOpenAI = async () => {
-             if (!OPENAI_API_KEY) throw new Error("No OpenAI Key");
-             console.log("[Stream] Trying OpenAI:", model);
+             if (!rctx.keys.openAI) throw new Error("No OpenAI Key");
+             console.log("[Stream] Trying OpenAI:", rctx.model.model);
              const res = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
-               method: 'POST', headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
-               body: JSON.stringify({ model: model || 'gpt-4o-mini', messages: oaiMessages, temperature: 0.1, stream: true })
+               method: 'POST', headers: { 'Authorization': `Bearer ${rctx.keys.openAI}`, 'Content-Type': 'application/json' },
+               body: JSON.stringify({ model: rctx.model.model || 'gpt-4o-mini', messages: oaiMessages, temperature: 0.1, stream: true })
              });
              if (!res.ok) throw new Error(`OpenAI HTTP ${res.status}: ${await res.text()}`);
              await processOpenAIStream(res);
@@ -1085,20 +1105,18 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
 
              try { controller.enqueue(new TextEncoder().encode(`data: [DONE]\n\n`)); } catch (e) {}
              controller.close();
-             if (pendingBackgroundTasks.length > 0) {
-                 await Promise.allSettled(pendingBackgroundTasks);
-             }
+             await rctx.tasks.awaitAll();
           };
 
           try {
             // EXPLICIT MODELS
-            if (model && model.includes('gpt') && !model.includes('openrouter') && OPENAI_API_KEY) {
+            if (rctx.model.model && rctx.model.model.includes('gpt') && !rctx.model.model.includes('openrouter') && rctx.keys.openAI) {
               try { await tryOpenAI(); await closeSafely(); return; } catch(e: any) { currentError += e.message; console.warn("OpenAI fail, cascading...", e); }
             }
-            if (model && (model.includes('openrouter') || model.startsWith('openrouter/')) && OPENROUTER_API_KEY) {
+            if (rctx.model.model && (rctx.model.model.includes('openrouter') || rctx.model.model.startsWith('openrouter/')) && rctx.keys.openRouter) {
               try { await tryOpenRouter(); await closeSafely(); return; } catch(e: any) { currentError += e.message; console.warn("OR fail, cascading...", e); }
             }
-            if (model && model.startsWith('groq/') && GROQ_API_KEY) {
+            if (rctx.model.model && rctx.model.model.startsWith('groq/') && rctx.keys.groq) {
               try { await tryGroq(); await closeSafely(); return; } catch(e: any) { currentError += e.message; console.warn("Groq fail, cascading...", e); }
             }
 
@@ -1833,7 +1851,7 @@ Kriteria:
 - Jawab "BUTUH_AGENT" jika pesan memerlukan informasi terkini, pencarian Google, pengerjaan kode, atau otomatisasi/cron.
 
 Jawab HANYA dengan satu kata: "CHAT_BIASA" atau "BUTUH_AGENT".`;
-          const intentResult = await runCoordinatorLLM(intentCheckPrompt, "Anda adalah router intent super ringan. Jawab HANYA satu kata.", true);
+          const intentResult = await runCoordinatorLLM(intentCheckPrompt, "Anda adalah router intent super ringan. Jawab HANYA satu kata.", true, rctx);
           if (intentResult.toUpperCase().includes("CHAT_BIASA")) {
              isChatBiasa = true;
              ctx.state.processingSteps.push('💬 Keputusan: Obrolan biasa → Jawab langsung tanpa sub-agent');
@@ -1855,10 +1873,10 @@ Jawab HANYA dengan satu kata: "CHAT_BIASA" atau "BUTUH_AGENT".`;
         // --- [REMOVED] MEMORY MANAGER DUPLICATE CALL ---
 
         if (stream && !extractedImage) {
-          const streamRes = getStreamResponse(ctx.request.finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps: ctx.state.processingSteps });
+          const streamRes = getStreamResponse(ctx.request.finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps: ctx.state.processingSteps }, rctx);
           if (streamRes) return streamRes;
         }
-        replyMessage = await runLLM(ctx.request.finalMessage, fullSystemContext, history);
+        replyMessage = await runLLM(ctx.request.finalMessage, fullSystemContext, history, rctx);
         
         // --- PHASE 3B: SOURCE TRACE EXTRACTION LAYER ---
         const extractSourceTrace = (msg: string): { replyWithoutTrace: string; sourceTrace?: string } => {
@@ -1934,7 +1952,7 @@ Jawab HANYA dengan satu kata: "CHAT_BIASA" atau "BUTUH_AGENT".`;
               source_trace: auditRecord.sourceTrace,
               confidence: auditRecord.confidence,
               evidence: auditRecord.evidence,
-              request_id: ctx.state.runtimeContext?.requestId || null,
+              request_id: null,
               user_id: ctx.auth.userId || null
             }]);
           } catch (auditErr) {
@@ -1981,7 +1999,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
       let plan: any[] = [];
       try {
         ctx.state.processingSteps.push('🤖 Kepala Agent (Coordinator): Merencanakan strategi...');
-        planText = await runCoordinatorLLM(`Permintaan User: "${ctx.request.finalMessage}"`, coordinatorSystemPrompt);
+        planText = await runCoordinatorLLM(`Permintaan User: "${ctx.request.finalMessage}"`, coordinatorSystemPrompt, false, rctx);
         planText = planText.replace(/```json/g, '').replace(/```/g, '').trim();
         plan = JSON.parse(planText);
         if (plan.length > 0) {
@@ -2115,7 +2133,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
                
                const env = { 
                   GEMINI_API_KEY, GROQ_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY, 
-                  APIFY_API_TOKEN: Deno.env.get('APIFY_API_TOKEN') || '', allGeminiKeys 
+                  APIFY_API_TOKEN: Deno.env.get('APIFY_API_TOKEN') || '', allGeminiKeys: rctx.keys.allGemini 
                };
                const fullTask = `Tugas Spesifik Anda: ${task}\n\nPermintaan Asli User: "${ctx.request.finalMessage}"\n\nKonteks Tambahan (Hasil Tier Sebelumnya):\n${accumulatedContext}`;
                
@@ -2132,7 +2150,7 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
                        console.log(`🚥 Traffic Light: Sub-agent [${subagent}] menggunakan GEMINI`);
                        model = 'gemini-2.0-flash';
                     }
-                    return await runLLM(prompt, sys, hist);
+                    return await runLLM(prompt, sys, hist, rctx);
                   } finally { model = originalModel; }
                };
 
@@ -2242,16 +2260,16 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
         }
 
         if (stream && !extractedImage) {
-          const streamRes = getStreamResponse(synthesisPrompt, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps: ctx.state.processingSteps, auditMode, routingDecision, contractValidation });
+          const streamRes = getStreamResponse(synthesisPrompt, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps: ctx.state.processingSteps, auditMode, routingDecision, contractValidation }, rctx);
           if (streamRes) return streamRes;
         }
-        replyMessage = await runLLM(synthesisPrompt, fullSystemContext, history);
+        replyMessage = await runLLM(synthesisPrompt, fullSystemContext, history, rctx);
       } else {
         if (stream && !extractedImage) {
-          const streamRes = getStreamResponse(ctx.request.finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps: ctx.state.processingSteps, auditMode, routingDecision, contractValidation });
+          const streamRes = getStreamResponse(ctx.request.finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps: ctx.state.processingSteps, auditMode, routingDecision, contractValidation }, rctx);
           if (streamRes) return streamRes;
         }
-        replyMessage = await runLLM(ctx.request.finalMessage, fullSystemContext, history);
+        replyMessage = await runLLM(ctx.request.finalMessage, fullSystemContext, history, rctx);
       }
       }
     } else {
@@ -2265,10 +2283,10 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
 
       if (stream && !extractedImage) {
         ctx.state.processingSteps.push('✍️ Menjawab langsung (tanpa tools)...');
-        const streamRes = getStreamResponse(ctx.request.finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps: ctx.state.processingSteps, auditMode, routingDecision, contractValidation });
+        const streamRes = getStreamResponse(ctx.request.finalMessage, fullSystemContext, history, { toolsUsed: tools, groundingSources, toolExecution, subagentRuns, processingSteps: ctx.state.processingSteps, auditMode, routingDecision, contractValidation }, rctx);
         if (streamRes) return streamRes;
       }
-      replyMessage = await runLLM(ctx.request.finalMessage, fullSystemContext, history);
+      replyMessage = await runLLM(ctx.request.finalMessage, fullSystemContext, history, rctx);
     }
 
     // Phase 5: Guarantee async delivery before sending JSON response
