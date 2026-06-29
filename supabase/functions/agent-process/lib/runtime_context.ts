@@ -18,6 +18,8 @@ export interface EnvironmentConfig {
   supabaseUrl: string;
   supabaseServiceKey: string;
   supabaseAnonKey: string;
+  apifyApiToken: string;
+  enableAsyncMemoryWrite: boolean;
 }
 
 export interface ProviderKeys {
@@ -96,8 +98,6 @@ export interface ModelConfig {
 export interface RuntimeState {
   /** Error string yang terakumulasi dari explicit model failures */
   explicitModelErrors: string;
-  /** Background tasks yang harus diselesaikan sebelum response dikirim */
-  pendingBackgroundTasks: Promise<any>[];
 }
 
 // ─────────────────────────────────────────────
@@ -194,17 +194,14 @@ export function createBackgroundTaskTracker(): BackgroundTaskTracker {
  *
  * @param userId - Auth user ID untuk tagging log entries
  * @param tasks  - BackgroundTaskTracker untuk fire-and-forget logging
- * @param isStream - Jika true, skip logApiUsage (streaming tidak hitung token di sini)
+ * @param env - Environment configuration for Supabase credentials
  */
 export function createRuntimeLogger(
   userId: string,
   tasks: BackgroundTaskTracker,
   isStream: boolean,
+  env: EnvironmentConfig
 ): RequestLogger {
-  // Import createClient di sini tidak bisa (circular/Deno import limitation).
-  // Caller harus menyediakan supabaseFactory jika diperlukan.
-  // Untuk Phase 5.1, logger masih memanggil createClient langsung
-  // (behavior identik dengan closure lama).
 
   return {
     logApiUsage(provider: string, modelName: string, inputText: string, outputText: string): void {
@@ -222,8 +219,8 @@ export function createRuntimeLogger(
 
         const totalCost = ((inputTokens / 1000) * costIn) + ((outputTokens / 1000) * costOut);
         const supClient = createClient(
-          Deno.env.get('SUPABASE_URL') ?? '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+          env.supabaseUrl,
+          env.supabaseServiceKey
         );
         await supClient.from('api_usage').insert([{
           user_id: userId, provider, model: modelName,
@@ -236,8 +233,8 @@ export function createRuntimeLogger(
       tasks.fire('LogAgentEvent', (async () => {
         const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.39.3');
         const supClient = createClient(
-          Deno.env.get('SUPABASE_URL') ?? '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+          env.supabaseUrl,
+          env.supabaseServiceKey
         );
         await supClient.from('agent_logs').insert([{
           user_id: userId || null, event_type: eventType, provider, message: logMessage
