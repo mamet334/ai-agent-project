@@ -125,7 +125,7 @@ Status: Open
 
 ## GAP-NEW-005: Project Memory Hybrid (File + DB) Tanpa Unified Interface
 
-Status: Open
+Status: **Resolved** ✅ (TASK-NEW-011, 2026-06-29 — Wave 3)
 
 **Severity:** Major
 **Lokasi:** `docs/project-memory/PROJECT-MEMORY.md` vs database `project_memory_entries`
