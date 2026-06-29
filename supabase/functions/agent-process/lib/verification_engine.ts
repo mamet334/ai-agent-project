@@ -254,43 +254,4 @@ export class VerificationEngine {
   }
 }
 
-export function logVerificationReport(report: VerificationReport): void {
-  try {
-    let logString = `==============================\n`;
-    logString += `VERIFICATION REPORT\n`;
-    logString += `==============================\n\n`;
-    
-    logString += `Overall Status : ${report.status}\n`;
-    logString += `Overall Score  : ${report.score}\n`;
-    logString += `Execution Time : ${report.executionTimeMs.toFixed(2)} ms\n\n`;
-    
-    logString += `Checks\n`;
-    report.checks.forEach(check => {
-      logString += `- ${check.id}\n`;
-      logString += `  Status : ${check.status}\n`;
-      logString += `  Message: ${check.message}\n`;
-    });
-    
-    if (report.failures.length > 0) {
-      logString += `\nFailures\n`;
-      report.failures.forEach(fail => {
-        logString += `- ${fail.id}\n`;
-        logString += `  Message: ${fail.message}\n`;
-      });
-    }
-    
-    logString += `\n==============================`;
-    
-    console.log(logString);
-  } catch (err) {
-    console.error("[VERIFICATION LOGGING ERROR] Failed to log verification report:", err);
-  }
-}
 
-export function logVerificationAudit(audit: VerificationAuditRecord): void {
-  try {
-    console.log(`\n[VERIFICATION AUDIT]\n${JSON.stringify(audit, null, 2)}\n`);
-  } catch (err) {
-    console.error("[VERIFICATION AUDIT LOG ERROR] Failed to log audit:", err);
-  }
-}

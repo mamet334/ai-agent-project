@@ -10,7 +10,14 @@ import { validateEvidence, buildBlockedResponse } from './lib/verification/evide
 import { PolicyEngine } from './lib/verification/policy_engine.ts';
 import { calculateConfidence } from './lib/verification/confidence_engine.ts';
 import { buildUniversalContract } from './lib/verification/universal_contract.ts';
-import { VerificationEngine, logVerificationReport, logVerificationAudit } from './lib/verification_engine.ts';
+import { VerificationEngine } from './lib/verification_engine.ts';
+import {
+  getActiveConflictsCount,
+  persistEvidenceAuditLog,
+  persistVerificationAuditLog,
+  logVerificationReport,
+  logVerificationAudit
+} from './lib/verification/verification_service.ts';
 import { RuntimeContext, createBackgroundTaskTracker, createRuntimeLogger } from './lib/runtime_context.ts';
 import { callGroq, callOpenAI, callOpenRouter } from './lib/provider_manager.ts';
 import {
@@ -635,34 +642,18 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
     ctx.state.processingSteps.push(`[EVIDENCE_GATE] Verdict=${evidenceReport.verdict} | total=${evidenceReport.totalEvidence}`);
 
     // Background: Simpan audit log ke Supabase
-    rctx.tasks.fire('EvidenceAuditLog', (async () => {
-      try {
-        const supClient = createClient(rctx.env.supabaseUrl, rctx.env.supabaseServiceKey);
-        await supClient.from('evidence_audit_logs').insert([{
-          request_id: evidenceReport.requestId,
-          user_id: ctx.auth.userId,
-          mode: evidenceReport.mode,
-          app_source: ctx.auth.appSource,
-          brain1_count: evidenceReport.brain1Count,
-          brain2_count: evidenceReport.brain2Count,
-          rag_count: evidenceReport.ragCount,
-          memory_count: evidenceReport.memoryCount,
-          total_evidence: evidenceReport.totalEvidence,
-          brain1_ids: brain1Ids,
-          brain2_tasks: brain2Tasks,
-          brain2_gaps: brain2Gaps,
-          rag_docs: ragIds,
-          verdict: evidenceReport.verdict,
-          block_reason: evidenceReport.blockReason,
-          llm_called: evidenceReport.isValid,
-          message_preview: (ctx.request.finalMessage || '').substring(0, 100),
-          routing_scope: routingDecision?.scope || null,
-          workspace_id: routingDecision?.workspace_id || null,
-        }]);
-      } catch (auditErr) {
-        console.error('[EVIDENCE_AUDIT_LOG_FAIL]', auditErr);
-      }
-    })());
+    rctx.tasks.fire('EvidenceAuditLog', persistEvidenceAuditLog(rctx, {
+      userId: ctx.auth.userId,
+      appSource: ctx.auth.appSource,
+      evidenceReport,
+      brain1Ids,
+      brain2Tasks,
+      brain2Gaps,
+      ragDocs: ragIds,
+      messagePreview: (ctx.request.finalMessage || '').substring(0, 100),
+      routingScope: routingDecision?.scope || null,
+      workspaceId: routingDecision?.workspace_id || null,
+    }));
 
     // === HARD BLOCK: Jika verdict BLOCKED, hentikan pipeline di sini ===
     if (!evidenceReport.isValid) {
@@ -703,17 +694,7 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
     let activeConflictsCount = 0;
     const currentEntryIds = brain1EntriesForConf.map((e: any) => e.id).filter(Boolean);
     if (currentEntryIds.length > 0) {
-      try {
-        const supClient = createClient(rctx.env.supabaseUrl, rctx.env.supabaseServiceKey);
-        const { count, error } = await supClient
-          .from('knowledge_conflicts')
-          .select('*', { count: 'exact', head: true })
-          .eq('resolution_status', 'OPEN')
-          .in('entry_a_id', currentEntryIds);
-        if (!error && count) activeConflictsCount = count;
-      } catch (e) {
-        console.error('[CONFIDENCE_ENGINE] Error querying conflicts:', e);
-      }
+      activeConflictsCount = await getActiveConflictsCount(rctx, currentEntryIds);
     }
 
     const confidenceReport = calculateConfidence({
@@ -955,29 +936,7 @@ Jawab HANYA dengan satu kata: "CHAT_BIASA" atau "BUTUH_AGENT".`;
         logVerificationAudit(auditRecord);
 
         // TASK 019: Verification Audit Persistence
-        rctx.tasks.fire('VerificationAuditLog', (async () => {
-          try {
-            const supClient = createClient(rctx.env.supabaseUrl, rctx.env.supabaseServiceKey);
-            await supClient.from('verification_audit_logs').insert([{
-              timestamp: auditRecord.timestamp,
-              provider: auditRecord.provider,
-              model: auditRecord.model,
-              decision: auditRecord.decision,
-              status: auditRecord.status,
-              score: auditRecord.score,
-              execution_time_ms: auditRecord.executionTimeMs,
-              checks: auditRecord.checks,
-              failures: auditRecord.failures,
-              source_trace: auditRecord.sourceTrace,
-              confidence: auditRecord.confidence,
-              evidence: auditRecord.evidence,
-              request_id: null,
-              user_id: ctx.auth.userId || null
-            }]);
-          } catch (auditErr) {
-            console.error('[VERIFICATION_AUDIT_LOG_FAIL]', auditErr);
-          }
-        })());
+        rctx.tasks.fire('VerificationAuditLog', persistVerificationAuditLog(rctx, auditRecord, ctx.auth.userId || null));
 
         // TASK 018: Hard Response Gate
         switch (vReport.decision) {
