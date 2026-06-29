@@ -163,14 +163,14 @@ Hingga batas pengetahuan saya (akhir 2024)...
 
 FITUR GRAFIK INTERAKTIF: Jika user meminta untuk membuat grafik (bar/pie/line chart) berdasarkan data, outputkan data tersebut DALAM BENTUK BLOK KODE seperti ini:
 <EXAMPLES>
-```json_chart
+\`\`\`json_chart
 { "title": "Judul Grafik", "type": "bar", "data": [{"name": "A", "value": 10}], "xKey": "name", "yKey": "value" }
-```
+\`\`\`
 </EXAMPLES>
 Pilih type "bar", "pie", atau "line" sesuai kebutuhan.
 FITUR ZIP GENERATOR: Jika user meminta Anda membuat file zip (project kodingan), outputkan data DALAM BENTUK BLOK KODE seperti ini (wajib persis):
 <EXAMPLES>
-```xml_zip
+\`\`\`xml_zip
 <filename>nama_bebas.zip</filename>
 <file name="index.html">
 <h1>Halo</h1>
@@ -178,7 +178,7 @@ FITUR ZIP GENERATOR: Jika user meminta Anda membuat file zip (project kodingan),
 <file name="app.js">
 console.log('hi');
 </file>
-```
+\`\`\`
 </EXAMPLES>
 DILARANG KERAS MENGGUNAKAN PYTHON ATAU "TOOL_CODE". JANGAN PERNAH MENULISKAN KODE PYTHON UNTUK MENGEKSEKUSI TOOL. JAWABLAH DENGAN TEKS BIASA.
 
@@ -201,16 +201,16 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList(ctx.reques
   let userContextPrompt = ctx.auth.userName ? `\nInformasi Akun: User login dengan email/nama "${ctx.auth.userName}". Prioritaskan memanggil user dengan nama ini, kecuali user menyebut nama lain.` : '';
 
   if (ctx.request.finalMessage.toLowerCase().includes('zip')) {
-    ctx.request.finalMessage += `\n\n[PERINTAH SANGAT PENTING DARI SISTEM]: User meminta file ZIP. Anda DILARANG menggunakan blok kode biasa seperti ```html. ANDA WAJIB MENGGUNAKAN format ```xml_zip. 
+    ctx.request.finalMessage += `\n\n[PERINTAH SANGAT PENTING DARI SISTEM]: User meminta file ZIP. Anda DILARANG menggunakan blok kode biasa seperti \`\`\`html. ANDA WAJIB MENGGUNAKAN format \`\`\`xml_zip. 
 <EXAMPLES>
 Contoh Jawaban Anda yang BENAR:
 Baik, ini file zip-nya:
-```xml_zip
+\`\`\`xml_zip
 <filename>nama_file.zip</filename>
 <file name="index.html">
 <!-- isi html -->
 </file>
-```
+\`\`\`
 </EXAMPLES>
 Wajib ikuti struktur persis seperti contoh di atas!`;
   }

@@ -1,3 +1,4 @@
+import { executeResponsePipeline } from './lib/coordinator/parser_pipeline.ts';
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { executeRequestPipeline } from './lib/request/request_pipeline.ts';
 import { Buffer } from 'node:buffer';
@@ -414,44 +415,7 @@ Jawab HANYA dengan satu kata: "CHAT_BIASA" atau "BUTUH_AGENT".`;
         replyMessage = await runLLM(ctx.request.finalMessage, fullSystemContext, history, rctx);
         
         // --- PHASE 3B: SOURCE TRACE EXTRACTION LAYER ---
-        const extractSourceTrace = (msg: string): { replyWithoutTrace: string; sourceTrace?: string } => {
-          const lines = msg.split('\n');
-          const formatRegex = /[A-Z]{2,3}-\d{4}/;
-          const keywordRegex = /^(?:\W|_)*(?:source\s*trace|sources?|referensi)\b/i;
-          
-          const scanLimit = Math.max(0, lines.length - 15);
-          let headerIndex = -1;
-          let firstIdIndex = -1;
-          
-          for (let i = scanLimit; i < lines.length; i++) {
-             const line = lines[i].trim();
-             if (headerIndex === -1 && keywordRegex.test(line)) headerIndex = i;
-             if (firstIdIndex === -1 && formatRegex.test(line)) firstIdIndex = i;
-          }
-          
-          let startIndex = -1;
-          if (headerIndex !== -1) {
-             let hasId = false;
-             for (let i = headerIndex; i < lines.length; i++) {
-                if (formatRegex.test(lines[i])) { hasId = true; break; }
-             }
-             if (hasId) startIndex = headerIndex;
-             else if (firstIdIndex !== -1) startIndex = firstIdIndex;
-          } else if (firstIdIndex !== -1) {
-             startIndex = firstIdIndex;
-          }
-          
-          if (startIndex !== -1) {
-             return {
-                replyWithoutTrace: lines.slice(0, startIndex).join('\n').trim(),
-                sourceTrace: lines.slice(startIndex).join('\n').trim()
-             };
-          }
-          
-          return { replyWithoutTrace: msg, sourceTrace: undefined };
-        };
-
-        const { replyWithoutTrace, sourceTrace } = extractSourceTrace(replyMessage);
+        const { replyWithoutTrace, sourceTrace } = executeResponsePipeline('extract_trace', replyMessage);
 
         // --- PHASE 3: VERIFICATION ENGINE SKELETON ---
         const vContext = {
@@ -510,70 +474,35 @@ Contoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP I
 
       let planText = '[]';
       let plan: any[] = [];
+      ctx.state.processingSteps.push('🤖 Kepala Agent (Coordinator): Merencanakan strategi...');
       try {
-        ctx.state.processingSteps.push('🤖 Kepala Agent (Coordinator): Merencanakan strategi...');
         planText = await runCoordinatorLLM(`Permintaan User: "${ctx.request.finalMessage}"`, coordinatorSystemPrompt, false, rctx);
-        planText = planText.replace(/```json/g, '').replace(/```/g, '').trim();
-        plan = JSON.parse(planText);
-        if (plan.length > 0) {
-          ctx.state.processingSteps.push(`📋 Rencana: ${plan.length} sub-agent akan ditugaskan → ${plan.map((p: any) => p.subagent).join(', ')}`);
-        } else {
-          ctx.state.processingSteps.push('📋 Coordinator memutuskan tidak ada sub-agent yang diperlukan');
-        }
       } catch (err) {
-        console.error("Mamet Healer: Mendeteksi format JSON rusak. Memperbaiki...");
-        // --- MAMET HEALER (DOKTER BEDAH LOGIKA) ---
-        const jsonMatch = planText.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          try {
-            plan = JSON.parse(jsonMatch[0].replace(/,\s*]/g, ']'));
-            console.log("Mamet Healer: Berhasil memperbaiki JSON!");
-          } catch(e) {
-            console.error("Mamet Healer: Gagal memperbaiki JSON, sub-agent dibatalkan.");
-            plan = [];
-          }
-        }
+        console.error("Coordinator LLM Error:", err);
       }
 
-      // --- MAMET HEALER: Fallback Layer (Downgraded Priority) ---
-      // Jika LLM (Coordinator) memberikan object tunggal (halusinasi struktur), bungkus ke dalam Array
-      if (plan && !Array.isArray(plan) && typeof plan === 'object') {
-          console.warn("[Mamet Healer] Coordinator returned an object instead of array. Coercing to Array.");
-          plan = [plan];
+      // --- DELEGATE TO PARSER PIPELINE ---
+      const parseResult = executeResponsePipeline('parse_plan', planText);
+      plan = parseResult.plan;
+      contractValidation = parseResult.validation as any;
+
+      if (parseResult.healerTriggered) {
+          console.error("Mamet Healer: Format JSON rusak. Pipeline mencoba perbaikan...");
       }
 
-      if (Array.isArray(plan)) {
-        plan = plan.map(p => {
-          if (p && typeof p.task !== 'string') {
-            p.task = typeof p.task === 'object' ? JSON.stringify(p.task) : String(p.task || "");
-          }
-          if (p && !p.subagent) {
-             console.warn(`[Mamet Healer] Missing subagent key detected in LLM output. Forcing to "UNKNOWN".`);
-             p.subagent = 'UNKNOWN';
-          }
-          return p;
-        });
-      }
-
-      // 🧱 STEP 1: EXECUTION CONTRACT LAYER (LIGHT VERSION)
-      contractValidation = { step: "VALIDATION", status: "OK", reason_code: "PASSED", normalized_plan: plan };
-      
-      if (!Array.isArray(plan)) {
-          contractValidation = { step: "VALIDATION", status: "REJECTED", reason_code: "SCHEMA_VIOLATION: Root is not an array", normalized_plan: [] };
+      if (plan.length > 0) {
+          ctx.state.processingSteps.push(`📋 Rencana: ${plan.length} sub-agent akan ditugaskan → ${plan.map((p: any) => p.subagent).join(', ')}`);
       } else {
-          for (const p of plan) {
-              if (!p || typeof p !== 'object' || !p.subagent || !p.task || p.subagent === 'UNKNOWN' || p.subagent.trim() === '') {
-                  contractValidation = { step: "VALIDATION", status: "REJECTED", reason_code: `SCHEMA_VIOLATION: Missing or invalid subagent/task fields`, normalized_plan: [] };
-                  console.warn(`[Execution Contract] REJECTED: ${contractValidation.reason_code}. Object: ${JSON.stringify(p)}`);
-                  break;
-              }
+          if (contractValidation.status === "REJECTED") {
+              ctx.state.processingSteps.push(`❌ [Execution Contract] Skema ditolak: ${contractValidation.reason_code}`);
+          } else {
+              ctx.state.processingSteps.push('📋 Coordinator memutuskan tidak ada sub-agent yang diperlukan');
           }
       }
 
       if (contractValidation.status === "REJECTED") {
-          plan = []; // Block execution pipeline
-          ctx.state.processingSteps.push(`❌ [Execution Contract] Skema ditolak: ${contractValidation.reason_code}`);
-      } else {
+          console.warn(`[Execution Contract] REJECTED: ${contractValidation.reason_code}.`);
+      } else if (plan.length > 0) {
           console.log(`[Execution Contract] VALIDATED OK. Starting execution loop.`);
       }
 
