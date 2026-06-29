@@ -4,7 +4,7 @@ import { getPluginPromptList, getPluginByName } from './plugins/registry.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { loadEngineerContext } from './lib/rag/engineer_context.ts';
 import { loadProjectMemory } from './lib/rag/project_memory.ts';
-import { buildContextFusion } from './lib/context_fusion.ts';
+import { buildContextPipeline } from './lib/rag/context_pipeline.ts';
 import { runSelfHealingLoopAsync } from './plugins/self_healing.ts';
 import { processMemoryWriteQueue } from './memory_write_worker.ts';
 import { WorkspaceGuardian } from './lib/workspace_guardian.ts';
@@ -667,18 +667,18 @@ Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList()}\nJika u
         (ctx as any).brain1Entries = engineerCtx.brain1Entries;
     }
 
-    let basePrompts = agentIdentityPrompt + userContextPrompt + memoryPrompt + engineerContextPrompt;
-    if (ctx.policy.webHint === "HIGH_PRIORITY") {
-      basePrompts += `\n[WEB vs RAG COMPARISON CONTRACT]: Jika terdapat perbedaan antara dokumen RAG internal dan Web/Internet, identifikasi mana yang lebih baru secara eksplisit.`;
-    }
-    
-    const resolved = buildContextFusion({
+    const resolved = buildContextPipeline({
       memoryArray: ctx.state.memoryArray,
       ragArray: ctx.state.ragArray,
       message: ctx.request.finalMessage,
-      basePrompts,
-      ctx
-    });
+      agentIdentityPrompt,
+      userContextPrompt,
+      memoryPrompt,
+      engineerContextPrompt,
+      webHint: ctx.policy.webHint,
+      mode: ctx.policy.mode,
+      ragTopK: ctx.policy.ragTopK
+    }, rctx);
     
     let fullSystemContext = resolved.finalContext;
     
