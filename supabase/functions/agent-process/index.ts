@@ -14,6 +14,13 @@ import { buildUniversalContract } from './lib/universal_evidence_contract.ts';
 import { VerificationEngine, logVerificationReport, logVerificationAudit } from './lib/verification_engine.ts';
 import { RuntimeContext, createBackgroundTaskTracker, createRuntimeLogger } from './lib/runtime_context.ts';
 import { callGroq, callOpenAI, callOpenRouter } from './lib/provider_manager.ts';
+import {
+  geminiKeyIndex, setGeminiKeyIndex,
+  groqKeyIndex, setGroqKeyIndex,
+  openaiKeyIndex, setOpenaiKeyIndex,
+  openrouterKeyIndex, setOpenrouterKeyIndex,
+  clearAllCooldowns, runLLM, runCoordinatorLLM
+} from './lib/llm_orchestrator.ts';
 
 async function getGeminiEmbedding(text: string, rctx: RuntimeContext): Promise<number[]> {
   try {
@@ -37,12 +44,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-byok-gemini, x-byok-groq, x-byok-openai, x-byok-openrouter',
 };
 
-// Global state for Round-Robin API Keys (persists across warm invocations)
-let geminiKeyIndex = 0;
-let groqKeyIndex = 0;
-let openaiKeyIndex = 0;
-let openrouterKeyIndex = 0;
-
 const getActiveKey = (envVarName: string, currentIndex: number, setIndex: (idx: number) => void): string => {
   const keysString = Deno.env.get(envVarName) || '';
   if (!keysString) return '';
@@ -62,87 +63,6 @@ const getAllKeys = (envVarName: string): string[] => {
   return keysString.split(',').map(k => k.trim()).filter(k => k);
 };
 
-// Retry dengan exponential backoff + multi-key rotation
-const callGeminiWithRetry = async (payload: any, geminiModel: string, allGeminiKeys: string[], maxRetries = 3): Promise<any> => {
-  let seenRateLimit = false;
-  let lastGeminiError = 'Unknown error';
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    for (let ki = 0; ki < allGeminiKeys.length; ki++) {
-      const key = allGeminiKeys[(geminiKeyIndex + ki) % allGeminiKeys.length];
-      try {
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${key}`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        if (res.ok) {
-          geminiKeyIndex = (geminiKeyIndex + ki + 1) % allGeminiKeys.length; // rotate to next key
-          return await res.json();
-        }
-        const errText = await res.text();
-        lastGeminiError = `Status ${res.status}: ${errText}`;
-        if (res.status === 429) {
-          seenRateLimit = true;
-          console.warn(`Gemini key #${ki} got 429, trying next key... Details: ${errText}`);
-          continue; // Try next key
-        }
-        // Other errors - try next key too
-        console.warn(`Gemini key #${ki} error ${res.status}, trying next... Details: ${errText}`);
-      } catch (e: any) {
-        lastGeminiError = e.message || String(e);
-        console.warn(`Gemini key #${ki} network error:`, e);
-      }
-    }
-    // All keys exhausted for this attempt, wait before retry
-    if (attempt < maxRetries - 1) {
-      const waitMs = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
-      console.log(`All Gemini keys exhausted, retrying in ${waitMs}ms (attempt ${attempt + 1}/${maxRetries})...`);
-      await new Promise(r => setTimeout(r, waitMs));
-    }
-  }
-  if (seenRateLimit) lockProvider('gemini');
-  throw new Error(`Gemini failed all retries. Last error: ${lastGeminiError}`);
-};
-
-// === COOLDOWN CONFIGURATION ===
-const PROVIDER_COOLDOWN_DURATIONS: Record<string, number> = {
-  'gemini': 60000,        // 60 seconds for Gemini
-  'openrouter': 60000,    // 60 seconds for OpenRouter
-  'groq': 3600000         // 1 hour for Groq (rentan rate limit)
-};
-
-const providerCooldowns = new Map<string, number>();
-
-const isProviderLocked = (provider: string): boolean => {
-  const expires = providerCooldowns.get(provider);
-  if (!expires) return false;
-  if (Date.now() > expires) {
-    providerCooldowns.delete(provider);
-    return false;
-  }
-  return true;
-};
-
-const lockProvider = (provider: string, durationMs?: number) => {
-  const duration = durationMs ?? PROVIDER_COOLDOWN_DURATIONS[provider] ?? 60000;
-  providerCooldowns.set(provider, Date.now() + duration);
-  console.log(`🔒 Provider cooldown set for ${provider} (${duration}ms)`);
-};
-
-const getAvailableProviders = (providers: Array<'gemini' | 'openrouter' | 'groq'>): Array<'gemini' | 'openrouter' | 'groq'> => {
-  return providers.filter(p => !isProviderLocked(p));
-};
-
-const clearExpiredCooldowns = () => {
-  const now = Date.now();
-  for (const [provider, expires] of providerCooldowns.entries()) {
-    if (now > expires) {
-      providerCooldowns.delete(provider);
-      console.log(`🔓 Provider cooldown expired for ${provider}`);
-    }
-  }
-};
-
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -159,7 +79,7 @@ serve(async (req) => {
 
   const bypassCooldown = req.headers.get('x-bypass-cooldown') === 'true';
   if (bypassCooldown) {
-    providerCooldowns.clear();
+    clearAllCooldowns();
     console.log("🔓 Cooldowns cleared via x-bypass-cooldown header!");
   }
 
@@ -484,10 +404,10 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
     const byokOpenAI = req.headers.get('x-byok-openai');
     const byokOpenRouter = req.headers.get('x-byok-openrouter');
 
-    const GEMINI_API_KEY = (byokGemini || getActiveKey('GEMINI_API_KEY', geminiKeyIndex, (idx) => { geminiKeyIndex = idx; }) || '').trim();
-    const GROQ_API_KEY = (byokGroq || getActiveKey('GROQ_API_KEY', groqKeyIndex, (idx) => { groqKeyIndex = idx; }) || '').trim();
-    const OPENAI_API_KEY = (byokOpenAI || getActiveKey('OPENAI_API_KEY', openaiKeyIndex, (idx) => { openaiKeyIndex = idx; }) || '').trim();
-    const OPENROUTER_API_KEY = (byokOpenRouter || getActiveKey('OPENROUTER_API_KEY', openrouterKeyIndex, (idx) => { openrouterKeyIndex = idx; }) || '').trim();
+    const GEMINI_API_KEY = (byokGemini || getActiveKey('GEMINI_API_KEY', geminiKeyIndex, setGeminiKeyIndex) || '').trim();
+    const GROQ_API_KEY = (byokGroq || getActiveKey('GROQ_API_KEY', groqKeyIndex, setGroqKeyIndex) || '').trim();
+    const OPENAI_API_KEY = (byokOpenAI || getActiveKey('OPENAI_API_KEY', openaiKeyIndex, setOpenaiKeyIndex) || '').trim();
+    const OPENROUTER_API_KEY = (byokOpenRouter || getActiveKey('OPENROUTER_API_KEY', openrouterKeyIndex, setOpenrouterKeyIndex) || '').trim();
 
     if (!GEMINI_API_KEY) {
       throw new Error('GEMINI_API_KEY is not set');
@@ -503,6 +423,7 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
         openAI: OPENAI_API_KEY,
       },
       model: { model },
+      policy: { canUseDesktopTools: ctx.policy.canUseDesktopTools },
       stream: { isStream: !!stream, extractedImage, desktopOSMode, auditMode },
       env: runtimeEnv,
       logger: createRuntimeLogger(ctx.auth.userId, backgroundTasks, !!stream, runtimeEnv),
@@ -552,165 +473,6 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
     // ========== AKHIR MODIFIKASI ==========
 
     // allGeminiKeys initialization was moved to rctx
-
-    const callLLMWithCascade = async (
-      promptText: string,
-      systemPromptText = '',
-      chatHistory: any[] = [],
-      preferredProvider: 'gemini' | 'groq' = 'gemini',
-      extractedImage: { mimeType: string; data: string } | null = null,
-      rctx: RuntimeContext
-    ): Promise<string> => {
-      clearExpiredCooldowns();
-
-      const buildPayload = () => {
-        const payload: any = { contents: [] };
-        if (systemPromptText) payload.systemInstruction = { parts: [{ text: systemPromptText }] };
-        if (chatHistory && chatHistory.length > 0) {
-          for (const msg of chatHistory) {
-            payload.contents.push({
-              role: msg.role === 'model' ? 'model' : 'user',
-              parts: [{ text: msg.content }]
-            });
-          }
-        }
-        const userParts: any[] = [{ text: promptText }];
-        if (extractedImage) {
-          userParts.push({ inlineData: { mimeType: extractedImage.mimeType, data: extractedImage.data } });
-        }
-        payload.contents.push({ role: 'user', parts: userParts });
-        return payload;
-      };
-
-      // === CASCADE ORDER: Gemini -> Groq -> OpenRouter ===
-      // Groq is now the primary fallback (free, fast, reliable)
-      const cascadeOrder: Array<'gemini' | 'openrouter' | 'groq'> =
-        preferredProvider === 'groq'
-          ? ['groq', 'gemini', 'openrouter']
-          : ['gemini', 'groq', 'openrouter'];
-
-      const availableProviders = getAvailableProviders(cascadeOrder);
-      console.log(`🎯 Cascade order: ${availableProviders.join(' -> ')} (locked: ${cascadeOrder.filter(p => isProviderLocked(p)).join(', ') || 'none'})`);
-
-      const payload = buildPayload();
-      let lastError = '';
-      if (availableProviders.length === 0) {
-        lastError = `No available providers. Locked: ${cascadeOrder.filter(p => isProviderLocked(p)).join(', ')}`;
-      }
-      for (const provider of availableProviders) {
-        console.log(`📍 Trying provider: ${provider}`);
-        
-        try {
-          if (provider === 'gemini') {
-            if (rctx.keys.allGemini.length === 0) {
-              console.log('⏭️  Gemini: No keys available, skipping');
-              lastError += ' [gemini]: No keys available;';
-              continue;
-            }
-            console.log('🔷 Calling Gemini...');
-            const data = await callGeminiWithRetry(payload, 'gemini-2.0-flash', rctx.keys.allGemini);
-            if (data) {
-              const answer = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-              if (!rctx.stream.isStream) rctx.logger.logApiUsage('gemini', 'gemini-2.0-flash', promptText + systemPromptText, answer);
-              console.log('✅ Gemini succeeded');
-              return answer;
-            }
-            console.log('⚠️  Gemini returned null, falling back...');
-            lastError += ' [gemini]: returned null;';
-            continue;
-          }
-
-          if (provider === 'openrouter') {
-            if (!rctx.keys.openRouter) {
-              console.log('⏭️  OpenRouter: No API key available, skipping');
-              lastError += ' [openrouter]: No API key;';
-              continue;
-            }
-            console.log('🟠 Calling OpenRouter...');
-            const answer = await callOpenRouter(promptText, systemPromptText, chatHistory, true, rctx);
-            if (answer) {
-              if (!rctx.stream.isStream) rctx.logger.logApiUsage('openrouter', 'google/gemini-2.0-flash-lite-preview-02-05:free', promptText + systemPromptText, answer);
-              console.log('✅ OpenRouter succeeded');
-              return answer;
-            }
-            console.log('⚠️  OpenRouter returned empty, falling back...');
-            lastError += ' [openrouter]: returned empty;';
-            continue;
-          }
-
-          if (provider === 'groq') {
-            if (!rctx.keys.groq) {
-              console.log('⏭️  Groq: No API key available, skipping');
-              lastError += ' [groq]: No API key;';
-              continue;
-            }
-            console.log('🟣 Calling Groq (Fallback Utama)...');
-            const answer = await callGroq(promptText, systemPromptText, chatHistory, rctx);
-            if (answer) {
-              if (!rctx.stream.isStream) rctx.logger.logApiUsage('groq', 'llama-3.1-8b-instant', promptText + systemPromptText, answer);
-              console.log('✅ Groq succeeded');
-              return answer;
-            }
-            console.log('⚠️  Groq returned empty, falling back to OpenRouter...');
-            lastError += ' [groq]: returned empty;';
-            continue;
-          }
-        } catch (err: any) {
-          const message = String(err.message || err);
-          lastError += ` [${provider}]: ${message};`;
-          const isRateLimit = message.includes('429') || message.includes('rate limit') || message.includes('quota');
-          
-          if (isRateLimit) {
-            console.log(`🚫 Provider ${provider} hit rate limit (429), locking for ${PROVIDER_COOLDOWN_DURATIONS[provider]}ms`);
-            lockProvider(provider);
-            await rctx.logger.logAgentEvent('RATE_LIMIT_HIT', provider, `429 Error: ${message.substring(0, 200)}`);
-          } else {
-            await rctx.logger.logAgentEvent('FALLBACK_TRIGGERED', provider, `Error: ${message.substring(0, 200)}`);
-          }
-          console.warn(`❌ Provider ${provider} failed: ${message}`);
-        }
-      }
-
-      throw new Error('Semua provider AI sedang limit/gangguan. Detail error:' + rctx.state.explicitModelErrors + lastError);
-    };
-
-    let explicitModelErrors = '';
-
-    const runLLM = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], rctx: RuntimeContext) => {
-      if (ctx.policy.canUseDesktopTools && !systemPromptText.includes('DESKTOP NATIVE AWARENESS ENABLED')) {
-         systemPromptText += `\n[STATUS: DESKTOP NATIVE AWARENESS ENABLED]\nAnda WAJIB mengeluarkan perintah Windows di dalam tag <terminal>. DILARANG menyebut sub-agent atau menolak. Contoh: <terminal>dir %USERPROFILE%\\Desktop</terminal>\n`;
-      }
-
-      // === PRIORITAS USER-EXPLICIT MODEL SELECTION ===
-      if (!rctx.stream.extractedImage) {
-        if (rctx.model.model && rctx.model.model.includes('gpt') && !rctx.model.model.includes('openrouter') && rctx.keys.openAI) {
-          try { return await callOpenAI(promptText, systemPromptText, chatHistory, undefined, rctx); } catch(e: any) { console.warn('OpenAI failed:', e); rctx.state.explicitModelErrors += ` [openai]: ${e.message || e};`; }
-        } else if (rctx.model.model && (rctx.model.model.includes('openrouter') || rctx.model.model.startsWith('openrouter/')) && rctx.keys.openRouter) {
-          try { return await callOpenRouter(promptText, systemPromptText, chatHistory, false, rctx); } catch(e: any) { console.warn('OpenRouter failed:', e); rctx.state.explicitModelErrors += ` [openrouter]: ${e.message || e};`; }
-        } else if (rctx.model.model && rctx.model.model.startsWith('groq/') && rctx.keys.groq) {
-          try { return await callGroq(promptText, systemPromptText, chatHistory, rctx); } catch(e: any) { console.warn('Groq failed:', e); rctx.state.explicitModelErrors += ` [groq-explicit]: ${e.message || e};`; }
-        }
-      }
-
-      // === DEFAULT CASCADE: Gemini -> OpenRouter -> Groq ===
-      // Ignore complexity score, use default provider order
-      console.log(`🔄 Using default cascade: Gemini -> OpenRouter -> Groq`);
-      return await callLLMWithCascade(promptText, systemPromptText, chatHistory, 'gemini', rctx.stream.extractedImage, rctx);
-    };
-
-    // --- OTAK KHUSUS KEPALA AGENT (HEMAT KUOTA) + ANTI-LIMIT ---
-    const runCoordinatorLLM = async (promptText: string, systemPromptText = '', preferFast = false, rctx: RuntimeContext) => {
-      // === NOTE: Groq is temporarily disabled, so preferFast will use default cascade ===
-      // if (preferFast && rctx.keys.groq && !isProviderLocked('groq')) {
-      //   try {
-      //     console.log("Mamet Traffic Light: Memutar tugas ringan (Intent Router) ke Groq...");
-      //     return await callGroq(promptText, systemPromptText, [], rctx);
-      //   } catch(e) { console.warn('Traffic Light Groq failed, cascading to Gemini...', e); }
-      // }
-
-      // Always use default cascade: Gemini -> OpenRouter
-      return await callLLMWithCascade(promptText, systemPromptText, [], 'gemini', null, rctx);
-    };
 
     let replyMessage = 'Gagal memproses jawaban dari AI.';
     let groundingSources: any[] = [];
@@ -872,7 +634,7 @@ const ctx = buildUnifiedExecutionContext({ message, desktopOSMode, tools, ragEna
                    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(geminiPayload)
                  }, 15000);
                  if (attempt.ok) {
-                   geminiKeyIndex = (geminiKeyIndex + ki + 1) % rctx.keys.allGemini.length;
+                   setGeminiKeyIndex((geminiKeyIndex + ki + 1) % rctx.keys.allGemini.length);
                    res = attempt;
                    break;
                  }

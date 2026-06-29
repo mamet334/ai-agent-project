@@ -85,7 +85,15 @@ export interface ModelConfig {
 }
 
 // ─────────────────────────────────────────────
-// 5. RUNTIME STATE
+// 5. POLICY CONFIG
+// ─────────────────────────────────────────────
+
+export interface PolicyConfig {
+  canUseDesktopTools: boolean;
+}
+
+// ─────────────────────────────────────────────
+// 6. RUNTIME STATE
 // ─────────────────────────────────────────────
 
 /**
@@ -135,6 +143,9 @@ export interface RuntimeContext {
 
   /** Model configuration dari request */
   model: ModelConfig;
+
+  /** Policy parameters */
+  policy: PolicyConfig;
 
   /** Stream dan output configuration */
   stream: StreamConfig;
