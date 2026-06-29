@@ -25,6 +25,7 @@ export interface RagPipelineResult {
   finalContext: string;
   ragArray: any[];
   memoryArray: any[];
+  memoryPrompt: string;
   engineerContext: EngineerContextResult | null;
   metadata: {
     routingDecision: any;
@@ -150,6 +151,7 @@ export async function executeRagPipeline(
     finalContext: resolved.finalContext,
     ragArray,
     memoryArray,
+    memoryPrompt,
     engineerContext: engineerCtx,
     metadata: {
       routingDecision,
