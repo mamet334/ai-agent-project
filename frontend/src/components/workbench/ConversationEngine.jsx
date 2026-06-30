@@ -58,6 +58,7 @@ export default function ConversationEngine({ sessionId }) {
     setInput('');
     const newMessages = [...messages, { role: 'user', content: userMsg }];
     setMessages(newMessages);
+    console.log("[LIFECYCLE] Chat request sent");
     setIsLoading(true);
 
     try {
@@ -82,6 +83,7 @@ export default function ConversationEngine({ sessionId }) {
         body: JSON.stringify(payload)
       });
 
+      console.log(`[LIFECYCLE] LLM response received (HTTP Status: ${response.status})`);
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
       const reader = response.body.getReader();
@@ -90,6 +92,7 @@ export default function ConversationEngine({ sessionId }) {
       let aiResponseText = '';
       let processingSteps = [];
 
+      console.log("[LIFECYCLE] Stream started");
       setMessages(prev => [...prev, { role: 'model', content: '', steps: [], isStreaming: true }]);
 
       while (!done) {
@@ -111,6 +114,8 @@ export default function ConversationEngine({ sessionId }) {
                   aiResponseText += parsed.text;
                 }
                 
+                console.log("[LIFECYCLE] Stream chunk received:", dataStr);
+                
                 setMessages(prev => {
                   const next = [...prev];
                   next[next.length - 1] = {
@@ -121,13 +126,17 @@ export default function ConversationEngine({ sessionId }) {
                   };
                   return next;
                 });
-              } catch (err) {}
+                console.log("[LIFECYCLE] Bubble updated");
+              } catch (err) {
+                 console.error("[LIFECYCLE] Exception during chunk processing:", err);
+              }
             }
           }
         }
       }
       
       // Finalize
+      console.log("[LIFECYCLE] Stream completed");
       setMessages(prev => {
         const next = [...prev];
         next[next.length - 1].isStreaming = false;

@@ -68,6 +68,7 @@ class WidgetRegistry {
   }
 }
 
+console.log("[LIFECYCLE] Widget registry ready");
 export const widgetRegistry = new WidgetRegistry();
 
 // --- Default Registrations ---
