@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import WorkbenchZone from './WorkbenchZone';
 import { workspaceManager } from '../../core/workspace/WorkspaceManager';
-import AIAgent from '../AIAgent'; // This will act as our Conversation Engine for now
+import ConversationEngine from './ConversationEngine';
 
 export default function WorkspaceShell({ defaultWorkspaceId = 'ws-owner' }) {
   const [workspaceState, setWorkspaceState] = useState(workspaceManager.state);
@@ -66,12 +66,7 @@ export default function WorkspaceShell({ defaultWorkspaceId = 'ws-owner' }) {
         <div className="flex-1 flex flex-col min-w-0 bg-[#0a0a0f] relative z-0">
           
           <div className="flex-1 overflow-hidden">
-            {/* 
-               For Migration Strategy (Phase 4): We inject the old AIAgent here as the central Engine.
-               Eventually, AIAgent will be refactored strictly into a pure Conversation Engine 
-               without sidebars. For now, we mount it.
-            */}
-            <AIAgent isEmbeddedEngine={true} activeSessionId={workspaceState.sessionId} />
+            <ConversationEngine sessionId={workspaceState.sessionId} />
           </div>
 
           {/* Bottom Workbench */}
