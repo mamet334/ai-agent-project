@@ -1,9 +1,45 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Database, Activity, Target, ShieldCheck, Clock, RefreshCw } from 'lucide-react';
 import { supabase } from '../supabase';
 import EngineerChat from './EngineerChat';
 
 export default function EngineerDashboard({ userId }) {
+  const [chatWidth, setChatWidth] = useState(() => {
+    const stored = localStorage.getItem('mamet_eng_chat_width');
+    return stored ? parseInt(stored, 10) : 320;
+  });
+  const isResizing = useRef(false);
+
+  useEffect(() => {
+    const handlePointerMove = (e) => {
+      if (!isResizing.current) return;
+      let newWidth = document.body.clientWidth - e.clientX;
+      newWidth = Math.max(250, Math.min(800, newWidth));
+      setChatWidth(newWidth);
+    };
+
+    const handlePointerUp = () => {
+      if (isResizing.current) {
+        isResizing.current = false;
+        document.body.style.cursor = 'default';
+        localStorage.setItem('mamet_eng_chat_width', chatWidth.toString());
+      }
+    };
+
+    document.addEventListener('pointermove', handlePointerMove);
+    document.addEventListener('pointerup', handlePointerUp);
+    return () => {
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [chatWidth]);
+
+  const startResizing = (e) => {
+    e.preventDefault();
+    isResizing.current = true;
+    document.body.style.cursor = 'col-resize';
+  };
+
   const [tasks, setTasks] = useState([]);
   const [gaps, setGaps] = useState([]);
   const [memoryEntries, setMemoryEntries] = useState([]);
@@ -74,7 +110,7 @@ export default function EngineerDashboard({ userId }) {
     <div className="w-full h-full flex flex-col md:flex-row bg-slate-950 overflow-hidden">
       
       {/* LEFT PANEL: Dashboards */}
-      <div className="w-full md:w-2/3 lg:w-3/4 h-full flex flex-col p-6 overflow-y-auto custom-scrollbar">
+      <div className="flex-1 h-full flex flex-col p-6 overflow-y-auto custom-scrollbar min-w-[300px]">
         <div className="flex items-center justify-between mb-8 shrink-0">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-purple-500/20 rounded-xl border border-purple-500/30 shadow-[0_0_15px_rgba(168,85,247,0.3)]">
@@ -223,8 +259,17 @@ export default function EngineerDashboard({ userId }) {
         )}
       </div>
 
+      {/* RESIZE HANDLE */}
+      <div 
+        className="hidden md:block w-1.5 hover:bg-emerald-500/50 bg-slate-800 cursor-col-resize z-10 transition-colors shrink-0"
+        onPointerDown={startResizing}
+      />
+
       {/* RIGHT PANEL: Engineer Chat */}
-      <div className="w-full md:w-1/3 lg:w-1/4 h-full shrink-0 border-t md:border-t-0 md:border-l border-slate-800">
+      <div 
+        className="h-full shrink-0 border-t md:border-t-0 flex flex-col bg-slate-950" 
+        style={{ width: window.innerWidth >= 768 ? `${chatWidth}px` : '100%' }}
+      >
         <EngineerChat userId={userId} />
       </div>
     </div>
