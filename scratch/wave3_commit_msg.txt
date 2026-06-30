@@ -1,0 +1,24 @@
+docs(wave3): Project Memory Unification - GAP-NEW-005 closed
+
+ADR-0011: project_memory_entries (Supabase) as Canonical Source of Truth
+- Defines 4 artifact statuses: CANONICAL, SNAPSHOT, GENERATED, DEPRECATED
+- Documents sync rules between DB (canonical) and markdown (snapshot)
+- Migration plan: Phase 0 (docs) -> Phase 1 (backfill) -> Phase 2 (auto) -> Phase 3 (CI)
+- No runtime code changes
+
+PROJECT-MEMORY.md: Updated to SNAPSHOT status
+- Added SNAPSHOT disclaimer header with sync date
+- Added Artifact Status Registry table
+- Added ADR index (ADR-0001 to ADR-0011)
+- Added updated task registry with Wave status
+- Added Memory Sync Rule section per ADR-0011
+- Added PM-0004 and PM-0005 findings
+
+ARCHITECTURE-GAPS.md: GAP-NEW-005 marked Resolved
+
+Wave 3 summary:
+- 1 ADR created (ADR-0011)
+- 1 file updated (PROJECT-MEMORY.md)
+- 1 gap status updated (GAP-NEW-005 -> Resolved)
+- 0 runtime behavior changes
+- 0 code changes

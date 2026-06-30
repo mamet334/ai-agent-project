@@ -13,6 +13,7 @@ export interface CompressContextParams {
   nodes: any[];
   edges: any[];
   query: string;
+  rctx?: any;
 }
 
 export interface CompressedMemoryContext {
@@ -34,7 +35,7 @@ export interface CompressedMemoryContext {
  * Compresses the raw memory subgraph into an efficient cognitive payload.
  */
 export async function compressCognitiveContext(params: CompressContextParams): Promise<CompressedMemoryContext> {
-  const { intent, nodes, edges, query } = params;
+  const { intent, nodes, edges, query, rctx } = params;
 
   // =========================================================================
   // LAYER A: DETERMINISTIC EXTRACTOR
@@ -166,68 +167,42 @@ Silakan lakukan Cognitive Compression berformat JSON.`;
     let success = false;
     let llmResponse = "";
 
-    // PRIMARY COMPRESSION ENGINE: Groq (Llama 3.1) - Extremely low latency
-    const groqKeyString = Deno.env.get('GROQ_API_KEY') || '';
-    const groqKeys = groqKeyString.split(',').map(k => k.trim()).filter(Boolean);
-    
-    if (groqKeys.length > 0) {
-      try {
-        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${groqKeys[0]}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: 'llama-3.1-8b-instant',
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: userPrompt }
-            ],
-            response_format: { type: 'json_object' },
-            temperature: 0.1
-          })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          llmResponse = data.choices?.[0]?.message?.content || '{}';
-          success = true;
-        } else {
-          console.warn("[ContextCompressor] Groq HTTP Error:", res.status, await res.text());
-        }
-      } catch (e) {
-        console.warn("[ContextCompressor] Groq Fetch Error:", e);
-      }
-    }
+    // MIGRATION: GAP-006 (Capability Adapter Integration)
+    if (rctx && rctx.logger) { // Ensure CapabilityRegistry is accessible via rctx or use global
+       // We import CapabilityRegistry at the top of this file
+       const { CapabilityRegistry } = await import('../lib/adapters/adapter_registry.ts');
+       await CapabilityRegistry.initializeAdapters(rctx);
+       
+       const adapters = CapabilityRegistry.getAvailableAIAdapters(['groq', 'gemini']);
+       
+       const adapterPayload = {
+         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+         systemInstruction: { parts: [{ text: systemPrompt }] }
+       };
 
-    // FALLBACK ENGINE: Gemini Flash
-    if (!success) {
-      const geminiKeyString = Deno.env.get('GEMINI_API_KEY') || '';
-      const geminiKeys = geminiKeyString.split(',').map(k => k.trim()).filter(Boolean);
-      
-      if (geminiKeys.length > 0) {
-        try {
-          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKeys[0]}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              systemInstruction: { parts: [{ text: systemPrompt }] },
-              contents: [{ role: 'user', parts: [{ text: userPrompt }] }]
-            })
-          });
-          if (res.ok) {
-            const data = await res.json();
-            let textOutput = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-            // Clean markdown JSON ticks from Gemini response
-            llmResponse = textOutput.replace(/```json/gi, '').replace(/```/g, '').trim();
-            success = true;
-          } else {
-             console.warn("[ContextCompressor] Gemini HTTP Error:", res.status, await res.text());
-          }
-        } catch (e) {
-          console.warn("[ContextCompressor] Gemini Fetch Error:", e);
-        }
-      }
+       for (const adapter of adapters) {
+         try {
+           const adapterInput = {
+             promptText: userPrompt,
+             systemPromptText: systemPrompt,
+             chatHistory: [],
+             payload: adapterPayload,
+             forceDefaultModel: false,
+             model: adapter.name === 'GroqAdapter' ? 'llama-3.1-8b-instant' : 'gemini-2.5-flash'
+           };
+           const result = await adapter.execute(adapterInput, { trace_id: rctx?.tasks?.traceId || 'unknown' });
+           if (result && result.result) {
+             llmResponse = result.result.replace(/```json/gi, '').replace(/```/g, '').trim();
+             success = true;
+             console.log(`[ContextCompressor] Succeeded via ${adapter.name}`);
+             break;
+           }
+         } catch (e) {
+           console.warn(`[ContextCompressor] Adapter ${adapter.name} failed:`, e);
+         }
+       }
+    } else {
+       console.warn("[ContextCompressor] WARNING: rctx missing, falling back to empty response.");
     }
 
     // JSON PARSING & SAFEGUARD
