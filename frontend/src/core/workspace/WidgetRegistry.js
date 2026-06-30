@@ -67,5 +67,40 @@ class WidgetRegistry {
   }
 }
 
-// Export a singleton instance
 export const widgetRegistry = new WidgetRegistry();
+
+// --- Default Registrations ---
+import { lazy } from 'react';
+
+widgetRegistry.register({
+  id: 'widget:engineering-tasks',
+  name: 'Engineering Tasks',
+  icon: 'Target',
+  version: '1.0.0',
+  allowed_workspaces: ['ENGINEER', '*'],
+  default_size: { width: 300, height: 400 },
+  default_workbench: 'left',
+  component: lazy(() => import('../../components/widgets/EngineeringTasksWidget'))
+});
+
+widgetRegistry.register({
+  id: 'widget:architecture-gaps',
+  name: 'Architecture Gaps',
+  icon: 'Activity',
+  version: '1.0.0',
+  allowed_workspaces: ['ENGINEER', '*'],
+  default_size: { width: 300, height: 400 },
+  default_workbench: 'left',
+  component: lazy(() => import('../../components/widgets/ArchitectureGapsWidget'))
+});
+
+widgetRegistry.register({
+  id: 'widget:verification-log',
+  name: 'Verification Log',
+  icon: 'ShieldCheck',
+  version: '1.0.0',
+  allowed_workspaces: ['ENGINEER', '*'],
+  default_size: { width: 300, height: 400 },
+  default_workbench: 'right',
+  component: lazy(() => import('../../components/widgets/VerificationLogWidget'))
+});
