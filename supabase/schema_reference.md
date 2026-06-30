@@ -30,6 +30,8 @@
 | `user_id` | `uuid` |  |
 | `title` | `text` |  |
 | `messages` | `jsonb` | Nullable |
+| `workspace_id` | `uuid` | Nullable (Ref: knowledge_spaces.id) |
+| `workspace_type` | `text` | Default: 'OWNER' |
 | `created_at` | `timestamptz` | Nullable |
 | `updated_at` | `timestamptz` | Nullable |
 
