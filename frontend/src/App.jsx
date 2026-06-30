@@ -21,6 +21,7 @@ const EngineerAppWrapper = () => (
 
 const MemoryAppWrapper = () => <div className="p-8 text-slate-400">Memory App (Phase 3 Placeholder)</div>
 const ResearchAppWrapper = () => <div className="p-8 text-slate-400">Research App (Phase 3 Placeholder)</div>
+const SettingsAppWrapper = () => <div className="p-8 text-slate-400">Settings App (Phase 3 Placeholder)</div>
 
 export default function App() {
   useEffect(() => {
@@ -51,6 +52,13 @@ export default function App() {
       name: 'Research',
       iconComponent: FlaskConical,
       renderComponent: ResearchAppWrapper
+    });
+
+    applicationManager.registerApp({
+      id: 'app:settings',
+      name: 'Settings',
+      iconComponent: FlaskConical, // Just a placeholder icon, ActivityBar uses its own Settings icon for the bottom button
+      renderComponent: SettingsAppWrapper
     });
 
     // 2. Activate default app

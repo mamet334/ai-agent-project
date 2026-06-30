@@ -24,7 +24,7 @@ export default function ActivityBar() {
   return (
     <div className="w-14 h-full bg-slate-950 border-r border-slate-800 flex flex-col items-center py-4 shrink-0 z-50">
       <div className="flex flex-col gap-4 w-full items-center">
-        {appState.apps.map(app => {
+        {appState.apps.filter(app => app.id !== 'app:settings').map(app => {
           const Icon = app.iconComponent;
           return (
             <ActivityIcon 
@@ -38,7 +38,12 @@ export default function ActivityBar() {
         })}
       </div>
       <div className="mt-auto flex flex-col gap-4 w-full items-center">
-        <ActivityIcon icon={<Settings size={24} strokeWidth={1.5} />} tooltip="Settings" />
+        <ActivityIcon 
+          icon={<Settings size={24} strokeWidth={1.5} />} 
+          active={appState.activeAppId === 'app:settings'}
+          tooltip="Settings" 
+          onClick={() => applicationManager.activateApp('app:settings')}
+        />
       </div>
     </div>
   );
