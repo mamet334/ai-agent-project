@@ -9,6 +9,11 @@ class Kernel {
   }
 
   async boot() {
+    if (this.status !== 'COLD') {
+      console.log(`[KERNEL] Boot skipped (status: ${this.status})`);
+      return;
+    }
+    
     console.log('[KERNEL] Booting Mamet OS...');
     this.status = 'BOOTING';
 
