@@ -11,7 +11,8 @@ export const loadProjectMemory = async (
   userId: string,
   globalMemory: string,
   canReadMemory: boolean,
-  rctx: RuntimeContext
+  rctx: RuntimeContext,
+  workspaceId?: string | null
 ): Promise<ProjectMemoryResult> => {
   let memoryArray: any[] = [];
   
@@ -21,7 +22,8 @@ export const loadProjectMemory = async (
       userId,
       rctx.env.supabaseUrl,
       rctx.env.supabaseServiceKey,
-      rctx
+      rctx,
+      workspaceId
     );
   }
   

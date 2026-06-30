@@ -57,7 +57,8 @@ export const ContextBuilderHandler = {
         ctx.auth.userId || '',
         ctx.request.globalMemory,
         ctx.policy.canReadMemory,
-        rctx
+        rctx,
+        routingDecision?.workspace_id
     );
 
     const engineerPromise = loadEngineerContext(ctx.policy.mode, ctx.request.finalMessage, rctx);

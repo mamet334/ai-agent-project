@@ -126,7 +126,7 @@ export const retrieveMemoriesV2 = async (userPrompt: string, userId: string, sup
   }
 };
 
-export const retrieveMemories = async (userPrompt: string, userId: string, supabaseUrl: string, supabaseKey: string, rctx?: any) => {
+export const retrieveMemories = async (userPrompt: string, userId: string, supabaseUrl: string, supabaseKey: string, rctx?: any, workspaceId?: string | null) => {
   // FEATURE FLAG & FALLBACK MECHANISM
   if (MEMORY_V2_ENABLED) {
      const v2Result = await retrieveMemoriesV2(userPrompt, userId, supabaseUrl, supabaseKey, rctx);
@@ -148,7 +148,17 @@ export const retrieveMemories = async (userPrompt: string, userId: string, supab
     const dbLimit = isTemporalQuery ? 50 : 15;
     
     // Safe select to avoid missing column PostgREST errors (PGRST204)
-    let { data, error } = await supabase.from('user_memories').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(dbLimit);
+    let memoryQuery = supabase.from('user_memories').select('*').eq('user_id', userId);
+    
+    if (workspaceId) {
+       // Fetch memories that belong to this workspace OR are global
+       memoryQuery = memoryQuery.or(`workspace_id.eq.${workspaceId},workspace_id.is.null`);
+    } else {
+       // If no workspace is specified (or global context), fetch global memories only
+       memoryQuery = memoryQuery.is('workspace_id', null);
+    }
+    
+    let { data, error } = await memoryQuery.order('created_at', { ascending: false }).limit(dbLimit);
     
     if (error) {
        console.error('[MEMORY_RETRIEVAL_ERROR] DB Query failed:', error);
