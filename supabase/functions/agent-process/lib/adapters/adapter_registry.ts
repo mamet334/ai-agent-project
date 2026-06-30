@@ -1,5 +1,6 @@
 import { CapabilityAdapter } from './capability_adapter.ts';
-import { GeminiAdapter, GroqAdapter, OpenRouterAdapter } from './ai_adapter.ts';
+import { GeminiAdapter, GroqAdapter, OpenRouterAdapter, OpenAIAdapter } from './ai_adapter.ts';
+import { GeminiEmbeddingAdapter, OpenAIEmbeddingAdapter } from './embedding_adapter.ts';
 import { RuntimeContext } from '../runtime_context.ts';
 
 export class CapabilityRegistry {
@@ -13,10 +14,16 @@ export class CapabilityRegistry {
     const gemini = new GeminiAdapter(rctx);
     const groq = new GroqAdapter(rctx);
     const openRouter = new OpenRouterAdapter(rctx);
+    const openai = new OpenAIAdapter(rctx);
+    const geminiEmbedding = new GeminiEmbeddingAdapter(rctx);
+    const openaiEmbedding = new OpenAIEmbeddingAdapter(rctx);
 
     if (await gemini.initialize()) this.adapters.set('gemini', gemini);
     if (await groq.initialize()) this.adapters.set('groq', groq);
     if (await openRouter.initialize()) this.adapters.set('openrouter', openRouter);
+    if (await openai.initialize()) this.adapters.set('openai', openai);
+    if (await geminiEmbedding.initialize()) this.adapters.set('gemini_embedding', geminiEmbedding);
+    if (await openaiEmbedding.initialize()) this.adapters.set('openai_embedding', openaiEmbedding);
     
     this.isInitialized = true;
   }
@@ -30,6 +37,15 @@ export class CapabilityRegistry {
     for (const name of preferredOrder) {
       const adapter = this.adapters.get(name);
       if (adapter) available.push(adapter);
+    }
+    return available;
+  }
+
+  public static getAvailableEmbeddingAdapters(preferredOrder: string[]): CapabilityAdapter[] {
+    const available: CapabilityAdapter[] = [];
+    for (const name of preferredOrder) {
+      const adapter = this.adapters.get(name);
+      if (adapter && adapter.type === 'EMBEDDING') available.push(adapter);
     }
     return available;
   }

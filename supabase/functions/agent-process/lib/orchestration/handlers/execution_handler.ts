@@ -85,17 +85,24 @@ export const ExecutionPlannerHandler = {
                 const originalModel = model;
                 try {
                   if (subagent === 'coder' || subagent === 'debate') {
-                     console.log(`🚥 Traffic Light: Sub-agent [${subagent}] dialihkan ke OpenRouter Gemini`);
                      model = 'openrouter-google-gemini-2.0-flash-exp';
                   } else if (subagent === 'scraper' || subagent === 'communicator' || subagent === 'youtube_analyst' || subagent === 'file_analyzer') {
-                     console.log(`🚥 Traffic Light: Sub-agent [${subagent}] dialihkan ke GROQ`);
                      model = 'groq-llama-3.1';
                   } else {
-                     console.log(`🚥 Traffic Light: Sub-agent [${subagent}] menggunakan GEMINI`);
                      model = 'gemini-2.0-flash';
                   }
                   return await runLLM(prompt, sys, hist, rctx);
                 } finally { model = originalModel; }
+             };
+
+             const customRunResearch = async (prompt: string, context: string): Promise<{ text: string, sources: any[] }> => {
+                 const { callLLMWithMetadata } = await import('../../llm_orchestrator.ts');
+                 const res = await callLLMWithMetadata(
+                     `Cari informasi mengenai: ${prompt}\n\nKonteks:\n${context}`, 
+                     'Anda adalah asisten peneliti yang objektif.', 
+                     [], 'gemini', null, rctx, ['web_search']
+                 );
+                 return { text: res.result, sources: res.metadata?.sources || [] };
              };
 
              const startTime = Date.now();
@@ -112,7 +119,7 @@ export const ExecutionPlannerHandler = {
                 const executeContext = { 
                     task: fullTask, cleanTask: task, accumulatedContext, 
                     env: { ...env, signal: abortController.signal, fetch: controlledFetch }, 
-                    runLLM: customRunLLM, userId: ctx.auth.userId, signal: abortController.signal 
+                    runLLM: customRunLLM, runResearch: customRunResearch, userId: ctx.auth.userId, signal: abortController.signal 
                 };
 
                 const isolatedExecutionPromise = (async () => {

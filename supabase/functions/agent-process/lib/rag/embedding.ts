@@ -1,18 +1,36 @@
 import { RuntimeContext } from '../runtime_context.ts';
+import { CapabilityRegistry } from '../adapters/adapter_registry.ts';
 
 export const generateEmbedding = async (text: string, rctx: RuntimeContext): Promise<number[]> => {
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent?key=${rctx.keys.gemini}`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'models/gemini-embedding-2', content: { parts: [{ text }] } })
-    });
-    if (!response.ok) return [];
-    const data = await response.json();
-    return data.embedding?.values || [];
-  } catch (e) {
-    console.error("Embedding API failed", e);
-    return [];
+  // Ensure adapters are initialized (usually done in Orchestrator, but safe to call)
+  await CapabilityRegistry.initializeAdapters(rctx);
+  
+  const availableAdapters = CapabilityRegistry.getAvailableEmbeddingAdapters(['gemini_embedding', 'openai_embedding']);
+  
+  if (availableAdapters.length === 0) {
+      console.error("[Embedding] No embedding adapters available. Please check your API keys.");
+      return [];
   }
+
+  let lastError = '';
+
+  for (const adapter of availableAdapters) {
+      try {
+          // Provide trace_id if available, fallback to 'unknown'
+          const traceId = (rctx?.tasks as any)?.traceId || 'unknown';
+          const res = await adapter.execute({ text }, { trace_id: traceId });
+          
+          if (res.result && Array.isArray(res.result) && res.result.length === 768) {
+              return res.result;
+          } else {
+              console.warn(`[Embedding] Adapter ${adapter.name} returned invalid dimension (expected 768, got ${res.result?.length}).`);
+          }
+      } catch(e: any) {
+          console.warn(`[Embedding] Adapter ${adapter.name} failed:`, e.message || String(e));
+          lastError += `[${adapter.name}]: ${e.message}; `;
+      }
+  }
+  
+  console.error(`[Embedding] All embedding adapters failed. Errors: ${lastError}`);
+  return [];
 };

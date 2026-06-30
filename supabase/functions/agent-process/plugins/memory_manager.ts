@@ -1,4 +1,4 @@
-import { saveFactDirectly } from './memory_manager_v1.ts';
+import { eventBus } from '../lib/event/event_bus.ts';
 
 export default {
   name: 'memory_manager',
@@ -32,20 +32,20 @@ Tugas asli: ${task}`;
         return { output: "Tidak ada memori baru yang perlu disimpan." };
       }
 
-      // Simpan langsung ke user_memories V1 via saveFactDirectly
-      const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-
-      await saveFactDirectly({
-         user_id: userId,
-         content: parsed.content,
-         memory_type: parsed.memory_type || 'FACT',
-         confidence: parsed.confidence || 0.9,
-         source: 'user'
-      }, supabaseUrl, supabaseKey);
+      // Simpan memori melalui Event Bus secara asinkron (Sesuai ADR 11)
+      eventBus.emit({
+        type: 'Memory.WriteRequested',
+        source: 'memory_manager_plugin',
+        payload: {
+          userId: userId,
+          message: parsed.content,
+          canWriteMemory: true, // Asumsi tool hanya diizinkan berjalan di Engineer mode (diatur oleh policy)
+          mode: 'ENGINEER' // Asumsikan LITE diblok dari mengeksekusi tool ini
+        }
+      });
 
       return {
-        output: `Memori berhasil ditanamkan ke dalam otak DB: "${parsed.content}" (${parsed.memory_type})`,
+        output: `Permintaan penyimpanan memori dikirim: "${parsed.content}" (${parsed.memory_type})`,
         toolExecution: { name: 'auto_memory_extraction_v1', args: parsed }
       };
     } catch (err) {

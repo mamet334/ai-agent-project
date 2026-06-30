@@ -79,7 +79,7 @@ export const SynthesisHandler = {
       type: 'Memory.WriteRequested',
       source: 'Orchestrator',
       trace_id: rctx?.tasks?.traceId || 'unknown',
-      payload: { rctx, userId: ctx.auth.userId, message: ctx.request.finalMessage, canWriteMemory: ctx.policy.canWriteMemory }
+      payload: { rctx, userId: ctx.auth.userId, message: ctx.request.finalMessage, canWriteMemory: ctx.policy.canWriteMemory, mode: ctx.policy.mode }
     });
 
     await rctx.tasks.awaitAll();
