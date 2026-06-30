@@ -1,24 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import WorkbenchZone from './WorkbenchZone';
-import { workspaceManager } from '../../core/workspace/WorkspaceManager';
 import ConversationEngine from './ConversationEngine';
+import { useWorkspace } from '../../core/workspace/WorkspaceContext';
 
-export default function WorkspaceShell({ defaultWorkspaceId = 'ws-owner' }) {
-  const [workspaceState, setWorkspaceState] = useState(workspaceManager.state);
-
-  useEffect(() => {
-    // Subscribe to OS State
-    const unsubscribe = workspaceManager.subscribe((newState) => {
-      setWorkspaceState({ ...newState });
-    });
-
-    // Initialize
-    if (!workspaceManager.activeWorkspaceId) {
-      workspaceManager.switchWorkspace(defaultWorkspaceId);
-    }
-
-    return unsubscribe;
-  }, [defaultWorkspaceId]);
+export default function WorkspaceShell() {
+  const { osState: workspaceState, manager } = useWorkspace();
 
   if (workspaceState.status === 'INITIALIZE' || workspaceState.status === 'LOADING_MANIFEST') {
     return (
@@ -36,7 +22,7 @@ export default function WorkspaceShell({ defaultWorkspaceId = 'ws-owner' }) {
   const bottomWidgets = layout?.bottom_workbench || [];
 
   const handleResize = (position, newSize) => {
-    workspaceManager.updateLayout(position, newSize);
+    manager.updateLayout(position, newSize);
   };
 
   return (

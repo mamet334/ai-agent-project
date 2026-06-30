@@ -1,10 +1,11 @@
 import React from 'react';
 import { LayoutDashboard, Code, Database, Search } from 'lucide-react';
-import { workspaceManager } from '../../core/workspace/WorkspaceManager';
+import { useWorkspace } from '../../core/workspace/WorkspaceContext';
 
 export default function WorkspaceNavWidget() {
+  const { osState, manager } = useWorkspace();
   console.log("[LIFECYCLE] WorkspaceNavWidget loaded");
-  const activeWorkspace = workspaceManager.state.workspaceId || 'ws-owner';
+  const activeWorkspace = osState.workspaceId || 'ws-owner';
 
   const workspaces = [
     { id: 'ws-owner', name: 'Owner Workspace', icon: LayoutDashboard, type: 'OWNER' },
@@ -24,7 +25,7 @@ export default function WorkspaceNavWidget() {
         return (
           <button
             key={ws.id}
-            onClick={() => workspaceManager.switchWorkspace(ws.id)}
+            onClick={() => manager.switchWorkspace(ws.id)}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium transition-all ${
               isActive 
                 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-sm' 

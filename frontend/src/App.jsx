@@ -2,15 +2,25 @@ import React, { useEffect } from 'react'
 import OSDesktopShell from './components/os/OSDesktopShell'
 import WorkspaceShell from './components/workbench/WorkspaceShell'
 import ErrorBoundary from './components/workbench/ErrorBoundary'
-import EngineerPlaceholderApp from './components/os/EngineerPlaceholderApp'
 import { applicationManager } from './core/application/ApplicationManager'
 import { MessageSquare, Terminal, Database, FlaskConical } from 'lucide-react'
+import { WorkspaceProvider } from './core/workspace/WorkspaceContext'
 import './App.css'
 
-// We create a wrapper for Assistant that maps to WorkspaceShell for now.
-const AssistantAppWrapper = () => <WorkspaceShell defaultWorkspaceId="ws-owner" />
-const MemoryAppWrapper = () => <div className="p-8 text-slate-400">Memory App (Phase 2 Placeholder)</div>
-const ResearchAppWrapper = () => <div className="p-8 text-slate-400">Research App (Phase 2 Placeholder)</div>
+const AssistantAppWrapper = () => (
+  <WorkspaceProvider appId="app:assistant" defaultWorkspaceId="ws-owner">
+    <WorkspaceShell />
+  </WorkspaceProvider>
+)
+
+const EngineerAppWrapper = () => (
+  <WorkspaceProvider appId="app:engineer" defaultWorkspaceId="ws-engineer">
+    <WorkspaceShell />
+  </WorkspaceProvider>
+)
+
+const MemoryAppWrapper = () => <div className="p-8 text-slate-400">Memory App (Phase 3 Placeholder)</div>
+const ResearchAppWrapper = () => <div className="p-8 text-slate-400">Research App (Phase 3 Placeholder)</div>
 
 export default function App() {
   useEffect(() => {
@@ -26,7 +36,7 @@ export default function App() {
       id: 'app:engineer',
       name: 'Engineer',
       iconComponent: Terminal,
-      renderComponent: EngineerPlaceholderApp
+      renderComponent: EngineerAppWrapper
     });
 
     applicationManager.registerApp({

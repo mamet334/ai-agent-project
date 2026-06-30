@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import WidgetHost from './WidgetHost';
-import { workspaceManager } from '../../core/workspace/WorkspaceManager';
+import { useWorkspace } from '../../core/workspace/WorkspaceContext';
 
 /**
  * WorkbenchZone
