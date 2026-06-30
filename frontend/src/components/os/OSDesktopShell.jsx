@@ -1,14 +1,12 @@
 import React from 'react';
 import ActivityBar from './ActivityBar';
+import ApplicationContainer from './ApplicationContainer';
 
-export default function OSDesktopShell({ children }) {
+export default function OSDesktopShell() {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-slate-950 text-slate-200 font-sans">
       <ActivityBar />
-      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-        {/* Application Container (Phase 1: Just wraps existing behavior) */}
-        {children}
-      </div>
+      <ApplicationContainer />
     </div>
   );
 }
