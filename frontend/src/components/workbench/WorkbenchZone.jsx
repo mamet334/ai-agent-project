@@ -47,7 +47,8 @@ export default function WorkbenchZone({
     document.addEventListener('pointerup', onPointerUp);
   };
 
-  if (widgets.length === 0) return null;
+  const safeWidgets = Array.isArray(widgets) ? widgets : [];
+  if (safeWidgets.length === 0) return null;
 
   const style = {};
   if (position === 'left' || position === 'right') {
@@ -69,7 +70,7 @@ export default function WorkbenchZone({
       
       {/* Content Area */}
       <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
-        {widgets.map(widgetId => (
+        {safeWidgets.map(widgetId => (
           <div key={widgetId} className={position === 'bottom' ? "h-full inline-block w-1/3 p-1" : "min-h-[250px]"}>
              <WidgetHost widgetId={widgetId} />
           </div>
