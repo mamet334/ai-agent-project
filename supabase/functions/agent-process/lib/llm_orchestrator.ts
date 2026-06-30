@@ -58,18 +58,19 @@ const clearExpiredCooldowns = () => {
   }
 };
 
-export const callLLMWithCascade = async (
+export const callLLMWithMetadata = async (
   promptText: string,
   systemPromptText = '',
   chatHistory: any[] = [],
   preferredProvider: 'gemini' | 'groq' = 'gemini',
   extractedImage: { mimeType: string; data: string } | null = null,
-  rctx: RuntimeContext
-): Promise<string> => {
+  rctx: RuntimeContext,
+  tools: string[] = []
+): Promise<{ result: string; metadata?: any }> => {
   clearExpiredCooldowns();
   await CapabilityRegistry.initializeAdapters(rctx);
 
-  const buildPayload = () => {
+  const buildPayload = (tools: string[] = []) => {
     const payload: any = { contents: [] };
     if (systemPromptText) payload.systemInstruction = { parts: [{ text: systemPromptText }] };
     if (chatHistory && chatHistory.length > 0) {
@@ -85,6 +86,10 @@ export const callLLMWithCascade = async (
       userParts.push({ inlineData: { mimeType: extractedImage.mimeType, data: extractedImage.data } });
     }
     payload.contents.push({ role: 'user', parts: userParts });
+    
+    if (tools.includes('web_search')) {
+      payload.tools = [{ googleSearch: {} }];
+    }
     return payload;
   };
 
@@ -99,7 +104,7 @@ export const callLLMWithCascade = async (
 
   console.log(`🎯 Cascade order: ${availableAdapters.map(a => a.name).join(' -> ')}`);
 
-  const payload = buildPayload();
+  const payload = buildPayload(tools);
   let lastError = '';
 
   if (availableAdapters.length === 0) {
@@ -119,7 +124,7 @@ export const callLLMWithCascade = async (
         model: rctx.model.model
       };
 
-      const result = await adapter.execute(adapterInput, { trace_id: rctx?.tasks?.traceId || 'unknown' });
+        const result = await adapter.execute(adapterInput, { trace_id: (rctx?.tasks as any)?.traceId || 'unknown' });
       
       if (result && result.result) {
         if (!rctx.stream.isStream) {
@@ -127,7 +132,7 @@ export const callLLMWithCascade = async (
         }
         console.log(`✅ ${adapter.name} succeeded`);
         eventBus.emit({ type: 'Capability.Executed', source: adapter.name, payload: { success: true } });
-        return result.result;
+        return { result: result.result, metadata: result.metadata };
       }
 
       console.log(`⚠️  ${adapter.name} returned empty, falling back...`);
@@ -154,6 +159,18 @@ export const callLLMWithCascade = async (
   throw new Error('Semua AI Adapter gagal (limit/gangguan). Detail error:' + rctx.state.explicitModelErrors + lastError);
 };
 
+export const callLLMWithCascade = async (
+  promptText: string,
+  systemPromptText = '',
+  chatHistory: any[] = [],
+  preferredProvider: 'gemini' | 'groq' = 'gemini',
+  extractedImage: { mimeType: string; data: string } | null = null,
+  rctx: RuntimeContext
+): Promise<string> => {
+  const res = await callLLMWithMetadata(promptText, systemPromptText, chatHistory, preferredProvider, extractedImage, rctx, []);
+  return res.result;
+};
+
 export const runLLM = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], rctx: RuntimeContext) => {
   if (rctx.policy.canUseDesktopTools && !systemPromptText.includes('DESKTOP NATIVE AWARENESS ENABLED')) {
      systemPromptText += `\n[STATUS: DESKTOP NATIVE AWARENESS ENABLED]\nAnda WAJIB mengeluarkan perintah Windows di dalam tag <terminal>. DILARANG menyebut sub-agent atau menolak. Contoh: <terminal>dir %USERPROFILE%\\Desktop</terminal>\n`;
@@ -174,6 +191,60 @@ export const runLLM = async (promptText: string, systemPromptText = '', chatHist
   // Ignore complexity score, use default provider order
   console.log(`🔄 Using default cascade: Gemini -> OpenRouter -> Groq`);
   return await callLLMWithCascade(promptText, systemPromptText, chatHistory, 'gemini', rctx.stream.extractedImage, rctx);
+};
+
+export const runStreamLLM = async function*(promptText: string, systemPromptText = '', chatHistory: any[] = [], rctx: RuntimeContext): AsyncGenerator<string, void, unknown> {
+  await CapabilityRegistry.initializeAdapters(rctx);
+  const input = { promptText, systemPromptText, chatHistory, image: rctx.stream.extractedImage };
+
+  let preferredAdapters: string[] = [];
+  if (!input.image) {
+    if (rctx.model.model && rctx.model.model.includes('gpt') && !rctx.model.model.includes('openrouter')) preferredAdapters.push('openai');
+    if (rctx.model.model && (rctx.model.model.includes('openrouter') || rctx.model.model.startsWith('openrouter/'))) preferredAdapters.push('openrouter');
+    if (rctx.model.model && rctx.model.model.startsWith('groq/')) preferredAdapters.push('groq');
+  }
+
+  // Append cascade
+  for (const p of ['gemini', 'groq', 'openrouter']) {
+     if (!preferredAdapters.includes(p)) preferredAdapters.push(p);
+  }
+
+  const availableAdapters = CapabilityRegistry.getAvailableAIAdapters(preferredAdapters);
+  let lastError = '';
+  
+  if (availableAdapters.length === 0) {
+      yield `\n\n**Internal Server Error:** No AI adapters available. Check API keys.\n\n`;
+      return;
+  }
+
+  for (const adapter of availableAdapters) {
+     try {
+       console.log(`📍 Streaming via Capability Adapter: ${adapter.name}`);
+       const streamIter = adapter.stream(input, { trace_id: (rctx?.tasks as any)?.traceId || 'unknown' });
+       // Peek the first chunk to catch connection errors early
+       const firstResult = await streamIter.next();
+       
+       if (!firstResult.done && firstResult.value) {
+          yield firstResult.value;
+       }
+       
+       // If no error on first chunk, we are connected and locked in. 
+       // Yield the rest.
+       yield* streamIter;
+       return; // Success, end cascade
+     } catch(err: any) {
+       const msg = err.message || String(err);
+       console.warn(`❌ Adapter ${adapter.name} stream failed: ${msg}`);
+       if (msg.includes('FATAL_CLIENT_ERROR')) {
+           yield `\n\n**[SYSTEM HALTED] Client Error:** ${msg}\n\n`;
+           return;
+       }
+       lastError += ` [${adapter.name}]: ${msg};`;
+       yield `\n\n*(Fallback Note: ${adapter.name} failed, cascading...)*\n\n`;
+     }
+  }
+
+  yield `\n\n**Semua AI Provider sedang limit atau gangguan.**\nDetail error: ${lastError}`;
 };
 
 // --- OTAK KHUSUS KEPALA AGENT (HEMAT KUOTA) + ANTI-LIMIT ---

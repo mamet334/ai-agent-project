@@ -1,12 +1,14 @@
 import { saveFactDirectly } from './plugins/memory_manager_v1.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { detectFact } from './lib/fact_detector.ts';
+import { PolicyEngine } from './lib/verification/policy_engine.ts';
 
 export const processMemoryWriteQueue = async (
   userId: string,
   userMessage: string,
   supabaseUrl: string,
-  supabaseKey: string
+  supabaseKey: string,
+  mode: string
 ) => {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -28,6 +30,20 @@ export const processMemoryWriteQueue = async (
   };
 
   try {
+    // 0. MAEF POLICY GATE (GAP-005 Security Hardening)
+    const policyDecision = PolicyEngine.evaluate('WRITE_MEMORY', {
+      mode: mode as any,
+      evidenceCount: 0,
+      riskScore: 0,
+      appSource: 'WORKER',
+      hasActiveConflicts: false
+    });
+
+    if (!policyDecision.allow) {
+       await logAudit('REJECTED_BY_POLICY', 'UNKNOWN', 0.0, policyDecision.reason);
+       return;
+    }
+
     // 1. FACT DETECTOR GATE
     const detectorResult = detectFact(userMessage);
 

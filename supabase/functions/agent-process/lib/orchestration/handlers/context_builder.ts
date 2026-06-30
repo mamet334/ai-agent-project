@@ -1,4 +1,10 @@
-import { executeRagPipeline } from '../../rag/rag_pipeline.ts';
+import { generateEmbedding } from '../../rag/embedding.ts';
+import { searchDocuments } from '../../rag/document_search.ts';
+import { executeRoutingDecision } from '../../rag/routing_decider.ts';
+import { loadProjectMemory } from '../../rag/project_memory.ts';
+import { loadEngineerContext } from '../../rag/engineer_context.ts';
+import { buildContextPipeline } from '../../rag/context_pipeline.ts';
+
 import { validateEvidence, buildBlockedResponse } from '../../verification/evidence_validator.ts';
 import { calculateConfidence } from '../../verification/confidence_engine.ts';
 import { buildUniversalContract } from '../../verification/universal_contract.ts';
@@ -12,45 +18,84 @@ export const ContextBuilderHandler = {
     
     eventBus.emit({ type: 'Intent.Received', source: 'Orchestrator', payload: { intent: ctx.request.finalMessage }, trace_id: rctx?.tasks?.traceId || 'unknown' });
     maef.requestTransition('CONTEXT_BUILD', 'Starting Context Building Phase');
-    
-    const ragResult = await executeRagPipeline({
-      userId: ctx.auth.userId,
-      query: ctx.request.finalMessage,
-      globalMemory: ctx.request.globalMemory,
-      isRagEnabled: ctx.request.isRagEnabled,
-      effectiveRagThreshold: ctx.request.effectiveRagThreshold,
-      effectiveRagMatchCount: ctx.request.effectiveRagMatchCount,
-      canReadMemory: ctx.policy.canReadMemory,
-      mode: ctx.policy.mode,
-      ragTopK: ctx.policy.ragTopK,
-      webHint: ctx.policy.webHint,
-      agentIdentityPrompt: ctx.request.agentIdentityPrompt || '',
-      userContextPrompt: ctx.request.userContextPrompt || ''
-    }, rctx);
 
-    ctx.state.ragArray = ragResult.ragArray;
-    ctx.state.memoryArray = ragResult.memoryArray;
-    ctx.state.processingSteps.push(...ragResult.metadata.processingSteps);
-    
-    let routingDecision = ctx.request.routingDecision;
-    if (ragResult.metadata.routingDecision) {
-       routingDecision = ragResult.metadata.routingDecision;
+    // 1. ROUTING DECIDER
+    let routingDecision = await executeRoutingDecision(ctx.request.finalMessage, ctx.auth.userId, rctx);
+    if (ctx.request.routingDecision) {
+       routingDecision = ctx.request.routingDecision; // explicit override
     }
+    ctx.state.processingSteps.push(`🔍 [Routing Decider] Scope: ${routingDecision.scope} (${routingDecision.reason_code})`);
 
     if (ctx.auth.userId && ctx.request.finalMessage && typeof ctx.request.finalMessage === 'string' && ctx.request.finalMessage.trim().length > 0) {
       console.log(`[MEMORY_GATEWAY] Edge Function hanya validasi auth dan memproses LLM. Tidak ada auto-save sembunyi.`);
     }
 
-    let brain1Ids = ragResult.engineerContext?.brain1Ids || [];
-    let brain2Tasks = ragResult.engineerContext?.brain2Tasks || [];
-    let brain2Gaps = ragResult.engineerContext?.brain2Gaps || [];
-    let brain2Verifications = ragResult.engineerContext?.brain2Verifications || [];
+    // 2. SCATTER: Trigger independent services in parallel (Phase 1 Event-Driven Gatherer)
+    const ragPromise = (async () => {
+        if (!ctx.auth.userId || !ctx.request.isRagEnabled) return [];
+        try {
+            const queryEmbedding = await generateEmbedding(ctx.request.finalMessage, rctx);
+            if (queryEmbedding.length === 0) return [];
+            return await searchDocuments(
+                queryEmbedding,
+                ctx.request.finalMessage,
+                ctx.request.effectiveRagThreshold,
+                ctx.request.effectiveRagMatchCount,
+                routingDecision,
+                ctx.auth.userId,
+                rctx
+            );
+        } catch (err: any) {
+            console.error("RAG Search Error:", err);
+            if (err.message && err.message.includes("RAG_DB_FAIL")) throw err;
+            return [];
+        }
+    })();
+
+    const memoryPromise = loadProjectMemory(
+        ctx.request.finalMessage,
+        ctx.auth.userId || '',
+        ctx.request.globalMemory,
+        ctx.policy.canReadMemory,
+        rctx
+    );
+
+    const engineerPromise = loadEngineerContext(ctx.policy.mode, ctx.request.finalMessage, rctx);
+
+    // 3. GATHER: Await all parallel executions
+    const [ragArray, projectMemResult, engineerCtx] = await Promise.all([ragPromise, memoryPromise, engineerPromise]);
+
+    ctx.state.ragArray = ragArray;
+    ctx.state.memoryArray = projectMemResult.memoryArray;
+    const memoryPrompt = projectMemResult.memoryPrompt;
     
-    if (ctx.policy.mode === 'ENGINEER' && ragResult.engineerContext) {
-        ctx.brain1Entries = ragResult.engineerContext.brain1Entries;
+    ctx.state.processingSteps.push(`[RAG CONTEXT GENERATED] ragArray size=${ragArray.length}`);
+    ctx.state.processingSteps.push(`[MEMORY PROMPT GENERATED] memoryPrompt="${memoryPrompt.trim()}" memoryArray size=${projectMemResult.memoryArray.length}`);
+
+    // 4. FUSION
+    const resolvedContext = buildContextPipeline({
+        memoryArray: projectMemResult.memoryArray,
+        ragArray: ragArray,
+        message: ctx.request.finalMessage,
+        agentIdentityPrompt: ctx.request.agentIdentityPrompt || '',
+        userContextPrompt: ctx.request.userContextPrompt || '',
+        memoryPrompt: memoryPrompt,
+        engineerContextPrompt: engineerCtx.engineerContextPrompt,
+        webHint: ctx.policy.webHint,
+        mode: ctx.policy.mode,
+        ragTopK: ctx.policy.ragTopK
+    }, rctx);
+
+    let brain1Ids = engineerCtx?.brain1Ids || [];
+    let brain2Tasks = engineerCtx?.brain2Tasks || [];
+    let brain2Gaps = engineerCtx?.brain2Gaps || [];
+    let brain2Verifications = engineerCtx?.brain2Verifications || [];
+    
+    if (ctx.policy.mode === 'ENGINEER' && engineerCtx) {
+        ctx.brain1Entries = engineerCtx.brain1Entries;
     }
 
-    let fullSystemContext = ragResult.finalContext;
+    let fullSystemContext = resolvedContext.finalContext;
     
     const ragIds = ctx.state.ragArray.map((r: any) => {
        const match = r.content?.match(/\[Dari file "([^"]+)"\]/);
@@ -156,15 +201,15 @@ export const ContextBuilderHandler = {
       }
     }
 
-    const memoryContextText = ragResult.memoryArray?.length > 0 ? ragResult.memoryArray.map((m: any) => m.content).join('\n') : '';
-    const ragContextText = ragResult.ragArray?.length > 0 ? ragResult.ragArray.map((r: any) => r.content).join('\n') : '';
+    const memoryContextText = projectMemResult.memoryArray?.length > 0 ? projectMemResult.memoryArray.map((m: any) => m.content).join('\n') : '';
+    const ragContextText = ragArray?.length > 0 ? ragArray.map((r: any) => r.content).join('\n') : '';
     const brain1ContextText = brain1EntriesForConf.map((e: any) => `[${e.entry_type}] ${e.title}: ${e.content}`).join('\n');
     let brain2ContextText = '';
     if (brain2Tasks.length > 0) brain2ContextText += `Active Tasks: ${brain2Tasks.join(', ')}\n`;
     if (brain2Gaps.length > 0) brain2ContextText += `Architecture Gaps: ${brain2Gaps.join(', ')}\n`;
     if (brain2Verifications.length > 0) brain2ContextText += `Recent Verifications: ${brain2Verifications.join(', ')}\n`;
 
-    let systemBasePrompt = (ctx.request.agentIdentityPrompt || '') + (ctx.request.userContextPrompt || '') + ragResult.memoryPrompt;
+    let systemBasePrompt = (ctx.request.agentIdentityPrompt || '') + (ctx.request.userContextPrompt || '') + memoryPrompt;
     if (ctx.policy.webHint === "HIGH_PRIORITY") {
       systemBasePrompt += `\n[WEB vs RAG COMPARISON CONTRACT]: Jika terdapat perbedaan antara dokumen RAG internal dan Web/Internet, identifikasi mana yang lebih baru secara eksplisit.`;
     }

@@ -19,17 +19,17 @@ export function detectFact(text: string): IntentResult {
   let lowerText = text.trim().toLowerCase();
 
   if (lowerText.includes('?')) {
-    return { intent: 'QUESTION', score: 0.1, confidence: 'LOW', memory_eligible: false, tier: 'NONE', reason: 'Mengandung tanda tanya (?)' };
+    return { intent: 'QUESTION', score: 0.1, confidence: 'LOW', memory_eligible: false, tier: 'NONE', memory_type: 'OTHER', reason: 'Mengandung tanda tanya (?)' };
   }
 
   const questionWords = ['apa', 'siapa', 'kapan', 'dimana', 'di mana', 'kenapa', 'mengapa', 'bagaimana', 'gimana', 'berap', 'apakah'];
   if (questionWords.some(w => lowerText.includes(w))) {
-    return { intent: 'QUESTION', score: 0.15, confidence: 'LOW', memory_eligible: false, tier: 'NONE', reason: 'Mengandung kata tanya' };
+    return { intent: 'QUESTION', score: 0.15, confidence: 'LOW', memory_eligible: false, tier: 'NONE', memory_type: 'OTHER', reason: 'Mengandung kata tanya' };
   }
 
   const taskWords = ['buatkan', 'tolong', 'jelaskan', 'cari', 'generate', 'analisis', 'bantu', 'tuliskan', 'error', 'bug', 'gagal', 'coba', 'test', 'tes', 'ubah', 'hapus', 'edit', 'lihat', 'cek'];
   if (taskWords.some(w => lowerText.startsWith(w) || lowerText.includes(` ${w} `))) {
-    return { intent: 'TASK', score: 0.2, confidence: 'LOW', memory_eligible: false, tier: 'NONE', reason: 'Command / Task Request' };
+    return { intent: 'TASK', score: 0.2, confidence: 'LOW', memory_eligible: false, tier: 'NONE', memory_type: 'OTHER', reason: 'Command / Task Request' };
   }
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
