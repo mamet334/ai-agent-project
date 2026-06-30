@@ -1,6 +1,42 @@
 import React, { Suspense } from 'react';
-import { Maximize2, Minus, X } from 'lucide-react';
+import { Maximize2, Minus, X, AlertTriangle } from 'lucide-react';
 import { widgetRegistry } from '../../core/workspace/WidgetRegistry';
+
+class WidgetErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error(`[WidgetHost] Module Load Failure for ${this.props.widgetId}:`, error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full p-4 text-center bg-slate-900 border border-slate-800 rounded">
+          <AlertTriangle className="w-8 h-8 text-amber-500 mb-2" />
+          <div className="text-xs font-bold text-slate-300">Module Load Failure</div>
+          <div className="text-[10px] text-slate-500 mt-1 max-w-[200px] break-words">
+            Failed to load widget: {this.props.widgetId}
+          </div>
+          <button 
+            onClick={() => { this.setState({ hasError: false, error: null }); }}
+            className="mt-3 px-3 py-1 bg-slate-800 text-emerald-500 text-[10px] rounded border border-slate-700 hover:bg-slate-700 transition-colors"
+          >
+            Retry Loading
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function WidgetHost({ widgetId, onClose }) {
   const widgetMeta = widgetRegistry.getWidget(widgetId);
@@ -46,15 +82,17 @@ export default function WidgetHost({ widgetId, onClose }) {
       
       {/* Widget Content */}
       <div className="flex-1 overflow-auto custom-scrollbar bg-slate-950 p-2 relative">
-        <Suspense fallback={
-          <div className="flex items-center justify-center h-full text-slate-500 text-xs">
-            Loading {widgetMeta.name}...
-          </div>
-        }>
-          {WidgetComponent ? <WidgetComponent /> : (
-            <div className="text-slate-500 text-xs">No component provided</div>
-          )}
-        </Suspense>
+        <WidgetErrorBoundary widgetId={widgetId}>
+          <Suspense fallback={
+            <div className="flex items-center justify-center h-full text-slate-500 text-xs">
+              Loading {widgetMeta.name}...
+            </div>
+          }>
+            {WidgetComponent ? <WidgetComponent /> : (
+              <div className="text-slate-500 text-xs">No component provided</div>
+            )}
+          </Suspense>
+        </WidgetErrorBoundary>
       </div>
     </div>
   );
