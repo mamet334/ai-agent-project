@@ -4,6 +4,7 @@
  */
 
 import { widgetRegistry } from './WidgetRegistry';
+import { supabase } from '../../supabase';
 
 class WorkspaceManager {
   constructor() {
@@ -109,18 +110,26 @@ class WorkspaceManager {
     this.activeSessionId = `session-${manifest.id}-${Date.now()}`;
 
     // 5. Restore Layout Phase
-    // Here we would normally read from localStorage or DB using the Workspace/Session ID
+    // Fetch layout from Supabase User Metadata (or fallback to localStorage/default)
+    const { data: { user } } = await supabase.auth.getUser();
+    let userLayouts = {};
+    if (user && user.user_metadata && user.user_metadata.workspace_layouts) {
+      userLayouts = user.user_metadata.workspace_layouts;
+    }
+
     const storedLayoutStr = localStorage.getItem(`mamet_layout_${manifest.id}`);
     const storedWidgetsStr = localStorage.getItem(`mamet_widgets_${manifest.id}`);
     
-    let layout = manifest.default_layout; // fallback to manifest default
-    let widgets = {};
+    let layout = userLayouts[`layout_${manifest.id}`] || manifest.default_layout;
+    let widgets = userLayouts[`widgets_${manifest.id}`] || {};
 
-    if (storedLayoutStr) {
-      try { layout = JSON.parse(storedLayoutStr); } catch (e) {}
-    }
-    if (storedWidgetsStr) {
-      try { widgets = JSON.parse(storedWidgetsStr); } catch (e) {}
+    if (!userLayouts[`layout_${manifest.id}`]) {
+      if (storedLayoutStr) {
+        try { layout = JSON.parse(storedLayoutStr); } catch (e) {}
+      }
+      if (storedWidgetsStr) {
+        try { widgets = JSON.parse(storedWidgetsStr); } catch (e) {}
+      }
     }
 
     this._updateState({
@@ -137,15 +146,41 @@ class WorkspaceManager {
   }
 
   /**
+   * Helper to sync Layout to Supabase User Metadata
+   */
+  async _syncLayoutToSupabase(workspaceId, layout, widgets) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const currentLayouts = user.user_metadata?.workspace_layouts || {};
+      const newLayouts = {
+        ...currentLayouts,
+        [`layout_${workspaceId}`]: layout,
+        [`widgets_${workspaceId}`]: widgets
+      };
+
+      await supabase.auth.updateUser({
+        data: { workspace_layouts: newLayouts }
+      });
+      console.log(`[WorkspaceManager] Synced layout to Supabase for ${workspaceId}`);
+    } catch (e) {
+      console.error(`[WorkspaceManager] Failed to sync layout to Supabase`, e);
+    }
+  }
+
+  /**
    * Suspend Phase: Save state before leaving
    */
   async suspendCurrentSession() {
     if (!this.activeWorkspaceId) return;
     this._updateState({ status: 'SUSPENDING' });
     
-    // Save Layout Persistence
+    // Save Layout Persistence locally and remotely
     localStorage.setItem(`mamet_layout_${this.activeWorkspaceId}`, JSON.stringify(this.state.layout));
     localStorage.setItem(`mamet_widgets_${this.activeWorkspaceId}`, JSON.stringify(this.state.widgets));
+    
+    await this._syncLayoutToSupabase(this.activeWorkspaceId, this.state.layout, this.state.widgets);
     
     console.log(`[WorkspaceManager] Suspended workspace: ${this.activeWorkspaceId}`);
   }
@@ -157,6 +192,9 @@ class WorkspaceManager {
     const newLayout = { ...this.state.layout, [`${workbench}_size`]: newSize };
     this._updateState({ layout: newLayout });
     localStorage.setItem(`mamet_layout_${this.activeWorkspaceId}`, JSON.stringify(newLayout));
+    
+    // Debounce/Throttle remote sync in production, we do direct for now
+    this._syncLayoutToSupabase(this.activeWorkspaceId, newLayout, this.state.widgets);
   }
 
   /**
@@ -178,6 +216,7 @@ class WorkspaceManager {
       };
       this._updateState({ layout: newLayout });
       localStorage.setItem(`mamet_layout_${this.activeWorkspaceId}`, JSON.stringify(newLayout));
+      this._syncLayoutToSupabase(this.activeWorkspaceId, newLayout, this.state.widgets);
     }
   }
 }

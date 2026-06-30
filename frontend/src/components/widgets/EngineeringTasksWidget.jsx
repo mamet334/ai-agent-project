@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Target } from 'lucide-react';
-import { supabase } from '../../../supabase';
+import { supabase } from '../../supabase';
 
 export default function EngineeringTasksWidget() {
   const [tasks, setTasks] = useState([]);

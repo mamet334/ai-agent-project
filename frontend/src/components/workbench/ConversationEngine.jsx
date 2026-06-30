@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Terminal, Loader2, RefreshCw } from 'lucide-react';
 import { workspaceManager } from '../../core/workspace/WorkspaceManager';
-import { supabase } from '../../../supabase';
+import { supabase } from '../../supabase';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
