@@ -120,17 +120,20 @@ class WorkspaceManager {
     const storedLayoutStr = localStorage.getItem(`mamet_layout_${manifest.id}`);
     const storedWidgetsStr = localStorage.getItem(`mamet_widgets_${manifest.id}`);
     
-    let layout = userLayouts[`layout_${manifest.id}`] || manifest.default_layout;
-    let widgets = userLayouts[`widgets_${manifest.id}`] || {};
+    let rawLayout = userLayouts[`layout_${manifest.id}`];
+    let rawWidgets = userLayouts[`widgets_${manifest.id}`];
 
-    if (!userLayouts[`layout_${manifest.id}`]) {
+    if (!rawLayout) {
       if (storedLayoutStr) {
-        try { layout = JSON.parse(storedLayoutStr); } catch (e) {}
+        try { rawLayout = JSON.parse(storedLayoutStr); } catch (e) {}
       }
       if (storedWidgetsStr) {
-        try { widgets = JSON.parse(storedWidgetsStr); } catch (e) {}
+        try { rawWidgets = JSON.parse(storedWidgetsStr); } catch (e) {}
       }
     }
+
+    const layout = this._validateAndSanitizeLayout(rawLayout, manifest.default_layout);
+    const widgets = rawWidgets && typeof rawWidgets === 'object' ? rawWidgets : {};
 
     this._updateState({
       layout,
@@ -143,6 +146,29 @@ class WorkspaceManager {
     // 7. Ready Phase
     this._updateState({ status: 'READY' });
     console.log(`[WorkspaceManager] Workspace ${manifest.name} is READY.`);
+  }
+
+  /**
+   * Architectural Guarantee: State Protection
+   * Validates raw persistence data against the Manifest schema.
+   * Discards corrupted states and falls back to default safely.
+   */
+  _validateAndSanitizeLayout(rawLayout, defaultLayout) {
+    if (!rawLayout || typeof rawLayout !== 'object') {
+      return defaultLayout;
+    }
+    
+    const sanitized = { ...rawLayout };
+    
+    // Enforce array types for workbenches
+    ['left_workbench', 'right_workbench', 'bottom_workbench', 'floating_workbench'].forEach(key => {
+      if (sanitized[key] && !Array.isArray(sanitized[key])) {
+        console.warn(`[WorkspaceManager] Corrupted layout state detected for ${key}. Falling back to default.`);
+        sanitized[key] = defaultLayout[key] || [];
+      }
+    });
+
+    return sanitized;
   }
 
   /**
