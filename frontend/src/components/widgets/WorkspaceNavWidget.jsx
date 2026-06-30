@@ -3,6 +3,7 @@ import { LayoutDashboard, Code, Database, Search } from 'lucide-react';
 import { workspaceManager } from '../../core/workspace/WorkspaceManager';
 
 export default function WorkspaceNavWidget() {
+  console.log("[LIFECYCLE] WorkspaceNavWidget loaded");
   const activeWorkspace = workspaceManager.state.workspaceId || 'ws-owner';
 
   const workspaces = [
