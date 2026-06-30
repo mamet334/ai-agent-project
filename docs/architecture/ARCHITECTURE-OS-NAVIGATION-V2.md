@@ -28,17 +28,25 @@ Konsep desain baru memisahkan antara **App (Tool)** dan **Workspace (Environment
 
 ### Hirarki Baru (Desktop OS Pattern)
 ```text
-MAMET OS (Shell / Kernel)
+MAMET OS (Shell)
 │
-├── 1. APPLICATION MANAGER (Persistent State Container)
-│   ├── App: ASSISTANT (Chat Client)
-│   ├── App: ENGINEER (Code & System IDE)
-│   ├── App: MEMORY (Database / File Explorer)
-│   └── App: RESEARCH (Browser / RAG Pipeline)
+├── 1. KERNEL (Global Runtime, Boot, Panic, Recovery)
 │
-└── 2. WORKSPACE MANAGER (Environment / Project Context)
-    ├── Terikat pada Aplikasi (Setiap Aplikasi punya Workspace masing-masing)
-    └── Menentukan Dataset & Layout spesifik untuk project yang aktif
+├── 2. RUNTIME LAYER (Event Bus, Scheduler, DI)
+│
+├── 3. SERVICE MANAGER (AI Runtime, Memory, Auth, Storage)
+│
+├── 4. APPLICATION MANAGER (Register, Activate, Suspend, Destroy)
+│
+├── 5. WINDOW MANAGER (Split Screen, Floating, Docking Foundation)
+│
+├── 6. APPLICATION (Assistant, Engineer, Memory, Research)
+│
+├── 7. WORKSPACE (Environment / Project Context)
+│
+├── 8. SESSION (Active State)
+│
+└── 9. CONVERSATION (Data/UI Payload)
 ```
 
 **Matrix Aplikasi & Workspace:**
@@ -95,18 +103,23 @@ graph TD
 Untuk mencegah kerusakan sistem (sesuai *Engineering Evolution* MAEF), migrasi dilakukan dalam 3 Fase:
 
 * **Phase 1: Shell Restructuring (UI Scaffold)**
-  - Buat `ActivityBar.jsx`.
-  - Bungkus `WorkspaceShell` ke dalam struktur `AppManager`.
-  - Simulasi *Switching* statis dengan CSS `display: none` untuk memastikan tidak ada *unmount*.
+  - Bangun `ActivityBar` (Global Sidebar).
+  - Bangun `ApplicationContainer` (UI Shell).
+  - Membungkus OS tanpa mengubah perilaku/state *engine* lama.
 
 * **Phase 2: State Persistence (App Manager Core)**
   - Bangun `ApplicationManager.js`.
-  - Pisahkan `ConversationEngine` agar diikat pada `AssistantApp` *instance*, bukan pada *global workspace layout*.
+  - Implementasi siklus hidup: *Registered -> Loading -> Running -> Background -> Suspended*.
+  - Pemisahan *Global State* -> *App State* -> *Workspace State*.
 
 * **Phase 3: Contextual Workspaces**
-  - Refaktor `WorkspaceManager` agar menerima konteks *App*.
-  - Modifikasi *Supabase layout metadata* agar disimpan berdasarkan `app_id` + `workspace_id`.
-  - Hapus `WorkspaceNavWidget` lama.
+  - Isolasi Konteks: Setiap Aplikasi mendapatkan *Workspace Manager* sendiri.
+
+* **Phase 4: Runtime Layer & Service Manager**
+  - Pemisahan *dependency injection* dan *event bus* dari *Application Manager*.
+
+* **Phase 5: Window Manager Foundation**
+  - Kesiapan tata letak antarmuka agar di masa depan mendukung *Split Screen*, *Floating Window*, dan *Multiple Docking*.
 
 ---
 
