@@ -104,3 +104,14 @@ widgetRegistry.register({
   default_workbench: 'right',
   component: lazy(() => import('../../components/widgets/VerificationLogWidget'))
 });
+
+widgetRegistry.register({
+  id: 'widget:workspace-nav',
+  name: 'Workspace Navigation',
+  icon: 'Compass',
+  version: '1.0.0',
+  allowed_workspaces: ['*'],
+  default_size: { width: 250, height: 400 },
+  default_workbench: 'left',
+  component: lazy(() => import('../../components/widgets/WorkspaceNavWidget'))
+});
