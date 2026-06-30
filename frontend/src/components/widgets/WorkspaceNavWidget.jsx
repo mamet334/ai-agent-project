@@ -7,12 +7,20 @@ export default function WorkspaceNavWidget() {
   console.log("[LIFECYCLE] WorkspaceNavWidget loaded");
   const activeWorkspace = osState.workspaceId || 'ws-owner';
 
-  const workspaces = [
+  let workspaces = [
     { id: 'ws-owner', name: 'Owner Workspace', icon: LayoutDashboard, type: 'OWNER' },
     { id: 'ws-engineer', name: 'Engineer Console', icon: Code, type: 'ENGINEER' },
     { id: 'ws-memory', name: 'Memory Core', icon: Database, type: 'MEMORY' },
-    { id: 'ws-research', name: 'Research Lab', icon: Search, type: 'RESEARCH' },
+    { id: 'ws-research', name: 'Research Lab', icon: Search, type: 'RESEARCH' }
   ];
+
+  // Phase 3: Context Isolation.
+  // Prevent cross-app navigation that traps the user by hiding workspaces that belong to other Apps.
+  if (manager.appId === 'app:assistant') {
+    workspaces = workspaces.filter(w => w.id === 'ws-owner');
+  } else if (manager.appId === 'app:engineer') {
+    workspaces = workspaces.filter(w => w.id === 'ws-engineer');
+  }
 
   return (
     <div className="flex flex-col space-y-1">
