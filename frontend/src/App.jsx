@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react'
 import OSDesktopShell from './components/os/OSDesktopShell'
-import WorkspaceShell from './components/workbench/WorkspaceShell'
+import AppShell from './components/workbench/AppShell'
+import ConversationEngine from './components/workbench/ConversationEngine'
 import ErrorBoundary from './components/workbench/ErrorBoundary'
 import { serviceManager } from './core/runtime/ServiceManager'
 import { kernel } from './core/runtime/Kernel'
@@ -10,13 +11,13 @@ import './App.css'
 
 const AssistantAppWrapper = () => (
   <WorkspaceProvider appId="app:assistant" defaultWorkspaceId="ws-owner">
-    <WorkspaceShell />
+    <AppShell mainPanel={ConversationEngine} />
   </WorkspaceProvider>
 )
 
 const EngineerAppWrapper = () => (
   <WorkspaceProvider appId="app:engineer" defaultWorkspaceId="ws-engineer">
-    <WorkspaceShell />
+    <AppShell mainPanel={ConversationEngine} />
   </WorkspaceProvider>
 )
 

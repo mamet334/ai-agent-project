@@ -1,9 +1,9 @@
 import React from 'react';
 import WorkbenchZone from './WorkbenchZone';
-import ConversationEngine from './ConversationEngine';
+import FloatingWindowManager from '../os/FloatingWindowManager';
 import { useWorkspace } from '../../core/workspace/WorkspaceContext';
 
-export default function WorkspaceShell() {
+export default function AppShell({ mainPanel: MainPanelComponent }) {
   const { osState: workspaceState, manager } = useWorkspace();
 
   if (
@@ -53,11 +53,24 @@ export default function WorkspaceShell() {
           onResize={handleResize}
         />
 
-        {/* Center: The Anchor (Conversation Engine) */}
+        {/* Center: The Main Panel */}
         <div className="flex-1 flex flex-col min-w-0 bg-[#0a0a0f] relative z-0">
           
-          <div className="flex-1 overflow-hidden">
-            <ConversationEngine sessionId={workspaceState.sessionId} />
+          <div className="flex-1 overflow-hidden relative">
+            {/* Phase 5: Window Manager Foundation */}
+            {MainPanelComponent ? (
+              <MainPanelComponent sessionId={workspaceState.sessionId} />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-slate-500 font-mono text-xs">
+                [No Main Panel Provided]
+              </div>
+            )}
+            
+            {/* Phase 5: Floating Windows Layer */}
+            <FloatingWindowManager 
+              windows={layout?.floating_windows || []} 
+              sessionId={workspaceState.sessionId}
+            />
           </div>
 
           {/* Bottom Workbench */}
