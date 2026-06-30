@@ -1,5 +1,5 @@
 import { eventBus, MAEFEvent } from '../event_bus.ts';
-import { processMemoryWriteQueue } from '../../memory_write_worker.ts';
+import { processMemoryWriteQueue } from '../../../memory_write_worker.ts';
 
 export const registerMemorySubscribers = () => {
   eventBus.subscribe('Memory.WriteRequested', (event: MAEFEvent) => {
