@@ -132,6 +132,7 @@
 | `source` | `text` | Nullable |
 | `metadata` | `jsonb` | Nullable |
 | `memory_state` | `text` | Nullable |
+| `workspace_id` | `uuid` | Nullable (Ref: knowledge_spaces.id) |
 
 ## Table `ai_system_logs`
 | Name | Type | Constraints |
