@@ -129,6 +129,18 @@ export default function ConversationEngine({ sessionId }) {
                 console.log("[LIFECYCLE] Bubble updated");
               } catch (err) {
                  console.error("[LIFECYCLE] Exception during chunk processing:", err);
+                 aiResponseText += `\n\n[System Error: Gagal memproses aliran data. Root Cause: ${err.message}]`;
+                 setMessages(prev => {
+                   const next = [...prev];
+                   next[next.length - 1] = {
+                     role: 'model',
+                     content: aiResponseText,
+                     steps: [...processingSteps],
+                     isStreaming: false
+                   };
+                   return next;
+                 });
+                 done = true; // Architecturally stop the stream on unrecoverable parsing error
               }
             }
           }
