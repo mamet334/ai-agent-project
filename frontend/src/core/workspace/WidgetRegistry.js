@@ -3,6 +3,7 @@
  * Plugin-First Architecture: Components register themselves here,
  * rather than the UI hardcoding their existence.
  */
+import { lazy } from 'react';
 
 class WidgetRegistry {
   constructor() {
@@ -70,7 +71,6 @@ class WidgetRegistry {
 export const widgetRegistry = new WidgetRegistry();
 
 // --- Default Registrations ---
-import { lazy } from 'react';
 
 widgetRegistry.register({
   id: 'widget:engineering-tasks',
