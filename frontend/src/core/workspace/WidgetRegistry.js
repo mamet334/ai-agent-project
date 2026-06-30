@@ -3,7 +3,7 @@
  * Plugin-First Architecture: Components register themselves here,
  * rather than the UI hardcoding their existence.
  */
-import { lazy } from 'react';
+import { lazyLoadWithRetry } from './lazyLoadWithRetry';
 
 class WidgetRegistry {
   constructor() {
@@ -80,7 +80,7 @@ widgetRegistry.register({
   allowed_workspaces: ['ENGINEER', '*'],
   default_size: { width: 300, height: 400 },
   default_workbench: 'left',
-  component: lazy(() => import('../../components/widgets/EngineeringTasksWidget'))
+  component: lazyLoadWithRetry(() => import('../../components/widgets/EngineeringTasksWidget'), 'widget:engineering-tasks')
 });
 
 widgetRegistry.register({
@@ -91,7 +91,7 @@ widgetRegistry.register({
   allowed_workspaces: ['ENGINEER', '*'],
   default_size: { width: 300, height: 400 },
   default_workbench: 'left',
-  component: lazy(() => import('../../components/widgets/ArchitectureGapsWidget'))
+  component: lazyLoadWithRetry(() => import('../../components/widgets/ArchitectureGapsWidget'), 'widget:architecture-gaps')
 });
 
 widgetRegistry.register({
@@ -102,7 +102,7 @@ widgetRegistry.register({
   allowed_workspaces: ['ENGINEER', '*'],
   default_size: { width: 300, height: 400 },
   default_workbench: 'right',
-  component: lazy(() => import('../../components/widgets/VerificationLogWidget'))
+  component: lazyLoadWithRetry(() => import('../../components/widgets/VerificationLogWidget'), 'widget:verification-log')
 });
 
 widgetRegistry.register({
@@ -113,5 +113,5 @@ widgetRegistry.register({
   allowed_workspaces: ['*'],
   default_size: { width: 250, height: 400 },
   default_workbench: 'left',
-  component: lazy(() => import('../../components/widgets/WorkspaceNavWidget'))
+  component: lazyLoadWithRetry(() => import('../../components/widgets/WorkspaceNavWidget'), 'widget:workspace-nav')
 });
