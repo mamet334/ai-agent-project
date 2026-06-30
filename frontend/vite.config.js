@@ -10,7 +10,11 @@ export default defineConfig({
     // Run obfuscator only on our custom source code to avoid breaking third-party libraries
     obfuscator({
       include: ['src/**/*.js', 'src/**/*.jsx', 'src/**/*.ts', 'src/**/*.tsx'],
-      exclude: ['node_modules/**', '**/node_modules/**'],
+      exclude: [
+        'node_modules/**', 
+        '**/node_modules/**',
+        'src/core/workspace/WidgetRegistry.js' // Critical: Obfuscator breaks static analysis of dynamic imports
+      ],
       compact: true,
       controlFlowFlattening: false,
       deadCodeInjection: false,
