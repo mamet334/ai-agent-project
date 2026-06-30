@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Database, Activity, Target, ShieldCheck, Clock, RefreshCw } from 'lucide-react';
 import { supabase } from '../supabase';
+import EngineerChat from './EngineerChat';
 
 export default function EngineerDashboard({ userId }) {
   const [tasks, setTasks] = useState([]);
@@ -70,8 +71,11 @@ export default function EngineerDashboard({ userId }) {
   }
 
   return (
-    <div className="w-full h-full flex flex-col bg-slate-950 p-6 overflow-y-auto custom-scrollbar">
-      <div className="flex items-center justify-between mb-8">
+    <div className="w-full h-full flex flex-col md:flex-row bg-slate-950 overflow-hidden">
+      
+      {/* LEFT PANEL: Dashboards */}
+      <div className="w-full md:w-2/3 lg:w-3/4 h-full flex flex-col p-6 overflow-y-auto custom-scrollbar">
+        <div className="flex items-center justify-between mb-8 shrink-0">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-purple-500/20 rounded-xl border border-purple-500/30 shadow-[0_0_15px_rgba(168,85,247,0.3)]">
             <Database className="w-6 h-6 text-purple-400" />
@@ -212,11 +216,17 @@ export default function EngineerDashboard({ userId }) {
         </div>
 
       </div>
-      {lastUpdated && (
-        <div className="text-center mt-6 text-[10px] text-slate-600">
-          Last synced: {lastUpdated.toLocaleTimeString()}
-        </div>
-      )}
+        {lastUpdated && (
+          <div className="text-center mt-6 text-[10px] text-slate-600 shrink-0">
+            Last synced: {lastUpdated.toLocaleTimeString()}
+          </div>
+        )}
+      </div>
+
+      {/* RIGHT PANEL: Engineer Chat */}
+      <div className="w-full md:w-1/3 lg:w-1/4 h-full shrink-0 border-t md:border-t-0 md:border-l border-slate-800">
+        <EngineerChat userId={userId} />
+      </div>
     </div>
   );
 }
