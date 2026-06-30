@@ -1,6 +1,7 @@
 import { serviceManager } from './ServiceManager';
 import { EventBus } from './EventBus';
 import { ApplicationManager } from '../application/ApplicationManager';
+import { WindowManager } from '../window/WindowManager';
 import { WidgetRegistry } from '../workspace/WidgetRegistry';
 
 class Kernel {
@@ -74,6 +75,9 @@ class Kernel {
 
     const applicationManager = new ApplicationManager(serviceManager);
     serviceManager.register('ApplicationManager', applicationManager);
+
+    const windowManager = new WindowManager(serviceManager);
+    serviceManager.register('WindowManager', windowManager);
 
     this.status = 'RUNNING';
     console.log('[KERNEL] System Ready.');
