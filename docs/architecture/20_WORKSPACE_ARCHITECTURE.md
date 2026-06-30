@@ -47,6 +47,21 @@ Rendered Workspace UI
 
 Setiap Workspace wajib memiliki identitas yang diisolasi. Workspace didefinisikan secara statis maupun dinamis melalui sebuah **Workspace Manifest**.
 
+### Hierarki Workspace Session
+Workspace tidak langsung memiliki riwayat obrolan. Struktur hierarki yang benar adalah:
+```text
+Workspace
+    ↓
+Workspace Session
+    ↓
+Conversation Engine
+    ↓
+Workbench
+    ↓
+Widgets
+```
+Satu Workspace dapat memiliki banyak Session. Chat/Percakapan dimiliki oleh Session, bukan secara langsung oleh Workspace. Hal ini memungkinkan Owner membuka beberapa sesi terpisah di dalam satu Workspace tanpa mencampur aduk riwayat.
+
 ### Struktur Manifest (`workspace.json` atau DB Record)
 Sistem UI tidak boleh menebak konfigurasi. Core UI akan membaca manifest berikut saat me-*load* ruang kerja:
 ```json
@@ -140,16 +155,68 @@ Setiap Workbench bertindak sebagai *Host* yang menampung *Widget* yang telah dir
 **Workspace Manager** adalah konduktor utama UI. Proses pergantian ruang kerja di Mamet akan terasa seberat dan selengkap mengganti *Project* di IDE (seperti VSCode), bukan sekadar pindah tab di browser.
 
 **Lifecycle Pergantian Workspace:**
-1. **Unmount Phase**: Simpan state layout Workbench (posisi widget, ukuran panel) ke *localStorage/DB* dengan kunci ID Workspace. Bersihkan konteks memori aktif.
-2. **Load Manifest Phase**: Ambil `workspace.json` atau *database record* untuk Workspace baru.
-3. **Bind Context Phase**: Setel filter *Memory* dan *Knowledge* ke API.
-4. **Mount Registry Phase**: Aktifkan Widget yang tercatat dalam tata letak.
-5. **Restore Layout Phase**: Pasang kembali (render) posisi *Workbench* sesuai simpanan sesi terakhir.
-6. **Ready**: *Conversation Engine* aktif dengan konteks terisolasi penuh.
+Siklus hidup sebuah Workspace harus ketat agar implementasi konsisten:
+1. **Initialize**: Persiapan awal sebelum memori dan komponen dimuat.
+2. **Load Manifest**: Membaca definisi (kemampuan, widget default) dari `workspace.json` atau basis data.
+3. **Load Memory**: Mengikat konteks memori khusus untuk Workspace ini.
+4. **Load Knowledge**: Mengikat sumber pengetahuan (dokumen RAG) untuk Workspace.
+5. **Load Capability**: Mengaktifkan modul-modul fungsi yang diizinkan oleh Registry.
+6. **Restore Layout**: Mengembalikan posisi dan ukuran panel dari sesi sebelumnya.
+7. **Restore Session**: Memuat riwayat dari *Conversation Engine* yang relevan.
+8. **Ready**: *Workspace* siap menerima interaksi pengguna.
+9. **Suspend**: Proses dijeda sementara saat berpindah *Workspace* (state disimpan di *background*).
+10. **Resume**: Menghidupkan kembali *Workspace* dari status *Suspend*.
+11. **Archive**: Sesi ditutup sepenuhnya secara permanen.
 
 ---
 
-## 8. IMPLEMENTATION ROADMAP
+## 8. UI EVENT FLOW & MAEF INTEGRATION
+
+Sistem UI harus berjalan selaras dengan *Mamet AI Execution Framework* (MAEF). UI dilarang keras memanggil kapabilitas secara langsung (bypass). Alur event interaksi adalah sebagai berikut:
+
+```text
+Conversation Engine (User Input)
+       ↓
+UI Event (Dispatched)
+       ↓
+Workspace Manager (Membungkus event dengan konteks Session & Workspace)
+       ↓
+Capability Registry (Mengecek izin)
+       ↓
+Capability Adapter (Menerjemahkan ke protokol MAEF)
+       ↓
+MAEF Orchestrator (Backend mengeksekusi siklus)
+       ↓
+Verification (Backend melakukan validasi integritas)
+       ↓
+Response (Kembali ke Conversation Engine & dirender)
+```
+
+---
+
+## 9. RUNTIME STATE & LAYOUT PERSISTENCE
+
+### Runtime State
+Saat Workspace berada dalam fase **Ready**, Workspace Manager harus mempertahankan *state* berikut di dalam memori klien (React State / Store):
+* **Active Session**: Sesi obrolan/kerja mana yang sedang berjalan.
+* **Active Layout**: Konfigurasi tata letak visual saat ini.
+* **Active Widgets**: Daftar widget yang sedang di-*render*.
+* **Active Capability**: Izin alat yang sedang bisa digunakan.
+* **Active Memory Context**: Filter *Memory* yang sedang di-*binding* ke sesi.
+* **Active Knowledge Context**: Akses klaster RAG yang relevan.
+
+### Layout Persistence
+Layout bukanlah bagian statis dari UI, melainkan bagian dinamis dari Workspace. Setiap perubahan visual oleh pengguna akan disimpan ke dalam konfigurasi Workspace per *Session*. Data yang disimpan minimal mencakup:
+* **Ukuran panel** (lebar/tinggi Workbench).
+* **Posisi widget** (kiri, kanan, bawah, atau floating).
+* **Widget aktif** (disembunyikan atau ditampilkan).
+* **Workbench state** (terbuka/tertutup).
+* **Sesi terakhir** yang diakses.
+Layout ini akan di-*restore* secara otomatis saat pengguna kembali membuka Workspace tersebut.
+
+---
+
+## 10. IMPLEMENTATION ROADMAP
 
 Eksekusi harus dilakukan secara bertahap untuk mencegah kegagalan sistem produksi yang ada:
 
@@ -176,7 +243,7 @@ Eksekusi harus dilakukan secara bertahap untuk mencegah kegagalan sistem produks
 
 ---
 
-## 9. MIGRATION STRATEGY
+## 11. MIGRATION STRATEGY
 * **Paralel UI**: Selama Fase 1 hingga Fase 4, UI lama (`AIAgent.jsx`) tetap berjalan sebagai *default*. Sistem UI OS yang baru (contoh: `OSDesktop.jsx`) dapat diakses melalui bendera fitur (Feature Flag) tersembunyi untuk uji coba *Owner*.
 * **Seamless State Transfer**: Riwayat obrolan tidak terpengaruh, karena UI OS baru tetap membaca tabel `chats` berdasarkan filter `workspace_type` yang telah kita perkuat pada revisi sebelumnya.
 
