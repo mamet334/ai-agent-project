@@ -118,11 +118,11 @@ export class WorkspaceManager {
       userLayouts = user.user_metadata.workspace_layouts;
     }
 
-    const storedLayoutStr = localStorage.getItem(`mamet_${this.appId}_layout_${manifest.id}`);
-    const storedWidgetsStr = localStorage.getItem(`mamet_${this.appId}_widgets_${manifest.id}`);
+    const storedLayoutStr = localStorage.getItem(`mamet_v2_${this.appId}_layout_${manifest.id}`);
+    const storedWidgetsStr = localStorage.getItem(`mamet_v2_${this.appId}_widgets_${manifest.id}`);
     
-    let rawLayout = userLayouts[`${this.appId}_layout_${manifest.id}`];
-    let rawWidgets = userLayouts[`${this.appId}_widgets_${manifest.id}`];
+    let rawLayout = userLayouts[`v2_${this.appId}_layout_${manifest.id}`];
+    let rawWidgets = userLayouts[`v2_${this.appId}_widgets_${manifest.id}`];
 
     if (!rawLayout) {
       if (storedLayoutStr) {
@@ -183,8 +183,8 @@ export class WorkspaceManager {
       const currentLayouts = user.user_metadata?.workspace_layouts || {};
       const newLayouts = {
         ...currentLayouts,
-        [`${this.appId}_layout_${workspaceId}`]: layout,
-        [`${this.appId}_widgets_${workspaceId}`]: widgets
+        [`v2_${this.appId}_layout_${workspaceId}`]: layout,
+        [`v2_${this.appId}_widgets_${workspaceId}`]: widgets
       };
 
       await supabase.auth.updateUser({
@@ -204,8 +204,8 @@ export class WorkspaceManager {
     this._updateState({ status: 'SUSPENDING' });
     
     // Save Layout Persistence locally and remotely
-    localStorage.setItem(`mamet_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(this.state.layout));
-    localStorage.setItem(`mamet_${this.appId}_widgets_${this.activeWorkspaceId}`, JSON.stringify(this.state.widgets));
+    localStorage.setItem(`mamet_v2_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(this.state.layout));
+    localStorage.setItem(`mamet_v2_${this.appId}_widgets_${this.activeWorkspaceId}`, JSON.stringify(this.state.widgets));
     
     await this._syncLayoutToSupabase(this.activeWorkspaceId, this.state.layout, this.state.widgets);
     
@@ -218,7 +218,7 @@ export class WorkspaceManager {
   updateLayout(workbench, newSize) {
     const newLayout = { ...this.state.layout, [`${workbench}_size`]: newSize };
     this._updateState({ layout: newLayout });
-    localStorage.setItem(`mamet_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(newLayout));
+    localStorage.setItem(`mamet_v2_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(newLayout));
     
     // Debounce/Throttle remote sync in production, we do direct for now
     this._syncLayoutToSupabase(this.activeWorkspaceId, newLayout, this.state.widgets);
@@ -242,7 +242,7 @@ export class WorkspaceManager {
         [workbenchKey]: [...currentWidgets, widgetId] 
       };
       this._updateState({ layout: newLayout });
-      localStorage.setItem(`mamet_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(newLayout));
+      localStorage.setItem(`mamet_v2_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(newLayout));
       this._syncLayoutToSupabase(this.activeWorkspaceId, newLayout, this.state.widgets);
     }
   }
