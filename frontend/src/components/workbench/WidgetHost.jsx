@@ -1,6 +1,6 @@
 import React, { Suspense } from 'react';
 import { Maximize2, Minus, X, AlertTriangle } from 'lucide-react';
-import { widgetRegistry } from '../../core/workspace/WidgetRegistry';
+import { serviceManager } from '../../core/runtime/ServiceManager';
 
 class WidgetErrorBoundary extends React.Component {
   constructor(props) {
@@ -39,6 +39,7 @@ class WidgetErrorBoundary extends React.Component {
 }
 
 export default function WidgetHost({ widgetId, onClose }) {
+  const widgetRegistry = serviceManager.get('WidgetRegistry');
   const widgetMeta = widgetRegistry.getWidget(widgetId);
 
   if (!widgetMeta) {

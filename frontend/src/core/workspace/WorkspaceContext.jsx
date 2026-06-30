@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { WorkspaceManager } from './WorkspaceManager';
+import { serviceManager } from '../runtime/ServiceManager';
 
 const WorkspaceContext = createContext(null);
 
 export function WorkspaceProvider({ appId, defaultWorkspaceId, children }) {
-  const [manager] = useState(() => new WorkspaceManager(appId));
+  const [manager] = useState(() => new WorkspaceManager(appId, serviceManager));
   const [osState, setOsState] = useState(manager.state);
 
   useEffect(() => {

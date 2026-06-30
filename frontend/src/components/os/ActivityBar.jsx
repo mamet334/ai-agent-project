@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Settings } from 'lucide-react';
-import { applicationManager } from '../../core/application/ApplicationManager';
+import { serviceManager } from '../../core/runtime/ServiceManager';
 
 const ActivityIcon = ({ icon, active, tooltip, onClick }) => (
   <div 
@@ -15,11 +15,12 @@ const ActivityIcon = ({ icon, active, tooltip, onClick }) => (
 );
 
 export default function ActivityBar() {
+  const applicationManager = serviceManager.get('ApplicationManager');
   const [appState, setAppState] = useState(() => applicationManager.getState());
 
   useEffect(() => {
     return applicationManager.subscribe(setAppState);
-  }, []);
+  }, [applicationManager]);
 
   return (
     <div className="w-14 h-full bg-slate-950 border-r border-slate-800 flex flex-col items-center py-4 shrink-0 z-50">

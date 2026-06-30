@@ -3,12 +3,12 @@
  * Handles the lifecycle defined in 20_WORKSPACE_ARCHITECTURE.md
  */
 
-import { widgetRegistry } from './WidgetRegistry';
 import { supabase } from '../../supabase';
 
 export class WorkspaceManager {
-  constructor(appId = 'global') {
+  constructor(appId = 'global', serviceManager) {
     this.appId = appId;
+    this.serviceManager = serviceManager;
     this.activeWorkspaceId = null;
     this.activeSessionId = null;
     
