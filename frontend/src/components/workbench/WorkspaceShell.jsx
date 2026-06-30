@@ -6,10 +6,15 @@ import { useWorkspace } from '../../core/workspace/WorkspaceContext';
 export default function WorkspaceShell() {
   const { osState: workspaceState, manager } = useWorkspace();
 
-  if (workspaceState.status === 'INITIALIZE' || workspaceState.status === 'LOADING_MANIFEST') {
+  if (
+    workspaceState.status === 'IDLE' || 
+    workspaceState.status === 'INITIALIZE' || 
+    workspaceState.status === 'LOADING_MANIFEST' ||
+    workspaceState.status === 'RESTORING_LAYOUT'
+  ) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-slate-950 text-emerald-500 font-mono text-sm">
-        [Mamet OS] Loading Workspace Environment...
+        [Mamet OS] Loading Workspace Environment... ({workspaceState.status})
       </div>
     );
   }
