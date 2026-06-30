@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Terminal, Loader2, RefreshCw } from 'lucide-react';
-import { workspaceManager } from '../../core/workspace/WorkspaceManager';
+import { useWorkspace } from '../../core/workspace/WorkspaceContext';
 import { supabase } from '../../supabase';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -29,6 +29,7 @@ const parseThinkingContent = (text) => {
 };
 
 export default function ConversationEngine({ sessionId }) {
+  const { manager: workspaceManager, osState } = useWorkspace();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -66,7 +67,7 @@ export default function ConversationEngine({ sessionId }) {
       const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
       const endpoint = 'https://uuyzdjifhdfyyvpxsofu.supabase.co/functions/v1/agent-process';
       
-      const osState = workspaceManager.state;
+      // osState is taken from context
       const payload = {
         message: userMsg,
         mode: osState.capabilities.includes('cap:code-execution') ? 'ENGINEER' : 'OWNER',

@@ -6,8 +6,9 @@
 import { widgetRegistry } from './WidgetRegistry';
 import { supabase } from '../../supabase';
 
-class WorkspaceManager {
-  constructor() {
+export class WorkspaceManager {
+  constructor(appId = 'global') {
+    this.appId = appId;
     this.activeWorkspaceId = null;
     this.activeSessionId = null;
     
@@ -117,8 +118,8 @@ class WorkspaceManager {
       userLayouts = user.user_metadata.workspace_layouts;
     }
 
-    const storedLayoutStr = localStorage.getItem(`mamet_layout_${manifest.id}`);
-    const storedWidgetsStr = localStorage.getItem(`mamet_widgets_${manifest.id}`);
+    const storedLayoutStr = localStorage.getItem(`mamet_${this.appId}_layout_${manifest.id}`);
+    const storedWidgetsStr = localStorage.getItem(`mamet_${this.appId}_widgets_${manifest.id}`);
     
     let rawLayout = userLayouts[`layout_${manifest.id}`];
     let rawWidgets = userLayouts[`widgets_${manifest.id}`];
@@ -246,5 +247,3 @@ class WorkspaceManager {
     }
   }
 }
-
-export const workspaceManager = new WorkspaceManager();
