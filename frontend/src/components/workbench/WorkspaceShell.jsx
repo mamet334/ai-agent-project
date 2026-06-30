@@ -13,7 +13,7 @@ export default function WorkspaceShell() {
     workspaceState.status === 'RESTORING_LAYOUT'
   ) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-slate-950 text-emerald-500 font-mono text-sm">
+      <div className="flex h-full w-full items-center justify-center bg-slate-950 text-emerald-500 font-mono text-sm">
         [Mamet OS] Loading Workspace Environment... ({workspaceState.status})
       </div>
     );
@@ -31,7 +31,7 @@ export default function WorkspaceShell() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-black overflow-hidden font-sans text-slate-200">
+    <div className="flex flex-col h-full w-full bg-black overflow-hidden font-sans text-slate-200">
       {/* Top Header / App Bar (Optional, depending on OS design) */}
       <div className="h-10 bg-slate-900 border-b border-slate-800 flex items-center px-4 shrink-0 justify-between">
         <div className="text-xs font-bold text-slate-400">
