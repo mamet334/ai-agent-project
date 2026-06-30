@@ -156,8 +156,29 @@ class WorkspaceManager {
   updateLayout(workbench, newSize) {
     const newLayout = { ...this.state.layout, [`${workbench}_size`]: newSize };
     this._updateState({ layout: newLayout });
-    // Throttle actual DB/localStorage saving in real implementation
     localStorage.setItem(`mamet_layout_${this.activeWorkspaceId}`, JSON.stringify(newLayout));
+  }
+
+  /**
+   * Widget Control: Used by UI Events (like Conversation Engine) to pop open a widget
+   */
+  openWidgetInWorkbench(workbenchPosition, widgetId, widgetData) {
+    console.log(`[WorkspaceManager] Opening ${widgetId} in ${workbenchPosition} workbench`);
+    
+    // In a full implementation, widgetData would be passed via an EventBus to the widget.
+    // For now, we ensure the widget is visible in the layout.
+    const currentLayout = this.state.layout;
+    const workbenchKey = `${workbenchPosition}_workbench`;
+    const currentWidgets = currentLayout[workbenchKey] || [];
+    
+    if (!currentWidgets.includes(widgetId)) {
+      const newLayout = { 
+        ...currentLayout, 
+        [workbenchKey]: [...currentWidgets, widgetId] 
+      };
+      this._updateState({ layout: newLayout });
+      localStorage.setItem(`mamet_layout_${this.activeWorkspaceId}`, JSON.stringify(newLayout));
+    }
   }
 }
 
