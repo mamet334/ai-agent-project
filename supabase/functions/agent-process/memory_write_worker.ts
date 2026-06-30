@@ -8,7 +8,8 @@ export const processMemoryWriteQueue = async (
   userMessage: string,
   supabaseUrl: string,
   supabaseKey: string,
-  mode: string
+  mode: string,
+  workspaceId?: string | null
 ) => {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -66,21 +67,35 @@ export const processMemoryWriteQueue = async (
 
     // 2.5. STATE TRANSITION FOR EXCLUSIVE TYPES
     if (memoryType === 'LOCATION' || memoryType === 'JOB') {
-        await supabase
+        let updateQuery = supabase
           .from('user_memories')
           .update({ memory_state: 'HISTORICAL' })
           .eq('user_id', userId)
           .eq('memory_type', memoryType)
           .neq('memory_state', 'HISTORICAL');
+          
+        if (workspaceId) {
+          updateQuery = updateQuery.eq('workspace_id', workspaceId);
+        } else {
+          updateQuery = updateQuery.is('workspace_id', null);
+        }
+        await updateQuery;
     }
 
     // 2. DEDUPLICATION LAYER
-    const { data: existing } = await supabase
+    let existingQuery = supabase
       .from('user_memories')
       .select('id, summary, confidence')
       .eq('user_id', userId)
-      .ilike('summary', `%${extractedFact}%`)
-      .limit(1);
+      .ilike('summary', `%${extractedFact}%`);
+      
+    if (workspaceId) {
+      existingQuery = existingQuery.eq('workspace_id', workspaceId);
+    } else {
+      existingQuery = existingQuery.is('workspace_id', null);
+    }
+    
+    const { data: existing } = await existingQuery.limit(1);
 
     if (existing && existing.length > 0) {
        const newConfidence = Math.min(1.0, (existing[0].confidence || detectorResult.score) + 0.1);
@@ -96,7 +111,8 @@ export const processMemoryWriteQueue = async (
       memory_type: memoryType,
       confidence: detectorResult.score,
       source: 'rule_based_async_worker',
-      memory_state: 'ACTIVE'
+      memory_state: 'ACTIVE',
+      workspace_id: workspaceId || null
     }, supabaseUrl, supabaseKey);
 
     await logAudit('STORED', 'FACT', detectorResult.score, detectorResult.reason);
