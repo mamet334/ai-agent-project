@@ -161,8 +161,8 @@ export class WorkspaceManager {
     
     const sanitized = { ...rawLayout };
     
-    // Enforce array types for workbenches
-    ['left_workbench', 'right_workbench', 'bottom_workbench', 'floating_workbench'].forEach(key => {
+    // Enforce array types for workbenches and floating windows
+    ['left_workbench', 'right_workbench', 'bottom_workbench', 'floating_windows'].forEach(key => {
       if (sanitized[key] && !Array.isArray(sanitized[key])) {
         console.warn(`[WorkspaceManager] Corrupted layout state detected for ${key}. Falling back to default.`);
         sanitized[key] = defaultLayout[key] || [];
