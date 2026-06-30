@@ -1,5 +1,7 @@
 import { RuntimeContext } from './runtime_context.ts';
 import { callGroq, callOpenAI, callOpenRouter } from './provider_manager.ts';
+import { eventBus } from './event/event_bus.ts';
+import { CapabilityRegistry } from './adapters/adapter_registry.ts';
 
 // Global state for Round-Robin API Keys (persists across warm invocations)
 export let geminiKeyIndex = 0;
@@ -11,47 +13,7 @@ export const setOpenaiKeyIndex = (idx: number) => { openaiKeyIndex = idx; };
 export let openrouterKeyIndex = 0;
 export const setOpenrouterKeyIndex = (idx: number) => { openrouterKeyIndex = idx; };
 
-// Retry dengan exponential backoff + multi-key rotation
-const callGeminiWithRetry = async (payload: any, geminiModel: string, allGeminiKeys: string[], maxRetries = 3): Promise<any> => {
-  let seenRateLimit = false;
-  let lastGeminiError = 'Unknown error';
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    for (let ki = 0; ki < allGeminiKeys.length; ki++) {
-      const key = allGeminiKeys[(geminiKeyIndex + ki) % allGeminiKeys.length];
-      try {
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${key}`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        if (res.ok) {
-          geminiKeyIndex = (geminiKeyIndex + ki + 1) % allGeminiKeys.length; // rotate to next key
-          return await res.json();
-        }
-        const errText = await res.text();
-        lastGeminiError = `Status ${res.status}: ${errText}`;
-        if (res.status === 429) {
-          seenRateLimit = true;
-          console.warn(`Gemini key #${ki} got 429, trying next key... Details: ${errText}`);
-          continue; // Try next key
-        }
-        // Other errors - try next key too
-        console.warn(`Gemini key #${ki} error ${res.status}, trying next... Details: ${errText}`);
-      } catch (e: any) {
-        lastGeminiError = e.message || String(e);
-        console.warn(`Gemini key #${ki} network error:`, e);
-      }
-    }
-    // All keys exhausted for this attempt, wait before retry
-    if (attempt < maxRetries - 1) {
-      const waitMs = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
-      console.log(`All Gemini keys exhausted, retrying in ${waitMs}ms (attempt ${attempt + 1}/${maxRetries})...`);
-      await new Promise(r => setTimeout(r, waitMs));
-    }
-  }
-  if (seenRateLimit) lockProvider('gemini');
-  throw new Error(`Gemini failed all retries. Last error: ${lastGeminiError}`);
-};
+
 
 // === COOLDOWN CONFIGURATION ===
 const PROVIDER_COOLDOWN_DURATIONS: Record<string, number> = {
@@ -105,6 +67,7 @@ export const callLLMWithCascade = async (
   rctx: RuntimeContext
 ): Promise<string> => {
   clearExpiredCooldowns();
+  await CapabilityRegistry.initializeAdapters(rctx);
 
   const buildPayload = () => {
     const payload: any = { contents: [] };
@@ -125,96 +88,70 @@ export const callLLMWithCascade = async (
     return payload;
   };
 
-  // === CASCADE ORDER: Gemini -> Groq -> OpenRouter ===
-  // Groq is now the primary fallback (free, fast, reliable)
-  const cascadeOrder: Array<'gemini' | 'openrouter' | 'groq'> =
+  const cascadeOrder: Array<string> =
     preferredProvider === 'groq'
       ? ['groq', 'gemini', 'openrouter']
       : ['gemini', 'groq', 'openrouter'];
 
-  const availableProviders = getAvailableProviders(cascadeOrder);
-  console.log(`🎯 Cascade order: ${availableProviders.join(' -> ')} (locked: ${cascadeOrder.filter(p => isProviderLocked(p)).join(', ') || 'none'})`);
+  // Filter available via cooldown check
+  const allowedOrder = cascadeOrder.filter(p => !isProviderLocked(p));
+  const availableAdapters = CapabilityRegistry.getAvailableAIAdapters(allowedOrder);
+
+  console.log(`🎯 Cascade order: ${availableAdapters.map(a => a.name).join(' -> ')}`);
 
   const payload = buildPayload();
   let lastError = '';
-  if (availableProviders.length === 0) {
-    lastError = `No available providers. Locked: ${cascadeOrder.filter(p => isProviderLocked(p)).join(', ')}`;
+
+  if (availableAdapters.length === 0) {
+    lastError = `No available AI adapters. Locked: ${cascadeOrder.filter(p => isProviderLocked(p)).join(', ')}`;
   }
-  for (const provider of availableProviders) {
-    console.log(`📍 Trying provider: ${provider}`);
+
+  for (const adapter of availableAdapters) {
+    console.log(`📍 Executing Capability Adapter: ${adapter.name}`);
     
     try {
-      if (provider === 'gemini') {
-        if (rctx.keys.allGemini.length === 0) {
-          console.log('⏭️  Gemini: No keys available, skipping');
-          lastError += ' [gemini]: No keys available;';
-          continue;
+      const adapterInput = {
+        promptText,
+        systemPromptText,
+        chatHistory,
+        payload,
+        forceDefaultModel: adapter.name === 'OpenRouterAdapter' ? true : false,
+        model: rctx.model.model
+      };
+
+      const result = await adapter.execute(adapterInput, { trace_id: rctx?.tasks?.traceId || 'unknown' });
+      
+      if (result && result.result) {
+        if (!rctx.stream.isStream) {
+          rctx.logger.logApiUsage(result.source, rctx.model.model || 'auto', promptText + systemPromptText, result.result);
         }
-        console.log('🔷 Calling Gemini...');
-        const data = await callGeminiWithRetry(payload, 'gemini-2.0-flash', rctx.keys.allGemini);
-        if (data) {
-          const answer = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          if (!rctx.stream.isStream) rctx.logger.logApiUsage('gemini', 'gemini-2.0-flash', promptText + systemPromptText, answer);
-          console.log('✅ Gemini succeeded');
-          return answer;
-        }
-        console.log('⚠️  Gemini returned null, falling back...');
-        lastError += ' [gemini]: returned null;';
-        continue;
+        console.log(`✅ ${adapter.name} succeeded`);
+        eventBus.emit({ type: 'Capability.Executed', source: adapter.name, payload: { success: true } });
+        return result.result;
       }
 
-      if (provider === 'openrouter') {
-        if (!rctx.keys.openRouter) {
-          console.log('⏭️  OpenRouter: No API key available, skipping');
-          lastError += ' [openrouter]: No API key;';
-          continue;
-        }
-        console.log('🟠 Calling OpenRouter...');
-        const answer = await callOpenRouter(promptText, systemPromptText, chatHistory, true, rctx);
-        if (answer) {
-          if (!rctx.stream.isStream) rctx.logger.logApiUsage('openrouter', 'google/gemini-2.0-flash-lite-preview-02-05:free', promptText + systemPromptText, answer);
-          console.log('✅ OpenRouter succeeded');
-          return answer;
-        }
-        console.log('⚠️  OpenRouter returned empty, falling back...');
-        lastError += ' [openrouter]: returned empty;';
-        continue;
-      }
-
-      if (provider === 'groq') {
-        if (!rctx.keys.groq) {
-          console.log('⏭️  Groq: No API key available, skipping');
-          lastError += ' [groq]: No API key;';
-          continue;
-        }
-        console.log('🟣 Calling Groq (Fallback Utama)...');
-        const answer = await callGroq(promptText, systemPromptText, chatHistory, rctx);
-        if (answer) {
-          if (!rctx.stream.isStream) rctx.logger.logApiUsage('groq', 'llama-3.1-8b-instant', promptText + systemPromptText, answer);
-          console.log('✅ Groq succeeded');
-          return answer;
-        }
-        console.log('⚠️  Groq returned empty, falling back to OpenRouter...');
-        lastError += ' [groq]: returned empty;';
-        continue;
-      }
+      console.log(`⚠️  ${adapter.name} returned empty, falling back...`);
+      lastError += ` [${adapter.name}]: returned empty;`;
+      
     } catch (err: any) {
       const message = String(err.message || err);
-      lastError += ` [${provider}]: ${message};`;
-      const isRateLimit = message.includes('429') || message.includes('rate limit') || message.includes('quota');
+      lastError += ` [${adapter.name}]: ${message};`;
+      const isRateLimit = message.includes('429') || message.includes('rate limit') || message.includes('RATE_LIMIT') || message.includes('quota');
+      
+      const providerKey = adapter.name.toLowerCase().replace('adapter', '');
       
       if (isRateLimit) {
-        console.log(`🚫 Provider ${provider} hit rate limit (429), locking for ${PROVIDER_COOLDOWN_DURATIONS[provider]}ms`);
-        lockProvider(provider);
-        await rctx.logger.logAgentEvent('RATE_LIMIT_HIT', provider, `429 Error: ${message.substring(0, 200)}`);
+        console.log(`🚫 Adapter ${adapter.name} hit rate limit (429), locking for ${PROVIDER_COOLDOWN_DURATIONS[providerKey] || 60000}ms`);
+        lockProvider(providerKey);
+        await rctx.logger.logAgentEvent('RATE_LIMIT_HIT', providerKey, `429 Error: ${message.substring(0, 200)}`);
       } else {
-        await rctx.logger.logAgentEvent('FALLBACK_TRIGGERED', provider, `Error: ${message.substring(0, 200)}`);
+        await rctx.logger.logAgentEvent('FALLBACK_TRIGGERED', providerKey, `Error: ${message.substring(0, 200)}`);
       }
-      console.warn(`❌ Provider ${provider} failed: ${message}`);
+      console.warn(`❌ Adapter ${adapter.name} failed: ${message}`);
     }
   }
 
-  throw new Error('Semua provider AI sedang limit/gangguan. Detail error:' + rctx.state.explicitModelErrors + lastError);
+  throw new Error('Semua AI Adapter gagal (limit/gangguan). Detail error:' + rctx.state.explicitModelErrors + lastError);
 };
 
 export const runLLM = async (promptText: string, systemPromptText = '', chatHistory: any[] = [], rctx: RuntimeContext) => {

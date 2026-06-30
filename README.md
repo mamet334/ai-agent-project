@@ -1,96 +1,145 @@
-# 🤖 AI Agent - Multi-Tool Integration Platform
+# MAMET ECOSYSTEM
 
-Aplikasi AI Agent dengan integrasi tools, berjalan di web & API backend.
+> **Build Knowledge. Build Architecture. Build Systems.**
 
-## 📋 Quick Start
+---
 
-### 1. Install Dependencies
+## OVERVIEW
 
-```bash
-# Frontend
-cd frontend
-npm install
+Mamet Ecosystem adalah platform AI pribadi yang dibangun di atas **MAEF (Mamet Architecture & Engineering Framework)**.
 
-# Backend (tab/terminal baru)
-cd backend
-npm install
-```
+Tujuan utama proyek ini bukan membuat chatbot, tetapi membangun **AI Ecosystem** yang:
 
-### 2. Setup Environment
+- dikendalikan penuh oleh Owner
+- memiliki identitas sendiri
+- memiliki Knowledge sendiri
+- memiliki Memory sendiri
+- modular
+- portable
+- vendor-independent
+- dapat terus berkembang tanpa kehilangan identitas
 
-```bash
-# Copy .env di backend folder
-cp .env.example .env
+LLM bukan identitas sistem.
 
-# Edit .env dan masukkan API key Anda
-# ANTHROPIC_API_KEY=sk-ant-xxxxx
-```
+LLM hanyalah Reasoning Engine yang dapat diganti kapan saja.
 
-### 3. Run Project
+---
 
-```bash
-# Terminal 1 - Frontend
-cd frontend
-npm run dev
-# Buka http://localhost:5173
+# BEFORE YOU START
 
-# Terminal 2 - Backend
-cd backend
-npm start
-# Server running di http://localhost:3000
-```
+**Jangan langsung membaca Source Code.**
 
-## 📁 Folder Structure
+Seluruh engineer, AI Agent, maupun kontributor **WAJIB** membaca Constitution terlebih dahulu.
+
+Mulai dari:
 
 ```
-ai-agent-complete/
-├── frontend/                 # React App
-│   ├── src/
-│   │   ├── components/
-│   │   │   └── AIAgent.jsx
-│   │   ├── App.jsx
-│   │   └── main.jsx
-│   ├── package.json
-│   └── vite.config.js
-│
-├── backend/                  # Node.js Server
-│   ├── server.js
-│   ├── tools-config.js
-│   ├── package.json
-│   └── .env.example
-│
-└── docs/                     # Documentation
-    └── ARCHITECTURE.md
+constitution/README.md
 ```
 
-## 🛠️ Tools Available
+Kemudian ikuti urutan dokumen yang terdapat di dalam folder Constitution.
 
-- Web Search
-- Code Executor
-- API Caller
-- Slack Integration
-- Database Queries
-- Email Sender
-- File System
-- Custom APIs
+Repository hanyalah implementasi.
 
-## 📚 Documentation
+Constitution adalah Source of Truth.
 
-- `README.md` - Project overview
-- `QUICK-START-GUIDE.md` - Detailed setup
-- `docs/ARCHITECTURE.md` - Technical details
+---
 
-## 🚀 Next Steps
+# PROJECT STRUCTURE
 
-1. Run `npm install` di frontend & backend
-2. Setup `.env` dengan API keys
-3. Start frontend & backend
-4. Open browser & test
+```
+mamet-ai/
 
-## 💡 Tips
+├── constitution/     ← Source of Truth
+├── docs/             ← User & Technical Documentation
+├── src/              ← Implementation
+├── tests/            ← Testing
+├── scripts/          ← Automation
+└── package.json
+```
 
-- Buka project di Claude Desktop untuk bantuan
-- Gunakan Claude Code untuk development
-- Check docs untuk detil lebih lanjut
+---
 
-Happy Coding! 🎉
+# ENGINEERING PRINCIPLE
+
+Urutan engineering yang benar:
+
+```
+Constitution
+
+↓
+
+Vision
+
+↓
+
+Architecture
+
+↓
+
+Engineering
+
+↓
+
+Repository
+
+↓
+
+Runtime
+```
+
+Jangan pernah membalik urutan tersebut.
+
+---
+
+# FOR AI ENGINEERS
+
+Jika Anda adalah:
+
+- Antigravity
+- ChatGPT
+- Codex
+- Claude
+- Cursor
+- Copilot
+- AI Agent lainnya
+
+Jangan langsung membuat patch.
+
+Jangan langsung melakukan refactor.
+
+Jangan langsung melakukan coding.
+
+Pahami Constitution terlebih dahulu.
+
+Seluruh implementasi harus mengikuti Constitution.
+
+---
+
+# PROJECT GOAL
+
+Target utama proyek ini bukan menghasilkan kode sebanyak mungkin.
+
+Target utama adalah membangun platform AI yang:
+
+- stabil
+- modular
+- mudah dipelihara
+- dapat berkembang
+- tetap konsisten terhadap Constitution
+
+---
+
+# MOTTO
+
+> Repository is Implementation.
+
+> Constitution is the Source of Truth.
+
+> Think Constitution First.
+
+> Think Architecture First.
+
+> Think Root Cause First.
+
+> Build Systems, Not Just Code.
