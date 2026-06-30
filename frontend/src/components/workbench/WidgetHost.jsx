@@ -1,0 +1,61 @@
+import React, { Suspense } from 'react';
+import { Maximize2, Minus, X } from 'lucide-react';
+import { widgetRegistry } from '../../core/workspace/WidgetRegistry';
+
+export default function WidgetHost({ widgetId, onClose }) {
+  const widgetMeta = widgetRegistry.getWidget(widgetId);
+
+  if (!widgetMeta) {
+    return (
+      <div className="p-4 bg-red-900/20 border border-red-500/50 rounded text-red-400 text-xs">
+        Widget Not Found: {widgetId}
+      </div>
+    );
+  }
+
+  const WidgetComponent = widgetMeta.component;
+
+  return (
+    <div className="flex flex-col bg-slate-900 border border-slate-800 rounded-lg overflow-hidden h-full">
+      {/* Widget Header */}
+      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-800/50 border-b border-slate-800 cursor-move shrink-0">
+        <div className="flex items-center gap-2">
+          {/* We assume lucide icons will be handled elsewhere or passed statically, 
+              for now we just use a generic dot if icon string is passed */}
+          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span className="text-xs font-semibold text-slate-300">{widgetMeta.name}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button className="p-1 hover:bg-slate-700 text-slate-500 hover:text-slate-300 rounded transition-colors" title="Minimize">
+            <Minus className="w-3 h-3" />
+          </button>
+          <button className="p-1 hover:bg-slate-700 text-slate-500 hover:text-slate-300 rounded transition-colors" title="Maximize">
+            <Maximize2 className="w-3 h-3" />
+          </button>
+          {onClose && (
+            <button 
+              onClick={() => onClose(widgetId)}
+              className="p-1 hover:bg-red-500/20 text-slate-500 hover:text-red-400 rounded transition-colors" 
+              title="Close"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      </div>
+      
+      {/* Widget Content */}
+      <div className="flex-1 overflow-auto custom-scrollbar bg-slate-950 p-2 relative">
+        <Suspense fallback={
+          <div className="flex items-center justify-center h-full text-slate-500 text-xs">
+            Loading {widgetMeta.name}...
+          </div>
+        }>
+          {WidgetComponent ? <WidgetComponent /> : (
+            <div className="text-slate-500 text-xs">No component provided</div>
+          )}
+        </Suspense>
+      </div>
+    </div>
+  );
+}
