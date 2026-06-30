@@ -2,7 +2,8 @@ import React, { useEffect } from 'react'
 import OSDesktopShell from './components/os/OSDesktopShell'
 import WorkspaceShell from './components/workbench/WorkspaceShell'
 import ErrorBoundary from './components/workbench/ErrorBoundary'
-import { applicationManager } from './core/application/ApplicationManager'
+import { serviceManager } from './core/runtime/ServiceManager'
+import { kernel } from './core/runtime/Kernel'
 import { MessageSquare, Terminal, Database, FlaskConical } from 'lucide-react'
 import { WorkspaceProvider } from './core/workspace/WorkspaceContext'
 import './App.css'
@@ -24,9 +25,18 @@ const ResearchAppWrapper = () => <div className="p-8 text-slate-400">Research Ap
 const SettingsAppWrapper = () => <div className="p-8 text-slate-400">Settings App (Phase 3 Placeholder)</div>
 
 export default function App() {
+  const [isBooted, setIsBooted] = React.useState(false);
+
   useEffect(() => {
-    // 1. Register applications to the App Manager
-    applicationManager.registerApp({
+    const initOS = async () => {
+      // Phase 4: Boot Kernel
+      await kernel.boot();
+      setIsBooted(true);
+
+      const applicationManager = serviceManager.get('ApplicationManager');
+
+      // 1. Register applications to the App Manager
+      applicationManager.registerApp({
       id: 'app:assistant',
       name: 'Assistant',
       iconComponent: MessageSquare,
@@ -63,7 +73,18 @@ export default function App() {
 
     // 2. Activate default app
     applicationManager.activateApp('app:assistant');
+
+    };
+    initOS();
   }, []);
+
+  if (!isBooted) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-950 text-emerald-500 font-mono text-sm">
+        [Kernel] Boot sequence initiated...
+      </div>
+    );
+  }
 
   return (
     <ErrorBoundary>

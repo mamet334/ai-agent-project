@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { applicationManager } from '../../core/application/ApplicationManager';
+import { serviceManager } from '../../core/runtime/ServiceManager';
 
 export default function ApplicationContainer() {
+  const applicationManager = serviceManager.get('ApplicationManager');
   const [appState, setAppState] = useState(() => applicationManager.getState());
 
   useEffect(() => {
     return applicationManager.subscribe(setAppState);
-  }, []);
+  }, [applicationManager]);
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden relative bg-slate-950">

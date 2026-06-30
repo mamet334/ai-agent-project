@@ -4,22 +4,20 @@
  * NOT a Service Locator. NOT an Event Bus.
  */
 class ApplicationManager {
-  constructor() {
+  constructor(serviceManager) {
+    this.serviceManager = serviceManager;
     this.apps = new Map();
     this.activeAppId = null;
-    this.listeners = new Set();
   }
 
   subscribe(listener) {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+    const eventBus = this.serviceManager.get('EventBus');
+    return eventBus.on('APP_STATE_CHANGED', listener);
   }
 
   notify() {
-    const state = this.getState();
-    for (const listener of this.listeners) {
-      listener(state);
-    }
+    const eventBus = this.serviceManager.get('EventBus');
+    eventBus.emit('APP_STATE_CHANGED', this.getState());
   }
 
   getState() {
@@ -72,4 +70,4 @@ class ApplicationManager {
   }
 }
 
-export const applicationManager = new ApplicationManager();
+export { ApplicationManager };

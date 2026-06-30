@@ -6,7 +6,8 @@
 import { lazyLoadWithRetry } from './lazyLoadWithRetry';
 
 class WidgetRegistry {
-  constructor() {
+  constructor(serviceManager) {
+    this.serviceManager = serviceManager;
     this.widgets = new Map();
   }
 
@@ -69,50 +70,4 @@ class WidgetRegistry {
 }
 
 console.log("[LIFECYCLE] Widget registry ready");
-export const widgetRegistry = new WidgetRegistry();
-
-// --- Default Registrations ---
-
-widgetRegistry.register({
-  id: 'widget:engineering-tasks',
-  name: 'Engineering Tasks',
-  icon: 'Target',
-  version: '1.0.0',
-  allowed_workspaces: ['ENGINEER', '*'],
-  default_size: { width: 300, height: 400 },
-  default_workbench: 'left',
-  component: lazyLoadWithRetry(() => import('../../components/widgets/EngineeringTasksWidget'), 'widget:engineering-tasks')
-});
-
-widgetRegistry.register({
-  id: 'widget:architecture-gaps',
-  name: 'Architecture Gaps',
-  icon: 'Activity',
-  version: '1.0.0',
-  allowed_workspaces: ['ENGINEER', '*'],
-  default_size: { width: 300, height: 400 },
-  default_workbench: 'left',
-  component: lazyLoadWithRetry(() => import('../../components/widgets/ArchitectureGapsWidget'), 'widget:architecture-gaps')
-});
-
-widgetRegistry.register({
-  id: 'widget:verification-log',
-  name: 'Verification Log',
-  icon: 'ShieldCheck',
-  version: '1.0.0',
-  allowed_workspaces: ['ENGINEER', '*'],
-  default_size: { width: 300, height: 400 },
-  default_workbench: 'right',
-  component: lazyLoadWithRetry(() => import('../../components/widgets/VerificationLogWidget'), 'widget:verification-log')
-});
-
-widgetRegistry.register({
-  id: 'widget:workspace-nav',
-  name: 'Workspace Navigation',
-  icon: 'Compass',
-  version: '1.0.0',
-  allowed_workspaces: ['*'],
-  default_size: { width: 250, height: 400 },
-  default_workbench: 'left',
-  component: lazyLoadWithRetry(() => import('../../components/widgets/WorkspaceNavWidget'), 'widget:workspace-nav')
-});
+export { WidgetRegistry };
