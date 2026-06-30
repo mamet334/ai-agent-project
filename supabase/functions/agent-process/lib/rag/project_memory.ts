@@ -20,7 +20,8 @@ export const loadProjectMemory = async (
       finalMessage,
       userId,
       rctx.env.supabaseUrl,
-      rctx.env.supabaseServiceKey
+      rctx.env.supabaseServiceKey,
+      rctx
     );
   }
   

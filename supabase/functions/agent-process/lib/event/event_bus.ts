@@ -9,6 +9,9 @@ export type EventType =
   | 'Evidence.Evaluated'
   | 'Memory.WriteRequested'
   | 'Response.Generated'
+  | 'Tool.Invoked'
+  | 'Tool.Requested'
+  | 'Tool.Completed'
   | 'Error.Occurred';
 
 export interface MAEFEvent {

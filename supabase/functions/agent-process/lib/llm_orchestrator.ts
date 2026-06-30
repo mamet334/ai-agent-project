@@ -62,7 +62,7 @@ export const callLLMWithMetadata = async (
   promptText: string,
   systemPromptText = '',
   chatHistory: any[] = [],
-  preferredProvider: 'gemini' | 'groq' = 'gemini',
+  preferredProvider: string = 'gemini',
   extractedImage: { mimeType: string; data: string } | null = null,
   rctx: RuntimeContext,
   tools: string[] = []
@@ -93,10 +93,12 @@ export const callLLMWithMetadata = async (
     return payload;
   };
 
-  const cascadeOrder: Array<string> =
-    preferredProvider === 'groq'
-      ? ['groq', 'gemini', 'openrouter']
-      : ['gemini', 'groq', 'openrouter'];
+  let cascadeOrder: Array<string> = ['gemini', 'groq', 'openrouter', 'openai'];
+  
+  if (preferredProvider && cascadeOrder.includes(preferredProvider)) {
+     // Pindahkan preferredProvider ke urutan teratas
+     cascadeOrder = [preferredProvider, ...cascadeOrder.filter(p => p !== preferredProvider)];
+  }
 
   // Filter available via cooldown check
   const allowedOrder = cascadeOrder.filter(p => !isProviderLocked(p));
@@ -131,7 +133,7 @@ export const callLLMWithMetadata = async (
           rctx.logger.logApiUsage(result.source, rctx.model.model || 'auto', promptText + systemPromptText, result.result);
         }
         console.log(`✅ ${adapter.name} succeeded`);
-        eventBus.emit({ type: 'Capability.Executed', source: adapter.name, payload: { success: true } });
+        eventBus.emit({ type: 'Capability.Executed', source: adapter.name, payload: { success: true, rctx } });
         return { result: result.result, metadata: result.metadata };
       }
 
@@ -163,7 +165,7 @@ export const callLLMWithCascade = async (
   promptText: string,
   systemPromptText = '',
   chatHistory: any[] = [],
-  preferredProvider: 'gemini' | 'groq' = 'gemini',
+  preferredProvider: string = 'gemini',
   extractedImage: { mimeType: string; data: string } | null = null,
   rctx: RuntimeContext
 ): Promise<string> => {
@@ -176,21 +178,21 @@ export const runLLM = async (promptText: string, systemPromptText = '', chatHist
      systemPromptText += `\n[STATUS: DESKTOP NATIVE AWARENESS ENABLED]\nAnda WAJIB mengeluarkan perintah Windows di dalam tag <terminal>. DILARANG menyebut sub-agent atau menolak. Contoh: <terminal>dir %USERPROFILE%\\Desktop</terminal>\n`;
   }
 
-  // === PRIORITAS USER-EXPLICIT MODEL SELECTION ===
-  if (!rctx.stream.extractedImage) {
-    if (rctx.model.model && rctx.model.model.includes('gpt') && !rctx.model.model.includes('openrouter') && rctx.keys.openAI) {
-      try { return await callOpenAI(promptText, systemPromptText, chatHistory, undefined, rctx); } catch(e: any) { console.warn('OpenAI failed:', e); rctx.state.explicitModelErrors += ` [openai]: ${e.message || e};`; }
-    } else if (rctx.model.model && (rctx.model.model.includes('openrouter') || rctx.model.model.startsWith('openrouter/')) && rctx.keys.openRouter) {
-      try { return await callOpenRouter(promptText, systemPromptText, chatHistory, false, rctx); } catch(e: any) { console.warn('OpenRouter failed:', e); rctx.state.explicitModelErrors += ` [openrouter]: ${e.message || e};`; }
-    } else if (rctx.model.model && rctx.model.model.startsWith('groq/') && rctx.keys.groq) {
-      try { return await callGroq(promptText, systemPromptText, chatHistory, rctx); } catch(e: any) { console.warn('Groq failed:', e); rctx.state.explicitModelErrors += ` [groq-explicit]: ${e.message || e};`; }
+  // === PRIORITAS USER-EXPLICIT MODEL SELECTION via Capability Registry ===
+  let preferredProvider = 'gemini';
+  
+  if (!rctx.stream.extractedImage && rctx.model.model) {
+    if (rctx.model.model.includes('gpt') && !rctx.model.model.includes('openrouter')) {
+       preferredProvider = 'openai';
+    } else if (rctx.model.model.includes('openrouter') || rctx.model.model.startsWith('openrouter/')) {
+       preferredProvider = 'openrouter';
+    } else if (rctx.model.model.startsWith('groq/')) {
+       preferredProvider = 'groq';
     }
   }
 
-  // === DEFAULT CASCADE: Gemini -> OpenRouter -> Groq ===
-  // Ignore complexity score, use default provider order
-  console.log(`🔄 Using default cascade: Gemini -> OpenRouter -> Groq`);
-  return await callLLMWithCascade(promptText, systemPromptText, chatHistory, 'gemini', rctx.stream.extractedImage, rctx);
+  console.log(`🔄 runLLM delegated to Capability Registry with preferred provider: ${preferredProvider}`);
+  return await callLLMWithCascade(promptText, systemPromptText, chatHistory, preferredProvider, rctx.stream.extractedImage, rctx);
 };
 
 export const runStreamLLM = async function*(promptText: string, systemPromptText = '', chatHistory: any[] = [], rctx: RuntimeContext): AsyncGenerator<string, void, unknown> {

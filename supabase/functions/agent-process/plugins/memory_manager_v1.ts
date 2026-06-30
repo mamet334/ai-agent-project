@@ -57,7 +57,7 @@ export const saveFactDirectly = async (
 
 export const MEMORY_V2_ENABLED = Deno.env.get('MEMORY_V2_ENABLED') === 'true';
 
-export const retrieveMemoriesV2 = async (userPrompt, userId, supabaseUrl, supabaseKey) => {
+export const retrieveMemoriesV2 = async (userPrompt: string, userId: string, supabaseUrl: string, supabaseKey: string, rctx?: any) => {
   const startTime = Date.now();
   if (!userId || userPrompt.trim().length < 4) return [];
 
@@ -93,7 +93,8 @@ export const retrieveMemoriesV2 = async (userPrompt, userId, supabaseUrl, supaba
       intent: intentSpec,
       nodes: subgraph.nodes,
       edges: subgraph.edges,
-      query: userPrompt
+      query: userPrompt,
+      rctx
     });
 
     console.log('[MEMORY_V2_COMPRESSION_STATS]', {
@@ -125,10 +126,10 @@ export const retrieveMemoriesV2 = async (userPrompt, userId, supabaseUrl, supaba
   }
 };
 
-export const retrieveMemories = async (userPrompt, userId, supabaseUrl, supabaseKey) => {
+export const retrieveMemories = async (userPrompt: string, userId: string, supabaseUrl: string, supabaseKey: string, rctx?: any) => {
   // FEATURE FLAG & FALLBACK MECHANISM
   if (MEMORY_V2_ENABLED) {
-     const v2Result = await retrieveMemoriesV2(userPrompt, userId, supabaseUrl, supabaseKey);
+     const v2Result = await retrieveMemoriesV2(userPrompt, userId, supabaseUrl, supabaseKey, rctx);
      if (v2Result !== null) {
          return v2Result; 
      }

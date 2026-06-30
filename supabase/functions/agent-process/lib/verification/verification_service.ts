@@ -103,6 +103,30 @@ export async function persistVerificationAuditLog(
   }
 }
 
+export async function persistTelemetryLog(
+  rctx: RuntimeContext,
+  params: {
+    userId: string | null;
+    eventType: string;
+    provider: string | null;
+    message: string;
+    metadata: any;
+  }
+): Promise<void> {
+  try {
+    const supClient = createClient(rctx.env.supabaseUrl, rctx.env.supabaseServiceKey);
+    await supClient.from('agent_logs').insert([{
+      user_id: params.userId,
+      event_type: params.eventType,
+      provider: params.provider,
+      message: params.message,
+      metadata: params.metadata
+    }]);
+  } catch (err) {
+    console.error('[TELEMETRY_LOG_FAIL]', err);
+  }
+}
+
 export function logVerificationReport(report: VerificationReport): void {
   try {
     let logString = `==============================\n`;
