@@ -214,6 +214,77 @@ export class VerificationEngine {
     
     console.log(`[VERIFICATION]\n${check006.id}\n${check006.status}`);
 
+    // ---------------------------------------------------------
+    // CHECK 007: FORBIDDEN_PHRASES (Content Hallucination Check)
+    // ---------------------------------------------------------
+    const check007: VerificationCheck = {
+      id: "CHECK_007_FORBIDDEN_PHRASES",
+      name: "No Forbidden Phrases (Hallucination)",
+      status: "PASS",
+      severity: "ERROR",
+      message: "No hallucination or forbidden phrases detected."
+    };
+
+    const forbiddenPhrases = [
+      "berdasarkan pengetahuan umum saya",
+      "saya kurang yakin",
+      "saya tidak tahu pasti",
+      "mungkin saja",
+      "sebagai model bahasa ai"
+    ];
+
+    const responseLower = (context.responseText || "").toLowerCase();
+    const foundForbidden = forbiddenPhrases.find(phrase => responseLower.includes(phrase));
+
+    if (foundForbidden) {
+      check007.status = "FAIL";
+      check007.message = `Detected forbidden phrase indicating hallucination or rule violation: "${foundForbidden}"`;
+      overallStatus = "FAIL";
+      overallScore = Math.max(0, overallScore - 50);
+    }
+
+    checks.push(check007);
+    if (check007.status === "FAIL") failures.push(check007);
+    
+    console.log(`[VERIFICATION]\n${check007.id}\n${check007.status}`);
+
+    // ---------------------------------------------------------
+    // CHECK 008: APOLOGETIC_REFUSAL (Content Evasion Check)
+    // ---------------------------------------------------------
+    const check008: VerificationCheck = {
+      id: "CHECK_008_APOLOGETIC_REFUSAL",
+      name: "No Apologetic Refusal",
+      status: "PASS",
+      severity: "WARNING",
+      message: "LLM provided an answer instead of a raw refusal."
+    };
+
+    const refusalPhrases = [
+      "maaf, saya tidak mengerti",
+      "maaf, saya tidak dapat",
+      "saya tidak memiliki informasi tersebut"
+    ];
+
+    const foundRefusal = refusalPhrases.find(phrase => responseLower.includes(phrase));
+
+    // Refusal is allowed if we genuinely have 0 confidence/evidence, but if evidence exists, LLM shouldn't refuse blindly.
+    const hasEvidence = (context.evidenceReport?.totalEvidence || 0) > 0;
+
+    if (foundRefusal && hasEvidence) {
+      check008.status = "WARN";
+      check008.message = `LLM refused to answer despite evidence being present: "${foundRefusal}"`;
+      // Warn doesn't fail the overall status, but drops score
+      overallScore = Math.max(0, overallScore - 20);
+      if (overallStatus === "PASS") overallStatus = "WARN";
+    } else if (foundRefusal) {
+      check008.message = "LLM correctly refused to answer when no evidence was present.";
+    }
+
+    checks.push(check008);
+    if (check008.status === "WARN" || check008.status === "FAIL") warnings.push(check008);
+    
+    console.log(`[VERIFICATION]\n${check008.id}\n${check008.status}`);
+
     const executionTimeMs = performance.now() - startTime;
     const finalDecision: VerificationDecision = overallStatus === "PASS" ? "PASS" : "FAIL";
     const totalChecks = checks.length;

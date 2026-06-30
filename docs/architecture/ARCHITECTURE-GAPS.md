@@ -101,25 +101,23 @@ Status: **Resolved** ✅ (TASK-NEW-001, 2026-06-29)
 
 ## GAP-NEW-003: `index.ts` Monolith 2301 Baris
 
-Status: Open
+Status: **Resolved** ✅ (Wave 5-4 / ADR-0009)
 
 **Severity:** Critical
 **Lokasi:** `supabase/functions/agent-process/index.ts`
 **Dampak:** Melanggar MAEF Architecture First. Tidak bisa diverifikasi secara incremental.
-**Rencana:** Wave 5 — Extract provider cascade, RAG, streaming ke modul terpisah.
-**Linked Task:** TASK-NEW-007 (ADR-0009 Decomposition Plan)
+**Resolusi:** Seluruh komponen telah diekstraksi ke dalam hirarki `lib/request`, `lib/rag`, `lib/orchestration`, dll. File `index.ts` kini hanya berukuran 48 baris dan murni bertindak sebagai HTTP entrypoint/router.
 
 ---
 
 ## GAP-NEW-004: VerificationEngine Bukan Hard Gate Nyata
 
-Status: Open
+Status: **Resolved** ✅ (Wave 5-4)
 
 **Severity:** Critical
 **Lokasi:** `supabase/functions/agent-process/lib/verification_engine.ts`
 **Dampak:** Vision mensyaratkan Verification Engine sebagai Hard Gate. Saat ini hanya cek struktural, tidak cek konten jawaban.
-**Rencana:** Wave 6 — Tambahkan minimal 2 content checks.
-**Linked Task:** TASK-NEW-008 (ADR-0010 Verification Engine Spec)
+**Resolusi:** Telah ditambahkan Content-based checks ke dalam `VerificationEngine`, yaitu `CHECK_007_FORBIDDEN_PHRASES` (Hallucination detector) dan `CHECK_008_APOLOGETIC_REFUSAL` (Evasion detector). VerificationEngine kini beroperasi sebagai Hard Gate (gagal jika berhalusinasi).
 
 ---
 
@@ -180,13 +178,12 @@ Status: Open
 
 ## GAP-NEW-010: Universal Evidence Contract dan Context Fusion Adalah Dua Jalur Paralel
 
-Status: Open
+Status: **Resolved** ✅ (Wave 5-3 / ADR-0008)
 
 **Severity:** Major
-**Lokasi:** `lib/universal_evidence_contract.ts` + `lib/context_fusion.ts`
+**Lokasi:** `lib/verification/universal_contract.ts` & `lib/rag/context_pipeline.ts`
 **Dampak:** Bisa konflik. Melanggar prinsip deterministic engineering.
-**Rencana:** Wave 4 — ADR-0008 untuk memilih satu jalur canonical.
-**Linked Task:** TASK-NEW-006
+**Resolusi:** Berkas lama `universal_evidence_contract.ts` dan `context_fusion.ts` telah dihapus dan disatukan ke dalam arsitektur tunggal yang direpresentasikan oleh `universal_contract.ts` (penyusun prompt) dan `context_pipeline.ts` (engine pencarian). Single Source of Truth telah tercapai.
 
 ---
 
