@@ -85,85 +85,134 @@ export default function ConversationEngine({ sessionId }) {
       });
 
       console.log(`[LIFECYCLE] LLM response received (HTTP Status: ${response.status})`);
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      
+      let reader;
+      let decoder;
+      let isMock = false;
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder('utf-8');
-      let done = false;
-      let aiResponseText = '';
-      let processingSteps = [];
+      if (!response.ok) {
+        if (response.status === 401 || import.meta.env.VITE_MOCK_LLM === 'true') {
+          console.warn("[LIFECYCLE] 401 Unauthorized or Mock Mode enabled. Falling back to simulated response.");
+          isMock = true;
+        } else {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+      } else {
+        reader = response.body.getReader();
+        decoder = new TextDecoder('utf-8');
+      }
+      if (isMock) {
+        // Simulate a mock streaming response
+        setMessages(prev => [...prev, { role: 'model', content: '', steps: [], isStreaming: true }]);
+        
+        const mockResponse = `[MOCK MODE] Anda saat ini belum login, sehingga request ke Edge Function ditolak (HTTP 401). 
+Ini adalah simulasi respons LLM agar antarmuka tidak rusak.\n\nInstruksi yang Anda kirim: "${userMsg}"`;
+        
+        for (let i = 0; i <= mockResponse.length; i += 15) {
+          await new Promise(r => setTimeout(r, 100)); // Simulate typing delay
+          setMessages(prev => {
+            const next = [...prev];
+            next[next.length - 1] = {
+              role: 'model',
+              content: mockResponse.substring(0, i),
+              steps: [{ text: "Simulated routing decision" }],
+              isStreaming: true
+            };
+            return next;
+          });
+        }
+        
+        setMessages(prev => {
+          const next = [...prev];
+          next[next.length - 1] = {
+            role: 'model',
+            content: mockResponse,
+            steps: [{ text: "Simulated routing decision" }],
+            isStreaming: false
+          };
+          return next;
+        });
+        
+      } else {
+        let done = false;
+        let aiResponseText = '';
+        let processingSteps = [];
 
-      console.log("[LIFECYCLE] Stream started");
-      setMessages(prev => [...prev, { role: 'model', content: '', steps: [], isStreaming: true }]);
+        console.log("[LIFECYCLE] Stream started");
+        setMessages(prev => [...prev, { role: 'model', content: '', steps: [], isStreaming: true }]);
 
-      while (!done) {
-        const { value, done: readerDone } = await reader.read();
-        done = readerDone;
-        if (value) {
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const dataStr = line.substring(6).trim();
-              if (dataStr === '[DONE]') continue;
-              try {
-                const parsed = JSON.parse(dataStr);
-                if (parsed.step) {
-                   processingSteps.push(parsed.step);
+        while (!done) {
+          const { value, done: readerDone } = await reader.read();
+          done = readerDone;
+          if (value) {
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split('\n');
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const dataStr = line.substring(6).trim();
+                if (dataStr === '[DONE]') continue;
+                try {
+                  const parsed = JSON.parse(dataStr);
+                  if (parsed.step) {
+                     processingSteps.push(parsed.step);
+                  }
+                  if (parsed.text) {
+                    aiResponseText += parsed.text;
+                  }
+                  
+                  console.log("[LIFECYCLE] Stream chunk received:", dataStr);
+                  
+                  setMessages(prev => {
+                    const next = [...prev];
+                    next[next.length - 1] = {
+                      role: 'model',
+                      content: aiResponseText,
+                      steps: [...processingSteps],
+                      isStreaming: !done
+                    };
+                    return next;
+                  });
+                  console.log("[LIFECYCLE] Bubble updated");
+                } catch (err) {
+                   console.error("[LIFECYCLE] Exception during chunk processing:", err);
+                   aiResponseText += `\n\n[System Error: Gagal memproses aliran data. Root Cause: ${err.message}]`;
+                   setMessages(prev => {
+                     const next = [...prev];
+                     next[next.length - 1] = {
+                       role: 'model',
+                       content: aiResponseText,
+                       steps: [...processingSteps],
+                       isStreaming: false
+                     };
+                     return next;
+                   });
+                   done = true; // Architecturally stop the stream on unrecoverable parsing error
                 }
-                if (parsed.text) {
-                  aiResponseText += parsed.text;
-                }
-                
-                console.log("[LIFECYCLE] Stream chunk received:", dataStr);
-                
-                setMessages(prev => {
-                  const next = [...prev];
-                  next[next.length - 1] = {
-                    role: 'model',
-                    content: aiResponseText,
-                    steps: [...processingSteps],
-                    isStreaming: !done
-                  };
-                  return next;
-                });
-                console.log("[LIFECYCLE] Bubble updated");
-              } catch (err) {
-                 console.error("[LIFECYCLE] Exception during chunk processing:", err);
-                 aiResponseText += `\n\n[System Error: Gagal memproses aliran data. Root Cause: ${err.message}]`;
-                 setMessages(prev => {
-                   const next = [...prev];
-                   next[next.length - 1] = {
-                     role: 'model',
-                     content: aiResponseText,
-                     steps: [...processingSteps],
-                     isStreaming: false
-                   };
-                   return next;
-                 });
-                 done = true; // Architecturally stop the stream on unrecoverable parsing error
               }
             }
           }
         }
+        
+        // Finalize
+        console.log("[LIFECYCLE] Stream completed");
+        setMessages(prev => {
+          const next = [...prev];
+          next[next.length - 1].isStreaming = false;
+          return next;
+        });
+        
+        // Populate aiResponseText for OS Execution Interceptor
+        var finalAiResponseText = aiResponseText;
       }
-      
-      // Finalize
-      console.log("[LIFECYCLE] Stream completed");
-      setMessages(prev => {
-        const next = [...prev];
-        next[next.length - 1].isStreaming = false;
-        return next;
-      });
 
       // === OS EXECUTION INTERCEPTOR (Local Sandbox Execution) ===
-      if (window.electronAPI && osState.capabilities.includes('cap:code-execution')) {
+      if (!isMock && window.electronAPI && osState.capabilities.includes('cap:code-execution')) {
         let interceptHit = false;
         let autoReply = '';
 
         // 1. Terminal parsing (<terminal>...</terminal>)
-        const termMatch = aiResponseText.match(/<terminal>([\s\S]*?)<\/terminal>/i);
-        const mdTermMatch = aiResponseText.match(/```(?:bash|sh|cmd|powershell|ps1)?\n([\s\S]*?)```/i);
+        const termMatch = finalAiResponseText.match(/<terminal>([\s\S]*?)<\/terminal>/i);
+        const mdTermMatch = finalAiResponseText.match(/```(?:bash|sh|cmd|powershell|ps1)?\n([\s\S]*?)```/i);
         let rawCmd = null;
 
         if (termMatch) {
@@ -188,7 +237,7 @@ export default function ConversationEngine({ sessionId }) {
         }
 
         // 2. File Editing (<edit_file path="...">...</edit_file>)
-        const fileMatch = aiResponseText.match(/<edit_file\s+path=["']([^"']+)["'][^>]*>([\s\S]*?)<\/edit_file>/i);
+        const fileMatch = finalAiResponseText.match(/<edit_file\s+path=["']([^"']+)["'][^>]*>([\s\S]*?)<\/edit_file>/i);
         if (fileMatch) {
            interceptHit = true;
            const filePath = fileMatch[1].trim();
@@ -203,7 +252,7 @@ export default function ConversationEngine({ sessionId }) {
 
         // 3. Docker Sandbox Interceptor (Isolated Code Execution)
         if (window.electronAPI.runDockerSandbox && !interceptHit) {
-          const codeBlockMatch = aiResponseText.match(/```(python|py|javascript|js)\n([\s\S]*?)```/i);
+          const codeBlockMatch = finalAiResponseText.match(/```(python|py|javascript|js)\n([\s\S]*?)```/i);
           if (codeBlockMatch) {
             try {
               const dockerStatus = await window.electronAPI.checkDockerStatus();
