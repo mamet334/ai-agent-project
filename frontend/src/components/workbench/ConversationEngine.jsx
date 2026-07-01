@@ -25,6 +25,7 @@ const parseThinkingContent = (text) => {
       };
     }
   }
+  // Jika tidak ada tag think, seluruh teks adalah answer
   return { thinking: '', answer: text, isThinkingComplete: true };
 };
 
@@ -312,6 +313,8 @@ Ini adalah simulasi respons LLM agar antarmuka tidak rusak.\n\nInstruksi yang An
 
         {messages.map((m, idx) => {
           const parsed = parseThinkingContent(m.content);
+          // Fallback: jika parsed.answer kosong, gunakan m.content langsung
+          const displayText = parsed.answer || m.content || '';
           
           return (
             <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -320,7 +323,7 @@ Ini adalah simulasi respons LLM agar antarmuka tidak rusak.\n\nInstruksi yang An
                 {/* Lifecycle Visualizer (MAEF Event Pipeline) */}
                 {m.role === 'model' && (m.isStreaming || m.steps?.length > 0 || parsed.thinking) && (
                   <div className="mb-4 bg-slate-950 rounded-xl border border-slate-800 overflow-hidden font-mono text-[10px]">
-                    <div className="bg-slate-900/80 border-b border-slate-800 px-3 py-1.5 flex items-center justify-between text-slate-400">
+                    <div className="bg-slate-900/80 border-b border-slate-800 px-3 py-1.5 flex items-center justify-between text-slate-500">
                       <span>MAEF Execution Lifecycle</span>
                       <button 
                         onClick={() => openLifecycleInspector('execution', m.steps)}
@@ -344,8 +347,8 @@ Ini adalah simulasi respons LLM agar antarmuka tidak rusak.\n\nInstruksi yang An
                 
                 {/* Final Response Output */}
                 <div className="text-sm whitespace-pre-wrap font-sans leading-relaxed">
-                  {parsed.answer}
-                  {m.isStreaming && parsed.isThinkingComplete && <span className="animate-pulse"> ▋</span>}
+                  {displayText}
+                  {m.isStreaming && parsed.isThinkingComplete && <span className="animate-pulse"> ▍</span>}
                 </div>
               </div>
             </div>
