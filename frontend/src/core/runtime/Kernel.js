@@ -4,6 +4,8 @@ import { WidgetRegistry } from '../workspace/WidgetRegistry';
 import { WorkspaceManager } from '../workspace/WorkspaceManager';
 import { lazyLoadWithRetry } from '../workspace/lazyLoadWithRetry';
 import { EventBus } from './EventBus';
+import { VaultService } from './services/VaultService';
+import { BrainService } from './services/BrainService';
 
 /**
  * MAEF Kernel v2.0
@@ -167,9 +169,19 @@ class Kernel {
 
   async _phase3_AdapterRegistryInit(serviceManager) {
     this.currentPhase = 3;
-    this.log('INFO', 'PHASE 3 — ADAPTER REGISTRY INIT: Started');
+    this.log('INFO', 'PHASE 3 — CORE CAPABILITY SERVICES INIT: Started');
 
-    // Initialize Adapter Registry stub
+    // 1. Vault Service (Security First)
+    const vaultService = new VaultService(serviceManager);
+    await vaultService.initialize();
+    serviceManager.register('VaultService', vaultService);
+
+    // 2. Brain Service (AI Orchestration)
+    const brainService = new BrainService(serviceManager);
+    await brainService.initialize();
+    serviceManager.register('BrainService', brainService);
+
+    // 3. Initialize Adapter Registry stub
     const adapterRegistry = {
       adapters: new Map(),
       register(name, adapter) {
@@ -189,10 +201,10 @@ class Kernel {
     adapterRegistry.register('DB', { name: 'Database Adapter', type: 'DB' });
     adapterRegistry.register('Search', { name: 'Search Adapter', type: 'SEARCH' });
     adapterRegistry.register('Tool', { name: 'Tool Adapter', type: 'TOOL' });
-    this.log('INFO', 'Adapter Registry Initialized with 4 Adapters');
+    this.log('INFO', 'Adapter Registry & Core Services Initialized');
 
-    this._emitEvent(serviceManager, 'KERNEL_PHASE_COMPLETED', { phase: 3, name: 'ADAPTER_REGISTRY_INIT' });
-    this.log('INFO', 'PHASE 3 — ADAPTER REGISTRY INIT: Completed');
+    this._emitEvent(serviceManager, 'KERNEL_PHASE_COMPLETED', { phase: 3, name: 'CORE_CAPABILITY_SERVICES_INIT' });
+    this.log('INFO', 'PHASE 3 — CORE CAPABILITY SERVICES INIT: Completed');
   }
 
   async _phase4_VerificationEngineStartup(serviceManager) {

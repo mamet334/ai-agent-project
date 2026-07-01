@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Send, Terminal, Loader2, RefreshCw } from 'lucide-react';
 import { useWorkspace } from '../../core/workspace/WorkspaceContext';
 import { supabase } from '../../supabase';
+import { kernel } from '../../core/runtime/Kernel';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -68,16 +69,17 @@ export default function ConversationEngine({ sessionId }) {
       const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
       const endpoint = 'https://uuyzdjifhdfyyvpxsofu.supabase.co/functions/v1/agent-process';
       
-      // --- AI Brain Injection ---
-      const aiProvider = localStorage.getItem('maef_ai_provider') || 'gemini';
-      const aiModel = localStorage.getItem('maef_ai_model') || '';
-      const aiKey = localStorage.getItem('maef_ai_key') || '';
-      
+      // --- AI Brain Injection (OS Layer Integration) ---
+      let aiProvider = 'gemini';
       let formattedModel = '';
-      if (aiModel) {
-        if (aiProvider === 'openrouter') formattedModel = `openrouter/${aiModel}`;
-        else if (aiProvider === 'groq') formattedModel = `groq/${aiModel}`;
-        else formattedModel = aiModel;
+      let aiKey = '';
+
+      const brainService = kernel.serviceManager?.get('BrainService');
+      if (brainService) {
+        const context = await brainService.getActiveBrainContext();
+        aiProvider = context.provider || 'gemini';
+        formattedModel = context.model || '';
+        aiKey = context.key || '';
       }
 
       const payload = {

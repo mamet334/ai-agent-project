@@ -8,15 +8,29 @@ export default function Settings() {
   const [health, setHealth] = useState(null);
   
   // AI Config State
-  const [aiProvider, setAiProvider] = useState(localStorage.getItem('maef_ai_provider') || 'openrouter');
-  const [aiModel, setAiModel] = useState(localStorage.getItem('maef_ai_model') || 'anthropic/claude-3.5-sonnet');
-  const [aiKey, setAiKey] = useState(localStorage.getItem('maef_ai_key') || '');
+  const [aiProvider, setAiProvider] = useState('openrouter');
+  const [aiModel, setAiModel] = useState('anthropic/claude-3.5-sonnet');
+  const [aiKey, setAiKey] = useState('');
   const [saveStatus, setSaveStatus] = useState('');
   
   useEffect(() => {
     // Get owner from Kernel identity
     setOwner(kernel.identity.owner);
     setHealth(kernel.getHealth());
+
+    // Fetch initial state from services
+    const brainService = kernel.serviceManager?.get('BrainService');
+    const vaultService = kernel.serviceManager?.get('VaultService');
+
+    if (brainService) {
+      const config = brainService.getBrainConfig();
+      setAiProvider(config.provider);
+      setAiModel(config.model);
+    }
+    if (vaultService && brainService) {
+      const key = vaultService.getKey(brainService.getBrainConfig().provider) || '';
+      setAiKey(key);
+    }
     
     // Periodically update health
     const interval = setInterval(() => {
@@ -27,11 +41,26 @@ export default function Settings() {
   }, []);
 
   const handleSaveAiConfig = () => {
-    localStorage.setItem('maef_ai_provider', aiProvider);
-    localStorage.setItem('maef_ai_model', aiModel);
-    localStorage.setItem('maef_ai_key', aiKey);
+    const brainService = kernel.serviceManager?.get('BrainService');
+    const vaultService = kernel.serviceManager?.get('VaultService');
+
+    if (brainService) {
+      brainService.setBrain(aiProvider, aiModel);
+    }
+    if (vaultService) {
+      vaultService.setKey(aiProvider, aiKey);
+    }
+
     setSaveStatus('Saved!');
     setTimeout(() => setSaveStatus(''), 2000);
+  };
+
+  const handleProviderChange = (newProvider) => {
+    setAiProvider(newProvider);
+    const vaultService = kernel.serviceManager?.get('VaultService');
+    if (vaultService) {
+      setAiKey(vaultService.getKey(newProvider) || '');
+    }
   };
 
   const formatUptime = (ms) => {
@@ -140,7 +169,7 @@ export default function Settings() {
                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">Provider</label>
                     <select 
                       value={aiProvider}
-                      onChange={(e) => setAiProvider(e.target.value)}
+                      onChange={(e) => handleProviderChange(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-purple-500 transition-colors"
                     >
                       <option value="openrouter">OpenRouter (Recommended)</option>
