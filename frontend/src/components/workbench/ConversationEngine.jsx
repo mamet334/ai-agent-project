@@ -126,13 +126,16 @@ export default function ConversationEngine({ sessionId }) {
         return;
       }
 
-      // Check if response is JSON (DIRECT mode) or stream
-      const contentType = response.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
         console.log("[LIFECYCLE] Received JSON response (DIRECT mode)");
         const jsonData = await response.json();
         const messageContent = jsonData.message || jsonData;
-        setMessages(prev => [...prev, { role: 'model', content: messageContent }]);
+        setMessages(prev => [...prev, { 
+          role: 'model', 
+          content: messageContent,
+          steps: jsonData.processingSteps || [],
+          metadata: jsonData
+        }]);
         setIsLoading(false);
         return;
       }
@@ -343,12 +346,12 @@ export default function ConversationEngine({ sessionId }) {
               <div className={`max-w-[85%] lg:max-w-[75%] rounded-2xl px-5 py-4 ${m.role === 'user' ? 'bg-emerald-600/20 text-emerald-100 border border-emerald-500/30' : 'bg-slate-900 text-slate-300 border border-slate-800'}`}>
                 
                 {/* Lifecycle Visualizer (MAEF Event Pipeline) */}
-                {m.role === 'model' && (m.isStreaming || m.steps?.length > 0 || parsed.thinking) && (
+                {m.role === 'model' && (m.isStreaming || m.steps?.length > 0 || parsed.thinking || m.metadata) && (
                   <div className="mb-4 bg-slate-950 rounded-xl border border-slate-800 overflow-hidden font-mono text-[10px]">
                     <div className="bg-slate-900/80 border-b border-slate-800 px-3 py-1.5 flex items-center justify-between text-slate-500">
                       <span>MAEF Execution Lifecycle</span>
                       <button 
-                        onClick={() => openLifecycleInspector('execution', m.steps)}
+                        onClick={() => openLifecycleInspector('execution', m.metadata || m.steps)}
                         className="text-emerald-500 hover:text-emerald-400 hover:underline cursor-pointer"
                       >
                         Inspect Details ↗

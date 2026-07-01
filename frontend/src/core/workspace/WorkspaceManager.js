@@ -303,5 +303,16 @@ export class WorkspaceManager {
       localStorage.setItem(`mamet_v2_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(newLayout));
       this._debouncedSyncLayoutToSupabase(this.activeWorkspaceId, newLayout, this.state.widgets);
     }
+    
+    if (widgetData && this.serviceManager && this.serviceManager.has('EventBus')) {
+      const eventBus = this.serviceManager.get('EventBus');
+      setTimeout(() => {
+        eventBus.emit({
+          type: 'Widget.DataInjected',
+          source: 'WorkspaceManager',
+          payload: { widgetId, data: widgetData }
+        });
+      }, 100);
+    }
   }
 }

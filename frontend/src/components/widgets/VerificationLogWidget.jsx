@@ -1,21 +1,59 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabase';
+import { kernel } from '../../core/runtime/Kernel';
 
 export default function VerificationLogWidget() {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const eventBus = kernel.serviceManager?.has('EventBus') ? kernel.serviceManager.get('EventBus') : null;
+    let unsub = null;
+
+    if (eventBus) {
+      unsub = eventBus.subscribe(event => {
+        if (event.type === 'Widget.DataInjected' && event.payload.widgetId === 'widget:verification-log') {
+          const executionTrace = event.payload.data;
+          
+          let title = 'MAEF Execution Trace';
+          let resultText = 'PASS';
+          let evidenceText = '';
+
+          // If from conversation engine, we passed `m.metadata`
+          if (executionTrace && executionTrace.processingSteps) {
+            evidenceText = `Tools Used: ${executionTrace.toolsUsed?.length || 0}\nSubagents: ${executionTrace.subagentRuns?.length || 0}\nSteps:\n- ${executionTrace.processingSteps?.join('\n- ')}`;
+          } else if (executionTrace && executionTrace.logs) {
+            // from old format (m.steps)
+            evidenceText = `Steps:\n- ${executionTrace.logs?.join('\n- ')}`;
+          } else {
+            evidenceText = JSON.stringify(executionTrace);
+          }
+
+          setLogs([{
+            id: 'trace-' + Date.now(),
+            related_task: title,
+            result: resultText,
+            evidence: evidenceText
+          }]);
+          setLoading(false);
+        }
+      });
+    }
+
     const fetchLogs = async () => {
       const { data, error } = await supabase
         .from('verification_runs')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(20);
-      if (data) setLogs(data);
+      if (data && logs.length === 0) setLogs(data); // only load if trace hasn't overwritten it
       setLoading(false);
     };
     fetchLogs();
+
+    return () => {
+      if (unsub) unsub();
+    };
   }, []);
 
   const getStatusColor = (status) => {
@@ -39,7 +77,7 @@ export default function VerificationLogWidget() {
               {log.result}
             </span>
           </div>
-          <p className="text-[10px] text-slate-400 line-clamp-2 mt-1">{log.evidence}</p>
+          <p className="text-[10px] text-slate-400 mt-1 whitespace-pre-wrap font-mono">{log.evidence}</p>
         </div>
       ))}
     </div>
