@@ -3,6 +3,7 @@ import { EventBus } from './EventBus';
 import { ApplicationManager } from '../application/ApplicationManager';
 import { WindowManager } from '../window/WindowManager';
 import { WidgetRegistry } from '../workspace/WidgetRegistry';
+import { lazyLoadWithRetry } from '../workspace/lazyLoadWithRetry';
 
 class Kernel {
   constructor() {
@@ -33,8 +34,6 @@ class Kernel {
     serviceManager.register('WidgetRegistry', widgetRegistry);
 
     // Register Default Widgets
-    const { lazyLoadWithRetry } = await import('../workspace/lazyLoadWithRetry');
-
     widgetRegistry.register({
       id: 'widget:engineering-tasks',
       name: 'Engineering Tasks',
