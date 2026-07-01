@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { kernel } from '../core/runtime/Kernel';
-import { User, Mail, Shield, LogOut, Palette, Activity, Monitor, Bell, Cpu, Clock } from 'lucide-react';
+import { User, Mail, Shield, LogOut, Palette, Activity, Monitor, Bell, Cpu, Clock, Brain, Key } from 'lucide-react';
 
 export default function Settings() {
   const [owner, setOwner] = useState(null);
@@ -110,6 +110,56 @@ export default function Settings() {
           {/* Right Column - System & Preferences */}
           <div className="lg:col-span-2 space-y-6">
             
+            {/* AI Engine Configuration */}
+            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg shadow-black/20">
+              <div className="p-4 bg-slate-800/50 border-b border-slate-800 flex items-center gap-3">
+                <div className="p-2 bg-purple-500/10 rounded-lg">
+                  <Brain className="w-5 h-5 text-purple-400" />
+                </div>
+                <h3 className="font-medium text-slate-200">AI Brain Configuration</h3>
+              </div>
+              <div className="p-5 space-y-4">
+                <p className="text-xs text-slate-400 mb-2">Configure the core language model (brain) powering Mamet Ecosystem. Changes apply globally across the Orchestrator.</p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">Provider</label>
+                    <select className="w-full bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-purple-500 transition-colors">
+                      <option value="openrouter">OpenRouter (Recommended)</option>
+                      <option value="openai">OpenAI</option>
+                      <option value="anthropic">Anthropic</option>
+                      <option value="local">Local (Ollama/LMStudio)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">Model</label>
+                    <select className="w-full bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-purple-500 transition-colors">
+                      <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet</option>
+                      <option value="openai/gpt-4o">GPT-4o</option>
+                      <option value="meta-llama/llama-3-70b-instruct">Llama 3 70B</option>
+                      <option value="google/gemini-pro-1.5">Gemini 1.5 Pro</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                    <Key className="w-3 h-3" /> API Key
+                  </label>
+                  <div className="relative">
+                    <input 
+                      type="password" 
+                      placeholder="sk-or-v1-..." 
+                      className="w-full bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-lg pl-3 pr-16 py-2 outline-none focus:border-purple-500 transition-colors font-mono placeholder:text-slate-700"
+                    />
+                    <button className="absolute right-2 top-1/2 -translate-y-1/2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded transition-colors border border-slate-700">
+                      Save
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Preferences */}
             <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg shadow-black/20">
               <div className="p-4 bg-slate-800/50 border-b border-slate-800 flex items-center gap-3">
