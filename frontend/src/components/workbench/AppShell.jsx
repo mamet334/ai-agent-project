@@ -8,6 +8,8 @@ import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 export default function AppShell({ mainPanel: MainPanelComponent }) {
   const { osState: workspaceState, manager } = useWorkspace();
 
+  console.log("[AppShell] Workspace state:", workspaceState);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
