@@ -75,6 +75,7 @@ export default function ConversationEngine({ sessionId }) {
       workspaceTarget: workspaceManager.activeWorkspaceId,
       history: newMessages.slice(-10),
       stream: true,
+      ragEnabled: true,
     };
 
       const response = await fetch(endpoint, {
