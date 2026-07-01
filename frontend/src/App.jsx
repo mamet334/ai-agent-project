@@ -6,6 +6,7 @@ import ErrorBoundary from './components/workbench/ErrorBoundary'
 import Login from './components/Login'
 import { serviceManager } from './core/runtime/ServiceManager'
 import { kernel } from './core/runtime/Kernel'
+import { EventBus as CoreEventBus } from './core/runtime/EventBus'
 import { MessageSquare, Terminal, Database, FlaskConical, LogOut } from 'lucide-react'
 import { WorkspaceProvider } from './core/workspace/WorkspaceContext'
 import { supabase } from './supabase'
@@ -69,8 +70,7 @@ export default function App() {
       if (serviceManager.has('EventBus')) {
         eventBus = serviceManager.get('EventBus');
       } else {
-        const { EventBus: EB } = await import('./core/runtime/EventBus');
-        eventBus = new EB();
+        eventBus = new CoreEventBus();
         serviceManager.register('EventBus', eventBus);
       }
 
