@@ -388,6 +388,16 @@ class Kernel {
       default_workbench: 'right',
       component: lazyLoadWithRetry(() => import('../../components/widgets/VerificationLogWidget.jsx'), 'widget:verification-log')
     });
+    widgetRegistry.register({
+      id: 'widget:maef-monitor',
+      name: 'MAEF Execution Monitor',
+      icon: 'Activity',
+      version: '1.0.0',
+      allowed_workspaces: ['ENGINEER', '*'],
+      default_size: { width: 300, height: 400 },
+      default_workbench: 'right',
+      component: lazyLoadWithRetry(() => import('../../components/widgets/MaefExecutionMonitorWidget.jsx'), 'widget:maef-monitor')
+    });
   }
 
   async _handleBootFailure(error) {
