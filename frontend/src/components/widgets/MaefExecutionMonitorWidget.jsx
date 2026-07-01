@@ -7,6 +7,18 @@ export default function MaefExecutionMonitorWidget() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // 1. Check for pre-injected data (if widget mounted too slow to catch the event)
+    const wsManager = kernel.serviceManager?.has('WorkspaceManager') ? kernel.serviceManager.get('WorkspaceManager') : null;
+    if (wsManager && typeof wsManager.getWidgetData === 'function') {
+      const preInjectedData = wsManager.getWidgetData('widget:maef-monitor');
+      if (preInjectedData) {
+        const executionTrace = preInjectedData.logs || preInjectedData;
+        setActiveTrace(executionTrace);
+        setLoading(false);
+      }
+    }
+
+    // 2. Subscribe to EventBus for future dynamic injections
     const eventBus = kernel.serviceManager?.has('EventBus') ? kernel.serviceManager.get('EventBus') : null;
     let unsub = null;
 
