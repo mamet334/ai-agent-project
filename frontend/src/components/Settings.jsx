@@ -152,18 +152,15 @@ export default function Settings() {
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">Model</label>
-                    <select 
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">Model ID</label>
+                    <input 
+                      type="text"
                       value={aiModel}
                       onChange={(e) => setAiModel(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-purple-500 transition-colors"
-                    >
-                      <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet</option>
-                      <option value="openai/gpt-4o">GPT-4o</option>
-                      <option value="meta-llama/llama-3-70b-instruct">Llama 3 70B</option>
-                      <option value="google/gemini-pro-1.5">Gemini 1.5 Pro</option>
-                      <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-                    </select>
+                      placeholder="e.g. anthropic/claude-3.5-sonnet"
+                      className="w-full bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-purple-500 transition-colors font-mono"
+                    />
+                    <p className="text-[10px] text-slate-500 mt-1 mt-1">Leave empty to use default, or enter any valid ID.</p>
                   </div>
                 </div>
 
