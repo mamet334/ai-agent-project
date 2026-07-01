@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import WidgetHost from './WidgetHost';
 import { useWorkspace } from '../../core/workspace/WorkspaceContext';
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -59,10 +59,19 @@ export default function WorkbenchZone({
   onResize
 }) {
   const isResizing = useRef(false);
+  const [draftSize, setDraftSize] = useState(null);
+
   const { setNodeRef } = useDroppable({
     id: `zone-${position}`,
     data: { workbench: position }
   });
+
+  // Reset draftSize if external width/height changes when not resizing
+  useEffect(() => {
+    if (!isResizing.current) {
+       setDraftSize(null);
+    }
+  }, [width, height]);
 
   const handlePointerDown = (e) => {
     e.preventDefault();
@@ -81,7 +90,7 @@ export default function WorkbenchZone({
         newSize = Math.max(150, Math.min(600, document.body.clientHeight - moveEvent.clientY));
       }
       
-      if (onResize) onResize(position, newSize);
+      setDraftSize(newSize);
     };
 
     const onPointerUp = () => {
@@ -89,6 +98,14 @@ export default function WorkbenchZone({
       document.body.style.cursor = 'default';
       document.removeEventListener('pointermove', onPointerMove);
       document.removeEventListener('pointerup', onPointerUp);
+      
+      // Update global layout only when drag finishes to prevent AppShell re-render lag
+      setDraftSize((finalSize) => {
+         if (finalSize !== null && onResize) {
+            onResize(position, finalSize);
+         }
+         return null;
+      });
     };
 
     document.addEventListener('pointermove', onPointerMove);
@@ -100,10 +117,13 @@ export default function WorkbenchZone({
   let isEmpty = widgets.length === 0;
 
   const style = {};
+  const currentWidth = draftSize !== null ? draftSize : width;
+  const currentHeight = draftSize !== null ? draftSize : height;
+
   if (position === 'left' || position === 'right') {
-    style.width = isEmpty ? '60px' : (width ? `${width}px` : '300px');
+    style.width = isEmpty ? '60px' : (currentWidth ? `${currentWidth}px` : '300px');
   } else if (position === 'bottom') {
-    style.height = isEmpty ? '60px' : (height ? `${height}px` : '250px');
+    style.height = isEmpty ? '60px' : (currentHeight ? `${currentHeight}px` : '250px');
   }
 
   // Common wrapper styles
