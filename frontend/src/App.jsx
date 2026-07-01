@@ -44,6 +44,7 @@ export default function App() {
   const [isBooted, setIsBooted] = React.useState(false);
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [bootPhase, setBootPhase] = useState(0);
 
   useEffect(() => {
     // Check active session
@@ -64,7 +65,21 @@ export default function App() {
     if (!session) return;
 
     const initOS = async () => {
-      // Phase 4: Boot Kernel
+      // Set owner identity first
+      kernel.setOwner({
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Owner'
+      });
+
+      // Boot Kernel and listen to phase changes
+      const eventBus = serviceManager.get('EventBus');
+      if (eventBus) {
+        eventBus.on('KERNEL_PHASE_COMPLETED', (data) => {
+          setBootPhase(data.phase);
+        });
+      }
+
       await kernel.boot();
       setIsBooted(true);
 
@@ -126,9 +141,34 @@ export default function App() {
   }
 
   if (!isBooted) {
+    const phaseNames = [
+      'KERNEL INITIALIZATION',
+      'SYSTEM CORE REGISTRATION',
+      'EVENT SYSTEM BOOTSTRAP',
+      'ADAPTER REGISTRY INIT',
+      'VERIFICATION ENGINE STARTUP',
+      'ORCHESTRATOR INITIALIZATION',
+      'LOGGING & OBSERVABILITY INIT',
+      'METRICS SYSTEM WARMUP',
+      'KNOWLEDGE & MEMORY SEED',
+      'SYSTEM INTEGRATION CHECK',
+      'FULL SYSTEM ACTIVATION'
+    ];
+
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-slate-950 text-emerald-500 font-mono text-sm">
-        [Kernel] Boot sequence initiated...
+      <div className="flex h-screen w-screen flex-col items-center justify-center bg-slate-950">
+        <div className="text-emerald-500 font-mono text-sm mb-4">
+          [Kernel] Booting MAEF v3.0.0...
+        </div>
+        <div className="w-80 h-2 bg-slate-800 rounded-full overflow-hidden mb-4">
+          <div 
+            className="h-full bg-emerald-500 transition-all duration-500"
+            style={{ width: `${(bootPhase / 10) * 100}%` }}
+          />
+        </div>
+        <div className="text-emerald-400 font-mono text-xs">
+          PHASE {bootPhase}/10: {phaseNames[bootPhase] || 'INITIALIZING'}
+        </div>
       </div>
     );
   }
