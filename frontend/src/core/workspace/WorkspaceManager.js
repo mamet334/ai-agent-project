@@ -22,7 +22,21 @@ export class WorkspaceManager {
       status: 'IDLE'       // INITIALIZE, READY, SUSPENDED, etc.
     };
 
+    this.syncTimeout = null; // Debouncer reference for layout sync
     this.listeners = new Set();
+
+    // Technical Debt Fix: Kernel Shutdown Hook
+    this._setupShutdownHook();
+  }
+
+  _setupShutdownHook() {
+    window.addEventListener('beforeunload', () => {
+      if (this.activeWorkspaceId) {
+        // Synchronously save to local storage before tab closes
+        localStorage.setItem(`mamet_v2_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(this.state.layout));
+        localStorage.setItem(`mamet_v2_${this.appId}_widgets_${this.activeWorkspaceId}`, JSON.stringify(this.state.widgets));
+      }
+    });
   }
 
   /**
@@ -197,6 +211,18 @@ export class WorkspaceManager {
   }
 
   /**
+   * Debounced version of _syncLayoutToSupabase to prevent API spam during resize/drag
+   */
+  _debouncedSyncLayoutToSupabase(workspaceId, layout, widgets) {
+    if (this.syncTimeout) {
+      clearTimeout(this.syncTimeout);
+    }
+    this.syncTimeout = setTimeout(() => {
+      this._syncLayoutToSupabase(workspaceId, layout, widgets);
+    }, 2000); // 2 seconds debounce
+  }
+
+  /**
    * Suspend Phase: Save state before leaving
    */
   async suspendCurrentSession() {
@@ -207,6 +233,7 @@ export class WorkspaceManager {
     localStorage.setItem(`mamet_v2_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(this.state.layout));
     localStorage.setItem(`mamet_v2_${this.appId}_widgets_${this.activeWorkspaceId}`, JSON.stringify(this.state.widgets));
     
+    if (this.syncTimeout) clearTimeout(this.syncTimeout);
     await this._syncLayoutToSupabase(this.activeWorkspaceId, this.state.layout, this.state.widgets);
     
     console.log(`[WorkspaceManager] Suspended workspace: ${this.activeWorkspaceId}`);
@@ -220,8 +247,8 @@ export class WorkspaceManager {
     this._updateState({ layout: newLayout });
     localStorage.setItem(`mamet_v2_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(newLayout));
     
-    // Debounce/Throttle remote sync in production, we do direct for now
-    this._syncLayoutToSupabase(this.activeWorkspaceId, newLayout, this.state.widgets);
+    // Throttled remote sync to prevent API limit drain
+    this._debouncedSyncLayoutToSupabase(this.activeWorkspaceId, newLayout, this.state.widgets);
   }
 
   /**
@@ -243,7 +270,7 @@ export class WorkspaceManager {
       };
       this._updateState({ layout: newLayout });
       localStorage.setItem(`mamet_v2_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(newLayout));
-      this._syncLayoutToSupabase(this.activeWorkspaceId, newLayout, this.state.widgets);
+      this._debouncedSyncLayoutToSupabase(this.activeWorkspaceId, newLayout, this.state.widgets);
     }
   }
 }
