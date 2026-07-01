@@ -435,6 +435,10 @@ class Kernel {
     }
   }
 
+  getCurrentPhase() {
+    return this.currentPhase;
+  }
+
   getHealth() {
     this.health.uptime = Date.now() - this.health.startTime;
     return {

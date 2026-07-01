@@ -29,8 +29,9 @@ export class EventBus {
   }
 
   emit(event, payload) {
-    if (!this.active && event !== 'KERNEL_PHASE_COMPLETED' && event !== 'SYSTEM_READY') {
-      return; // Don't emit non-critical events before activation
+    // Always emit boot-related events regardless of active state
+    if (!this.active && !event.startsWith('KERNEL_') && !event.startsWith('SYSTEM_') && event !== 'OWNER_IDENTITY_SET') {
+      return; // Only block non-boot events before activation
     }
 
     // Emit to wildcard listeners first

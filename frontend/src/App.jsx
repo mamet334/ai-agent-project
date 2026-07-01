@@ -64,6 +64,8 @@ export default function App() {
   useEffect(() => {
     if (!session) return;
 
+    let pollInterval;
+
     const initOS = async () => {
       // Initialize EventBus EARLY so we can listen to boot events
       let eventBus = serviceManager.get('EventBus');
@@ -78,6 +80,12 @@ export default function App() {
         setBootPhase(data.phase);
       });
 
+      // Add polling as FALLBACK to ensure phase updates
+      pollInterval = setInterval(() => {
+        const currentPhase = kernel.getCurrentPhase();
+        setBootPhase(currentPhase);
+      }, 200);
+
       // Set owner identity first
       kernel.setOwner({
         id: session.user.id,
@@ -85,9 +93,14 @@ export default function App() {
         name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Owner'
       });
 
-      // Boot Kernel
-      await kernel.boot();
-      setIsBooted(true);
+      try {
+        // Boot Kernel
+        await kernel.boot();
+        setIsBooted(true);
+      } finally {
+        // Clean up polling
+        if (pollInterval) clearInterval(pollInterval);
+      }
 
       const applicationManager = serviceManager.get('ApplicationManager');
 
@@ -132,6 +145,11 @@ export default function App() {
 
     };
     initOS();
+
+    // Cleanup on unmount
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+    };
   }, [session]);
 
   if (loading) {
