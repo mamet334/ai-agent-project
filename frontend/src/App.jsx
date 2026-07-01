@@ -65,6 +65,19 @@ export default function App() {
     if (!session) return;
 
     const initOS = async () => {
+      // Initialize EventBus EARLY so we can listen to boot events
+      let eventBus = serviceManager.get('EventBus');
+      if (!eventBus) {
+        const { EventBus: EB } = await import('./core/runtime/EventBus');
+        eventBus = new EB();
+        serviceManager.register('EventBus', eventBus);
+      }
+      
+      // Listen to phase changes BEFORE booting kernel
+      eventBus.on('KERNEL_PHASE_COMPLETED', (data) => {
+        setBootPhase(data.phase);
+      });
+
       // Set owner identity first
       kernel.setOwner({
         id: session.user.id,
@@ -72,14 +85,7 @@ export default function App() {
         name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Owner'
       });
 
-      // Boot Kernel and listen to phase changes
-      const eventBus = serviceManager.get('EventBus');
-      if (eventBus) {
-        eventBus.on('KERNEL_PHASE_COMPLETED', (data) => {
-          setBootPhase(data.phase);
-        });
-      }
-
+      // Boot Kernel
       await kernel.boot();
       setIsBooted(true);
 

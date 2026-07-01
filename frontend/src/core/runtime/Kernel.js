@@ -128,15 +128,25 @@ class Kernel {
     this.currentPhase = 1;
     this.log('INFO', 'PHASE 1 — SYSTEM CORE REGISTRATION: Starting');
 
-    // Initialize Event Bus (will be activated in Phase 2)
-    const eventBus = new EventBus();
-    serviceManager.register('EventBus', eventBus);
-    this.log('INFO', 'Event System registered (inactive stub)');
+    // Use existing EventBus or create new one
+    let eventBus = serviceManager.get('EventBus');
+    if (!eventBus) {
+      eventBus = new EventBus();
+      serviceManager.register('EventBus', eventBus);
+      this.log('INFO', 'Event System registered (inactive stub)');
+    } else {
+      this.log('INFO', 'Event System already registered, reusing');
+    }
 
     // Initialize Widget Registry
-    const widgetRegistry = new WidgetRegistry(serviceManager);
-    serviceManager.register('WidgetRegistry', widgetRegistry);
-    this.log('INFO', 'Widget Registry registered');
+    let widgetRegistry = serviceManager.get('WidgetRegistry');
+    if (!widgetRegistry) {
+      widgetRegistry = new WidgetRegistry(serviceManager);
+      serviceManager.register('WidgetRegistry', widgetRegistry);
+      this.log('INFO', 'Widget Registry registered');
+    } else {
+      this.log('INFO', 'Widget Registry already registered, reusing');
+    }
 
     // Register default widgets
     await this._registerDefaultWidgets(widgetRegistry);
