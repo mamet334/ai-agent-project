@@ -68,22 +68,43 @@ export default function ConversationEngine({ sessionId }) {
       const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
       const endpoint = 'https://uuyzdjifhdfyyvpxsofu.supabase.co/functions/v1/agent-process';
       
-      // osState is taken from context
+      // --- AI Brain Injection ---
+      const aiProvider = localStorage.getItem('maef_ai_provider') || 'gemini';
+      const aiModel = localStorage.getItem('maef_ai_model') || '';
+      const aiKey = localStorage.getItem('maef_ai_key') || '';
+      
+      let formattedModel = '';
+      if (aiModel) {
+        if (aiProvider === 'openrouter') formattedModel = `openrouter/${aiModel}`;
+        else if (aiProvider === 'groq') formattedModel = `groq/${aiModel}`;
+        else formattedModel = aiModel;
+      }
+
       const payload = {
-      message: userMsg,
-      mode: osState.capabilities.includes('cap:code-execution') ? 'ENGINEER' : 'OWNER',
-      workspaceTarget: workspaceManager.activeWorkspaceId,
-      history: newMessages.slice(-10),
-      stream: true,
-      ragEnabled: true,
-    };
+        message: userMsg,
+        mode: osState.capabilities.includes('cap:code-execution') ? 'ENGINEER' : 'OWNER',
+        workspaceTarget: workspaceManager.activeWorkspaceId,
+        history: newMessages.slice(-10),
+        stream: true,
+        ragEnabled: true,
+        model: formattedModel || undefined,
+      };
+
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      };
+
+      if (aiKey) {
+        if (aiProvider === 'openrouter') headers['x-byok-openrouter'] = aiKey;
+        else if (aiProvider === 'openai') headers['x-byok-openai'] = aiKey;
+        else if (aiProvider === 'groq') headers['x-byok-groq'] = aiKey;
+        else if (aiProvider === 'gemini') headers['x-byok-gemini'] = aiKey;
+      }
 
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: headers,
         body: JSON.stringify(payload)
       });
 
