@@ -8,6 +8,7 @@ import { UnifiedExecutionContext, RequestPipelineParams, RequestPipelineResult }
 import { RuntimeContext, createBackgroundTaskTracker, createRuntimeLogger } from '../runtime_context.ts';
 import { getPluginPromptList } from '../../plugins/registry.ts';
 import { CapabilityRegistry } from '../adapters/adapter_registry.ts';
+import { compressChatHistory } from './history_compressor.ts';
 
 const getAllKeys = (envVarName: string): string[] => {
   const keysString = Deno.env.get(envVarName) || '';
@@ -216,6 +217,8 @@ Wajib ikuti struktur persis seperti contoh di atas!`;
   ctx.request.isRagEnabled = ctx.policy.ragTopK > 0;
   ctx.request.effectiveRagMatchCount = ctx.policy.ragTopK;
   ctx.request.effectiveRagThreshold = ctx.policy.ragThreshold;
+
+  ctx.request.history = await compressChatHistory(ctx.request.history || [], rctx);
 
   return { ctx, rctx };
 }
