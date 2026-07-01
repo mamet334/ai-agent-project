@@ -7,6 +7,12 @@ export default function Settings() {
   const [owner, setOwner] = useState(null);
   const [health, setHealth] = useState(null);
   
+  // AI Config State
+  const [aiProvider, setAiProvider] = useState(localStorage.getItem('maef_ai_provider') || 'openrouter');
+  const [aiModel, setAiModel] = useState(localStorage.getItem('maef_ai_model') || 'anthropic/claude-3.5-sonnet');
+  const [aiKey, setAiKey] = useState(localStorage.getItem('maef_ai_key') || '');
+  const [saveStatus, setSaveStatus] = useState('');
+  
   useEffect(() => {
     // Get owner from Kernel identity
     setOwner(kernel.identity.owner);
@@ -19,6 +25,14 @@ export default function Settings() {
     
     return () => clearInterval(interval);
   }, []);
+
+  const handleSaveAiConfig = () => {
+    localStorage.setItem('maef_ai_provider', aiProvider);
+    localStorage.setItem('maef_ai_model', aiModel);
+    localStorage.setItem('maef_ai_key', aiKey);
+    setSaveStatus('Saved!');
+    setTimeout(() => setSaveStatus(''), 2000);
+  };
 
   const formatUptime = (ms) => {
     if (!ms) return '0s';
@@ -124,20 +138,31 @@ export default function Settings() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">Provider</label>
-                    <select className="w-full bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-purple-500 transition-colors">
+                    <select 
+                      value={aiProvider}
+                      onChange={(e) => setAiProvider(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-purple-500 transition-colors"
+                    >
                       <option value="openrouter">OpenRouter (Recommended)</option>
                       <option value="openai">OpenAI</option>
                       <option value="anthropic">Anthropic</option>
+                      <option value="groq">Groq</option>
+                      <option value="gemini">Google Gemini</option>
                       <option value="local">Local (Ollama/LMStudio)</option>
                     </select>
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">Model</label>
-                    <select className="w-full bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-purple-500 transition-colors">
+                    <select 
+                      value={aiModel}
+                      onChange={(e) => setAiModel(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-purple-500 transition-colors"
+                    >
                       <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet</option>
                       <option value="openai/gpt-4o">GPT-4o</option>
                       <option value="meta-llama/llama-3-70b-instruct">Llama 3 70B</option>
                       <option value="google/gemini-pro-1.5">Gemini 1.5 Pro</option>
+                      <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
                     </select>
                   </div>
                 </div>
@@ -149,11 +174,16 @@ export default function Settings() {
                   <div className="relative">
                     <input 
                       type="password" 
+                      value={aiKey}
+                      onChange={(e) => setAiKey(e.target.value)}
                       placeholder="sk-or-v1-..." 
                       className="w-full bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-lg pl-3 pr-16 py-2 outline-none focus:border-purple-500 transition-colors font-mono placeholder:text-slate-700"
                     />
-                    <button className="absolute right-2 top-1/2 -translate-y-1/2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded transition-colors border border-slate-700">
-                      Save
+                    <button 
+                      onClick={handleSaveAiConfig}
+                      className={`absolute right-2 top-1/2 -translate-y-1/2 text-xs px-2 py-1 rounded transition-colors border ${saveStatus ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300'}`}
+                    >
+                      {saveStatus || 'Save'}
                     </button>
                   </div>
                 </div>
