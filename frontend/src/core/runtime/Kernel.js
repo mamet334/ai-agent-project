@@ -122,18 +122,21 @@ class Kernel {
     this.log('INFO', 'PHASE 1 — SYSTEM CORE REGISTRATION: Started');
 
     // Event System (reuse if already registered)
-    let eventBus = serviceManager.get('EventBus');
-    if (!eventBus) {
+    let eventBus;
+    if (serviceManager.has('EventBus')) {
+      eventBus = serviceManager.get('EventBus');
+      this.log('INFO', 'Event System Already Registered — Reusing');
+    } else {
       eventBus = new EventBus();
       serviceManager.register('EventBus', eventBus);
       this.log('INFO', 'Event System Registered');
-    } else {
-      this.log('INFO', 'Event System Already Registered — Reusing');
     }
 
     // Widget Registry
-    let widgetRegistry = serviceManager.get('WidgetRegistry');
-    if (!widgetRegistry) {
+    let widgetRegistry;
+    if (serviceManager.has('WidgetRegistry')) {
+      widgetRegistry = serviceManager.get('WidgetRegistry');
+    } else {
       widgetRegistry = new WidgetRegistry(serviceManager);
       serviceManager.register('WidgetRegistry', widgetRegistry);
       this.log('INFO', 'Widget Registry Registered');
