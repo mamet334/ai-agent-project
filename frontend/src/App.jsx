@@ -4,9 +4,10 @@ import AppShell from './components/workbench/AppShell'
 import ConversationEngine from './components/workbench/ConversationEngine'
 import ErrorBoundary from './components/workbench/ErrorBoundary'
 import Login from './components/Login'
+import Settings from './components/Settings'
 import { serviceManager } from './core/runtime/ServiceManager'
 import { kernel } from './core/runtime/Kernel'
-import { MessageSquare, Terminal, Database, FlaskConical, LogOut } from 'lucide-react'
+import { MessageSquare, Terminal, Database, FlaskConical, LogOut, Settings as SettingsIcon } from 'lucide-react'
 import { WorkspaceProvider } from './core/workspace/WorkspaceContext'
 import { supabase } from './supabase'
 import './App.css'
@@ -25,20 +26,7 @@ const EngineerAppWrapper = () => (
 
 const MemoryAppWrapper = () => <div className="p-8 text-slate-400">Memory App (Phase 3 Placeholder)</div>
 const ResearchAppWrapper = () => <div className="p-8 text-slate-400">Research App (Phase 3 Placeholder)</div>
-const SettingsAppWrapper = () => (
-  <div className="p-8">
-    <div className="max-w-md mx-auto">
-      <h2 className="text-xl font-semibold text-white mb-6">Settings</h2>
-      <button
-        onClick={async () => await supabase.auth.signOut()}
-        className="flex items-center gap-2 px-4 py-2 bg-red-900/30 border border-red-800 text-red-300 rounded-lg hover:bg-red-900/50 transition-colors"
-      >
-        <LogOut className="w-4 h-4" />
-        Sign Out
-      </button>
-    </div>
-  </div>
-)
+
 
 export default function App() {
   const [isBooted, setIsBooted] = React.useState(false)
@@ -84,7 +72,7 @@ export default function App() {
       applicationManager.registerApp({ id: 'app:engineer', name: 'Engineer', iconComponent: Terminal, renderComponent: EngineerAppWrapper })
       applicationManager.registerApp({ id: 'app:memory', name: 'Memory', iconComponent: Database, renderComponent: MemoryAppWrapper })
       applicationManager.registerApp({ id: 'app:research', name: 'Research', iconComponent: FlaskConical, renderComponent: ResearchAppWrapper })
-      applicationManager.registerApp({ id: 'app:settings', name: 'Settings', iconComponent: FlaskConical, renderComponent: SettingsAppWrapper })
+      applicationManager.registerApp({ id: 'app:settings', name: 'Settings', iconComponent: SettingsIcon, renderComponent: Settings })
       applicationManager.activateApp('app:assistant')
     }
 
