@@ -87,7 +87,7 @@ export default function ConversationEngine({ sessionId }) {
         mode: osState.capabilities.includes('cap:code-execution') ? 'ENGINEER' : 'OWNER',
         workspaceTarget: workspaceManager.activeWorkspaceId,
         history: newMessages.slice(-10),
-        stream: true,
+        stream: false,
         ragEnabled: true,
         model: formattedModel || undefined,
       };
