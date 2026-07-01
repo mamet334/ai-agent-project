@@ -74,7 +74,7 @@ export default function App() {
 
       // Listen for Kernel phase changes
       eventBus.on('KERNEL_PHASE_COMPLETED', (data) => setBootPhase(data.phase))
-      // Also poll as fallback
+      // Also poll as fallback - START BEFORE BOOT!
       pollInterval = setInterval(() => setBootPhase(kernel.getCurrentPhase()), 200)
 
       // Set Owner Identity FIRST
