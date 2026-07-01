@@ -151,6 +151,7 @@ export default function ConversationEngine({ sessionId }) {
       let done = false;
       let aiResponseText = '';
       let processingSteps = [];
+      let buffer = '';
 
       console.log("[LIFECYCLE] Stream started");
       setMessages(prev => [...prev, { role: 'model', content: '', steps: [], isStreaming: true }]);
@@ -159,8 +160,9 @@ export default function ConversationEngine({ sessionId }) {
         const { value, done: readerDone } = await reader.read();
         done = readerDone;
         if (value) {
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
           for (const line of lines) {
             if (line.startsWith('data: ')) {
               const dataStr = line.substring(6).trim();
