@@ -65,11 +65,13 @@ export default function App() {
 
     const initOS = async () => {
       // Initialize EventBus EARLY to listen to Kernel phases
-      let eventBus = serviceManager.get('EventBus')
-      if (!eventBus) {
-        const { EventBus: EB } = await import('./core/runtime/EventBus')
-        eventBus = new EB()
-        serviceManager.register('EventBus', eventBus)
+      let eventBus;
+      if (serviceManager.has('EventBus')) {
+        eventBus = serviceManager.get('EventBus');
+      } else {
+        const { EventBus: EB } = await import('./core/runtime/EventBus');
+        eventBus = new EB();
+        serviceManager.register('EventBus', eventBus);
       }
 
       // Listen for Kernel phase changes

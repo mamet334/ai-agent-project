@@ -17,6 +17,10 @@ export class ServiceManager {
     }
     return this.services.get(name);
   }
+
+  has(name) {
+    return this.services.has(name);
+  }
 }
 
 // Global Singleton for the DI Container
