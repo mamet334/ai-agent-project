@@ -6,6 +6,26 @@ import { RuntimeContext } from '../runtime_context.ts';
 export class CapabilityRegistry {
   private static adapters = new Map<string, CapabilityAdapter>();
   private static isInitialized = false;
+  private static providerCooldowns = new Map<string, number>();
+
+  public static clearAllCooldowns() {
+    this.providerCooldowns.clear();
+  }
+
+  public static isProviderLocked(provider: string): boolean {
+    const expires = this.providerCooldowns.get(provider);
+    if (!expires) return false;
+    if (Date.now() > expires) {
+      this.providerCooldowns.delete(provider);
+      return false;
+    }
+    return true;
+  }
+
+  public static lockProvider(provider: string, durationMs: number = 60000) {
+    this.providerCooldowns.set(provider, Date.now() + durationMs);
+    console.log(`🔒 Provider cooldown set for ${provider} (${durationMs}ms)`);
+  }
 
   public static async initializeAdapters(rctx: RuntimeContext) {
     // Re-initialize for each execution context to ensure keys are fresh
@@ -35,6 +55,7 @@ export class CapabilityRegistry {
   public static getAvailableAIAdapters(preferredOrder: string[]): CapabilityAdapter[] {
     const available: CapabilityAdapter[] = [];
     for (const name of preferredOrder) {
+      if (this.isProviderLocked(name)) continue;
       const adapter = this.adapters.get(name);
       if (adapter) available.push(adapter);
     }

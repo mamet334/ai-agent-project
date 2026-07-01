@@ -7,18 +7,7 @@ import { buildUnifiedExecutionContext } from './execution_context.ts';
 import { UnifiedExecutionContext, RequestPipelineParams, RequestPipelineResult } from './types.ts';
 import { RuntimeContext, createBackgroundTaskTracker, createRuntimeLogger } from '../runtime_context.ts';
 import { getPluginPromptList } from '../../plugins/registry.ts';
-import { geminiKeyIndex, setGeminiKeyIndex, groqKeyIndex, setGroqKeyIndex, openaiKeyIndex, setOpenaiKeyIndex, openrouterKeyIndex, setOpenrouterKeyIndex, clearAllCooldowns } from '../llm_orchestrator.ts';
-
-const getActiveKey = (envVarName: string, currentIndex: number, setIndex: (idx: number) => void): string => {
-  const keysString = Deno.env.get(envVarName) || '';
-  if (!keysString) return '';
-  const keys = keysString.split(',').map(k => k.trim()).filter(k => k);
-  if (keys.length === 0) return '';
-  
-  const key = keys[currentIndex % keys.length];
-  setIndex((currentIndex + 1) % keys.length);
-  return key;
-};
+import { CapabilityRegistry } from '../adapters/adapter_registry.ts';
 
 const getAllKeys = (envVarName: string): string[] => {
   const keysString = Deno.env.get(envVarName) || '';
@@ -45,7 +34,7 @@ export async function executeRequestPipeline(
 
   const bypassCooldown = request.headers.get('x-bypass-cooldown') === 'true';
   if (bypassCooldown) {
-    clearAllCooldowns();
+    CapabilityRegistry.clearAllCooldowns();
     console.log("🔓 Cooldowns cleared via x-bypass-cooldown header!");
   }
 
@@ -86,10 +75,17 @@ export async function executeRequestPipeline(
   const byokOpenAI = request.headers.get('x-byok-openai');
   const byokOpenRouter = request.headers.get('x-byok-openrouter');
 
-  const GEMINI_API_KEY = (byokGemini || getActiveKey('GEMINI_API_KEY', geminiKeyIndex, setGeminiKeyIndex) || '').trim();
-  const GROQ_API_KEY = (byokGroq || getActiveKey('GROQ_API_KEY', groqKeyIndex, setGroqKeyIndex) || '').trim();
-  const OPENAI_API_KEY = (byokOpenAI || getActiveKey('OPENAI_API_KEY', openaiKeyIndex, setOpenaiKeyIndex) || '').trim();
-  const OPENROUTER_API_KEY = (byokOpenRouter || getActiveKey('OPENROUTER_API_KEY', openrouterKeyIndex, setOpenrouterKeyIndex) || '').trim();
+  const allGeminiKeys = getAllKeys('GEMINI_API_KEY');
+  const GEMINI_API_KEY = (byokGemini || (allGeminiKeys.length > 0 ? allGeminiKeys[0] : '')).trim();
+  
+  const allGroqKeys = getAllKeys('GROQ_API_KEY');
+  const GROQ_API_KEY = (byokGroq || (allGroqKeys.length > 0 ? allGroqKeys[0] : '')).trim();
+  
+  const allOpenAIKeys = getAllKeys('OPENAI_API_KEY');
+  const OPENAI_API_KEY = (byokOpenAI || (allOpenAIKeys.length > 0 ? allOpenAIKeys[0] : '')).trim();
+  
+  const allOpenRouterKeys = getAllKeys('OPENROUTER_API_KEY');
+  const OPENROUTER_API_KEY = (byokOpenRouter || (allOpenRouterKeys.length > 0 ? allOpenRouterKeys[0] : '')).trim();
 
   if (!GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY is not set');

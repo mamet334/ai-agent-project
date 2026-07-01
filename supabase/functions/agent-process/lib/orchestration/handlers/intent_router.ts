@@ -10,7 +10,7 @@ export const IntentRouterHandler = {
     let contractValidation = ctx.request.contractValidation;
 
     if (!tools || tools.length === 0) {
-      maef.evaluatePhaseResult('CONTEXT_BUILD', { isChatBiasa: true });
+      maef.evaluatePhaseResult('CONTEXT_BUILD', { skipPhases: ['ORCHESTRATION', 'TOOL_EXECUTION'] });
       return { isChatBiasa: true, plan, contractValidation };
     }
 
@@ -62,7 +62,9 @@ export const IntentRouterHandler = {
       }
     } 
 
-    maef.evaluatePhaseResult('CONTEXT_BUILD', { isChatBiasa });
+    maef.evaluatePhaseResult('CONTEXT_BUILD', { 
+      skipPhases: isChatBiasa ? ['ORCHESTRATION', 'TOOL_EXECUTION'] : [] 
+    });
 
     if (maef.shouldExecutePhase('ORCHESTRATION')) {
         let coordinatorSystemPrompt = `Tugas Anda adalah menganalisis permintaan user dan memilih sub-agent yang tepat.\nAnda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList(tools)}\n\nPENTING:\n1. Anda adalah mesin parsing JSON. Anda DILARANG KERAS merespons dengan kalimat atau teks biasa. Anda WAJIB mengembalikan HANYA sebuah Array JSON murni. Jika tidak butuh sub-agent, kembalikan [].\n2. Jika user menanyakan informasi aktual, fakta terbaru, atau info di luar batas pengetahuan internal Anda, Anda WAJIB memanggil sub-agent "researcher" atau "deep_research".\n3. Jika user meminta penjadwalan, panggil "cron_manager".\n4. JIKA pertanyaan user adalah tentang data spesifik yang ada di Pangkalan Data RAG/Dokumen internal user, kembalikan [].\n5. RULE KETAT KNOWLEDGE WORKSPACE:\n- MACRO QUERY: panggil "knowledge_manager".\n- MICRO QUERY: kembalikan [].\n- LOKAL FOLDER: panggil "file_analyzer".\nContoh Output Wajib: [{"subagent": "researcher", "task": "Cari pemenang MotoGP 2026"}]`;

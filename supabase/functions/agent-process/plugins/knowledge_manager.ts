@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { evaluateKnowledgeQuality } from '../lib/knowledge_quality_filter.ts';
-import { chunkText, getGeminiEmbeddingWithRetry } from '../lib/vector_utils.ts';
+import { chunkText } from '../lib/vector_utils.ts';
+import { generateEmbedding } from '../lib/rag/embedding.ts';
 
 export const knowledgeManagerPlugin = {
   name: 'knowledge_manager',
@@ -137,9 +138,11 @@ export const knowledgeManagerPlugin = {
           const chunks = chunkText(contentToSave, 4500);
           let successCount = 0;
           for (const chunk of chunks) {
-             const embeddingVector = await getGeminiEmbeddingWithRetry(chunk, env.allGeminiKeys);
-             const { error: chunkErr } = await supabase.from('document_chunks').insert({ document_id: docData.id, content: chunk, embedding: embeddingVector });
-             if (!chunkErr) successCount++;
+             const embeddingVector = await generateEmbedding(chunk, context.rctx);
+             if (embeddingVector && embeddingVector.length === 768) {
+               const { error: chunkErr } = await supabase.from('document_chunks').insert({ document_id: docData.id, content: chunk, embedding: embeddingVector });
+               if (!chunkErr) successCount++;
+             }
           }
 
           // 💾 STEP 4: SAVE DECISION TRANSPARENCY LAYER

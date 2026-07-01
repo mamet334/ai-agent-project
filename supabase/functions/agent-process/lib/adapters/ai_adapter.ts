@@ -1,5 +1,4 @@
 import { CapabilityAdapter, AdapterContext, AdapterResult } from './capability_adapter.ts';
-import { callGroq, callOpenRouter, callOpenAI } from '../provider_manager.ts';
 import { RuntimeContext } from '../runtime_context.ts';
 
 async function* processOpenAIStream(res: Response): AsyncGenerator<string, void, unknown> {
@@ -39,7 +38,31 @@ export class GroqAdapter implements CapabilityAdapter {
 
   async execute(input: any, context: AdapterContext): Promise<AdapterResult> {
     const { promptText, systemPromptText, chatHistory } = input;
-    const answer = await callGroq(promptText, systemPromptText || '', chatHistory || [], this.rctx);
+    const messages = [];
+    if (systemPromptText) messages.push({ role: 'system', content: systemPromptText });
+    if (chatHistory && chatHistory.length > 0) {
+      for (const msg of chatHistory) messages.push({ role: msg.role === 'model' ? 'assistant' : 'user', content: msg.content });
+    }
+    messages.push({ role: 'user', content: promptText });
+    
+    let groqModel = 'llama-3.1-8b-instant';
+    if (this.rctx.model.model && this.rctx.model.model.startsWith('groq/')) {
+      groqModel = this.rctx.model.model.replace('groq/', '');
+    } else if (this.rctx.model.model === 'groq-llama-3.3') {
+      groqModel = 'llama-3.3-70b-versatile';
+    } else if (this.rctx.model.model === 'groq-llama-3.1') {
+      groqModel = 'llama-3.1-8b-instant';
+    }
+
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${this.rctx.keys.groq}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: groqModel, messages, temperature: 0.1 })
+    });
+    if (!res.ok) throw new Error(`Groq API Error: ${res.status} ${await res.text()}`);
+    const data = await res.json();
+    const answer = data.choices?.[0]?.message?.content || '';
+    
     return {
       result: answer,
       confidence: 0.9,
@@ -95,7 +118,38 @@ export class OpenRouterAdapter implements CapabilityAdapter {
 
   async execute(input: any, context: AdapterContext): Promise<AdapterResult> {
     const { promptText, systemPromptText, chatHistory, forceDefaultModel } = input;
-    const answer = await callOpenRouter(promptText, systemPromptText || '', chatHistory || [], !!forceDefaultModel, this.rctx);
+    const messages = [];
+    if (systemPromptText) messages.push({ role: 'system', content: systemPromptText });
+    if (chatHistory && chatHistory.length > 0) {
+      for (const msg of chatHistory) messages.push({ role: msg.role === 'model' ? 'assistant' : 'user', content: msg.content });
+    }
+    messages.push({ role: 'user', content: promptText });
+    
+    let openRouterModel = 'anthropic/claude-sonnet-4.6';
+    if (!forceDefaultModel) {
+      if (this.rctx.model.model && this.rctx.model.model.startsWith('openrouter/')) {
+        openRouterModel = this.rctx.model.model.replace('openrouter/', '');
+      } else if (this.rctx.model.model === 'openrouter-llama-3') {
+        openRouterModel = 'anthropic/claude-sonnet-4.6';
+      } else if (this.rctx.model.model === 'openrouter-google-gemini-2.0-flash-exp') {
+        openRouterModel = 'anthropic/claude-sonnet-4.6';
+      }
+    }
+
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.rctx.keys.openRouter}`,
+        'HTTP-Referer': 'https://ai-agent-project.vercel.app',
+        'X-Title': 'Mamet AI Agent',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ model: openRouterModel, messages, temperature: 0.1 })
+    });
+    if (!res.ok) throw new Error(`OpenRouter API Error: ${res.status} ${await res.text()}`);
+    const data = await res.json();
+    const answer = data.choices?.[0]?.message?.content || '';
+
     return {
       result: answer,
       confidence: 0.9,
@@ -311,7 +365,23 @@ export class OpenAIAdapter implements CapabilityAdapter {
 
   async execute(input: any, context: AdapterContext): Promise<AdapterResult> {
     const { promptText, systemPromptText, chatHistory } = input;
-    const answer = await callOpenAI(promptText, systemPromptText || '', chatHistory || [], undefined, this.rctx);
+    const messages = [];
+    if (systemPromptText) messages.push({ role: 'system', content: systemPromptText });
+    if (chatHistory && chatHistory.length > 0) {
+      for (const msg of chatHistory) messages.push({ role: msg.role === 'model' ? 'assistant' : 'user', content: msg.content });
+    }
+    messages.push({ role: 'user', content: promptText });
+    
+    const selectedModel = this.rctx.model.model || 'gpt-4o-mini';
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${this.rctx.keys.openAI}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: selectedModel, messages, temperature: 0.1 })
+    });
+    if (!res.ok) throw new Error(`OpenAI API Error: ${res.status} ${await res.text()}`);
+    const data = await res.json();
+    const answer = data.choices?.[0]?.message?.content || '';
+
     return {
       result: answer,
       confidence: 0.9,

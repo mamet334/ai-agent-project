@@ -33,12 +33,10 @@ export class MAEFStateMachine {
 
   // --- CONTROL PLANE: Lifecycle Decision Authority ---
   public evaluatePhaseResult(phase: MAEFPhase, result: any): void {
-    if (phase === 'CONTEXT_BUILD') {
-       if (result.isChatBiasa) {
-           // Chat Biasa skips Orchestration and Tool Execution
-           this.allowedNextPhases.delete('ORCHESTRATION');
-           this.allowedNextPhases.delete('TOOL_EXECUTION');
-       }
+    if (result && Array.isArray(result.skipPhases)) {
+        for (const phaseToSkip of result.skipPhases) {
+            this.allowedNextPhases.delete(phaseToSkip);
+        }
     }
   }
 

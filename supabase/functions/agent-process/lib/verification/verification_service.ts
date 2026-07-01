@@ -1,7 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { RuntimeContext } from '../runtime_context.ts';
 import { EvidenceReport } from './types.ts';
-import { VerificationReport, VerificationAuditRecord } from '../verification_engine.ts';
+import { VerificationReport, VerificationAuditRecord } from './verification_engine.ts';
 
 /**
  * Verification Service — Infrastructure Layer
