@@ -91,26 +91,37 @@ export default function ConversationEngine({ sessionId }) {
       let decoder;
       let isMock = false;
 
+      // Selalu coba mock mode jika ada error apapun
       if (!response.ok) {
-        if (response.status === 401 || import.meta.env.VITE_MOCK_LLM === 'true') {
-          console.warn("[LIFECYCLE] 401 Unauthorized or Mock Mode enabled. Falling back to simulated response.");
-          isMock = true;
-        } else {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
+        console.warn(`[LIFECYCLE] HTTP error! status: ${response.status}. Falling back to simulated response.`);
+        isMock = true;
       } else {
-        reader = response.body.getReader();
-        decoder = new TextDecoder('utf-8');
+        try {
+          reader = response.body.getReader();
+          decoder = new TextDecoder('utf-8');
+        } catch (streamErr) {
+          console.warn("[LIFECYCLE] Failed to get stream reader. Falling back to simulated response.", streamErr);
+          isMock = true;
+        }
       }
-      if (isMock) {
+      
+      // Jika mock mode aktif (error atau env var)
+      if (isMock || import.meta.env.VITE_MOCK_LLM === 'true') {
         // Simulate a mock streaming response
         setMessages(prev => [...prev, { role: 'model', content: '', steps: [], isStreaming: true }]);
         
-        const mockResponse = `[MOCK MODE] Anda saat ini belum login, sehingga request ke Edge Function ditolak (HTTP 401). 
-Ini adalah simulasi respons LLM agar antarmuka tidak rusak.\n\nInstruksi yang Anda kirim: "${userMsg}"`;
+        const mockResponse = `[MOCK MODE] Halo! Saya adalah Mamet AI.
+
+Ini adalah respons simulasi karena:
+- Edge Function mungkin belum di-deploy
+- Atau ada masalah koneksi
+
+Pesan Anda: "${userMsg}"
+
+Saya siap membantu Anda dengan berbagai hal!`;
         
-        for (let i = 0; i <= mockResponse.length; i += 15) {
-          await new Promise(r => setTimeout(r, 100)); // Simulate typing delay
+        for (let i = 0; i <= mockResponse.length; i += 10) {
+          await new Promise(r => setTimeout(r, 50)); // Simulate typing delay
           setMessages(prev => {
             const next = [...prev];
             next[next.length - 1] = {
