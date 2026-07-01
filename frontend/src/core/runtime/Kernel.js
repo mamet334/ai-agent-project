@@ -42,7 +42,7 @@ class Kernel {
       allowed_workspaces: ['ENGINEER', '*'],
       default_size: { width: 300, height: 400 },
       default_workbench: 'left',
-      component: lazyLoadWithRetry(() => import('../../components/widgets/EngineeringTasksWidget'), 'widget:engineering-tasks')
+      component: lazyLoadWithRetry(() => import('../../components/widgets/EngineeringTasksWidget.jsx'), 'widget:engineering-tasks')
     });
 
     widgetRegistry.register({
@@ -53,7 +53,7 @@ class Kernel {
       allowed_workspaces: ['ENGINEER', '*'],
       default_size: { width: 300, height: 400 },
       default_workbench: 'left',
-      component: lazyLoadWithRetry(() => import('../../components/widgets/ArchitectureGapsWidget'), 'widget:architecture-gaps')
+      component: lazyLoadWithRetry(() => import('../../components/widgets/ArchitectureGapsWidget.jsx'), 'widget:architecture-gaps')
     });
 
     widgetRegistry.register({
@@ -64,7 +64,7 @@ class Kernel {
       allowed_workspaces: ['ENGINEER', '*'],
       default_size: { width: 300, height: 400 },
       default_workbench: 'right',
-      component: lazyLoadWithRetry(() => import('../../components/widgets/VerificationLogWidget'), 'widget:verification-log')
+      component: lazyLoadWithRetry(() => import('../../components/widgets/VerificationLogWidget.jsx'), 'widget:verification-log')
     });
 
     widgetRegistry.register({
@@ -75,7 +75,7 @@ class Kernel {
       allowed_workspaces: ['*'],
       default_size: { width: 250, height: 400 },
       default_workbench: 'left',
-      component: lazyLoadWithRetry(() => import('../../components/widgets/WorkspaceNavWidget'), 'widget:workspace-nav')
+      component: lazyLoadWithRetry(() => import('../../components/widgets/WorkspaceNavWidget.jsx'), 'widget:workspace-nav')
     });
 
     const applicationManager = new ApplicationManager(serviceManager);
