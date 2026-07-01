@@ -2,6 +2,7 @@ import { ApplicationManager } from '../application/ApplicationManager';
 import { WindowManager } from '../window/WindowManager';
 import { WidgetRegistry } from '../workspace/WidgetRegistry';
 import { lazyLoadWithRetry } from '../workspace/lazyLoadWithRetry';
+import { EventBus } from './EventBus';
 import { MessageSquare, Terminal, Database, FlaskConical } from 'lucide-react';
 
 class Kernel {
@@ -15,6 +16,11 @@ class Kernel {
 
     this.status = 'booting';
     console.log('[Kernel] Boot sequence initiated');
+
+    // Phase 0: Register EventBus
+    const eventBus = new EventBus();
+    serviceManager.register('EventBus', eventBus);
+    console.log('[Kernel] EventBus registered');
 
     // Phase 1: Register Widget Registry
     const widgetRegistry = new WidgetRegistry(serviceManager);
