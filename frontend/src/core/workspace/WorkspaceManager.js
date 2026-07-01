@@ -252,6 +252,36 @@ export class WorkspaceManager {
   }
 
   /**
+   * Widget Control: Used by Golden Layout / Drag-and-Drop to move widgets
+   */
+  moveWidget(widgetId, fromWorkbench, toWorkbench, newIndex) {
+    const layout = { ...this.state.layout };
+    
+    const fromList = [...(layout[`${fromWorkbench}_workbench`] || [])];
+    const toList = fromWorkbench === toWorkbench ? fromList : [...(layout[`${toWorkbench}_workbench`] || [])];
+    
+    const currentIndex = fromList.indexOf(widgetId);
+    if (currentIndex === -1) return;
+    
+    fromList.splice(currentIndex, 1);
+    
+    if (newIndex === undefined || newIndex === -1) {
+      toList.push(widgetId);
+    } else {
+      toList.splice(newIndex, 0, widgetId);
+    }
+    
+    layout[`${fromWorkbench}_workbench`] = fromList;
+    if (fromWorkbench !== toWorkbench) {
+      layout[`${toWorkbench}_workbench`] = toList;
+    }
+    
+    this._updateState({ layout });
+    localStorage.setItem(`mamet_v2_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(layout));
+    this._debouncedSyncLayoutToSupabase(this.activeWorkspaceId, layout, this.state.widgets);
+  }
+
+  /**
    * Widget Control: Used by UI Events (like Conversation Engine) to pop open a widget
    */
   openWidgetInWorkbench(workbenchPosition, widgetId, widgetData) {
