@@ -70,11 +70,12 @@ export default function ConversationEngine({ sessionId }) {
       
       // osState is taken from context
       const payload = {
-        message: userMsg,
-        mode: osState.capabilities.includes('cap:code-execution') ? 'ENGINEER' : 'OWNER',
-        workspaceTarget: workspaceManager.activeWorkspaceId,
-        history: newMessages.slice(-10),
-      };
+      message: userMsg,
+      mode: osState.capabilities.includes('cap:code-execution') ? 'ENGINEER' : 'OWNER',
+      workspaceTarget: workspaceManager.activeWorkspaceId,
+      history: newMessages.slice(-10),
+      stream: true,
+    };
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -97,6 +98,17 @@ export default function ConversationEngine({ sessionId }) {
         }
         console.error("[LIFECYCLE] Edge Function Error:", errorText);
         setMessages(prev => [...prev, { role: 'model', content: `⚠️ Error: ${errorText}` }]);
+        setIsLoading(false);
+        return;
+      }
+
+      // Check if response is JSON (DIRECT mode) or stream
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        console.log("[LIFECYCLE] Received JSON response (DIRECT mode)");
+        const jsonData = await response.json();
+        const messageContent = jsonData.message || jsonData;
+        setMessages(prev => [...prev, { role: 'model', content: messageContent }]);
         setIsLoading(false);
         return;
       }
