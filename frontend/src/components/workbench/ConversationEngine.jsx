@@ -157,11 +157,19 @@ Ini adalah simulasi respons LLM agar antarmuka tidak rusak.\n\nInstruksi yang An
                   if (parsed.step) {
                      processingSteps.push(parsed.step);
                   }
+                  // Parsing format dari edge function: { choices: [{ delta: { content: "teks" } }] }
+                  let chunkText = '';
                   if (parsed.text) {
-                    aiResponseText += parsed.text;
+                    chunkText = parsed.text;
+                  } else if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) {
+                    chunkText = parsed.choices[0].delta.content;
                   }
                   
-                  console.log("[LIFECYCLE] Stream chunk received:", dataStr);
+                  if (chunkText) {
+                    aiResponseText += chunkText;
+                  }
+                  
+                  console.log("[LIFECYCLE] Stream chunk received:", dataStr, "Extracted text:", chunkText);
                   
                   setMessages(prev => {
                     const next = [...prev];
