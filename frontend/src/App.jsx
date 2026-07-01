@@ -44,7 +44,6 @@ export default function App() {
   const [isBooted, setIsBooted] = React.useState(false);
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [bootPhase, setBootPhase] = useState(0);
 
   useEffect(() => {
     // Check active session
@@ -64,43 +63,10 @@ export default function App() {
   useEffect(() => {
     if (!session) return;
 
-    let pollInterval;
-
     const initOS = async () => {
-      // Initialize EventBus EARLY so we can listen to boot events
-      let eventBus = serviceManager.get('EventBus');
-      if (!eventBus) {
-        const { EventBus: EB } = await import('./core/runtime/EventBus');
-        eventBus = new EB();
-        serviceManager.register('EventBus', eventBus);
-      }
-      
-      // Listen to phase changes BEFORE booting kernel
-      eventBus.on('KERNEL_PHASE_COMPLETED', (data) => {
-        setBootPhase(data.phase);
-      });
-
-      // Add polling as FALLBACK to ensure phase updates
-      pollInterval = setInterval(() => {
-        const currentPhase = kernel.getCurrentPhase();
-        setBootPhase(currentPhase);
-      }, 200);
-
-      // Set owner identity first
-      kernel.setOwner({
-        id: session.user.id,
-        email: session.user.email,
-        name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Owner'
-      });
-
-      try {
-        // Boot Kernel
-        await kernel.boot();
-        setIsBooted(true);
-      } finally {
-        // Clean up polling
-        if (pollInterval) clearInterval(pollInterval);
-      }
+      // Phase 4: Boot Kernel
+      await kernel.boot(serviceManager);
+      setIsBooted(true);
 
       const applicationManager = serviceManager.get('ApplicationManager');
 
@@ -145,11 +111,6 @@ export default function App() {
 
     };
     initOS();
-
-    // Cleanup on unmount
-    return () => {
-      if (pollInterval) clearInterval(pollInterval);
-    };
   }, [session]);
 
   if (loading) {
@@ -165,34 +126,9 @@ export default function App() {
   }
 
   if (!isBooted) {
-    const phaseNames = [
-      'KERNEL INITIALIZATION',
-      'SYSTEM CORE REGISTRATION',
-      'EVENT SYSTEM BOOTSTRAP',
-      'ADAPTER REGISTRY INIT',
-      'VERIFICATION ENGINE STARTUP',
-      'ORCHESTRATOR INITIALIZATION',
-      'LOGGING & OBSERVABILITY INIT',
-      'METRICS SYSTEM WARMUP',
-      'KNOWLEDGE & MEMORY SEED',
-      'SYSTEM INTEGRATION CHECK',
-      'FULL SYSTEM ACTIVATION'
-    ];
-
     return (
-      <div className="flex h-screen w-screen flex-col items-center justify-center bg-slate-950">
-        <div className="text-emerald-500 font-mono text-sm mb-4">
-          [Kernel] Booting MAEF v3.0.0...
-        </div>
-        <div className="w-80 h-2 bg-slate-800 rounded-full overflow-hidden mb-4">
-          <div 
-            className="h-full bg-emerald-500 transition-all duration-500"
-            style={{ width: `${(bootPhase / 10) * 100}%` }}
-          />
-        </div>
-        <div className="text-emerald-400 font-mono text-xs">
-          PHASE {bootPhase}/10: {phaseNames[bootPhase] || 'INITIALIZING'}
-        </div>
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-950 text-emerald-500 font-mono text-sm">
+        [Kernel] Booting...
       </div>
     );
   }
