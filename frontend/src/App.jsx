@@ -1,12 +1,14 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import OSDesktopShell from './components/os/OSDesktopShell'
 import AppShell from './components/workbench/AppShell'
 import ConversationEngine from './components/workbench/ConversationEngine'
 import ErrorBoundary from './components/workbench/ErrorBoundary'
+import Login from './components/Login'
 import { serviceManager } from './core/runtime/ServiceManager'
 import { kernel } from './core/runtime/Kernel'
-import { MessageSquare, Terminal, Database, FlaskConical } from 'lucide-react'
+import { MessageSquare, Terminal, Database, FlaskConical, LogOut } from 'lucide-react'
 import { WorkspaceProvider } from './core/workspace/WorkspaceContext'
+import { supabase } from './supabase'
 import './App.css'
 
 const AssistantAppWrapper = () => (
@@ -23,12 +25,44 @@ const EngineerAppWrapper = () => (
 
 const MemoryAppWrapper = () => <div className="p-8 text-slate-400">Memory App (Phase 3 Placeholder)</div>
 const ResearchAppWrapper = () => <div className="p-8 text-slate-400">Research App (Phase 3 Placeholder)</div>
-const SettingsAppWrapper = () => <div className="p-8 text-slate-400">Settings App (Phase 3 Placeholder)</div>
+const SettingsAppWrapper = () => (
+  <div className="p-8">
+    <div className="max-w-md mx-auto">
+      <h2 className="text-xl font-semibold text-white mb-6">Settings</h2>
+      <button
+        onClick={async () => await supabase.auth.signOut()}
+        className="flex items-center gap-2 px-4 py-2 bg-red-900/30 border border-red-800 text-red-300 rounded-lg hover:bg-red-900/50 transition-colors"
+      >
+        <LogOut className="w-4 h-4" />
+        Sign Out
+      </button>
+    </div>
+  </div>
+)
 
 export default function App() {
   const [isBooted, setIsBooted] = React.useState(false);
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Check active session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!session) return;
+
     const initOS = async () => {
       // Phase 4: Boot Kernel
       await kernel.boot();
@@ -77,7 +111,19 @@ export default function App() {
 
     };
     initOS();
-  }, []);
+  }, [session]);
+
+  if (loading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-950 text-emerald-500 font-mono text-sm">
+        [Auth] Checking session...
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <Login onLoginSuccess={() => {}} />;
+  }
 
   if (!isBooted) {
     return (
