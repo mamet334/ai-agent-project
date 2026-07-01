@@ -37,15 +37,24 @@ export const searchDocuments = async (
     const getWords = (s: string) => s.toLowerCase().match(/\w+/g) || [];
     const wordsA = getWords(strA);
     const wordsB = getWords(strB);
-    const dict = new Set([...wordsA, ...wordsB]);
+    
+    if (wordsA.length === 0 || wordsB.length === 0) return 0;
+
+    const freqA = new Map<string, number>();
+    for (const w of wordsA) freqA.set(w, (freqA.get(w) || 0) + 1);
+    
+    const freqB = new Map<string, number>();
+    for (const w of wordsB) freqB.set(w, (freqB.get(w) || 0) + 1);
+
     let dotProduct = 0; let normA = 0; let normB = 0;
-    dict.forEach(w => {
-      const countA = wordsA.filter(x => x === w).length;
-      const countB = wordsB.filter(x => x === w).length;
-      dotProduct += countA * countB;
-      normA += countA * countA;
+    
+    for (const count of freqA.values()) { normA += count * count; }
+    for (const [w, countB] of freqB.entries()) {
       normB += countB * countB;
-    });
+      const countA = freqA.get(w) || 0;
+      dotProduct += countA * countB;
+    }
+    
     if (normA === 0 || normB === 0) return 0;
     return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
   };
