@@ -27,6 +27,7 @@ export interface MAEFEvent {
 type EventHandler = (event: MAEFEvent) => Promise<void> | void;
 
 class EventBus {
+  private readonly MAX_EVENTS = 1000;
   private subscribers = new Map<EventType, EventHandler[]>();
   private eventStore: MAEFEvent[] = [];
 
@@ -39,6 +40,10 @@ class EventBus {
 
     console.log(`[EVENT_BUS] ${fullEvent.type} from ${fullEvent.source} | trace_id: ${fullEvent.trace_id || 'none'}`);
     this.eventStore.push(fullEvent);
+    
+    if (this.eventStore.length > this.MAX_EVENTS) {
+      this.eventStore.shift();
+    }
 
     const handlers = this.subscribers.get(fullEvent.type) || [];
     for (const handler of handlers) {

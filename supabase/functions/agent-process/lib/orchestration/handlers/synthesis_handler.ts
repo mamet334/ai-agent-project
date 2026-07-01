@@ -1,6 +1,6 @@
 import { runLLM } from '../../llm_orchestrator.ts';
 import { executeResponsePipeline } from '../../coordinator/parser_pipeline.ts';
-import { VerificationEngine } from '../../verification_engine.ts';
+import { VerificationEngine } from '../../verification/verification_engine.ts';
 import { eventBus } from '../../event/event_bus.ts';
 
 export const SynthesisHandler = {

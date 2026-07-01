@@ -3,7 +3,7 @@ import { validateEvidence } from './evidence_validator.ts';
 import { calculateConfidence } from './confidence_engine.ts';
 import { PolicyEngine } from './policy_engine.ts';
 import { buildUniversalContract } from './universal_contract.ts';
-import { VerificationEngine, VerificationReport } from '../verification_engine.ts';
+import { VerificationEngine, VerificationReport } from './verification_engine.ts';
 import { getActiveConflictsCount, persistEvidenceAuditLog, persistVerificationAuditLog } from './verification_service.ts';
 import { EvidenceReport, ConfidenceReport, PolicyAction } from './types.ts';
 

@@ -116,7 +116,7 @@ export const initializeToolSubscriber = () => {
         const executeContext = { 
             task: fullTask, cleanTask: task, accumulatedContext, 
             env: { ...env, signal: abortController.signal, fetch: controlledFetch }, 
-            runLLM: customRunLLM, runResearch: customRunResearch, userId, signal: abortController.signal 
+            runLLM: customRunLLM, runResearch: customRunResearch, userId, signal: abortController.signal, rctx
         };
 
         const isolatedExecutionPromise = (async () => {

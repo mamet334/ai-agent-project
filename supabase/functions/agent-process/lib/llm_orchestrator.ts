@@ -1,17 +1,8 @@
 import { RuntimeContext } from './runtime_context.ts';
-import { callGroq, callOpenAI, callOpenRouter } from './provider_manager.ts';
 import { eventBus } from './event/event_bus.ts';
 import { CapabilityRegistry } from './adapters/adapter_registry.ts';
 
-// Global state for Round-Robin API Keys (persists across warm invocations)
-export let geminiKeyIndex = 0;
-export const setGeminiKeyIndex = (idx: number) => { geminiKeyIndex = idx; };
-export let groqKeyIndex = 0;
-export const setGroqKeyIndex = (idx: number) => { groqKeyIndex = idx; };
-export let openaiKeyIndex = 0;
-export const setOpenaiKeyIndex = (idx: number) => { openaiKeyIndex = idx; };
-export let openrouterKeyIndex = 0;
-export const setOpenrouterKeyIndex = (idx: number) => { openrouterKeyIndex = idx; };
+// API Key state moved to Adapters
 
 
 
@@ -22,41 +13,7 @@ const PROVIDER_COOLDOWN_DURATIONS: Record<string, number> = {
   'groq': 3600000         // 1 hour for Groq (rentan rate limit)
 };
 
-const providerCooldowns = new Map<string, number>();
-
-export const clearAllCooldowns = () => {
-  providerCooldowns.clear();
-};
-
-const isProviderLocked = (provider: string): boolean => {
-  const expires = providerCooldowns.get(provider);
-  if (!expires) return false;
-  if (Date.now() > expires) {
-    providerCooldowns.delete(provider);
-    return false;
-  }
-  return true;
-};
-
-const lockProvider = (provider: string, durationMs?: number) => {
-  const duration = durationMs ?? PROVIDER_COOLDOWN_DURATIONS[provider] ?? 60000;
-  providerCooldowns.set(provider, Date.now() + duration);
-  console.log(`🔒 Provider cooldown set for ${provider} (${duration}ms)`);
-};
-
-const getAvailableProviders = (providers: Array<'gemini' | 'openrouter' | 'groq'>): Array<'gemini' | 'openrouter' | 'groq'> => {
-  return providers.filter(p => !isProviderLocked(p));
-};
-
-const clearExpiredCooldowns = () => {
-  const now = Date.now();
-  for (const [provider, expires] of providerCooldowns.entries()) {
-    if (now > expires) {
-      providerCooldowns.delete(provider);
-      console.log(`🔓 Provider cooldown expired for ${provider}`);
-    }
-  }
-};
+// Cooldown state moved to CapabilityRegistry
 
 export const callLLMWithMetadata = async (
   promptText: string,
@@ -67,7 +24,6 @@ export const callLLMWithMetadata = async (
   rctx: RuntimeContext,
   tools: string[] = []
 ): Promise<{ result: string; metadata?: any }> => {
-  clearExpiredCooldowns();
   await CapabilityRegistry.initializeAdapters(rctx);
 
   const buildPayload = (tools: string[] = []) => {
@@ -100,9 +56,8 @@ export const callLLMWithMetadata = async (
      cascadeOrder = [preferredProvider, ...cascadeOrder.filter(p => p !== preferredProvider)];
   }
 
-  // Filter available via cooldown check
-  const allowedOrder = cascadeOrder.filter(p => !isProviderLocked(p));
-  const availableAdapters = CapabilityRegistry.getAvailableAIAdapters(allowedOrder);
+  // Filter available via cooldown check in Registry
+  const availableAdapters = CapabilityRegistry.getAvailableAIAdapters(cascadeOrder);
 
   console.log(`🎯 Cascade order: ${availableAdapters.map(a => a.name).join(' -> ')}`);
 
@@ -110,7 +65,7 @@ export const callLLMWithMetadata = async (
   let lastError = '';
 
   if (availableAdapters.length === 0) {
-    lastError = `No available AI adapters. Locked: ${cascadeOrder.filter(p => isProviderLocked(p)).join(', ')}`;
+    lastError = `No available AI adapters. Locked: ${cascadeOrder.filter(p => CapabilityRegistry.isProviderLocked(p)).join(', ')}`;
   }
 
   for (const adapter of availableAdapters) {
@@ -149,7 +104,7 @@ export const callLLMWithMetadata = async (
       
       if (isRateLimit) {
         console.log(`🚫 Adapter ${adapter.name} hit rate limit (429), locking for ${PROVIDER_COOLDOWN_DURATIONS[providerKey] || 60000}ms`);
-        lockProvider(providerKey);
+        CapabilityRegistry.lockProvider(providerKey, PROVIDER_COOLDOWN_DURATIONS[providerKey] || 60000);
         await rctx.logger.logAgentEvent('RATE_LIMIT_HIT', providerKey, `429 Error: ${message.substring(0, 200)}`);
       } else {
         await rctx.logger.logAgentEvent('FALLBACK_TRIGGERED', providerKey, `Error: ${message.substring(0, 200)}`);

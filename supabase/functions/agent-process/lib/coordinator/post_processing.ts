@@ -1,4 +1,4 @@
-import { VerificationEngine } from '../verification_engine.ts';
+import { VerificationEngine } from '../verification/verification_engine.ts';
 import { executeResponsePipeline } from './parser_pipeline.ts';
 
 export interface PostProcessInput {
