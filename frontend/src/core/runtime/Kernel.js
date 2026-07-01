@@ -10,13 +10,19 @@ class Kernel {
   }
 
   async boot() {
-    if (this.status !== 'COLD') {
-      console.log(`[KERNEL] Boot skipped (status: ${this.status})`);
-      return;
+    if (this.bootPromise) {
+      console.log(`[KERNEL] Boot already in progress or finished, returning existing promise.`);
+      return this.bootPromise;
     }
     
-    console.log('[KERNEL] Booting Mamet OS...');
-    this.status = 'BOOTING';
+    this.bootPromise = (async () => {
+      if (this.status !== 'COLD') {
+        console.log(`[KERNEL] Boot skipped (status: ${this.status})`);
+        return;
+      }
+      
+      console.log('[KERNEL] Booting Mamet OS...');
+      this.status = 'BOOTING';
 
     // 1. Core Runtime Services (Phase 4)
     const eventBus = new EventBus();
@@ -79,8 +85,11 @@ class Kernel {
     const windowManager = new WindowManager(serviceManager);
     serviceManager.register('WindowManager', windowManager);
 
-    this.status = 'RUNNING';
-    console.log('[KERNEL] System Ready.');
+      this.status = 'RUNNING';
+      console.log('[KERNEL] System Ready.');
+    })();
+    
+    return this.bootPromise;
   }
 }
 
