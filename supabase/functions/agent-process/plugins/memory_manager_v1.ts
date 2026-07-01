@@ -3,12 +3,15 @@ import { parseCognitiveIntent, bindCognitiveExecution } from '../lib/context_opt
 import { compressCognitiveContext } from './context_compressor.ts';
 
 // Helper to log audits asynchronously
-const logMemoryAudit = (supabaseUrl, supabaseKey, payload) => {
+const logMemoryAudit = (supabaseUrl, supabaseKey, payload, rctx) => {
   try {
     const supabase = createClient(supabaseUrl, supabaseKey);
-    supabase.from('memory_audit_logs').insert([payload]).then(({error}) => {
+    const promise = supabase.from('memory_audit_logs').insert([payload]).then(({error}) => {
       if (error) console.error("Audit log insert error:", error);
     });
+    if (rctx && rctx.tasks) {
+      rctx.tasks.add(promise);
+    }
   } catch(e) {
     console.error("Audit log setup error:", e);
   }
@@ -116,7 +119,8 @@ export const retrieveMemoriesV2 = async (userPrompt: string, userId: string, sup
     
     // Asynchronous hit tracker
     if (compressedContext.source_nodes.length > 0) {
-       supabase.rpc('update_memory_stats', { memory_ids: compressedContext.source_nodes }).catch(() => {});
+       const promise = supabase.rpc('update_memory_stats', { memory_ids: compressedContext.source_nodes }).catch(() => {});
+       if (rctx && rctx.tasks) rctx.tasks.add(promise);
     }
     
     return [finalMemoryObject];
@@ -137,7 +141,7 @@ export const retrieveMemories = async (userPrompt: string, userId: string, supab
 
   const startTime = Date.now();
   if (!userId || userPrompt.trim().length < 4) {
-     logMemoryAudit(supabaseUrl, supabaseKey, { user_id: userId, event_type: 'memory_retrieval_failed', status: 'FAILED', reason: 'query_too_short', query: userPrompt, execution_time_ms: Date.now() - startTime });
+     logMemoryAudit(supabaseUrl, supabaseKey, { user_id: userId, event_type: 'memory_retrieval_failed', status: 'FAILED', reason: 'query_too_short', query: userPrompt, execution_time_ms: Date.now() - startTime }, rctx);
      return [];
   }
   try {
@@ -267,9 +271,10 @@ export const retrieveMemories = async (userPrompt: string, userId: string, supab
     if (finalMemories.length > 0) {
        const memoryIds = finalMemories.map(m => m.id).filter(id => id);
        if (memoryIds.length > 0) {
-           supabase.rpc('update_memory_stats', { memory_ids: memoryIds })
+           const promise = supabase.rpc('update_memory_stats', { memory_ids: memoryIds })
              .then(({error}) => { if (error) console.error("Update memory stats error:", error) })
              .catch(e => console.error("Update memory stats exception:", e));
+           if (rctx && rctx.tasks) rctx.tasks.add(promise);
        }
     }
     
@@ -277,18 +282,18 @@ export const retrieveMemories = async (userPrompt: string, userId: string, supab
     
     // DETECT INTENT UNTUK REPORTING/LOOKUP (Rule-based)
     if (promptLower.includes('deadline')) {
-      logMemoryAudit(supabaseUrl, supabaseKey, { user_id: userId, event_type: 'deadline_lookup', status: 'SUCCESS', query: userPrompt, matched_memories: topMemories.length, execution_time_ms: latencyMs });
+      logMemoryAudit(supabaseUrl, supabaseKey, { user_id: userId, event_type: 'deadline_lookup', status: 'SUCCESS', query: userPrompt, matched_memories: topMemories.length, execution_time_ms: latencyMs }, rctx);
     } else if (promptLower.includes('tugas')) {
-      logMemoryAudit(supabaseUrl, supabaseKey, { user_id: userId, event_type: 'task_lookup', status: 'SUCCESS', query: userPrompt, matched_memories: topMemories.length, execution_time_ms: latencyMs });
+      logMemoryAudit(supabaseUrl, supabaseKey, { user_id: userId, event_type: 'task_lookup', status: 'SUCCESS', query: userPrompt, matched_memories: topMemories.length, execution_time_ms: latencyMs }, rctx);
     } else if (promptLower.includes('laporan')) {
-      logMemoryAudit(supabaseUrl, supabaseKey, { user_id: userId, event_type: 'report_generation', status: 'SUCCESS', query: userPrompt, matched_memories: topMemories.length, execution_time_ms: latencyMs });
+      logMemoryAudit(supabaseUrl, supabaseKey, { user_id: userId, event_type: 'report_generation', status: 'SUCCESS', query: userPrompt, matched_memories: topMemories.length, execution_time_ms: latencyMs }, rctx);
     } else {
-      logMemoryAudit(supabaseUrl, supabaseKey, { user_id: userId, event_type: 'memory_retrieval_success', status: 'SUCCESS', query: userPrompt, matched_memories: topMemories.length, execution_time_ms: latencyMs });
+      logMemoryAudit(supabaseUrl, supabaseKey, { user_id: userId, event_type: 'memory_retrieval_success', status: 'SUCCESS', query: userPrompt, matched_memories: topMemories.length, execution_time_ms: latencyMs }, rctx);
     }
     
     return finalMemories;
   } catch (e) {
-    logMemoryAudit(supabaseUrl, supabaseKey, { user_id: userId, event_type: 'memory_retrieval_failed', status: 'FAILED', reason: e.message, query: userPrompt, execution_time_ms: Date.now() - startTime });
+    logMemoryAudit(supabaseUrl, supabaseKey, { user_id: userId, event_type: 'memory_retrieval_failed', status: 'FAILED', reason: e.message, query: userPrompt, execution_time_ms: Date.now() - startTime }, rctx);
     return [];
   }
 };
