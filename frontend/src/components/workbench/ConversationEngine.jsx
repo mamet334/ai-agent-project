@@ -47,7 +47,7 @@ export default function ConversationEngine({ sessionId }) {
   // Handle Event Flow (Integrasi UI Event ke Right Workbench)
   const openLifecycleInspector = (stepName, logs) => {
     // 1. Dapatkan referensi Widget Registry dari event
-    workspaceManager.openWidgetInWorkbench('right', 'widget:verification-log', {
+    workspaceManager.openWidgetInWorkbench('right', 'widget:maef-monitor', {
       focusStep: stepName,
       logs: logs
     });

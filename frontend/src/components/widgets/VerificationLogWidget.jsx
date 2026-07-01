@@ -7,53 +7,16 @@ export default function VerificationLogWidget() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const eventBus = kernel.serviceManager?.has('EventBus') ? kernel.serviceManager.get('EventBus') : null;
-    let unsub = null;
-
-    if (eventBus) {
-      unsub = eventBus.subscribe(event => {
-        if (event.type === 'Widget.DataInjected' && event.payload.widgetId === 'widget:verification-log') {
-          const executionTrace = event.payload.data;
-          
-          let title = 'MAEF Execution Trace';
-          let resultText = 'PASS';
-          let evidenceText = '';
-
-          // If from conversation engine, we passed `m.metadata`
-          if (executionTrace && executionTrace.processingSteps) {
-            evidenceText = `Tools Used: ${executionTrace.toolsUsed?.length || 0}\nSubagents: ${executionTrace.subagentRuns?.length || 0}\nSteps:\n- ${executionTrace.processingSteps?.join('\n- ')}`;
-          } else if (executionTrace && executionTrace.logs) {
-            // from old format (m.steps)
-            evidenceText = `Steps:\n- ${executionTrace.logs?.join('\n- ')}`;
-          } else {
-            evidenceText = JSON.stringify(executionTrace);
-          }
-
-          setLogs([{
-            id: 'trace-' + Date.now(),
-            related_task: title,
-            result: resultText,
-            evidence: evidenceText
-          }]);
-          setLoading(false);
-        }
-      });
-    }
-
     const fetchLogs = async () => {
       const { data, error } = await supabase
         .from('verification_runs')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(20);
-      if (data && logs.length === 0) setLogs(data); // only load if trace hasn't overwritten it
+      if (data) setLogs(data); 
       setLoading(false);
     };
     fetchLogs();
-
-    return () => {
-      if (unsub) unsub();
-    };
   }, []);
 
   const getStatusColor = (status) => {
