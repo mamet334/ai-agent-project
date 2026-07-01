@@ -304,15 +304,28 @@ export class WorkspaceManager {
       this._debouncedSyncLayoutToSupabase(this.activeWorkspaceId, newLayout, this.state.widgets);
     }
     
-    if (widgetData && this.serviceManager && this.serviceManager.has('EventBus')) {
-      const eventBus = this.serviceManager.get('EventBus');
-      setTimeout(() => {
-        eventBus.emit({
-          type: 'Widget.DataInjected',
-          source: 'WorkspaceManager',
-          payload: { widgetId, data: widgetData }
-        });
-      }, 100);
+    if (widgetData) {
+      this.widgetDataStore = this.widgetDataStore || {};
+      this.widgetDataStore[widgetId] = widgetData;
+
+      if (this.serviceManager && this.serviceManager.has('EventBus')) {
+        const eventBus = this.serviceManager.get('EventBus');
+        // Let the widget mount first if it was just added (for already mounted widgets)
+        setTimeout(() => {
+          eventBus.emit({
+            type: 'Widget.DataInjected',
+            source: 'WorkspaceManager',
+            payload: { widgetId, data: widgetData }
+          });
+        }, 100);
+      }
     }
+  }
+
+  /**
+   * Retrieves data injected into a widget, useful for widgets that mount AFTER the data was injected.
+   */
+  getWidgetData(widgetId) {
+    return this.widgetDataStore ? this.widgetDataStore[widgetId] : null;
   }
 }
