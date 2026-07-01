@@ -41,96 +41,104 @@ const SettingsAppWrapper = () => (
 )
 
 export default function App() {
-  const [isBooted, setIsBooted] = React.useState(false);
-  const [session, setSession] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [isBooted, setIsBooted] = React.useState(false)
+  const [session, setSession] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [bootPhase, setBootPhase] = useState(0)
+  let pollInterval
 
   useEffect(() => {
-    // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
+      setSession(session)
+      setLoading(false)
+    })
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
+      setSession(session)
+    })
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => subscription.unsubscribe()
+  }, [])
 
   useEffect(() => {
-    if (!session) return;
+    if (!session) return
 
     const initOS = async () => {
-      // Phase 4: Boot Kernel
-      await kernel.boot(serviceManager);
-      setIsBooted(true);
+      // Initialize EventBus EARLY to listen to Kernel phases
+      let eventBus = serviceManager.get('EventBus')
+      if (!eventBus) {
+        const { EventBus: EB } = await import('./core/runtime/EventBus')
+        eventBus = new EB()
+        serviceManager.register('EventBus', eventBus)
+      }
 
-      const applicationManager = serviceManager.get('ApplicationManager');
+      // Listen for Kernel phase changes
+      eventBus.on('KERNEL_PHASE_COMPLETED', (data) => setBootPhase(data.phase))
+      // Also poll as fallback
+      pollInterval = setInterval(() => setBootPhase(kernel.getCurrentPhase()), 200)
 
-      // 1. Register applications to the App Manager
-      applicationManager.registerApp({
-      id: 'app:assistant',
-      name: 'Assistant',
-      iconComponent: MessageSquare,
-      renderComponent: AssistantAppWrapper
-    });
+      // Set Owner Identity FIRST
+      kernel.setOwner({
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Owner'
+      })
 
-    applicationManager.registerApp({
-      id: 'app:engineer',
-      name: 'Engineer',
-      iconComponent: Terminal,
-      renderComponent: EngineerAppWrapper
-    });
+      // Boot Kernel with serviceManager
+      await kernel.boot(serviceManager)
+      setIsBooted(true)
 
-    applicationManager.registerApp({
-      id: 'app:memory',
-      name: 'Memory',
-      iconComponent: Database,
-      renderComponent: MemoryAppWrapper
-    });
+      // Register & Activate Apps
+      const applicationManager = serviceManager.get('ApplicationManager')
+      applicationManager.registerApp({ id: 'app:assistant', name: 'Assistant', iconComponent: MessageSquare, renderComponent: AssistantAppWrapper })
+      applicationManager.registerApp({ id: 'app:engineer', name: 'Engineer', iconComponent: Terminal, renderComponent: EngineerAppWrapper })
+      applicationManager.registerApp({ id: 'app:memory', name: 'Memory', iconComponent: Database, renderComponent: MemoryAppWrapper })
+      applicationManager.registerApp({ id: 'app:research', name: 'Research', iconComponent: FlaskConical, renderComponent: ResearchAppWrapper })
+      applicationManager.registerApp({ id: 'app:settings', name: 'Settings', iconComponent: FlaskConical, renderComponent: SettingsAppWrapper })
+      applicationManager.activateApp('app:assistant')
+    }
 
-    applicationManager.registerApp({
-      id: 'app:research',
-      name: 'Research',
-      iconComponent: FlaskConical,
-      renderComponent: ResearchAppWrapper
-    });
+    initOS()
 
-    applicationManager.registerApp({
-      id: 'app:settings',
-      name: 'Settings',
-      iconComponent: FlaskConical, // Just a placeholder icon, ActivityBar uses its own Settings icon for the bottom button
-      renderComponent: SettingsAppWrapper
-    });
-
-    // 2. Activate default app
-    applicationManager.activateApp('app:assistant');
-
-    };
-    initOS();
-  }, [session]);
+    // Cleanup poll
+    return () => { if (pollInterval) clearInterval(pollInterval) }
+  }, [session])
 
   if (loading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-slate-950 text-emerald-500 font-mono text-sm">
         [Auth] Checking session...
       </div>
-    );
+    )
   }
 
   if (!session) {
-    return <Login onLoginSuccess={() => {}} />;
+    return <Login onLoginSuccess={() => {}} />
   }
 
   if (!isBooted) {
+    const phaseNames = [
+      'KERNEL INITIALIZATION', 'SYSTEM CORE REGISTRATION', 'EVENT SYSTEM BOOTSTRAP',
+      'ADAPTER REGISTRY INIT', 'VERIFICATION ENGINE STARTUP', 'ORCHESTRATOR INITIALIZATION',
+      'LOGGING & OBSERVABILITY INIT', 'METRICS SYSTEM WARMUP', 'KNOWLEDGE & MEMORY INITIAL SEED',
+      'SYSTEM INTEGRATION CHECK', 'FULL SYSTEM ACTIVATION'
+    ]
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-slate-950 text-emerald-500 font-mono text-sm">
-        [Kernel] Booting...
+      <div className="flex h-screen w-screen flex-col items-center justify-center bg-slate-950">
+        <div className="text-emerald-500 font-mono text-sm mb-4">
+          [Kernel] Booting MAEF v3.0.0...
+        </div>
+        <div className="w-80 h-2 bg-slate-800 rounded-full overflow-hidden mb-4">
+          <div 
+            className="h-full bg-emerald-500 transition-all duration-500"
+            style={{ width: `${(bootPhase / 10) * 100}%` }}
+          />
+        </div>
+        <div className="text-emerald-400 font-mono text-xs">
+          PHASE {bootPhase}/10: {phaseNames[bootPhase] || 'INITIALIZING'}
+        </div>
       </div>
-    );
+    )
   }
 
   return (

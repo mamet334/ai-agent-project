@@ -1,5 +1,3 @@
-import { EventBus } from '../runtime/EventBus';
-
 /**
  * Phase 5: Window Manager Foundation
  * Level 5 in Mamet OS Architecture.
@@ -9,13 +7,13 @@ import { EventBus } from '../runtime/EventBus';
 export class WindowManager {
   constructor(serviceManager) {
     this.serviceManager = serviceManager;
+    this.eventBus = serviceManager.get('EventBus'); // Use global EventBus from ServiceManager
     // The window tree state (Foundation for future GoldenLayout-like engine)
     this.state = {
       floatingWindows: new Map(),
       splitPanes: new Map(),
       activeFocus: null
     };
-    this.eventBus = new EventBus(); // Internal bus for window events
   }
 
   // --- Foundation APIs ---
