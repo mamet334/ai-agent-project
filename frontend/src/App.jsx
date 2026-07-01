@@ -6,7 +6,6 @@ import ErrorBoundary from './components/workbench/ErrorBoundary'
 import Login from './components/Login'
 import { serviceManager } from './core/runtime/ServiceManager'
 import { kernel } from './core/runtime/Kernel'
-import { EventBus as CoreEventBus } from './core/runtime/EventBus'
 import { MessageSquare, Terminal, Database, FlaskConical, LogOut } from 'lucide-react'
 import { WorkspaceProvider } from './core/workspace/WorkspaceContext'
 import { supabase } from './supabase'
@@ -65,17 +64,6 @@ export default function App() {
     if (!session) return
 
     const initOS = async () => {
-      // Initialize EventBus EARLY to listen to Kernel phases
-      let eventBus;
-      if (serviceManager.has('EventBus')) {
-        eventBus = serviceManager.get('EventBus');
-      } else {
-        eventBus = new CoreEventBus();
-        serviceManager.register('EventBus', eventBus);
-      }
-
-      // Listen for Kernel phase changes
-      eventBus.on('KERNEL_PHASE_COMPLETED', (data) => setBootPhase(data.phase))
       // Also poll as fallback - START BEFORE BOOT!
       pollInterval = setInterval(() => setBootPhase(kernel.getCurrentPhase()), 200)
 
