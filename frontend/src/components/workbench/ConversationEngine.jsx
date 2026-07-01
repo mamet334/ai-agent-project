@@ -87,146 +87,111 @@ export default function ConversationEngine({ sessionId }) {
 
       console.log(`[LIFECYCLE] LLM response received (HTTP Status: ${response.status})`);
       
+      if (!response.ok) {
+        let errorText = `HTTP error! status: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorText = errorData.error || errorText;
+        } catch (_) {
+          errorText = await response.text() || errorText;
+        }
+        console.error("[LIFECYCLE] Edge Function Error:", errorText);
+        setMessages(prev => [...prev, { role: 'model', content: `⚠️ Error: ${errorText}` }]);
+        setIsLoading(false);
+        return;
+      }
+
       let reader;
       let decoder;
-      let isMock = false;
-
-      // Selalu coba mock mode jika ada error apapun
-      if (!response.ok) {
-        console.warn(`[LIFECYCLE] HTTP error! status: ${response.status}. Falling back to simulated response.`);
-        isMock = true;
-      } else {
-        try {
-          reader = response.body.getReader();
-          decoder = new TextDecoder('utf-8');
-        } catch (streamErr) {
-          console.warn("[LIFECYCLE] Failed to get stream reader. Falling back to simulated response.", streamErr);
-          isMock = true;
-        }
+      try {
+        reader = response.body.getReader();
+        decoder = new TextDecoder('utf-8');
+      } catch (streamErr) {
+        console.error("[LIFECYCLE] Failed to get stream reader:", streamErr);
+        setMessages(prev => [...prev, { role: 'model', content: `⚠️ Error: Gagal membaca aliran data.` }]);
+        setIsLoading(false);
+        return;
       }
-      
-      // Jika mock mode aktif (error atau env var)
-      if (isMock || import.meta.env.VITE_MOCK_LLM === 'true') {
-        // Simulate a mock streaming response
-        setMessages(prev => [...prev, { role: 'model', content: '', steps: [], isStreaming: true }]);
-        
-        const mockResponse = `[MOCK MODE] Halo! Saya adalah Mamet AI.
+      let done = false;
+      let aiResponseText = '';
+      let processingSteps = [];
 
-Ini adalah respons simulasi karena:
-- Edge Function mungkin belum di-deploy
-- Atau ada masalah koneksi
+      console.log("[LIFECYCLE] Stream started");
+      setMessages(prev => [...prev, { role: 'model', content: '', steps: [], isStreaming: true }]);
 
-Pesan Anda: "${userMsg}"
-
-Saya siap membantu Anda dengan berbagai hal!`;
-        
-        for (let i = 0; i <= mockResponse.length; i += 10) {
-          await new Promise(r => setTimeout(r, 50)); // Simulate typing delay
-          setMessages(prev => {
-            const next = [...prev];
-            next[next.length - 1] = {
-              role: 'model',
-              content: mockResponse.substring(0, i),
-              steps: [{ text: "Simulated routing decision" }],
-              isStreaming: true
-            };
-            return next;
-          });
-        }
-        
-        setMessages(prev => {
-          const next = [...prev];
-          next[next.length - 1] = {
-            role: 'model',
-            content: mockResponse,
-            steps: [{ text: "Simulated routing decision" }],
-            isStreaming: false
-          };
-          return next;
-        });
-        
-      } else {
-        let done = false;
-        let aiResponseText = '';
-        let processingSteps = [];
-
-        console.log("[LIFECYCLE] Stream started");
-        setMessages(prev => [...prev, { role: 'model', content: '', steps: [], isStreaming: true }]);
-
-        while (!done) {
-          const { value, done: readerDone } = await reader.read();
-          done = readerDone;
-          if (value) {
-            const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split('\n');
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                const dataStr = line.substring(6).trim();
-                if (dataStr === '[DONE]') continue;
-                try {
-                  const parsed = JSON.parse(dataStr);
-                  if (parsed.step) {
-                     processingSteps.push(parsed.step);
-                  }
-                  // Parsing format dari edge function: { choices: [{ delta: { content: "teks" } }] }
-                  let chunkText = '';
-                  if (parsed.text) {
-                    chunkText = parsed.text;
-                  } else if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) {
-                    chunkText = parsed.choices[0].delta.content;
-                  }
-                  
-                  if (chunkText) {
-                    aiResponseText += chunkText;
-                  }
-                  
-                  console.log("[LIFECYCLE] Stream chunk received:", dataStr, "Extracted text:", chunkText);
-                  
-                  setMessages(prev => {
-                    const next = [...prev];
-                    next[next.length - 1] = {
-                      role: 'model',
-                      content: aiResponseText,
-                      steps: [...processingSteps],
-                      isStreaming: !done
-                    };
-                    return next;
-                  });
-                  console.log("[LIFECYCLE] Bubble updated");
-                } catch (err) {
-                   console.error("[LIFECYCLE] Exception during chunk processing:", err);
-                   aiResponseText += `\n\n[System Error: Gagal memproses aliran data. Root Cause: ${err.message}]`;
-                   setMessages(prev => {
-                     const next = [...prev];
-                     next[next.length - 1] = {
-                       role: 'model',
-                       content: aiResponseText,
-                       steps: [...processingSteps],
-                       isStreaming: false
-                     };
-                     return next;
-                   });
-                   done = true; // Architecturally stop the stream on unrecoverable parsing error
+      while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        if (value) {
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const dataStr = line.substring(6).trim();
+              if (dataStr === '[DONE]') continue;
+              try {
+                const parsed = JSON.parse(dataStr);
+                if (parsed.step) {
+                   processingSteps.push(parsed.step);
                 }
+                // Parsing format dari edge function: { choices: [{ delta: { content: "teks" } }] }
+                let chunkText = '';
+                if (parsed.text) {
+                  chunkText = parsed.text;
+                } else if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) {
+                  chunkText = parsed.choices[0].delta.content;
+                }
+                
+                if (chunkText) {
+                  aiResponseText += chunkText;
+                }
+                
+                console.log("[LIFECYCLE] Stream chunk received:", dataStr, "Extracted text:", chunkText);
+                
+                setMessages(prev => {
+                  const next = [...prev];
+                  next[next.length - 1] = {
+                    role: 'model',
+                    content: aiResponseText,
+                    steps: [...processingSteps],
+                    isStreaming: !done
+                  };
+                  return next;
+                });
+                console.log("[LIFECYCLE] Bubble updated");
+              } catch (err) {
+                 console.error("[LIFECYCLE] Exception during chunk processing:", err);
+                 aiResponseText += `\n\n[System Error: Gagal memproses aliran data. Root Cause: ${err.message}]`;
+                 setMessages(prev => {
+                   const next = [...prev];
+                   next[next.length - 1] = {
+                     role: 'model',
+                     content: aiResponseText,
+                     steps: [...processingSteps],
+                     isStreaming: false
+                   };
+                   return next;
+                 });
+                 done = true; // Architecturally stop the stream on unrecoverable parsing error
               }
             }
           }
         }
-        
-        // Finalize
-        console.log("[LIFECYCLE] Stream completed");
-        setMessages(prev => {
-          const next = [...prev];
-          next[next.length - 1].isStreaming = false;
-          return next;
-        });
-        
-        // Populate aiResponseText for OS Execution Interceptor
-        var finalAiResponseText = aiResponseText;
       }
+      
+      // Finalize
+      console.log("[LIFECYCLE] Stream completed");
+      setMessages(prev => {
+        const next = [...prev];
+        next[next.length - 1].isStreaming = false;
+        return next;
+      });
+      
+      // Populate aiResponseText for OS Execution Interceptor
+      const finalAiResponseText = aiResponseText;
 
       // === OS EXECUTION INTERCEPTOR (Local Sandbox Execution) ===
-      if (!isMock && window.electronAPI && osState.capabilities.includes('cap:code-execution')) {
+      if (window.electronAPI && osState.capabilities.includes('cap:code-execution')) {
         let interceptHit = false;
         let autoReply = '';
 
