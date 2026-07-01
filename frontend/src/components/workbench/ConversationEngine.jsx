@@ -51,12 +51,12 @@ export default function ConversationEngine({ sessionId }) {
     });
   };
 
-  const handleSend = async (e) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
+  const handleSend = async (e, autoOverrideMsg = null) => {
+    if (e) e.preventDefault();
+    const userMsg = autoOverrideMsg || input.trim();
+    if (!userMsg || isLoading) return;
 
-    const userMsg = input.trim();
-    setInput('');
+    if (!autoOverrideMsg) setInput('');
     const newMessages = [...messages, { role: 'user', content: userMsg }];
     setMessages(newMessages);
     console.log("[LIFECYCLE] Chat request sent");
@@ -156,6 +156,90 @@ export default function ConversationEngine({ sessionId }) {
         return next;
       });
 
+      // === OS EXECUTION INTERCEPTOR (Local Sandbox Execution) ===
+      if (window.electronAPI && osState.capabilities.includes('cap:code-execution')) {
+        let interceptHit = false;
+        let autoReply = '';
+
+        // 1. Terminal parsing (<terminal>...</terminal>)
+        const termMatch = aiResponseText.match(/<terminal>([\s\S]*?)<\/terminal>/i);
+        const mdTermMatch = aiResponseText.match(/```(?:bash|sh|cmd|powershell|ps1)?\n([\s\S]*?)```/i);
+        let rawCmd = null;
+
+        if (termMatch) {
+          rawCmd = termMatch[1].trim();
+        } else if (mdTermMatch) {
+          // Hanya tangkap command pendek yang aman jika bukan XML tag formal
+          const cmdCandidate = mdTermMatch[1].trim();
+          if (cmdCandidate && !cmdCandidate.includes('import ') && !cmdCandidate.includes('function ') && cmdCandidate.length < 200) {
+            rawCmd = cmdCandidate;
+          }
+        }
+
+        if (rawCmd) {
+           interceptHit = true;
+           rawCmd = rawCmd.split('\n').map(l => l.replace(/^\$\s*/, '').replace(/^>\s*/, '').trim()).filter(l => l && !l.startsWith('#')).join(' && ');
+           try {
+             const res = await window.electronAPI.runTerminalCommand(rawCmd);
+             autoReply += `\n[SYSTEM: TERMINAL RESULT for "${rawCmd}"]\n${res.output || 'Sukses (Tidak ada output)'}\n`;
+           } catch(err) {
+             autoReply += `\n[SYSTEM: TERMINAL ERROR]\n${err.message}\n`;
+           }
+        }
+
+        // 2. File Editing (<edit_file path="...">...</edit_file>)
+        const fileMatch = aiResponseText.match(/<edit_file\s+path=["']([^"']+)["'][^>]*>([\s\S]*?)<\/edit_file>/i);
+        if (fileMatch) {
+           interceptHit = true;
+           const filePath = fileMatch[1].trim();
+           const fileContent = fileMatch[2].trim();
+           try {
+             const res = await window.electronAPI.editFileSurgical(filePath, fileContent);
+             autoReply += `\n[SYSTEM: FILE EDIT RESULT for "${filePath}"]\n${res.success ? 'Berhasil disimpan' : 'Gagal: ' + (res.error || res.message)}\n`;
+           } catch(err) {
+             autoReply += `\n[SYSTEM: FILE EDIT ERROR]\n${err.message}\n`;
+           }
+        }
+
+        // 3. Docker Sandbox Interceptor (Isolated Code Execution)
+        if (window.electronAPI.runDockerSandbox && !interceptHit) {
+          const codeBlockMatch = aiResponseText.match(/```(python|py|javascript|js)\n([\s\S]*?)```/i);
+          if (codeBlockMatch) {
+            try {
+              const dockerStatus = await window.electronAPI.checkDockerStatus();
+              if (dockerStatus.available) {
+                const codeLang = codeBlockMatch[1].toLowerCase();
+                const codeContent = codeBlockMatch[2].trim();
+                const language = (codeLang === 'py' || codeLang === 'python') ? 'python' : 'javascript';
+                
+                // Hanya eksekusi jika kode terlihat aman dan bermakna
+                if (codeContent.length > 10 && codeContent.length < 50000 && 
+                    (codeContent.includes('print(') || codeContent.includes('console.log'))) {
+                  console.log(`[Docker Sandbox] Mengeksekusi ulang kode ${language} via Docker...`);
+                  const dockerResult = await window.electronAPI.runDockerSandbox(codeContent, language);
+                  
+                  if (dockerResult.success) {
+                    interceptHit = true;
+                    autoReply += `\n[SYSTEM: DOCKER SANDBOX EXECUTION (${language.toUpperCase()})]\nStatus: ✅ Berhasil\nOutput:\n${dockerResult.output}\n`;
+                  } else if (dockerResult.error && !dockerResult.error.includes('DOCKER_NOT_AVAILABLE') && !dockerResult.error.includes('DITOLAK')) {
+                    interceptHit = true;
+                    autoReply += `\n[SYSTEM: DOCKER SANDBOX EXECUTION (${language.toUpperCase()})]\nStatus: ❌ Gagal\nError:\n${dockerResult.error}\n`;
+                  }
+                }
+              }
+            } catch (dockerErr) {
+              console.warn('[Docker Sandbox] Interceptor error:', dockerErr.message);
+            }
+          }
+        }
+
+        if (interceptHit) {
+           setTimeout(() => {
+              handleSend(null, `[OS EXECUTION REPORT]\nBerikut adalah hasil eksekusi dari tindakan otomatis Anda di sistem operasi lokal user.\n${autoReply}`);
+           }, 1000);
+        }
+      }
+
     } catch (err) {
       console.error("Engine error:", err);
       setMessages(prev => [...prev, { role: 'model', content: `⚠️ Error: ${err.message}` }]);
@@ -237,7 +321,7 @@ export default function ConversationEngine({ sessionId }) {
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                handleSend(e);
+                handleSend(e, null);
               }
             }}
             placeholder="Ketik instruksi atau mulai percakapan dengan OS..."
