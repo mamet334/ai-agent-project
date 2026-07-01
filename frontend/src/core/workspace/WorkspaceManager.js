@@ -9,6 +9,7 @@ export class WorkspaceManager {
   constructor(appId = 'global', serviceManager) {
     this.appId = appId;
     this.serviceManager = serviceManager;
+    this.eventBus = serviceManager.get('EventBus'); // Use global EventBus
     this.activeWorkspaceId = null;
     this.activeSessionId = null;
     
@@ -23,7 +24,6 @@ export class WorkspaceManager {
     };
 
     this.syncTimeout = null; // Debouncer reference for layout sync
-    this.listeners = new Set();
 
     // Technical Debt Fix: Kernel Shutdown Hook
     this._setupShutdownHook();
@@ -43,14 +43,15 @@ export class WorkspaceManager {
    * Subscribes to Workspace State changes (React components will use this)
    */
   subscribe(listener) {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+    return this.eventBus.on('WORKSPACE_STATE_CHANGED', listener);
   }
 
   _notify() {
-    for (const listener of this.listeners) {
-      listener({ ...this.state, workspaceId: this.activeWorkspaceId, sessionId: this.activeSessionId });
-    }
+    this.eventBus.emit('WORKSPACE_STATE_CHANGED', { 
+      ...this.state, 
+      workspaceId: this.activeWorkspaceId, 
+      sessionId: this.activeSessionId 
+    });
   }
 
   _updateState(updates) {
