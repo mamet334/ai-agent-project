@@ -2,6 +2,8 @@ import React from 'react';
 import WorkbenchZone from './WorkbenchZone';
 import FloatingWindowManager from '../os/FloatingWindowManager';
 import { useWorkspace } from '../../core/workspace/WorkspaceContext';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 
 export default function AppShell({ mainPanel: MainPanelComponent }) {
   const { osState: workspaceState, manager } = useWorkspace();
@@ -30,7 +32,48 @@ export default function AppShell({ mainPanel: MainPanelComponent }) {
     manager.updateLayout(position, newSize);
   };
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeId = active.id;
+    const overId = over.id;
+
+    const activeData = active.data.current;
+    const overData = over.data.current;
+
+    if (!activeData || !overData) return;
+
+    const fromWorkbench = activeData.sortable?.containerId || activeData.workbench;
+    let toWorkbench = overData.sortable?.containerId || overData.workbench;
+    
+    if (String(overId).startsWith('zone-')) {
+      toWorkbench = String(overId).replace('zone-', '');
+    }
+
+    if (!fromWorkbench || !toWorkbench) return;
+
+    let newIndex = -1;
+    if (overData.sortable) {
+      newIndex = overData.sortable.index;
+      // If moving downwards in the same list, adjust index to account for removal
+      if (fromWorkbench === toWorkbench && activeData.sortable.index < newIndex) {
+        newIndex += 0; // dnd-kit already handles this index mapping contextually if we just pass the index, but splice requires exact insertion point. Actually, the index is the visual drop target.
+      }
+    }
+
+    if (activeId !== overId || fromWorkbench !== toWorkbench) {
+      manager.moveWidget(activeId, fromWorkbench, toWorkbench, newIndex);
+    }
+  };
+
   return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
     <div className="flex flex-col h-full w-full bg-black overflow-hidden font-sans text-slate-200">
       {/* Top Header / App Bar (Optional, depending on OS design) */}
       <div className="h-10 bg-slate-900 border-b border-slate-800 flex items-center px-4 shrink-0 justify-between">
@@ -92,5 +135,6 @@ export default function AppShell({ mainPanel: MainPanelComponent }) {
         
       </div>
     </div>
+    </DndContext>
   );
 }
