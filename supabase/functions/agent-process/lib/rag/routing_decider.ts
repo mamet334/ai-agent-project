@@ -7,7 +7,7 @@ export interface RoutingDecision {
     reason_code: string;
 }
 
-export const executeRoutingDecision = async (query: string, userId: string, rctx: RuntimeContext): Promise<RoutingDecision> => {
+export const executeRoutingDecision = async (query: string, userId: string, rctx: RuntimeContext, explicitWorkspaceId?: string): Promise<RoutingDecision> => {
     let routingDecision: RoutingDecision = {
         scope: "CORE",
         workspace_id: null,
@@ -15,6 +15,15 @@ export const executeRoutingDecision = async (query: string, userId: string, rctx
     };
 
     if (!userId) return routingDecision;
+
+    // Use explicit workspace ID from UI if provided
+    if (explicitWorkspaceId && explicitWorkspaceId.trim() !== '' && explicitWorkspaceId !== 'global') {
+        return {
+            scope: "WORKSPACE",
+            workspace_id: explicitWorkspaceId,
+            reason_code: "EXPLICIT_UI_WORKSPACE_SELECTION"
+        };
+    }
 
     try {
         const supabaseClient = createClient(

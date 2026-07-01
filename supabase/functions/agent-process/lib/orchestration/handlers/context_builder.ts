@@ -20,7 +20,7 @@ export const ContextBuilderHandler = {
     maef.requestTransition('CONTEXT_BUILD', 'Starting Context Building Phase');
 
     // 1. ROUTING DECIDER
-    let routingDecision = await executeRoutingDecision(ctx.request.finalMessage, ctx.auth.userId, rctx);
+    let routingDecision = await executeRoutingDecision(ctx.request.finalMessage, ctx.auth.userId, rctx, ctx.request.workspaceTarget);
     if (ctx.request.routingDecision) {
        routingDecision = ctx.request.routingDecision; // explicit override
     }
