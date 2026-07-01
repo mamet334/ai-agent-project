@@ -136,6 +136,10 @@ export default function ConversationEngine({ sessionId }) {
           steps: jsonData.processingSteps || [],
           metadata: jsonData
         }]);
+        
+        // Automatically push the trace to the adjacent layer
+        openLifecycleInspector('execution', jsonData);
+
         setIsLoading(false);
         return;
       }
@@ -344,31 +348,6 @@ export default function ConversationEngine({ sessionId }) {
           return (
             <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-[85%] lg:max-w-[75%] rounded-2xl px-5 py-4 ${m.role === 'user' ? 'bg-emerald-600/20 text-emerald-100 border border-emerald-500/30' : 'bg-slate-900 text-slate-300 border border-slate-800'}`}>
-                
-                {/* Lifecycle Visualizer (MAEF Event Pipeline) */}
-                {m.role === 'model' && (m.isStreaming || m.steps?.length > 0 || parsed.thinking || m.metadata) && (
-                  <div className="mb-4 bg-slate-950 rounded-xl border border-slate-800 overflow-hidden font-mono text-[10px]">
-                    <div className="bg-slate-900/80 border-b border-slate-800 px-3 py-1.5 flex items-center justify-between text-slate-500">
-                      <span>MAEF Execution Lifecycle</span>
-                      <button 
-                        onClick={() => openLifecycleInspector('execution', m.metadata || m.steps)}
-                        className="text-emerald-500 hover:text-emerald-400 hover:underline cursor-pointer"
-                      >
-                        Inspect Details ↗
-                      </button>
-                    </div>
-                    <div className="p-3 space-y-2">
-                      <div className="flex items-center gap-2 text-emerald-400/80"><CheckCircle /> Intent Recognized</div>
-                      <div className="flex items-center gap-2 text-emerald-400/80"><CheckCircle /> Planner Invoked</div>
-                      {parsed.thinking && !parsed.isThinkingComplete && (
-                        <div className="flex items-center gap-2 text-blue-400 animate-pulse"><RefreshCw className="w-3 h-3 animate-spin" /> Synthesizing Capability...</div>
-                      )}
-                      {parsed.isThinkingComplete && (
-                        <div className="flex items-center gap-2 text-emerald-400/80"><CheckCircle /> Verification Passed</div>
-                      )}
-                    </div>
-                  </div>
-                )}
                 
                 {/* Final Response Output */}
                 <div className="text-sm whitespace-pre-wrap font-sans leading-relaxed">
