@@ -24,6 +24,10 @@ export default function AgentForge() {
       const agentOrchestrator = kernel.serviceManager.get('AgentOrchestratorService');
       const toolRegistry = kernel.serviceManager.get('ToolRegistryService');
 
+      console.log('[AgentForge] AgentOrchestrator:', agentOrchestrator);
+      console.log('[AgentForge] Agents:', agentOrchestrator?.agents);
+      console.log('[AgentForge] Tools:', toolRegistry?.tools);
+
       // Load agents
       if (agentOrchestrator && agentOrchestrator.agents) {
         const agentList = Array.from(agentOrchestrator.agents.entries()).map(([name, config]) => ({
@@ -31,12 +35,14 @@ export default function AgentForge() {
           ...config,
           status: config.status || 'active'
         }));
+        console.log('[AgentForge] AgentList:', agentList);
         setAgents(agentList);
       }
 
       // Load tools
       if (toolRegistry && toolRegistry.listTools) {
         const toolList = toolRegistry.listTools();
+        console.log('[AgentForge] ToolList:', toolList);
         setTools(toolList);
       }
     } catch (err) {
@@ -49,6 +55,12 @@ export default function AgentForge() {
 
   // Initial load
   useEffect(() => {
+    const agentOrchestrator = kernel.serviceManager.get('AgentOrchestratorService');
+    const toolRegistry = kernel.serviceManager.get('ToolRegistryService');
+    console.log('[AgentForge] AgentOrchestrator:', agentOrchestrator);
+    console.log('[AgentForge] Agents:', agentOrchestrator?.agents);
+    console.log('[AgentForge] Tools:', toolRegistry?.tools);
+    
     loadData();
   }, []);
 
