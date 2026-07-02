@@ -97,11 +97,25 @@ export default function ConversationEngine({ sessionId }) {
       }
 
       const activeWorkspace = workspaceManager?.activeWorkspaceId || 'ASSISTANT';
-      const resolvedMode = activeWorkspace === 'ENGINEER' ? 'ENGINEER' : (activeWorkspace === 'LITE' ? 'LITE' : 'OWNER');
+      
+      let resolvedMode = 'OWNER';
+      let resolvedAppSource = 'assistant';
+      
+      if (activeWorkspace === 'ENGINEER') {
+        resolvedMode = 'ENGINEER';
+        resolvedAppSource = 'engineer';
+      } else if (activeWorkspace === 'ASSISTANT' || activeWorkspace === 'OWNER') {
+        resolvedMode = 'OWNER';
+        resolvedAppSource = 'assistant';
+      } else if (activeWorkspace === 'MAMETLITE' || activeWorkspace === 'LITE') {
+        resolvedMode = 'LITE';
+        resolvedAppSource = 'mametlite';
+      }
 
       const payload = {
         message: userMsg,
         mode: resolvedMode,
+        appSource: resolvedAppSource,
         workspaceTarget: workspaceManager.activeWorkspaceId,
         history: newMessages.slice(-10),
         globalMemory: localContext,
@@ -110,7 +124,7 @@ export default function ConversationEngine({ sessionId }) {
         model: formattedModel || undefined,
       };
       
-      console.log('[ConversationEngine] Active workspace:', activeWorkspace, 'Mode:', resolvedMode);
+      console.log('[ConversationEngine] Workspace:', activeWorkspace, 'Mode:', resolvedMode, 'AppSource:', resolvedAppSource);
 
       const headers = {
         'Content-Type': 'application/json',
