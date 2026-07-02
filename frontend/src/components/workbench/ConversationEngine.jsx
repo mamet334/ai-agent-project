@@ -64,6 +64,38 @@ export default function ConversationEngine({ sessionId }) {
     console.log("[LIFECYCLE] Chat request sent");
     setIsLoading(true);
 
+    // --- Natural Language Memory Trigger ---
+    const memoryKeywords = ['ingat', 'simpan', 'catat', 'remember', 'save', 'store'];
+    const lowerMsg = userMsg.toLowerCase();
+    const hasMemoryKeyword = memoryKeywords.some(keyword => lowerMsg.includes(keyword));
+    
+    if (hasMemoryKeyword && kernel.status === 'RUNNING') {
+      try {
+        const memoryService = kernel.serviceManager.get('MemoryService');
+        if (memoryService) {
+          // Extract the content to remember (remove the trigger word)
+          const contentToRemember = userMsg
+            .replace(/(ingat|simpan|catat|remember|save|store)/gi, '')
+            .trim();
+          
+          if (contentToRemember.length > 0) {
+            console.log('[ConversationEngine] Memory trigger detected, storing:', contentToRemember);
+            const stored = await memoryService.storeMemory(contentToRemember, contentToRemember);
+            if (stored) {
+              setMessages(prev => [...prev, { 
+                role: 'model', 
+                content: `✅ Saya telah menyimpan: "${contentToRemember}" ke memori.` 
+              }]);
+              setIsLoading(false);
+              return;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[ConversationEngine] Memory trigger failed:', err);
+      }
+    }
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
