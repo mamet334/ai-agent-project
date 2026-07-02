@@ -1,3 +1,5 @@
+import { supabase } from '../../../supabase.js';
+
 /**
  * KnowledgeService - Layer 2 Capability Service
  * Bertanggung jawab atas pengelolaan basis pengetahuan (RAG/Knowledge Base).
@@ -27,10 +29,22 @@ export class KnowledgeService {
     if (!this.isInitialized) throw new Error('KnowledgeService not initialized');
     
     console.log(`[KnowledgeService] Querying knowledge base for: ${query}`);
-    const placeholderResult = []; // TODO: Implement semantic search/API call
+    let result = [];
+    try {
+      const { data, error } = await supabase
+        .from('knowledge_base')
+        .select('*')
+        .ilike('content', `%${query}%`)
+        .limit(50);
+        
+      if (error) throw error;
+      result = data || [];
+    } catch (err) {
+      console.error('[KnowledgeService] Error querying knowledge:', err);
+    }
     
-    this.eventBus.emit('Knowledge:QueryResult', { query, result: placeholderResult });
-    return placeholderResult;
+    this.eventBus.emit('Knowledge:QueryResult', { query, result });
+    return result;
   }
 
   /**
@@ -41,9 +55,35 @@ export class KnowledgeService {
     if (!this.isInitialized) throw new Error('KnowledgeService not initialized');
     
     console.log(`[KnowledgeService] Indexing document: ${doc.title || 'Untitled'}`);
-    // TODO: Implement document upload/indexing
+    let success = false;
+    let newDocId = doc.id || 'new';
     
-    this.eventBus.emit('Knowledge:Indexed', { docId: doc.id || 'new', success: true });
-    return true;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      
+      const payload = { 
+        user_id: userId,
+        title: doc.title || 'Untitled',
+        content: typeof doc.content === 'object' ? JSON.stringify(doc.content) : (doc.content || ''),
+        metadata: doc.metadata || {}
+      };
+      
+      // If doc has an ID, we could upsert. For simplicity, we just insert.
+      const { data, error } = await supabase
+        .from('knowledge_base')
+        .insert([payload])
+        .select('id')
+        .single();
+        
+      if (error) throw error;
+      if (data?.id) newDocId = data.id;
+      success = true;
+    } catch (err) {
+      console.error('[KnowledgeService] Error indexing document:', err);
+    }
+    
+    this.eventBus.emit('Knowledge:Indexed', { docId: newDocId, success });
+    return success;
   }
 }
