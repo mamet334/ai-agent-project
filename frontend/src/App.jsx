@@ -70,8 +70,8 @@ export default function App() {
       const applicationManager = serviceManager.get('ApplicationManager')
       applicationManager.registerApp({ id: 'app:assistant', name: 'Assistant', iconComponent: MessageSquare, renderComponent: AssistantAppWrapper })
       applicationManager.registerApp({ id: 'app:engineer', name: 'Engineer', iconComponent: Terminal, renderComponent: EngineerAppWrapper })
-      applicationManager.registerApp({ id: 'app:memory', name: 'Memory', iconComponent: Database, renderComponent: MemoryAppWrapper })
-      applicationManager.registerApp({ id: 'app:research', name: 'Research', iconComponent: FlaskConical, renderComponent: ResearchAppWrapper })
+      applicationManager.registerApp({ id: 'app:memory-graph', name: 'Memory', iconComponent: Database, renderComponent: MemoryAppWrapper })
+      applicationManager.registerApp({ id: 'app:knowledge-base', name: 'Knowledge Base', iconComponent: FlaskConical, renderComponent: ResearchAppWrapper })
       applicationManager.registerApp({ id: 'app:settings', name: 'Settings', iconComponent: SettingsIcon, renderComponent: Settings })
       applicationManager.activateApp('app:assistant')
     }

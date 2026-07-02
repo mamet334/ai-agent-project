@@ -10,6 +10,10 @@ import { Engineer } from './services/engineer.js';
 import { FileSystem } from './fs.js';
 import { ProcessManager } from './process.js';
 import { ModuleLoader } from './module-loader.js';
+import { MemoryService } from './services/MemoryService.js';
+import { KnowledgeService } from './services/KnowledgeService.js';
+import { AgentOrchestratorService } from './services/AgentOrchestratorService.js';
+import { ToolRegistryService } from './services/ToolRegistryService.js';
 
 /**
  * MAEF Kernel v2.0
@@ -200,6 +204,26 @@ class Kernel {
     await brainService.initialize();
     serviceManager.register('BrainService', brainService);
 
+    // Memory Service
+    const memoryService = new MemoryService(serviceManager);
+    await memoryService.initialize();
+    serviceManager.register('MemoryService', memoryService);
+
+    // Knowledge Service
+    const knowledgeService = new KnowledgeService(serviceManager);
+    await knowledgeService.initialize();
+    serviceManager.register('KnowledgeService', knowledgeService);
+
+    // Agent Orchestrator Service
+    const agentOrchestrator = new AgentOrchestratorService(serviceManager);
+    await agentOrchestrator.initialize();
+    serviceManager.register('AgentOrchestratorService', agentOrchestrator);
+
+    // Tool Registry Service
+    const toolRegistry = new ToolRegistryService(serviceManager);
+    await toolRegistry.initialize();
+    serviceManager.register('ToolRegistryService', toolRegistry);
+
     // 3. Initialize Adapter Registry stub
     const adapterRegistry = {
       adapters: new Map(),
@@ -246,13 +270,8 @@ class Kernel {
     this.currentPhase = 5;
     this.log('INFO', 'PHASE 5 — ORCHESTRATOR INITIALIZATION: Started');
 
-    const orchestrator = {
-      mode: 'DRY-RUN_MODE',
-      plan: () => ({ plan: 'dry-run-plan', canExecute: false }),
-      execute: () => ({ success: true, dryRun: true })
-    };
-    serviceManager.register('Orchestrator', orchestrator);
-    this.log('INFO', 'Orchestrator Initialized in DRY-RUN_MODE');
+    // AgentOrchestratorService now handles actual orchestration, DRY-RUN stub removed.
+    this.log('INFO', 'Orchestrator initialization handled by AgentOrchestratorService');
 
     this._emitEvent(serviceManager, 'Kernel:PhaseCompleted', { phase: 5, name: 'ORCHESTRATOR_INITIALIZATION' });
     this.log('INFO', 'PHASE 5 — ORCHESTRATOR INITIALIZATION: Completed');
