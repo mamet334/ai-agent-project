@@ -35,7 +35,7 @@ export class MemoryService {
       const { data, error } = await supabase
         .from('user_memories')
         .select('*')
-        .ilike('content', `%${query}%`)
+        .ilike('summary', `%${query}%`)
         .order('created_at', { ascending: false })
         .limit(50);
         
