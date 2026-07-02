@@ -82,11 +82,26 @@ export default function ConversationEngine({ sessionId }) {
         aiKey = context.key || '';
       }
 
+      // --- Memory Injection (Layer 2) ---
+      const memoryService = kernel.serviceManager?.get('MemoryService');
+      let localContext = '';
+      if (memoryService) {
+          try {
+              const memories = await memoryService.getMemory(userMsg);
+              if (memories && memories.length > 0) {
+                  localContext = memories.map(m => m.summary || m.content || '').filter(Boolean).join('\n');
+              }
+          } catch (e) {
+              console.warn('[ConversationEngine] MemoryService query failed:', e);
+          }
+      }
+
       const payload = {
         message: userMsg,
         mode: osState.capabilities.includes('cap:code-execution') ? 'ENGINEER' : 'OWNER',
         workspaceTarget: workspaceManager.activeWorkspaceId,
         history: newMessages.slice(-10),
+        globalMemory: localContext,
         stream: false,
         ragEnabled: true,
         model: formattedModel || undefined,
