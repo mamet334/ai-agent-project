@@ -154,19 +154,34 @@ export const retrieveMemories = async (userPrompt: string, userId: string, supab
     // Safe select to avoid missing column PostgREST errors (PGRST204)
     let memoryQuery = supabase.from('user_memories').select('*').eq('user_id', userId);
     
-    if (workspaceId) {
-       // Fetch memories that belong to this workspace OR are global
-       memoryQuery = memoryQuery.or(`workspace_id.eq.${workspaceId},workspace_id.is.null`);
-    } else {
-       // If no workspace is specified (or global context), fetch global memories only
-       memoryQuery = memoryQuery.is('workspace_id', null);
+    try {
+        if (workspaceId) {
+           // Fetch memories that belong to this workspace OR are global
+           memoryQuery = memoryQuery.or(`workspace_id.eq.${workspaceId},workspace_id.is.null`);
+        } else {
+           // If no workspace is specified (or global context), fetch global memories only
+           memoryQuery = memoryQuery.is('workspace_id', null);
+        }
+    } catch (e) {
+        console.log('[MemoryManager] workspace_id column not found, skipping filter');
     }
     
-    let { data, error } = await memoryQuery.order('created_at', { ascending: false }).limit(dbLimit);
+    // PERUBAHAN 2: Tingkatkan limit ke 50 (hapus limit 15 yang menyebabkan amnesia data lama)
+    let { data, error } = await memoryQuery.order('created_at', { ascending: false }).limit(50);
     
     if (error) {
-       console.error('[MEMORY_RETRIEVAL_ERROR] DB Query failed:', error);
-       return [];
+       // PERUBAHAN 1 (Fallback): Jika benar terjadi PGRST204 saat await, ulangi tanpa filter workspace_id
+       if (error.code === 'PGRST204' || (error.message && error.message.includes('workspace_id'))) {
+           console.warn('[MemoryManager] workspace_id column missing in DB, falling back to base query');
+           const fallbackResult = await supabase.from('user_memories').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(50);
+           data = fallbackResult.data;
+           error = fallbackResult.error;
+       }
+       
+       if (error) {
+           console.error('[MEMORY_RETRIEVAL_ERROR] DB Query failed:', error);
+           return [];
+       }
     }
     
     if (!data || data.length === 0) return [];
