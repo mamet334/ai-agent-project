@@ -32,12 +32,17 @@ export class MemoryService {
     console.log('[MemoryService] 🔍 Query ke Supabase untuk:', query);
     let result = [];
     try {
-      const { data, error } = await supabase
-        .from('user_memories')
-        .select('*')
-        .ilike('summary', `%${query}%`)
-        .order('created_at', { ascending: false })
-        .limit(50);
+      const stopwords = ['hai', 'halo', 'saya', 'aku', 'adalah', 'apa', 'siapa', 'bagaimana', 'dimana', 'kapan', 'mengapa', 'coba', 'tolong', 'bisa', 'kan', 'dong', 'ya', 'yg', 'yang', 'ini', 'itu', 'dan', 'atau', 'ke', 'di', 'dari', 'untuk', 'dengan'];
+      const keywords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2 && !stopwords.includes(w));
+      
+      let memoryQuery = supabase.from('user_memories').select('*');
+      if (keywords.length > 0) {
+          const filterString = keywords.map(k => `summary.ilike.%${k}%`).join(',');
+          memoryQuery = memoryQuery.or(filterString);
+      } else {
+          memoryQuery = memoryQuery.ilike('summary', `%${query}%`);
+      }
+      const { data, error } = await memoryQuery.order('created_at', { ascending: false }).limit(10);
         
       console.log('[MemoryService] 📋 Data mentah dari Supabase:', JSON.stringify(data));
       if (error) {
