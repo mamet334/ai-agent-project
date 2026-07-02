@@ -96,9 +96,12 @@ export default function ConversationEngine({ sessionId }) {
           }
       }
 
+      const activeWorkspace = workspaceManager?.activeWorkspaceId || 'ASSISTANT';
+      const resolvedMode = activeWorkspace === 'ENGINEER' ? 'ENGINEER' : (activeWorkspace === 'LITE' ? 'LITE' : 'OWNER');
+
       const payload = {
         message: userMsg,
-        mode: osState.capabilities.includes('cap:code-execution') ? 'ENGINEER' : 'OWNER',
+        mode: resolvedMode,
         workspaceTarget: workspaceManager.activeWorkspaceId,
         history: newMessages.slice(-10),
         globalMemory: localContext,
@@ -107,7 +110,7 @@ export default function ConversationEngine({ sessionId }) {
         model: formattedModel || undefined,
       };
       
-      console.log('[ConversationEngine] Mengirim mode:', payload.mode);
+      console.log('[ConversationEngine] Active workspace:', activeWorkspace, 'Mode:', resolvedMode);
 
       const headers = {
         'Content-Type': 'application/json',
