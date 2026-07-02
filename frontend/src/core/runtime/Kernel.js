@@ -8,6 +8,8 @@ import { VaultService } from './services/VaultService';
 import { BrainService } from './services/BrainService';
 import { Engineer } from './services/engineer.js';
 import { FileSystem } from './fs.js';
+import { ProcessManager } from './process.js';
+import { ModuleLoader } from './module-loader.js';
 
 /**
  * MAEF Kernel v2.0
@@ -139,6 +141,14 @@ class Kernel {
     // FileSystem
     const fileSystem = new FileSystem();
     serviceManager.register('FileSystem', fileSystem);
+
+    // ProcessManager
+    const processManager = new ProcessManager(eventBus);
+    serviceManager.register('ProcessManager', processManager);
+
+    // ModuleLoader
+    const moduleLoader = new ModuleLoader(fileSystem);
+    serviceManager.register('ModuleLoader', moduleLoader);
 
     // Widget Registry
     let widgetRegistry;
