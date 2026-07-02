@@ -87,8 +87,14 @@ export default function ConversationEngine({ sessionId }) {
       try {
         memoryService = kernel.serviceManager?.has('MemoryService') ? kernel.serviceManager.get('MemoryService') : null;
         console.log('[ConversationEngine] 🔍 MemoryService tersedia?', !!memoryService);
-        if (kernel.serviceManager?.services) {
-            console.log('[ConversationEngine] 🔍 Daftar service terdaftar:', Array.from(kernel.serviceManager.services.keys()));
+        console.log('[ConversationEngine] 🔍 Kernel status:', kernel.status);
+        console.log('[ConversationEngine] 🔍 ServiceManager ada?', !!kernel.serviceManager);
+        
+        if (!memoryService) {
+            console.log('[ConversationEngine] ⚠️ MemoryService null, menunggu kernel...');
+            await new Promise(r => setTimeout(r, 500));
+            memoryService = kernel.serviceManager?.has('MemoryService') ? kernel.serviceManager.get('MemoryService') : null;
+            console.log('[ConversationEngine] 🔍 MemoryService setelah tunggu:', !!memoryService);
         }
       } catch (err) {
         console.warn('[ConversationEngine] ⚠️ Gagal mengakses ServiceManager:', err);
