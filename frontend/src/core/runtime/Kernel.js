@@ -6,6 +6,7 @@ import { lazyLoadWithRetry } from '../workspace/lazyLoadWithRetry';
 import { EventBus } from './EventBus';
 import { VaultService } from './services/VaultService';
 import { BrainService } from './services/BrainService';
+import { Engineer } from './services/engineer.js';
 
 /**
  * MAEF Kernel v2.0
@@ -175,6 +176,11 @@ class Kernel {
     const vaultService = new VaultService(serviceManager);
     await vaultService.initialize();
     serviceManager.register('VaultService', vaultService);
+
+    // Engineer Service (Engineering Brain)
+    const engineer = new Engineer(serviceManager);
+    await engineer.initialize();
+    serviceManager.register('Engineer', engineer);
 
     // 2. Brain Service (AI Orchestration)
     const brainService = new BrainService(serviceManager);
