@@ -1,9 +1,9 @@
 import { UnifiedExecutionContext, MametCapabilityMode } from './types.ts';
 
-export function buildUnifiedExecutionContext(input: { message: string, desktopOSMode?: boolean, tools?: string[], ragEnabled?: boolean, userId: string, userName?: string, appSource?: string }): UnifiedExecutionContext {
-  const isMametLite = input.appSource === 'mametlite';
-  const isMametEngineer = input.appSource === 'engineer';
-  const mode: MametCapabilityMode = isMametEngineer ? "ENGINEER" : isMametLite ? "LITE" : (input.desktopOSMode ? "AI" : "LITE");
+export function buildUnifiedExecutionContext(input: { message: string, desktopOSMode?: boolean, tools?: string[], ragEnabled?: boolean, userId: string, userName?: string, appSource?: string, mode?: string }): UnifiedExecutionContext {
+  const isMametLite = input.appSource === 'mametlite' || input.mode === 'LITE';
+  const isMametEngineer = input.appSource === 'engineer' || input.mode === 'ENGINEER';
+  const mode: MametCapabilityMode = (input.mode as MametCapabilityMode) || (isMametEngineer ? "ENGINEER" : isMametLite ? "LITE" : (input.desktopOSMode ? "AI" : "LITE"));
   const isRagEnabled = input.ragEnabled !== false;
   
   const qLen = (input.message || '').length;
