@@ -46,6 +46,10 @@ export const callLLMWithMetadata = async (
     if (tools.includes('web_search')) {
       payload.tools = [{ googleSearch: {} }];
     }
+    
+    // Batasi output tokens agar tidak melampaui limit/kredit 
+    payload.generationConfig = { maxOutputTokens: 8192 };
+    
     return payload;
   };
 

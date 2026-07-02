@@ -57,7 +57,7 @@ export class GroqAdapter implements CapabilityAdapter {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${this.rctx.keys.groq}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: groqModel, messages, temperature: 0.1 })
+      body: JSON.stringify({ model: groqModel, messages, temperature: 0.1, max_tokens: 8192 })
     });
     if (!res.ok) throw new Error(`Groq API Error: ${res.status} ${await res.text()}`);
     const data = await res.json();
@@ -88,7 +88,7 @@ export class GroqAdapter implements CapabilityAdapter {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${this.rctx.keys.groq}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: groqModel, messages, temperature: 0.1, stream: true }),
+      body: JSON.stringify({ model: groqModel, messages, temperature: 0.1, max_tokens: 8192, stream: true }),
       signal: aborter.signal
     });
     clearTimeout(id);
@@ -144,7 +144,7 @@ export class OpenRouterAdapter implements CapabilityAdapter {
         'X-Title': 'Mamet AI Agent',
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ model: openRouterModel, messages, temperature: 0.1 })
+      body: JSON.stringify({ model: openRouterModel, messages, temperature: 0.1, max_tokens: 8192 })
     });
     if (!res.ok) throw new Error(`OpenRouter API Error: ${res.status} ${await res.text()}`);
     const data = await res.json();
@@ -175,7 +175,7 @@ export class OpenRouterAdapter implements CapabilityAdapter {
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${this.rctx.keys.openRouter}`, 'HTTP-Referer': 'https://ai-agent-project.vercel.app', 'X-Title': 'Mamet AI Agent', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: orModel, messages, temperature: 0.1, stream: true }),
+      body: JSON.stringify({ model: orModel, messages, temperature: 0.1, max_tokens: 8192, stream: true }),
       signal: aborter.signal
     });
     clearTimeout(id);
@@ -279,7 +279,10 @@ export class GeminiAdapter implements CapabilityAdapter {
     if (image) userParts.push({ inlineData: { mimeType: image.mimeType, data: image.data } });
     geminiContents.push({ role: 'user', parts: userParts });
 
-    const geminiPayload: any = { contents: geminiContents };
+    const geminiPayload: any = { 
+        contents: geminiContents,
+        generationConfig: { maxOutputTokens: 8192 }
+    };
     if (systemPromptText) geminiPayload.systemInstruction = { parts: [{ text: systemPromptText }] };
 
     const allKeys = this.rctx.keys.allGemini;
@@ -376,7 +379,7 @@ export class OpenAIAdapter implements CapabilityAdapter {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${this.rctx.keys.openAI}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: selectedModel, messages, temperature: 0.1 })
+      body: JSON.stringify({ model: selectedModel, messages, temperature: 0.1, max_tokens: 8192 })
     });
     if (!res.ok) throw new Error(`OpenAI API Error: ${res.status} ${await res.text()}`);
     const data = await res.json();
@@ -404,7 +407,7 @@ export class OpenAIAdapter implements CapabilityAdapter {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${this.rctx.keys.openAI}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: this.rctx.model.model || 'gpt-4o-mini', messages, temperature: 0.1, stream: true }),
+      body: JSON.stringify({ model: this.rctx.model.model || 'gpt-4o-mini', messages, temperature: 0.1, max_tokens: 8192, stream: true }),
       signal: aborter.signal
     });
     clearTimeout(id);
