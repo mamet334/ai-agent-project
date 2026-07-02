@@ -29,7 +29,7 @@ export class MemoryService {
   async getMemory(query) {
     if (!this.isInitialized) throw new Error('MemoryService not initialized');
     
-    console.log(`[MemoryService] Fetching memory for query: ${query}`);
+    console.log('[MemoryService] 🔍 Query ke Supabase untuk:', query);
     let result = [];
     try {
       const { data, error } = await supabase
@@ -39,7 +39,11 @@ export class MemoryService {
         .order('created_at', { ascending: false })
         .limit(50);
         
-      if (error) throw error;
+      console.log('[MemoryService] 📋 Data mentah dari Supabase:', JSON.stringify(data));
+      if (error) {
+        console.log('[MemoryService] ⚠️ Error jika ada:', error);
+        throw error;
+      }
       result = data || [];
     } catch (err) {
       console.error('[MemoryService] Error fetching memory:', err);
