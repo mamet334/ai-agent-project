@@ -134,7 +134,7 @@ export const retrieveMemories = async (userPrompt: string, userId: string, supab
   // FEATURE FLAG & FALLBACK MECHANISM
   if (MEMORY_V2_ENABLED) {
      const v2Result = await retrieveMemoriesV2(userPrompt, userId, supabaseUrl, supabaseKey, rctx);
-     if (v2Result !== null) {
+     if (v2Result !== null && v2Result.length > 0) {
          return v2Result; 
      }
   }
@@ -195,15 +195,16 @@ export const retrieveMemories = async (userPrompt: string, userId: string, supab
     // Deduplikasi berdasar isi teks
     const uniqueMemoriesMap = new Map();
     for (const d of data) {
-       if (!uniqueMemoriesMap.has(d.summary.toLowerCase())) {
-          uniqueMemoriesMap.set(d.summary.toLowerCase(), d);
+       const dSumLower = (d.summary || d.content || '').toLowerCase();
+       if (!uniqueMemoriesMap.has(dSumLower)) {
+          uniqueMemoriesMap.set(dSumLower, d);
        }
     }
     const uniqueMemories = Array.from(uniqueMemoriesMap.values());
     
     const scoredMemories = uniqueMemories.map((mem, index) => {
        let score = 0;
-       const memLower = mem.summary.toLowerCase();
+       const memLower = (mem.summary || mem.content || '').toLowerCase();
        
        // Exact match (+5)
        if (promptLower.includes(memLower) || memLower.includes(promptLower)) {
@@ -262,7 +263,7 @@ export const retrieveMemories = async (userPrompt: string, userId: string, supab
       // STRICT SCORING GATE ENFORCEMENT: No score = no entry
       if (typeof d.finalScore !== 'number' || isNaN(d.finalScore)) continue;
       
-      let enrichedContent = d.summary;
+      let enrichedContent = d.summary || d.content || '';
       if (d.memory_state === 'STABILIZED' && d.justification_chain) {
           enrichedContent += ` [Verified Fact: ${d.justification_chain}]`;
       } else if (d.memory_state === 'CONFLICTED') {

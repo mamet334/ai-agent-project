@@ -58,7 +58,8 @@ export async function executeRequestPipeline(
       ragEnabled: parsed.ragEnabled,
       userId: user.id,
       userName: parsed.userName,
-      appSource: parsed.appSource
+      appSource: parsed.appSource,
+      mode: parsed.mode
   });
 
   console.log("[L1] auth binding", { actualAuthId: ctx.auth.userId, appSource: ctx.auth.appSource, message: parsed.message ? parsed.message.substring(0, 50) + '...' : null });
