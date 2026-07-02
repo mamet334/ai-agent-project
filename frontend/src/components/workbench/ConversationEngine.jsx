@@ -106,6 +106,8 @@ export default function ConversationEngine({ sessionId }) {
         ragEnabled: true,
         model: formattedModel || undefined,
       };
+      
+      console.log('[ConversationEngine] Mengirim mode:', payload.mode);
 
       const headers = {
         'Content-Type': 'application/json',

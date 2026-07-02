@@ -22,7 +22,7 @@ export function buildUnifiedExecutionContext(input: { message: string, desktopOS
   
   const ctx: UnifiedExecutionContext = {
     auth: { userId: input.userId, userName: input.userName, appSource: input.appSource || 'assistant' },
-    request: { originalMessage: input.message, finalMessage: input.message, lowerMsg },
+    request: { originalMessage: input.message, finalMessage: input.message, lowerMsg, mode },
     policy: {
         mode, decision: "ALLOW", toolsEnabled: true, webSearchEnabled: true, riskScore: 0,
         ragTopK: mode === "LITE" ? 10 : 5, ragThreshold: dynamicThreshold, webHint,

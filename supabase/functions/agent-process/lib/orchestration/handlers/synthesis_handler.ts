@@ -53,6 +53,7 @@ export const SynthesisHandler = {
         });
 
         if (vReport.decision === "FAIL") {
+            console.log(`[SynthesisHandler] Mode saat verifikasi:`, ctx.request.mode);
             if (ctx.request.mode === 'ENGINEER' || ctx.request.mode === 'engineer') {
                 console.warn(`[HARD GATE] BLOCKED. Keputusan verifikasi gagal (Skor: ${vReport.score}).`);
                 return { mode: 'DIRECT', aiResponse: { message: "Verification Failed" }, snapshot: maef.getSnapshot() };
