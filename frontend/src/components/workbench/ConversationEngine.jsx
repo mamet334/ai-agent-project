@@ -87,10 +87,13 @@ export default function ConversationEngine({ sessionId }) {
       let localContext = '';
       if (memoryService) {
           try {
+              console.log('[ConversationEngine] 🔍 Mencari memori untuk:', userMsg);
               const memories = await memoryService.getMemory(userMsg);
+              console.log('[ConversationEngine] 📋 Hasil memori:', JSON.stringify(memories));
               if (memories && memories.length > 0) {
                   localContext = memories.map(m => m.summary || m.content || '').filter(Boolean).join('\n');
               }
+              console.log('[ConversationEngine] 📝 GlobalMemory yang dikirim:', localContext);
           } catch (e) {
               console.warn('[ConversationEngine] MemoryService query failed:', e);
           }
