@@ -25,6 +25,7 @@ class Kernel {
     this.status = 'COLD'; // COLD → BOOTING → RUNNING → ERROR → SHUTTING_DOWN
     this.currentPhase = 0;
     this.bootPromise = null;
+    this.serviceManager = null;
     this.health = {
       startTime: null,
       uptime: 0,
@@ -60,6 +61,7 @@ class Kernel {
       this.log('INFO', 'Boot already in progress or finished');
       return this.bootPromise;
     }
+    this.serviceManager = serviceManager;
     this.bootPromise = this._executeBootstrapSequence(serviceManager);
     return this.bootPromise;
   }

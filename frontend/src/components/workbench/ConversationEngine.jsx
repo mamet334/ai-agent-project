@@ -73,46 +73,50 @@ export default function ConversationEngine({ sessionId }) {
       let aiProvider = 'gemini';
       let formattedModel = '';
       let aiKey = '';
-
-      const brainService = kernel.serviceManager?.get('BrainService');
-      if (brainService) {
-        const context = await brainService.getActiveBrainContext();
-        aiProvider = context.provider || 'gemini';
-        formattedModel = context.model || '';
-        aiKey = context.key || '';
-      }
-
-      // --- Memory Injection (Layer 2) ---
-      let memoryService = null;
-      try {
-        memoryService = kernel.serviceManager?.get('MemoryService');
-        console.log('[ConversationEngine] MemoryService tersedia?', !!memoryService);
-        console.log('[ConversationEngine] Kernel status:', kernel?.status);
-        console.log('[ConversationEngine] ServiceManager ada?', !!kernel?.serviceManager);
-        
-        if (!memoryService) {
-            await new Promise(r => setTimeout(r, 1000));
-            const memoryServiceRetry = kernel.serviceManager?.get('MemoryService');
-            console.log('[ConversationEngine] Setelah retry:', !!memoryServiceRetry);
-            memoryService = memoryServiceRetry;
-        }
-      } catch (err) {
-        console.warn('[ConversationEngine] ⚠️ Gagal mengakses ServiceManager:', err);
-      }
-
       let localContext = '';
-      if (memoryService) {
-          try {
-              console.log('[ConversationEngine] 🔍 Mencari memori untuk:', userMsg);
-              const memories = await memoryService.getMemory(userMsg);
-              console.log('[ConversationEngine] 📋 Hasil memori:', JSON.stringify(memories));
-              if (memories && memories.length > 0) {
-                  localContext = memories.map(m => m.summary || m.content || '').filter(Boolean).join('\n');
-              }
-              console.log('[ConversationEngine] 📝 GlobalMemory yang dikirim:', localContext);
-          } catch (e) {
-              console.warn('[ConversationEngine] MemoryService query failed:', e);
+      let memoryService = null;
+
+      if (kernel.status !== 'RUNNING') {
+        console.warn('[ConversationEngine] Kernel belum siap, skip service injection');
+      } else {
+        const brainService = kernel.serviceManager.get('BrainService');
+        if (brainService) {
+          const context = await brainService.getActiveBrainContext();
+          aiProvider = context.provider || 'gemini';
+          formattedModel = context.model || '';
+          aiKey = context.key || '';
+        }
+
+        // --- Memory Injection (Layer 2) ---
+        try {
+          memoryService = kernel.serviceManager.get('MemoryService');
+          console.log('[ConversationEngine] MemoryService tersedia?', !!memoryService);
+          console.log('[ConversationEngine] Kernel status:', kernel?.status);
+          console.log('[ConversationEngine] ServiceManager ada?', !!kernel?.serviceManager);
+          
+          if (!memoryService) {
+              await new Promise(r => setTimeout(r, 1000));
+              const memoryServiceRetry = kernel.serviceManager.get('MemoryService');
+              console.log('[ConversationEngine] Setelah retry:', !!memoryServiceRetry);
+              memoryService = memoryServiceRetry;
           }
+        } catch (err) {
+          console.warn('[ConversationEngine] ⚠️ Gagal mengakses ServiceManager:', err);
+        }
+
+        if (memoryService) {
+            try {
+                console.log('[ConversationEngine] 🔍 Mencari memori untuk:', userMsg);
+                const memories = await memoryService.getMemory(userMsg);
+                console.log('[ConversationEngine] 📋 Hasil memori:', JSON.stringify(memories));
+                if (memories && memories.length > 0) {
+                    localContext = memories.map(m => m.summary || m.content || '').filter(Boolean).join('\n');
+                }
+                console.log('[ConversationEngine] 📝 GlobalMemory yang dikirim:', localContext);
+            } catch (e) {
+                console.warn('[ConversationEngine] MemoryService query failed:', e);
+            }
+        }
       }
 
       const activeWorkspace = workspaceManager?.activeWorkspaceId || 'ASSISTANT';
