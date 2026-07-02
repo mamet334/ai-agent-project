@@ -85,16 +85,16 @@ export default function ConversationEngine({ sessionId }) {
       // --- Memory Injection (Layer 2) ---
       let memoryService = null;
       try {
-        memoryService = kernel.serviceManager?.has('MemoryService') ? kernel.serviceManager.get('MemoryService') : null;
-        console.log('[ConversationEngine] 🔍 MemoryService tersedia?', !!memoryService);
-        console.log('[ConversationEngine] 🔍 Kernel status:', kernel.status);
-        console.log('[ConversationEngine] 🔍 ServiceManager ada?', !!kernel.serviceManager);
+        memoryService = kernel.serviceManager?.get('MemoryService');
+        console.log('[ConversationEngine] MemoryService tersedia?', !!memoryService);
+        console.log('[ConversationEngine] Kernel status:', kernel?.status);
+        console.log('[ConversationEngine] ServiceManager ada?', !!kernel?.serviceManager);
         
         if (!memoryService) {
-            console.log('[ConversationEngine] ⚠️ MemoryService null, menunggu kernel...');
-            await new Promise(r => setTimeout(r, 500));
-            memoryService = kernel.serviceManager?.has('MemoryService') ? kernel.serviceManager.get('MemoryService') : null;
-            console.log('[ConversationEngine] 🔍 MemoryService setelah tunggu:', !!memoryService);
+            await new Promise(r => setTimeout(r, 1000));
+            const memoryServiceRetry = kernel.serviceManager?.get('MemoryService');
+            console.log('[ConversationEngine] Setelah retry:', !!memoryServiceRetry);
+            memoryService = memoryServiceRetry;
         }
       } catch (err) {
         console.warn('[ConversationEngine] ⚠️ Gagal mengakses ServiceManager:', err);
