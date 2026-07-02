@@ -126,6 +126,7 @@ export default function ConversationEngine({ sessionId }) {
         return;
       }
 
+      const contentType = response.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
         console.log("[LIFECYCLE] Received JSON response (DIRECT mode)");
         const jsonData = await response.json();
