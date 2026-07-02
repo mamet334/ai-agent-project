@@ -119,7 +119,7 @@ class Kernel {
     this.config.mode = 'BOOTSTRAP';
     this.identity.createdAt = new Date().toISOString();
     this.log('INFO', 'PHASE 0 — KERNEL INITIALIZATION: Started');
-    this._emitEvent(serviceManager, 'KERNEL_PHASE_COMPLETED', { phase: 0, name: 'KERNEL_INITIALIZATION' });
+    this._emitEvent(serviceManager, 'Kernel:PhaseCompleted', { phase: 0, name: 'KERNEL_INITIALIZATION' });
     this.log('INFO', 'PHASE 0 — KERNEL INITIALIZATION: Completed');
   }
 
@@ -163,7 +163,7 @@ class Kernel {
     // Register Default Widgets
     await this._registerDefaultWidgets(widgetRegistry);
 
-    this._emitEvent(serviceManager, 'KERNEL_PHASE_COMPLETED', { phase: 1, name: 'SYSTEM_CORE_REGISTRATION' });
+    this._emitEvent(serviceManager, 'Kernel:PhaseCompleted', { phase: 1, name: 'SYSTEM_CORE_REGISTRATION' });
     this.log('INFO', 'PHASE 1 — SYSTEM CORE REGISTRATION: Completed');
   }
 
@@ -172,14 +172,12 @@ class Kernel {
     this.log('INFO', 'PHASE 2 — EVENT SYSTEM BOOTSTRAP: Started');
 
     const eventBus = serviceManager.get('EventBus');
+    this.eventBus = eventBus; // Store reference for health tracking
     eventBus.activate = () => { eventBus._active = true; };
     eventBus._active = true; // Simple activation for now
     this.log('INFO', 'Event System Activated');
 
-    // Listen for events to track health
-    eventBus.on('*', () => { this.health.totalEvents++; });
-
-    this._emitEvent(serviceManager, 'KERNEL_PHASE_COMPLETED', { phase: 2, name: 'EVENT_SYSTEM_BOOTSTRAP' });
+    this._emitEvent(serviceManager, 'Kernel:PhaseCompleted', { phase: 2, name: 'EVENT_SYSTEM_BOOTSTRAP' });
     this.log('INFO', 'PHASE 2 — EVENT SYSTEM BOOTSTRAP: Completed');
   }
 
@@ -224,7 +222,7 @@ class Kernel {
     adapterRegistry.register('Tool', { name: 'Tool Adapter', type: 'TOOL' });
     this.log('INFO', 'Adapter Registry & Core Services Initialized');
 
-    this._emitEvent(serviceManager, 'KERNEL_PHASE_COMPLETED', { phase: 3, name: 'CORE_CAPABILITY_SERVICES_INIT' });
+    this._emitEvent(serviceManager, 'Kernel:PhaseCompleted', { phase: 3, name: 'CORE_CAPABILITY_SERVICES_INIT' });
     this.log('INFO', 'PHASE 3 — CORE CAPABILITY SERVICES INIT: Completed');
   }
 
@@ -240,7 +238,7 @@ class Kernel {
     serviceManager.register('VerificationEngine', verificationEngine);
     this.log('INFO', 'Verification Engine Started in SAFE_BOOTSTRAP_MODE');
 
-    this._emitEvent(serviceManager, 'KERNEL_PHASE_COMPLETED', { phase: 4, name: 'VERIFICATION_ENGINE_STARTUP' });
+    this._emitEvent(serviceManager, 'Kernel:PhaseCompleted', { phase: 4, name: 'VERIFICATION_ENGINE_STARTUP' });
     this.log('INFO', 'PHASE 4 — VERIFICATION ENGINE STARTUP: Completed');
   }
 
@@ -256,7 +254,7 @@ class Kernel {
     serviceManager.register('Orchestrator', orchestrator);
     this.log('INFO', 'Orchestrator Initialized in DRY-RUN_MODE');
 
-    this._emitEvent(serviceManager, 'KERNEL_PHASE_COMPLETED', { phase: 5, name: 'ORCHESTRATOR_INITIALIZATION' });
+    this._emitEvent(serviceManager, 'Kernel:PhaseCompleted', { phase: 5, name: 'ORCHESTRATOR_INITIALIZATION' });
     this.log('INFO', 'PHASE 5 — ORCHESTRATOR INITIALIZATION: Completed');
   }
 
@@ -271,7 +269,7 @@ class Kernel {
     serviceManager.register('LoggingSystem', loggingSystem);
     this.log('INFO', 'Logging & Observability System Initialized');
 
-    this._emitEvent(serviceManager, 'KERNEL_PHASE_COMPLETED', { phase: 6, name: 'LOGGING_OBSERVABILITY_INIT' });
+    this._emitEvent(serviceManager, 'Kernel:PhaseCompleted', { phase: 6, name: 'LOGGING_OBSERVABILITY_INIT' });
     this.log('INFO', 'PHASE 6 — LOGGING & OBSERVABILITY INIT: Completed');
   }
 
@@ -288,7 +286,7 @@ class Kernel {
     metricsSystem.measure('boot_phase', 7);
     this.log('INFO', 'Metrics System Warmed Up');
 
-    this._emitEvent(serviceManager, 'KERNEL_PHASE_COMPLETED', { phase: 7, name: 'METRICS_SYSTEM_WARMUP' });
+    this._emitEvent(serviceManager, 'Kernel:PhaseCompleted', { phase: 7, name: 'METRICS_SYSTEM_WARMUP' });
     this.log('INFO', 'PHASE 7 — METRICS SYSTEM WARMUP: Completed');
   }
 
@@ -310,7 +308,7 @@ class Kernel {
     serviceManager.register('MemorySeed', memorySeed);
 
     this.log('INFO', 'Knowledge & Memory Seed Planted');
-    this._emitEvent(serviceManager, 'KERNEL_PHASE_COMPLETED', { phase: 8, name: 'KNOWLEDGE_MEMORY_SEED' });
+    this._emitEvent(serviceManager, 'Kernel:PhaseCompleted', { phase: 8, name: 'KNOWLEDGE_MEMORY_SEED' });
     this.log('INFO', 'PHASE 8 — KNOWLEDGE & MEMORY INITIAL SEED: Completed');
   }
 
@@ -330,7 +328,7 @@ class Kernel {
     }
     this.log('INFO', 'All integration checks passed', checks);
 
-    this._emitEvent(serviceManager, 'KERNEL_PHASE_COMPLETED', { phase: 9, name: 'SYSTEM_INTEGRATION_CHECK' });
+    this._emitEvent(serviceManager, 'Kernel:PhaseCompleted', { phase: 9, name: 'SYSTEM_INTEGRATION_CHECK' });
     this.log('INFO', 'PHASE 9 — SYSTEM INTEGRATION CHECK: Completed');
   }
 
@@ -363,8 +361,8 @@ class Kernel {
     serviceManager.register('WorkspaceManager', workspaceManager);
     this.log('INFO', 'ApplicationManager, WindowManager & WorkspaceManager Activated');
 
-    this._emitEvent(serviceManager, 'SYSTEM_READY', { timestamp: new Date().toISOString() });
-    this._emitEvent(serviceManager, 'KERNEL_PHASE_COMPLETED', { phase: 10, name: 'FULL_SYSTEM_ACTIVATION' });
+    this._emitEvent(serviceManager, 'System:Ready', { timestamp: new Date().toISOString() });
+    this._emitEvent(serviceManager, 'Kernel:PhaseCompleted', { phase: 10, name: 'FULL_SYSTEM_ACTIVATION' });
     this.log('INFO', 'PHASE 10 — FULL SYSTEM ACTIVATION: Completed');
   }
 
@@ -447,6 +445,9 @@ class Kernel {
   // Health Monitoring
   getHealth() {
     this.health.uptime = Date.now() - this.health.startTime;
+    if (this.eventBus) {
+      this.health.totalEvents = this.eventBus.getTotalEvents();
+    }
     return {
       ...this.health,
       status: this.status,

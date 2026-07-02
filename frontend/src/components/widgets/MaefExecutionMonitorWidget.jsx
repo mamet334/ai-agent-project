@@ -23,7 +23,7 @@ export default function MaefExecutionMonitorWidget() {
     let unsub = null;
 
     if (eventBus) {
-      unsub = eventBus.on('Widget.DataInjected', (payload) => {
+      unsub = eventBus.on('Widget:DataInjected', (payload) => {
         if (payload.widgetId === 'widget:maef-monitor') {
           const executionTrace = payload.data?.logs || payload.data;
           setActiveTrace(executionTrace);

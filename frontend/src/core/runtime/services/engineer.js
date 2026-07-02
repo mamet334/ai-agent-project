@@ -46,7 +46,7 @@ class Engineer {
     await this._loadStaticKnowledge();
     this._registerListeners();
     console.log(`[Engineer] Initialized as ${this.capability}`);
-    this.eventBus.emit('ENGINEER_READY', { capability: this.capability });
+    this.eventBus.emit('Engineer:Ready', { capability: this.capability });
   }
 
   // =============================================
@@ -97,13 +97,13 @@ class Engineer {
   // =============================================
   _registerListeners() {
     // Tugas analisis dari User (via UI atau service lain)
-    this.eventBus.on('ENGINEER_ANALYZE_TASK', this._handleAnalysisTask.bind(this));
+    this.eventBus.on('Engineer:AnalyzeTask', this._handleAnalysisTask.bind(this));
 
     // Perintah review (misal dari pipeline verifikasi)
-    this.eventBus.on('ENGINEER_REVIEW_CHANGES', this._handleReviewTask.bind(this));
+    this.eventBus.on('Engineer:ReviewChanges', this._handleReviewTask.bind(this));
 
     // Perintah generate patch (hanya jika capability sudah IMPLEMENTER)
-    this.eventBus.on('ENGINEER_GENERATE_PATCH', this._handlePatchTask.bind(this));
+    this.eventBus.on('Engineer:GeneratePatch', this._handlePatchTask.bind(this));
   }
 
   // =============================================
@@ -154,7 +154,7 @@ class Engineer {
 
   async _handlePatchTask(task) {
     if (this.capability !== 'IMPLEMENTER' && this.capability !== 'SELF_MAINTENANCE') {
-      this.eventBus.emit('ENGINEER_RECOMMENDATION', {
+      this.eventBus.emit('Engineer:Recommendation', {
         type: 'ERROR',
         taskId: task.id,
         message: 'Engineer belum memiliki kapabilitas IMPLEMENTER. Butuh upgrade bertahap.',
@@ -229,7 +229,7 @@ class Engineer {
   _emitRecommendation(recommendation) {
     // Prinsip: AI berpikir, User memutuskan.
     // Engineer hanya mengirim rekomendasi, tidak mengeksekusi.
-    this.eventBus.emit('ENGINEER_RECOMMENDATION', {
+    this.eventBus.emit('Engineer:Recommendation', {
       ...recommendation,
       from: 'Engineer',
       capability: this.capability,
@@ -249,7 +249,7 @@ class Engineer {
     if (validCapabilities.includes(newCapability)) {
       this.capability = newCapability;
       console.log(`[Engineer] Capability upgraded to ${newCapability}`);
-      this.eventBus.emit('ENGINEER_CAPABILITY_UPDATED', { capability: this.capability });
+      this.eventBus.emit('Engineer:CapabilityUpdated', { capability: this.capability });
     } else {
       console.warn(`[Engineer] Invalid capability: ${newCapability}`);
     }
