@@ -9,7 +9,7 @@ export function WorkspaceProvider({ appId, defaultWorkspaceId, children }) {
   const [osState, setOsState] = useState(manager.state);
 
   useEffect(() => {
-    const unsubscribe = manager.subscribe(setOsState);
+    const unsubscribe = manager.subscribe((payload) => setOsState(payload?.data || payload));
     if (defaultWorkspaceId && !manager.activeWorkspaceId) {
       manager.switchWorkspace(defaultWorkspaceId);
     }

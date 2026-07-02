@@ -6,7 +6,7 @@ export default function ApplicationContainer() {
   const [appState, setAppState] = useState(() => applicationManager.getState());
 
   useEffect(() => {
-    return applicationManager.subscribe(setAppState);
+    return applicationManager.subscribe((payload) => setAppState(payload?.data || payload));
   }, [applicationManager]);
 
   return (
