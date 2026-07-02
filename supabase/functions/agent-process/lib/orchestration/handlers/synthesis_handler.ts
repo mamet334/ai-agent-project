@@ -53,8 +53,11 @@ export const SynthesisHandler = {
         });
 
         if (vReport.decision === "FAIL") {
-            console.warn(`[HARD GATE] BLOCKED. Keputusan verifikasi gagal (Skor: ${vReport.score}).`);
-            return { mode: 'DIRECT', aiResponse: { message: "Verification Failed" }, snapshot: maef.getSnapshot() };
+            if (ctx.request.mode === 'ENGINEER' || ctx.request.mode === 'engineer') {
+                console.warn(`[HARD GATE] BLOCKED. Keputusan verifikasi gagal (Skor: ${vReport.score}).`);
+                return { mode: 'DIRECT', aiResponse: { message: "Verification Failed" }, snapshot: maef.getSnapshot() };
+            }
+            console.log(`[HARD GATE] Soft Warning: Verification failed but bypassed for mode=${ctx.request.mode}`);
         }
     } else {
         if (maef.shouldExecutePhase('POST_PROCESSING')) {
