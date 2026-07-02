@@ -368,7 +368,7 @@ class Kernel {
     // Activate other services
     const verificationEngine = serviceManager.get('VerificationEngine');
     if (verificationEngine) verificationEngine.mode = 'OPERATIONAL';
-    const orchestrator = serviceManager.get('Orchestrator');
+    const orchestrator = serviceManager.get('AgentOrchestratorService');
     if (orchestrator) orchestrator.mode = 'OPERATIONAL';
 
     // Register ApplicationManager, WindowManager, & WorkspaceManager
