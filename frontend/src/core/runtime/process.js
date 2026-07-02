@@ -4,7 +4,7 @@ export class ProcessManager {
     this.bus = bus;
     this.tasks = new Map();
     this.defaultTimeoutMs = 15000; // 15 detik timeout untuk mencegah blocking
-    this.bus.on('process.execute', this.execute.bind(this));
+    this.bus.on('Process:Execute', this.execute.bind(this));
   }
 
   // Eksekusi fungsi dengan pengamanan try-catch dan race timeout

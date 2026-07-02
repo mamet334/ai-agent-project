@@ -59,11 +59,11 @@ export class WindowManager {
 
   // --- Observability ---
   subscribe(listener) {
-    return this.eventBus.on('WINDOW_STATE_CHANGED', listener);
+    return this.eventBus.on('Window:StateChanged', listener);
   }
 
   _notify() {
-    this.eventBus.emit('WINDOW_STATE_CHANGED', {
+    this.eventBus.emit('Window:StateChanged', {
       floatingWindows: Array.from(this.state.floatingWindows.values()),
       splitPanes: Array.from(this.state.splitPanes.values())
     });

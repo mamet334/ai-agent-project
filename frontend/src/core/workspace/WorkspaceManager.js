@@ -43,11 +43,11 @@ export class WorkspaceManager {
    * Subscribes to Workspace State changes (React components will use this)
    */
   subscribe(listener) {
-    return this.eventBus.on('WORKSPACE_STATE_CHANGED', listener);
+    return this.eventBus.on('Workspace:StateChanged', listener);
   }
 
   _notify() {
-    this.eventBus.emit('WORKSPACE_STATE_CHANGED', { 
+    this.eventBus.emit('Workspace:StateChanged', { 
       ...this.state, 
       workspaceId: this.activeWorkspaceId, 
       sessionId: this.activeSessionId 
