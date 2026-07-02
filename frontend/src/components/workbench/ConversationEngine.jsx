@@ -83,7 +83,17 @@ export default function ConversationEngine({ sessionId }) {
       }
 
       // --- Memory Injection (Layer 2) ---
-      const memoryService = kernel.serviceManager?.get('MemoryService');
+      let memoryService = null;
+      try {
+        memoryService = kernel.serviceManager?.has('MemoryService') ? kernel.serviceManager.get('MemoryService') : null;
+        console.log('[ConversationEngine] 🔍 MemoryService tersedia?', !!memoryService);
+        if (kernel.serviceManager?.services) {
+            console.log('[ConversationEngine] 🔍 Daftar service terdaftar:', Array.from(kernel.serviceManager.services.keys()));
+        }
+      } catch (err) {
+        console.warn('[ConversationEngine] ⚠️ Gagal mengakses ServiceManager:', err);
+      }
+
       let localContext = '';
       if (memoryService) {
           try {
