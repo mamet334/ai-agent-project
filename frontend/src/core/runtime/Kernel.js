@@ -7,6 +7,7 @@ import { EventBus } from './EventBus';
 import { VaultService } from './services/VaultService';
 import { BrainService } from './services/BrainService';
 import { Engineer } from './services/engineer.js';
+import { FileSystem } from './fs.js';
 
 /**
  * MAEF Kernel v2.0
@@ -134,6 +135,10 @@ class Kernel {
       serviceManager.register('EventBus', eventBus);
       this.log('INFO', 'Event System Registered');
     }
+
+    // FileSystem
+    const fileSystem = new FileSystem();
+    serviceManager.register('FileSystem', fileSystem);
 
     // Widget Registry
     let widgetRegistry;
