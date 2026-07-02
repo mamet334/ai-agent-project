@@ -6,6 +6,7 @@ export interface UnifiedExecutionContext {
     originalMessage: string; 
     finalMessage: string; 
     lowerMsg: string; 
+    mode?: string;
     tools?: any[]; 
     model?: string; 
     stream?: boolean; 

@@ -10,6 +10,7 @@ export async function parseRequestParams(req: Request, user: any) {
   }
   let { message, tools, model, userId: _clientUserId, userName, file, history, globalMemory, stream, desktopOSMode, ragEnabled, appSource: clientAppSource = 'assistant', workspaceTarget = 'AUTO', localWorkspaceEnabled = false, auditMode = 'OFF', mode: clientMode } = reqJson;
   const mode = clientMode || 'OWNER';
+  console.log('[RequestParser] Mode diterima:', mode);
 
   const jwtAppSource = user.user_metadata?.app_source as string | undefined;
   const ALLOWED_CLIENT_SOURCES = ['assistant', 'mametlite'];
