@@ -9,8 +9,8 @@ export class ProcessManager {
 
   // Eksekusi fungsi dengan pengamanan try-catch dan race timeout
   async execute(taskName, fn, ...args) {
-    // 1. Emit process.start
-    this.bus.emit('process.start', { taskName, timestamp: Date.now() });
+    // 1. Emit Process:Start
+    this.bus.emit('Process:Start', { taskName, timestamp: Date.now() });
 
     try {
       // 2. Siapkan Timeout Promise
@@ -28,12 +28,12 @@ export class ProcessManager {
       // 4. Lakukan Race antara eksekusi aktual vs timeout
       const result = await Promise.race([executionPromise, timeoutPromise]);
       
-      // 5. Emit process.complete
-      this.bus.emit('process.complete', { taskName, result, timestamp: Date.now() });
+      // 5. Emit Process:Complete
+      this.bus.emit('Process:Complete', { taskName, result, timestamp: Date.now() });
       return result;
     } catch (error) {
-      // 6. Emit process.error jika terjadi exception atau timeout
-      this.bus.emit('process.error', { taskName, error: error.message || error, timestamp: Date.now() });
+      // 6. Emit Process:Error jika terjadi exception atau timeout
+      this.bus.emit('Process:Error', { taskName, error: error.message || error, timestamp: Date.now() });
       throw error; // Tetap throw error agar caller bisa handle jika diperlukan
     }
   }

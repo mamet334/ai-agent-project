@@ -312,7 +312,7 @@ export class WorkspaceManager {
         const eventBus = this.serviceManager.get('EventBus');
         // Let the widget mount first if it was just added (for already mounted widgets)
         setTimeout(() => {
-          eventBus.emit('Widget.DataInjected', {
+          eventBus.emit('Widget:DataInjected', {
             source: 'WorkspaceManager',
             widgetId,
             data: widgetData

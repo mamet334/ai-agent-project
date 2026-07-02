@@ -31,7 +31,7 @@ class BrainService {
     localStorage.setItem('maef_ai_model', model);
     
     if (this.eventBus) {
-      this.eventBus.emit('BRAIN_CONFIG_UPDATED', this.state);
+      this.eventBus.emit('Brain:ConfigUpdated', this.state);
     }
   }
 
