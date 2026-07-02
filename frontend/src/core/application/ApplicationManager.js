@@ -12,12 +12,12 @@ class ApplicationManager {
 
   subscribe(listener) {
     const eventBus = this.serviceManager.get('EventBus');
-    return eventBus.on('APP_STATE_CHANGED', listener);
+    return eventBus.on('App:StateChanged', listener);
   }
 
   notify() {
     const eventBus = this.serviceManager.get('EventBus');
-    eventBus.emit('APP_STATE_CHANGED', this.getState());
+    eventBus.emit('App:StateChanged', this.getState());
   }
 
   getState() {

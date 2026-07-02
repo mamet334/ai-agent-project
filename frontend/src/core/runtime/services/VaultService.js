@@ -43,7 +43,7 @@ class VaultService {
     this._vault.set(provider, key);
     this._persist();
     if (this.eventBus) {
-      this.eventBus.emit('VAULT_KEY_UPDATED', { provider });
+      this.eventBus.emit('Vault:KeyUpdated', { provider });
     }
   }
 
