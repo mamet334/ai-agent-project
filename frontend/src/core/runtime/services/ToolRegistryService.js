@@ -13,7 +13,46 @@ export class ToolRegistryService {
   async initialize() {
     if (this.isInitialized) return;
     
-    // Placeholder untuk memuat build-in tools
+    // Register built-in tools
+    this.registerTool({
+      name: 'memory_manager',
+      description: 'Menyimpan, mencari, dan mengelola User Memory di Supabase',
+      category: 'memory',
+      execute: async (params) => {
+        const memoryService = this.serviceManager.get('MemoryService');
+        if (params.action === 'store') return await memoryService.storeMemory(params.key, params.value);
+        if (params.action === 'get') return await memoryService.getMemory(params.query);
+        return { error: 'Unknown action' };
+      }
+    });
+
+    this.registerTool({
+      name: 'web_search',
+      description: 'Mencari informasi dari web menggunakan search engine',
+      category: 'research',
+      execute: async (params) => {
+        // Placeholder - akan diisi nanti dengan API search
+        return { message: 'Web search tool ready', query: params.query };
+      }
+    });
+
+    this.registerTool({
+      name: 'file_reader',
+      description: 'Membaca dan menganalisis file (PDF, Excel, Word, TXT)',
+      category: 'analysis',
+      execute: async (params) => {
+        return { message: 'File reader tool ready', filePath: params.filePath };
+      }
+    });
+
+    this.registerTool({
+      name: 'deep_research',
+      description: 'Melakukan riset mendalam multi-langkah dengan sintesis',
+      category: 'research',
+      execute: async (params) => {
+        return { message: 'Deep research tool ready', topic: params.topic };
+      }
+    });
     
     this.isInitialized = true;
     this.eventBus.emit('ToolRegistry:Ready', { status: 'READY', timestamp: Date.now() });

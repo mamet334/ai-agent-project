@@ -13,7 +13,48 @@ export class AgentOrchestratorService {
   async initialize() {
     if (this.isInitialized) return;
     
-    // Placeholder untuk memuat konfigurasi agent standar
+    // Register built-in agents
+    // Agen: memory_manager
+    this.registerAgent({
+      name: 'memory_manager',
+      description: 'Mengelola User Memory - menyimpan, mencari, dan menghapus data memori pengguna',
+      tools: ['memory_manager'],
+      status: 'active',
+      category: 'memory'
+    });
+
+    // Agen: researcher
+    this.registerAgent({
+      name: 'researcher',
+      description: 'Mencari informasi dari web dan merangkum hasil pencarian',
+      tools: ['web_search'],
+      status: 'active',
+      category: 'research'
+    });
+
+    // Agen: file_analyzer
+    this.registerAgent({
+      name: 'file_analyzer',
+      description: 'Membaca dan menganalisis berbagai format file',
+      tools: ['file_reader'],
+      status: 'active',
+      category: 'analysis'
+    });
+
+    // Agen: deep_researcher
+    this.registerAgent({
+      name: 'deep_researcher',
+      description: 'Riset mendalam multi-langkah dengan sintesis dan pelaporan',
+      tools: ['web_search', 'memory_manager', 'file_reader'],
+      status: 'active',
+      category: 'research'
+    });
+
+    // Emit event setelah semua agen terdaftar
+    this.eventBus.emit('Agent:Registered', { name: 'memory_manager' });
+    this.eventBus.emit('Agent:Registered', { name: 'researcher' });
+    this.eventBus.emit('Agent:Registered', { name: 'file_analyzer' });
+    this.eventBus.emit('Agent:Registered', { name: 'deep_researcher' });
     
     this.isInitialized = true;
     this.eventBus.emit('AgentOrchestrator:Ready', { status: 'READY', timestamp: Date.now() });
