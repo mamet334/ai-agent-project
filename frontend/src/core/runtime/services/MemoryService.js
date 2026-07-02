@@ -66,20 +66,46 @@ export class MemoryService {
   async storeMemory(key, value) {
     if (!this.isInitialized) throw new Error('MemoryService not initialized');
     
+    // Input validation
+    if (!key || typeof key !== 'string' || key.trim().length === 0) {
+      console.error('[MemoryService] Invalid key: must be non-empty string');
+      this.eventBus.emit('Memory:Stored', { key, success: false, error: 'Invalid key' });
+      return false;
+    }
+    
+    if (value === undefined || value === null) {
+      console.error('[MemoryService] Invalid value: cannot be null or undefined');
+      this.eventBus.emit('Memory:Stored', { key, success: false, error: 'Invalid value' });
+      return false;
+    }
+    
     console.log(`[MemoryService] Storing memory [${key}]`);
     let success = false;
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
       
+      if (!userId) {
+        throw new Error('User not authenticated');
+      }
+      
+      const content = typeof value === 'object' ? JSON.stringify(value) : String(value);
+      const summary = key.length > 100 ? key.substring(0, 100) + '...' : key;
+      
       const { error } = await supabase
         .from('user_memories')
         .insert([
-          { user_id: userId, content: `${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}`, metadata: { key } }
+          { 
+            user_id: userId, 
+            summary: summary,
+            content: `${key}: ${content}`, 
+            metadata: { key, type: typeof value } 
+          }
         ]);
         
       if (error) throw error;
       success = true;
+      console.log('[MemoryService] Memory stored successfully');
     } catch (err) {
       console.error('[MemoryService] Error storing memory:', err);
     }
