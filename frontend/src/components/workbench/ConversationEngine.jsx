@@ -216,16 +216,18 @@ export default function ConversationEngine({ sessionId }) {
       
       console.log('[ConversationEngine] Workspace:', activeWorkspace, 'Mode:', resolvedMode, 'AppSource:', resolvedAppSource);
 
+      // Headers dengan pembersihan karakter non-ASCII untuk mencegah error ISO-8859-1
       const headers = {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        'Authorization': `Bearer ${token.replace(/[^\x00-\x7F]/g, '')}`
       };
 
       if (aiKey) {
-        if (aiProvider === 'openrouter') headers['x-byok-openrouter'] = aiKey;
-        else if (aiProvider === 'openai') headers['x-byok-openai'] = aiKey;
-        else if (aiProvider === 'groq') headers['x-byok-groq'] = aiKey;
-        else if (aiProvider === 'gemini') headers['x-byok-gemini'] = aiKey;
+        const cleanKey = aiKey.replace(/[^\x00-\x7F]/g, '');
+        if (aiProvider === 'openrouter') headers['x-byok-openrouter'] = cleanKey;
+        else if (aiProvider === 'openai') headers['x-byok-openai'] = cleanKey;
+        else if (aiProvider === 'groq') headers['x-byok-groq'] = cleanKey;
+        else if (aiProvider === 'gemini') headers['x-byok-gemini'] = cleanKey;
       }
 
       const response = await fetch(endpoint, {
