@@ -15,6 +15,7 @@ import { MemoryService } from './services/MemoryService.js';
 import { KnowledgeService } from './services/KnowledgeService.js';
 import { AgentOrchestratorService } from './services/AgentOrchestratorService.js';
 import { ToolRegistryService } from './services/ToolRegistryService.js';
+import { SemanticContextService } from './services/SemanticContextService.js';
 
 /**
  * MAEF Kernel v2.0
@@ -216,6 +217,11 @@ class Kernel {
     const memoryService = new MemoryService(serviceManager);
     await memoryService.initialize();
     serviceManager.register('MemoryService', memoryService);
+
+    // Semantic Context Service
+    const semanticContextService = new SemanticContextService(serviceManager);
+    await semanticContextService.initialize();
+    serviceManager.register('SemanticContextService', semanticContextService);
 
     // Knowledge Service
     const knowledgeService = new KnowledgeService(serviceManager);

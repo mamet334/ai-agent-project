@@ -149,6 +149,31 @@ export default function ConversationEngine({ sessionId }) {
                 console.warn('[ConversationEngine] MemoryService query failed:', e);
             }
         }
+
+        // --- Semantic Context Injection (Layer 2) ---
+        let semanticContext = '';
+        try {
+            const semanticContextService = kernel.serviceManager.get('SemanticContextService');
+            if (semanticContextService) {
+                console.log('[ConversationEngine] 🔍 Parsing semantic intent untuk:', userMsg);
+                const intentResult = semanticContextService.parseIntent(userMsg);
+                console.log('[ConversationEngine] 📋 Intent result:', intentResult);
+
+                if (intentResult.entities && intentResult.entities.length > 0) {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    const userId = session?.user?.id;
+                    
+                    if (userId) {
+                        semanticContextService.updateGraph(userId, intentResult.entities);
+                        const contextResult = semanticContextService.getContext(userId, userMsg);
+                        semanticContext = contextResult.context;
+                        console.log('[ConversationEngine] 📝 SemanticContext yang dikirim:', semanticContext);
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('[ConversationEngine] SemanticContextService failed:', e);
+        }
       }
 
       const activeWorkspace = workspaceManager?.activeWorkspaceId || 'ASSISTANT';
@@ -174,6 +199,7 @@ export default function ConversationEngine({ sessionId }) {
         workspaceTarget: workspaceManager.activeWorkspaceId,
         history: newMessages.slice(-10),
         globalMemory: localContext,
+        semanticContext: semanticContext,
         stream: false,
         ragEnabled: true,
         model: formattedModel || undefined,
