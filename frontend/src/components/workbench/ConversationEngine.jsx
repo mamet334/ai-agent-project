@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Send, Terminal, Loader2, RefreshCw, Copy, Check } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Send, Terminal, Loader2, Copy, Check } from 'lucide-react';
 import { useWorkspace } from '../../core/workspace/WorkspaceContext';
 import { supabase } from '../../supabase';
 import { kernel } from '../../core/runtime/Kernel';
 import FolderSelector from '../FolderSelector';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import ChatHistory from './ChatHistory';
 
 const parseThinkingContent = (text) => {
   if (!text) return { thinking: '', answer: '', isThinkingComplete: false };
@@ -37,6 +36,7 @@ export default function ConversationEngine({ sessionId }) {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState('');
   const [copiedIndex, setCopiedIndex] = useState(null);
+  const [currentChatId, setCurrentChatId] = useState(null);
   const messagesEndRef = useRef(null);
 
   // Auto-scroll
@@ -45,6 +45,60 @@ export default function ConversationEngine({ sessionId }) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
+
+  // =============================================
+  // PERSISTENSI CHAT KE SUPABASE
+  // =============================================
+  const saveChatToDB = useCallback(async (msgs, chatId = currentChatId) => {
+    if (!msgs || msgs.length === 0) return;
+    
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.id) return;
+
+    const title = msgs[0]?.content?.substring(0, 50) || 'Percakapan Baru';
+    const payload = {
+      user_id: session.user.id,
+      title: title,
+      messages: msgs,
+      updated_at: new Date().toISOString(),
+      workspace_type: osState?.workspaceId || 'OWNER'
+    };
+
+    let result;
+    if (chatId) {
+      result = await supabase.from('chats').update(payload).eq('id', chatId);
+    } else {
+      result = await supabase.from('chats').insert(payload).select('id').single();
+      if (result.data?.id) setCurrentChatId(result.data.id);
+    }
+
+    if (result.error) {
+      console.error('[ConversationEngine] Gagal menyimpan chat:', result.error);
+    }
+  }, [currentChatId, osState]);
+
+  // Auto-save setiap kali messages berubah
+  useEffect(() => {
+    if (currentChatId || messages.length > 0) {
+      saveChatToDB(messages);
+    }
+  }, [messages, currentChatId, saveChatToDB]);
+
+  const handleNewChat = () => {
+    setMessages([]);
+    setCurrentChatId(null);
+  };
+
+  const handleLoadChat = async (chatId) => {
+    const { data, error } = await supabase
+      .from('chats')
+      .select('*')
+      .eq('id', chatId)
+      .single();
+    if (error) { console.error(error); return; }
+    setMessages(data.messages || []);
+    setCurrentChatId(chatId);
+  };
 
   // Handle Event Flow (Integrasi UI Event ke Right Workbench)
   const openLifecycleInspector = (stepName, logs) => {
@@ -216,7 +270,7 @@ export default function ConversationEngine({ sessionId }) {
       
       console.log('[ConversationEngine] Workspace:', activeWorkspace, 'Mode:', resolvedMode, 'AppSource:', resolvedAppSource);
 
-      // Headers dengan pembersihan karakter non-ASCII untuk mencegah error ISO-8859-1
+      // Headers dengan pembersihan karakter non-ASCII
       const headers = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token.replace(/[^\x00-\x7F]/g, '')}`
@@ -399,80 +453,90 @@ export default function ConversationEngine({ sessionId }) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-950">
+    <div className="flex h-full bg-slate-950">
+      {/* Sidebar Riwayat Chat */}
+      <ChatHistory 
+        onSelectChat={handleLoadChat} 
+        onNewChat={handleNewChat} 
+        activeChatId={currentChatId} 
+      />
       
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar relative">
-        {messages.length === 0 && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center opacity-30 pointer-events-none">
-            <Terminal className="w-16 h-16 mb-4" />
-            <div className="font-mono text-sm tracking-widest text-emerald-500">CONVERSATION ENGINE</div>
-            <div className="text-xs text-slate-500 mt-2">Waiting for input...</div>
-          </div>
-        )}
+      {/* Area Chat Utama */}
+      <div className="flex-1 flex flex-col">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar relative">
+          {messages.length === 0 && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center opacity-30 pointer-events-none">
+              <Terminal className="w-16 h-16 mb-4" />
+              <div className="font-mono text-sm tracking-widest text-emerald-500">CONVERSATION ENGINE</div>
+              <div className="text-xs text-slate-500 mt-2">Waiting for input...</div>
+            </div>
+          )}
 
-        {messages.map((m, idx) => {
-          const parsed = parseThinkingContent(m.content);
-          const displayText = parsed.answer || m.content || '';
-          
-          return (
-            <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`relative group max-w-[85%] lg:max-w-[75%] rounded-2xl px-5 py-4 ${m.role === 'user' ? 'bg-emerald-600/20 text-emerald-100 border border-emerald-500/30' : 'bg-slate-900 text-slate-300 border border-slate-800'}`}>
-                <div className="text-sm whitespace-pre-wrap font-sans leading-relaxed">
-                  {displayText}
-                  {m.isStreaming && parsed.isThinkingComplete && <span className="animate-pulse"> ▍</span>}
+          {messages.map((m, idx) => {
+            const parsed = parseThinkingContent(m.content);
+            const displayText = parsed.answer || m.content || '';
+            
+            return (
+              <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`relative group max-w-[85%] lg:max-w-[75%] rounded-2xl px-5 py-4 ${m.role === 'user' ? 'bg-emerald-600/20 text-emerald-100 border border-emerald-500/30' : 'bg-slate-900 text-slate-300 border border-slate-800'}`}>
+                  <div className="text-sm whitespace-pre-wrap font-sans leading-relaxed">
+                    {displayText}
+                    {m.isStreaming && parsed.isThinkingComplete && <span className="animate-pulse"> ▍</span>}
+                  </div>
+                  
+                  {/* Tombol Copy */}
+                  {m.role === 'model' && !m.isStreaming && displayText && (
+                    <button
+                      onClick={() => handleCopy(displayText, idx)}
+                      className="absolute top-2 right-2 p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Salin ke clipboard"
+                    >
+                      {copiedIndex === idx ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5 text-slate-400" />
+                      )}
+                    </button>
+                  )}
                 </div>
-                
-                {/* Tombol Copy */}
-                {m.role === 'model' && !m.isStreaming && displayText && (
-                  <button
-                    onClick={() => handleCopy(displayText, idx)}
-                    className="absolute top-2 right-2 p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Salin ke clipboard"
-                  >
-                    {copiedIndex === idx ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    ) : (
-                      <Copy className="w-3.5 h-3.5 text-slate-400" />
-                    )}
-                  </button>
-                )}
+              </div>
+            )
+          })}
+          {isLoading && messages[messages.length - 1]?.role !== 'model' && (
+             <div className="flex justify-start">
+              <div className="bg-slate-900 px-5 py-3 rounded-2xl border border-slate-800 text-slate-400 text-xs flex items-center gap-3">
+                <Loader2 className="w-4 h-4 animate-spin text-emerald-500" /> Awaiting Intent Dispatch...
               </div>
             </div>
-          )
-        })}
-        {isLoading && messages[messages.length - 1]?.role !== 'model' && (
-           <div className="flex justify-start">
-            <div className="bg-slate-900 px-5 py-3 rounded-2xl border border-slate-800 text-slate-400 text-xs flex items-center gap-3">
-              <Loader2 className="w-4 h-4 animate-spin text-emerald-500" /> Awaiting Intent Dispatch...
-            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Folder Selector — hanya untuk workspace Engineer */}
+        {workspaceManager?.activeWorkspaceId === 'ws-engineer' && (
+          <div className="px-4 py-2 border-t border-slate-800">
+            <FolderSelector onSelect={(path) => setSelectedFolder(path)} currentPath={selectedFolder} showLabel={true} />
           </div>
         )}
-        <div ref={messagesEndRef} />
-      </div>
 
-      {/* Folder Selector — hanya untuk workspace Engineer */}
-      {workspaceManager?.activeWorkspaceId === 'ws-engineer' && (
-        <div className="px-4 py-2 border-t border-slate-800">
-          <FolderSelector onSelect={(path) => setSelectedFolder(path)} currentPath={selectedFolder} showLabel={true} />
-        </div>
-      )}
-
-      <div className="p-4 bg-slate-950 border-t border-slate-900 shrink-0">
-        <form onSubmit={handleSend} className="max-w-4xl mx-auto relative flex items-end gap-2 bg-slate-900 border border-slate-800 rounded-xl p-2 focus-within:border-emerald-500/50 transition-colors shadow-lg">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(e, null); } }}
-            placeholder="Ketik instruksi atau mulai percakapan dengan OS..."
-            className="flex-1 max-h-48 min-h-[44px] bg-transparent resize-none py-2.5 px-3 text-sm text-slate-200 placeholder-slate-500 focus:outline-none custom-scrollbar"
-            rows="1"
-          />
-          <button type="submit" disabled={!input.trim() || isLoading} className="p-3 mb-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:hover:bg-emerald-600 text-white transition-all shadow-md">
-            <Send className="w-4 h-4" />
-          </button>
-        </form>
-        <div className="text-center mt-2 text-[10px] text-slate-500 font-mono">
-          MAEF Conversation Engine v2.0 • Workspace: {workspaceManager.activeWorkspaceId}
+        {/* Input Area */}
+        <div className="p-4 bg-slate-950 border-t border-slate-900 shrink-0">
+          <form onSubmit={handleSend} className="max-w-4xl mx-auto relative flex items-end gap-2 bg-slate-900 border border-slate-800 rounded-xl p-2 focus-within:border-emerald-500/50 transition-colors shadow-lg">
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(e, null); } }}
+              placeholder="Ketik instruksi atau mulai percakapan dengan OS..."
+              className="flex-1 max-h-48 min-h-[44px] bg-transparent resize-none py-2.5 px-3 text-sm text-slate-200 placeholder-slate-500 focus:outline-none custom-scrollbar"
+              rows="1"
+            />
+            <button type="submit" disabled={!input.trim() || isLoading} className="p-3 mb-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:hover:bg-emerald-600 text-white transition-all shadow-md">
+              <Send className="w-4 h-4" />
+            </button>
+          </form>
+          <div className="text-center mt-2 text-[10px] text-slate-500 font-mono">
+            MAEF Conversation Engine v2.0 • Workspace: {workspaceManager.activeWorkspaceId}
+          </div>
         </div>
       </div>
     </div>
