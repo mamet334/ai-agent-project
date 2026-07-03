@@ -3,6 +3,7 @@ import OSDesktopShell from './components/os/OSDesktopShell'
 import AppShell from './components/workbench/AppShell'
 import ConversationEngine from './components/workbench/ConversationEngine'
 import ErrorBoundary from './components/workbench/ErrorBoundary'
+import EngineerApprovalDialog from './components/workbench/EngineerApprovalDialog'
 import Login from './components/Login'
 import Settings from './components/Settings'
 import AgentForge from './components/agent-forge/AgentForge'
@@ -130,6 +131,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <OSDesktopShell />
+      <EngineerApprovalDialog />
     </ErrorBoundary>
   )
 }
