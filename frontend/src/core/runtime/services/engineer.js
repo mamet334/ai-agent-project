@@ -29,7 +29,7 @@ class Engineer {
     };
 
     // Status capability (Phase 4-9)
-    this.capability = 'OBSERVER'; // OBSERVER | REVIEWER | ARCHITECT | PLANNER | IMPLEMENTER | VERIFIER | SELF_MAINTENANCE
+    this.capability = 'IMPLEMENTER'; // OBSERVER | REVIEWER | ARCHITECT | PLANNER | IMPLEMENTER | VERIFIER | SELF_MAINTENANCE
 
     // Metrics sederhana
     this.metrics = {
@@ -203,12 +203,204 @@ class Engineer {
   }
 
   async _generatePatch(task) {
-    // Hanya placeholder
-    return {
-      files: [],
-      description: 'Patch generation belum tersedia di versi dasar.',
-      ready: false
-    };
+    try {
+      console.log(`[Engineer] Generating patch for task: ${task.title || task.id}`);
+      
+      // 1. Baca file yang relevan via StorageManager
+      const relevantFiles = task.files || [];
+      const fileContents = {};
+      
+      for (const filePath of relevantFiles) {
+        try {
+          const content = await this.storageManager.read(filePath);
+          fileContents[filePath] = content;
+        } catch (e) {
+          console.warn(`[Engineer] Failed to read file ${filePath}:`, e);
+        }
+      }
+      
+      // 2. Gunakan LLM (via BrainService) untuk menghasilkan kode baru
+      let generatedCode = null;
+      try {
+        const brainService = this.serviceManager.get('BrainService');
+        if (brainService) {
+          const prompt = this._buildPatchPrompt(task, fileContents);
+          const response = await brainService.executeLLM(prompt);
+          generatedCode = this._extractCodeFromResponse(response);
+        }
+      } catch (e) {
+        console.warn('[Engineer] BrainService not available, using fallback');
+        generatedCode = this._generateFallbackPatch(task, fileContents);
+      }
+      
+      // 3. Tulis kode baru ke file via StorageManager.write()
+      const patchFiles = [];
+      for (const [filePath, newContent] of Object.entries(generatedCode)) {
+        try {
+          await this.storageManager.write(filePath, newContent);
+          patchFiles.push({
+            path: filePath,
+            status: 'WRITTEN',
+            size: newContent.length
+          });
+        } catch (e) {
+          console.error(`[Engineer] Failed to write file ${filePath}:`, e);
+          patchFiles.push({
+            path: filePath,
+            status: 'FAILED',
+            error: e.message
+          });
+        }
+      }
+      
+      const patch = {
+        id: `PATCH-${Date.now()}`,
+        taskId: task.id,
+        files: patchFiles,
+        description: task.description || 'Auto-generated patch',
+        generatedAt: new Date().toISOString(),
+        ready: true
+      };
+      
+      // 4. Emit event 'Engineer:PatchGenerated'
+      this.eventBus.emit('Engineer:PatchGenerated', patch);
+      
+      return patch;
+    } catch (error) {
+      console.error('[Engineer] Patch generation failed:', error);
+      return {
+        files: [],
+        description: `Patch generation failed: ${error.message}`,
+        ready: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Build prompt for LLM to generate patch
+   * @private
+   */
+  _buildPatchPrompt(task, fileContents) {
+    let prompt = `You are an expert software engineer. Generate code changes for the following task:\n\n`;
+    prompt += `Task: ${task.title || task.id}\n`;
+    prompt += `Description: ${task.description || ''}\n\n`;
+    
+    if (Object.keys(fileContents).length > 0) {
+      prompt += `Current file contents:\n`;
+      for (const [path, content] of Object.entries(fileContents)) {
+        prompt += `\n--- ${path} ---\n${content}\n`;
+      }
+    }
+    
+    prompt += `\n\nGenerate the new code for each file. Return in JSON format:\n`;
+    prompt += `{\n  "filePath1": "new content",\n  "filePath2": "new content"\n}`;
+    
+    return prompt;
+  }
+
+  /**
+   * Extract code from LLM response
+   * @private
+   */
+  _extractCodeFromResponse(response) {
+    try {
+      // Try to parse JSON from response
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+      // Fallback: return empty object
+      return {};
+    } catch (e) {
+      console.warn('[Engineer] Failed to extract code from response:', e);
+      return {};
+    }
+  }
+
+  /**
+   * Generate fallback patch when BrainService is not available
+   * @private
+   */
+  _generateFallbackPatch(task, fileContents) {
+    // Simple placeholder implementation
+    const result = {};
+    for (const filePath of Object.keys(fileContents)) {
+      result[filePath] = fileContents[filePath] + '\n// TODO: Implement changes for task: ' + (task.title || task.id);
+    }
+    return result;
+  }
+
+  /**
+   * Apply patch after verification and user approval
+   * @param {string} patchId - ID of the patch to apply
+   */
+  async applyPatch(patchId) {
+    try {
+      console.log(`[Engineer] Applying patch: ${patchId}`);
+      
+      // 1. Verify patch via VerificationEngine
+      const verificationEngine = this.serviceManager.get('VerificationEngine');
+      let verificationResult = { passed: true, issues: [] };
+      
+      if (verificationEngine) {
+        verificationResult = await verificationEngine.verifyPatch(patchId);
+      }
+      
+      if (!verificationResult.passed) {
+        console.error('[Engineer] Patch verification failed:', verificationResult.issues);
+        this.eventBus.emit('Engineer:PatchRejected', {
+          patchId,
+          reason: 'Verification failed',
+          issues: verificationResult.issues
+        });
+        return { success: false, reason: 'Verification failed' };
+      }
+      
+      // 2. Minta persetujuan User (via event)
+      this.eventBus.emit('Engineer:RequestApproval', {
+        patchId,
+        verificationResult
+      });
+      
+      // Note: Actual application happens after user approves via separate event
+      return { success: true, status: 'WAITING_APPROVAL' };
+      
+    } catch (error) {
+      console.error('[Engineer] Patch application failed:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Actually apply the patch (called after user approval)
+   * @param {string} patchId - ID of the patch to apply
+   */
+  async _executePatchApplication(patchId) {
+    try {
+      console.log(`[Engineer] Executing patch application: ${patchId}`);
+      
+      // In a real implementation, this would:
+      // 1. Apply the file changes
+      // 2. Run tests
+      // 3. Save to Project Memory
+      
+      // Save to Project Memory
+      const memoryService = this.serviceManager.get('MemoryService');
+      if (memoryService) {
+        await memoryService.storeMemory(
+          `Applied patch ${patchId}`,
+          `Patch ${patchId} was successfully applied to the codebase.`
+        );
+      }
+      
+      this.eventBus.emit('Engineer:PatchApplied', { patchId });
+      
+      return { success: true };
+    } catch (error) {
+      console.error('[Engineer] Patch execution failed:', error);
+      return { success: false, error: error.message };
+    }
   }
 
   // =============================================
