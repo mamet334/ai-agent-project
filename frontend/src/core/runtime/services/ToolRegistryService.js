@@ -13,6 +13,8 @@ export class ToolRegistryService {
   async initialize() {
     if (this.isInitialized) return;
     
+    this.isInitialized = true;
+    
     // Register built-in tools
     this.registerTool({
       name: 'memory_manager',
@@ -31,7 +33,6 @@ export class ToolRegistryService {
       description: 'Mencari informasi dari web menggunakan search engine',
       category: 'research',
       execute: async (params) => {
-        // Placeholder - akan diisi nanti dengan API search
         return { message: 'Web search tool ready', query: params.query };
       }
     });
@@ -54,15 +55,10 @@ export class ToolRegistryService {
       }
     });
     
-    this.isInitialized = true;
     this.eventBus.emit('ToolRegistry:Ready', { status: 'READY', timestamp: Date.now() });
     console.log('[ToolRegistryService] Initialized and Ready');
   }
 
-  /**
-   * Mendaftarkan tool baru ke dalam registry.
-   * @param {Object} toolConfig 
-   */
   async registerTool(toolConfig) {
     if (!this.isInitialized) throw new Error('ToolRegistryService not initialized');
     
@@ -76,30 +72,17 @@ export class ToolRegistryService {
     return true;
   }
 
-  /**
-   * Mengambil spesifikasi tool berdasarkan nama.
-   * @param {string} toolName 
-   */
   getTool(toolName) {
     return this.tools.get(toolName) || null;
   }
 
-  /**
-   * Mendapatkan daftar semua tools yang terdaftar.
-   */
   listTools() {
     return Array.from(this.tools.values());
   }
 
-  /**
-   * (Opsional) Mensimulasikan trigger eksekusi tool.
-   * @param {string} toolName 
-   * @param {any} args 
-   */
   async executeTool(toolName, args) {
     console.log(`[ToolRegistryService] Executing tool: ${toolName}`);
     this.eventBus.emit('Tool:Executed', { toolName, args });
-    // TODO: Tool execution routing
     return { success: true };
   }
 }
