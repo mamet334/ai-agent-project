@@ -9,7 +9,10 @@ export class IntentParser {
       QUESTION: ['apa', 'siapa', 'bagaimana', 'kapan', 'dimana', 'mengapa', 'kenapa', 'berapa', 'adakah'],
       COMMAND: ['buka', 'jalankan', 'cari', 'buat', 'hapus', 'tampilkan', 'simpan', 'kirim', 'unduh', 'tutup'],
       STORE: ['ingat', 'simpan', 'catat', 'tolong ingat', 'jangan lupa'],
-      GREETING: ['hai', 'halo', 'selamat', 'hello', 'hi', 'pagi', 'siang', 'sore', 'malam']
+      GREETING: ['hai', 'halo', 'selamat', 'hello', 'hi', 'pagi', 'siang', 'sore', 'malam'],
+      SCHEDULE: ['besok', 'nanti', 'jadwal', 'agenda', 'rapat', 'meeting'],
+      PREFERENCE_ASK: ['apa kesukaan', 'apa favorit', 'apa yang disukai', 'apa minuman', 'apa makanan'],
+      FAREWELL: ['dadah', 'sampai jumpa', 'bye', 'selamat tinggal']
     };
   }
 
@@ -91,5 +94,32 @@ export class IntentParser {
    */
   isGreeting(message) {
     return this.parse(message).intent === 'GREETING';
+  }
+
+  /**
+   * Cek apakah pesan berkaitan dengan jadwal/waktu
+   * @param {string} message - Pesan dari user
+   * @returns {boolean}
+   */
+  isSchedule(message) {
+    return this.parse(message).intent === 'SCHEDULE';
+  }
+
+  /**
+   * Cek apakah pesan adalah pertanyaan tentang preferensi
+   * @param {string} message - Pesan dari user
+   * @returns {boolean}
+   */
+  isPreferenceAsk(message) {
+    return this.parse(message).intent === 'PREFERENCE_ASK';
+  }
+
+  /**
+   * Cek apakah pesan adalah ucapan perpisahan
+   * @param {string} message - Pesan dari user
+   * @returns {boolean}
+   */
+  isFarewell(message) {
+    return this.parse(message).intent === 'FAREWELL';
   }
 }
