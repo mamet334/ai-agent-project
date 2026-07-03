@@ -33,9 +33,20 @@ export const ContextBuilderHandler = {
     // 2. SCATTER: Trigger independent services in parallel (Phase 1 Event-Driven Gatherer)
     const ragPromise = (async () => {
         if (!ctx.auth.userId || !ctx.request.isRagEnabled) return [];
+        
+        // Disable embedding for OWNER/LITE modes to avoid quota issues
+        if (ctx.policy.mode === 'OWNER' || ctx.policy.mode === 'LITE') {
+            console.log('[RAG] Embedding disabled for mode:', ctx.policy.mode);
+            return [];
+        }
+        
         try {
+            console.log('[RAG] Attempting embedding generation...');
             const queryEmbedding = await generateEmbedding(ctx.request.finalMessage, rctx);
-            if (queryEmbedding.length === 0) return [];
+            if (queryEmbedding.length === 0) {
+                console.warn('[RAG] Embedding generation returned empty, falling back to empty array');
+                return [];
+            }
             return await searchDocuments(
                 queryEmbedding,
                 ctx.request.finalMessage,
@@ -46,8 +57,16 @@ export const ContextBuilderHandler = {
                 rctx
             );
         } catch (err: any) {
-            console.error("RAG Search Error:", err);
-            if (err.message && err.message.includes("RAG_DB_FAIL")) throw err;
+            console.error("[RAG Search Error]:", err);
+            console.error("[RAG Error Details]:", err.message);
+            // Fallback: return empty array instead of throwing error
+            // This allows the system to continue without RAG context
+            if (err.message && err.message.includes("RAG_DB_FAIL")) {
+                console.warn('[RAG] RAG_DB_FAIL detected, returning empty array');
+                return [];
+            }
+            // Log but don't throw - allow system to continue
+            console.warn('[RAG] Embedding failed, continuing without RAG context');
             return [];
         }
     })();
