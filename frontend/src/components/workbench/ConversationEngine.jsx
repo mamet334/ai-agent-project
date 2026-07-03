@@ -106,6 +106,7 @@ export default function ConversationEngine({ sessionId }) {
       let formattedModel = '';
       let aiKey = '';
       let localContext = '';
+      let semanticContext = '';   // ✅ Dideklarasikan di sini agar bisa diakses di luar blok if/else
       let memoryService = null;
 
       if (kernel.status !== 'RUNNING') {
@@ -151,7 +152,6 @@ export default function ConversationEngine({ sessionId }) {
         }
 
         // --- Semantic Context Injection (Layer 2) ---
-        let semanticContext = '';
         try {
             const semanticContextService = kernel.serviceManager.get('SemanticContextService');
             if (semanticContextService) {
@@ -199,7 +199,7 @@ export default function ConversationEngine({ sessionId }) {
         workspaceTarget: workspaceManager.activeWorkspaceId,
         history: newMessages.slice(-10),
         globalMemory: localContext,
-        semanticContext: semanticContext,
+        semanticContext: semanticContext,   // ✅ Sekarang variabel ini sudah dikenali
         stream: false,
         ragEnabled: true,
         model: formattedModel || undefined,

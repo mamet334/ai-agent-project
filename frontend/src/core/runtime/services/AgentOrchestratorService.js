@@ -14,6 +14,9 @@ export class AgentOrchestratorService {
     console.log('[AgentOrchestratorService] initialize() called. isInitialized=', this.isInitialized);
     if (this.isInitialized) return;
     
+    // ✅ PINDAHKAN isInitialized = true ke ATAS, sebelum registerAgent()
+    this.isInitialized = true;
+    
     console.log('[AgentOrchestratorService] Initializing...');
     
     // Register built-in agents
@@ -59,7 +62,6 @@ export class AgentOrchestratorService {
     this.eventBus.emit('Agent:Registered', { name: 'file_analyzer' });
     this.eventBus.emit('Agent:Registered', { name: 'deep_researcher' });
     
-    this.isInitialized = true;
     this.eventBus.emit('AgentOrchestrator:Ready', { status: 'READY', timestamp: Date.now() });
     console.log('[AgentOrchestratorService] Initialized and Ready');
     console.log('[AgentOrchestratorService] Total agents registered:', this.agents.size);
@@ -91,17 +93,13 @@ export class AgentOrchestratorService {
     console.log(`[AgentOrchestratorService] registerAgent() called for:`, agentConfig?.name, 'isInitialized=', this.isInitialized);
     if (!this.isInitialized) {
       console.error(`[AgentOrchestratorService] Failed to register agent ${agentConfig?.name} because service is not initialized!`);
-      // Kita log errornya juga untuk debug
+      throw new Error('AgentOrchestratorService not initialized');
     }
-    // Hapus throw sementara untuk debugging jika diperlukan, atau tambahkan log sebelum throw
-    if (!this.isInitialized) throw new Error('AgentOrchestratorService not initialized');
     
     const name = agentConfig.name || 'UnknownAgent';
     console.log(`[AgentOrchestratorService] Registering new agent: ${name}`);
     this.agents.set(name, agentConfig);
     console.log(`[AgentOrchestratorService] Current agents Map after register:`, this.agents);
-    
-    // TODO: Persist agent configuration if necessary
     
     return true;
   }
