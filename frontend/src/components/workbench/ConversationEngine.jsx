@@ -3,6 +3,7 @@ import { Send, Terminal, Loader2, RefreshCw } from 'lucide-react';
 import { useWorkspace } from '../../core/workspace/WorkspaceContext';
 import { supabase } from '../../supabase';
 import { kernel } from '../../core/runtime/Kernel';
+import FolderSelector from '../FolderSelector';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -26,7 +27,6 @@ const parseThinkingContent = (text) => {
       };
     }
   }
-  // Jika tidak ada tag think, seluruh teks adalah answer
   return { thinking: '', answer: text, isThinkingComplete: true };
 };
 
@@ -35,6 +35,7 @@ export default function ConversationEngine({ sessionId }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedFolder, setSelectedFolder] = useState('');
   const messagesEndRef = useRef(null);
 
   // Auto-scroll
@@ -46,7 +47,6 @@ export default function ConversationEngine({ sessionId }) {
 
   // Handle Event Flow (Integrasi UI Event ke Right Workbench)
   const openLifecycleInspector = (stepName, logs) => {
-    // 1. Dapatkan referensi Widget Registry dari event
     workspaceManager.openWidgetInWorkbench('right', 'widget:maef-monitor', {
       focusStep: stepName,
       logs: logs
@@ -73,7 +73,6 @@ export default function ConversationEngine({ sessionId }) {
       try {
         const memoryService = kernel.serviceManager.get('MemoryService');
         if (memoryService) {
-          // Extract the content to remember (remove the trigger word)
           const contentToRemember = userMsg
             .replace(/(ingat|simpan|catat|remember|save|store)/gi, '')
             .trim();
@@ -106,7 +105,7 @@ export default function ConversationEngine({ sessionId }) {
       let formattedModel = '';
       let aiKey = '';
       let localContext = '';
-      let semanticContext = '';   // ✅ Dideklarasikan di sini agar bisa diakses di luar blok if/else
+      let semanticContext = '';
       let memoryService = null;
 
       if (kernel.status !== 'RUNNING') {
@@ -199,7 +198,7 @@ export default function ConversationEngine({ sessionId }) {
         workspaceTarget: workspaceManager.activeWorkspaceId,
         history: newMessages.slice(-10),
         globalMemory: localContext,
-        semanticContext: semanticContext,   // ✅ Sekarang variabel ini sudah dikenali
+        semanticContext: semanticContext,
         stream: false,
         ragEnabled: true,
         model: formattedModel || undefined,
@@ -253,7 +252,6 @@ export default function ConversationEngine({ sessionId }) {
           metadata: jsonData
         }]);
         
-        // Automatically push the trace to the adjacent layer
         openLifecycleInspector('execution', jsonData);
 
         setIsLoading(false);
@@ -295,7 +293,6 @@ export default function ConversationEngine({ sessionId }) {
                 if (parsed.step) {
                    processingSteps.push(parsed.step);
                 }
-                // Parsing format dari edge function: { choices: [{ delta: { content: "teks" } }] }
                 let chunkText = '';
                 if (parsed.text) {
                   chunkText = parsed.text;
@@ -333,14 +330,13 @@ export default function ConversationEngine({ sessionId }) {
                    };
                    return next;
                  });
-                 done = true; // Architecturally stop the stream on unrecoverable parsing error
+                 done = true;
               }
             }
           }
         }
       }
       
-      // Finalize
       console.log("[LIFECYCLE] Stream completed");
       setMessages(prev => {
         const next = [...prev];
@@ -348,7 +344,6 @@ export default function ConversationEngine({ sessionId }) {
         return next;
       });
       
-      // Populate aiResponseText for OS Execution Interceptor
       const finalAiResponseText = aiResponseText;
 
       // === OS EXECUTION INTERCEPTOR (Local Sandbox Execution) ===
@@ -356,7 +351,6 @@ export default function ConversationEngine({ sessionId }) {
         let interceptHit = false;
         let autoReply = '';
 
-        // 1. Terminal parsing (<terminal>...</terminal>)
         const termMatch = finalAiResponseText.match(/<terminal>([\s\S]*?)<\/terminal>/i);
         const mdTermMatch = finalAiResponseText.match(/```(?:bash|sh|cmd|powershell|ps1)?\n([\s\S]*?)```/i);
         let rawCmd = null;
@@ -364,7 +358,6 @@ export default function ConversationEngine({ sessionId }) {
         if (termMatch) {
           rawCmd = termMatch[1].trim();
         } else if (mdTermMatch) {
-          // Hanya tangkap command pendek yang aman jika bukan XML tag formal
           const cmdCandidate = mdTermMatch[1].trim();
           if (cmdCandidate && !cmdCandidate.includes('import ') && !cmdCandidate.includes('function ') && cmdCandidate.length < 200) {
             rawCmd = cmdCandidate;
@@ -382,7 +375,6 @@ export default function ConversationEngine({ sessionId }) {
            }
         }
 
-        // 2. File Editing (<edit_file path="...">...</edit_file>)
         const fileMatch = finalAiResponseText.match(/<edit_file\s+path=["']([^"']+)["'][^>]*>([\s\S]*?)<\/edit_file>/i);
         if (fileMatch) {
            interceptHit = true;
@@ -396,7 +388,6 @@ export default function ConversationEngine({ sessionId }) {
            }
         }
 
-        // 3. Docker Sandbox Interceptor (Isolated Code Execution)
         if (window.electronAPI.runDockerSandbox && !interceptHit) {
           const codeBlockMatch = finalAiResponseText.match(/```(python|py|javascript|js)\n([\s\S]*?)```/i);
           if (codeBlockMatch) {
@@ -407,7 +398,6 @@ export default function ConversationEngine({ sessionId }) {
                 const codeContent = codeBlockMatch[2].trim();
                 const language = (codeLang === 'py' || codeLang === 'python') ? 'python' : 'javascript';
                 
-                // Hanya eksekusi jika kode terlihat aman dan bermakna
                 if (codeContent.length > 10 && codeContent.length < 50000 && 
                     (codeContent.includes('print(') || codeContent.includes('console.log'))) {
                   console.log(`[Docker Sandbox] Mengeksekusi ulang kode ${language} via Docker...`);
@@ -458,14 +448,12 @@ export default function ConversationEngine({ sessionId }) {
 
         {messages.map((m, idx) => {
           const parsed = parseThinkingContent(m.content);
-          // Fallback: jika parsed.answer kosong, gunakan m.content langsung
           const displayText = parsed.answer || m.content || '';
           
           return (
             <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-[85%] lg:max-w-[75%] rounded-2xl px-5 py-4 ${m.role === 'user' ? 'bg-emerald-600/20 text-emerald-100 border border-emerald-500/30' : 'bg-slate-900 text-slate-300 border border-slate-800'}`}>
                 
-                {/* Final Response Output */}
                 <div className="text-sm whitespace-pre-wrap font-sans leading-relaxed">
                   {displayText}
                   {m.isStreaming && parsed.isThinkingComplete && <span className="animate-pulse"> ▍</span>}
@@ -483,6 +471,17 @@ export default function ConversationEngine({ sessionId }) {
         )}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Folder Selector — hanya untuk workspace Engineer */}
+      {workspaceManager?.activeWorkspaceId === 'ws-engineer' && (
+        <div className="px-4 py-2 border-t border-slate-800">
+          <FolderSelector 
+            onSelect={(path) => setSelectedFolder(path)}
+            currentPath={selectedFolder}
+            showLabel={true}
+          />
+        </div>
+      )}
 
       {/* Input Base */}
       <div className="p-4 bg-slate-950 border-t border-slate-900 shrink-0">
@@ -516,7 +515,6 @@ export default function ConversationEngine({ sessionId }) {
   );
 }
 
-// Temporary CheckCircle icon component
 const CheckCircle = () => (
   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
