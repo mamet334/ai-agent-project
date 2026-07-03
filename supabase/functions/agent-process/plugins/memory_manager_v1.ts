@@ -62,7 +62,16 @@ export const MEMORY_V2_ENABLED = Deno.env.get('MEMORY_V2_ENABLED') === 'true';
 
 export const retrieveMemoriesV2 = async (userPrompt: string, userId: string, supabaseUrl: string, supabaseKey: string, rctx?: any) => {
   const startTime = Date.now();
-  if (!userId || userPrompt.trim().length < 4) return [];
+  
+  // UUID VALIDATION - Fix for "SUPABASE" string error
+  console.log('[MemoryManagerV2] userId received:', userId);
+  const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+  if (!isValidUUID) {
+    console.warn('[MemoryManagerV2] Invalid userId, skipping query:', userId);
+    return null; // Return null to trigger fallback to V1
+  }
+  
+  if (!userId || userPrompt.trim().length < 4) return null;
 
   try {
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -140,6 +149,16 @@ export const retrieveMemories = async (userPrompt: string, userId: string, supab
   }
 
   const startTime = Date.now();
+  
+  // UUID VALIDATION - Fix for "SUPABASE" string error
+  console.log('[MemoryManager] userId received:', userId);
+  const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+  if (!isValidUUID) {
+    console.warn('[MemoryManager] Invalid userId, skipping query:', userId);
+    logMemoryAudit(supabaseUrl, supabaseKey, { user_id: userId, event_type: 'memory_retrieval_failed', status: 'FAILED', reason: 'invalid_uuid', query: userPrompt, execution_time_ms: Date.now() - startTime }, rctx);
+    return [];
+  }
+  
   if (!userId || userPrompt.trim().length < 4) {
      logMemoryAudit(supabaseUrl, supabaseKey, { user_id: userId, event_type: 'memory_retrieval_failed', status: 'FAILED', reason: 'query_too_short', query: userPrompt, execution_time_ms: Date.now() - startTime }, rctx);
      return [];
