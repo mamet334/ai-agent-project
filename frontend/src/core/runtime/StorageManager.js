@@ -1,137 +1,336 @@
-// StorageManager.js - Evolusi dari fs.js
-// Runtime Contract: Storage abstraksi multi-backend untuk Mamet OS
+/**
+ * StorageManager - Layer 1 Core Service
+ * Abstraksi semua media penyimpanan (localStorage, file system, IndexedDB, memory).
+ * Digunakan oleh seluruh service dan komponen untuk operasi baca/tulis.
+ */
 export class StorageManager {
   constructor() {
-    // Prefix untuk mencegah bentrok dengan data aplikasi lain di localStorage
-    this.prefix = 'mamet_fs:';
-    this.backend = 'localStorage'; // default backend
-    this.metadata = new Map(); // cache metadata file
+    // Tentukan backend default berdasarkan environment
+    this.backends = new Map();
+    this.backends.set('localStorage', this._localStorageBackend());
+    this.backends.set('file-system', this._fileSystemBackend());
+    this.backends.set('memory', this._memoryBackend());
+
+    // Deteksi environment: Electron atau Browser
+    if (typeof window !== 'undefined' && window.electronAPI) {
+      this.currentBackend = 'file-system';
+    } else {
+      this.currentBackend = 'localStorage';
+    }
   }
 
-  // Backend Management
+  // =============================================
+  // BACKEND MANAGEMENT
+  // =============================================
+
+  /**
+   * Set backend penyimpanan yang aktif
+   * @param {string} type - 'localStorage' | 'file-system' | 'memory'
+   */
   setBackend(type) {
-    const availableBackends = this.listBackends();
-    if (!availableBackends.includes(type)) {
-      throw new Error(`Backend '${type}' not available. Available: ${availableBackends.join(', ')}`);
+    if (this.backends.has(type)) {
+      this.currentBackend = type;
+      console.log(`[StorageManager] Backend diubah ke: ${type}`);
+    } else {
+      console.warn(`[StorageManager] Backend tidak dikenal: ${type}`);
     }
-    this.backend = type;
-    console.log(`[StorageManager] Backend switched to: ${type}`);
   }
 
+  /**
+   * Dapatkan backend yang sedang aktif
+   * @returns {string}
+   */
   getBackend() {
-    return this.backend;
+    return this.currentBackend;
   }
 
+  /**
+   * Daftar semua backend yang tersedia
+   * @returns {string[]}
+   */
   listBackends() {
-    return ['localStorage', 'indexedDB', 'memory', 'cloud'];
+    return Array.from(this.backends.keys());
   }
 
-  // Core Storage Operations (interface yang sudah ada)
+  // =============================================
+  // PUBLIC API
+  // =============================================
+
   async read(path) {
-    try {
-      const data = localStorage.getItem(this.prefix + path);
-      return data !== null ? data : null;
-    } catch (error) {
-      console.error(`[StorageManager] Failed to read ${path}:`, error);
-      return null;
-    }
+    const backend = this.backends.get(this.currentBackend);
+    return backend.read(path);
   }
 
   async write(path, content) {
-    try {
-      localStorage.setItem(this.prefix + path, content);
-      this.metadata.set(path, {
-        size: content.length,
-        created_at: Date.now(),
-        type: this._detectType(content)
-      });
-      return true;
-    } catch (error) {
-      console.error(`[StorageManager] Failed to write ${path}:`, error);
-      return false;
-    }
+    const backend = this.backends.get(this.currentBackend);
+    return backend.write(path, content);
   }
 
   async delete(path) {
-    try {
-      const key = this.prefix + path;
-      if (localStorage.getItem(key) === null) {
-        return false;
-      }
-      localStorage.removeItem(key);
-      this.metadata.delete(path);
-      return true;
-    } catch (error) {
-      console.error(`[StorageManager] Failed to delete ${path}:`, error);
-      return false;
-    }
+    const backend = this.backends.get(this.currentBackend);
+    return backend.delete(path);
   }
 
   async list(dir) {
-    try {
-      const results = [];
-      const searchPrefix = this.prefix + dir;
-      
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith(searchPrefix)) {
-          results.push(key.substring(this.prefix.length));
-        }
-      }
-      
-      return results;
-    } catch (error) {
-      console.error(`[StorageManager] Failed to list directory ${dir}:`, error);
-      return [];
-    }
+    const backend = this.backends.get(this.currentBackend);
+    return backend.list(dir);
   }
 
-  // New Methods
   async getInfo(path) {
-    const meta = this.metadata.get(path);
-    if (meta) return meta;
-    
-    // Fallback: calculate from actual data
-    const data = await this.read(path);
-    if (data === null) return null;
-    
-    const info = {
-      size: data.length,
-      created_at: Date.now(),
-      type: this._detectType(data)
-    };
-    this.metadata.set(path, info);
-    return info;
+    const backend = this.backends.get(this.currentBackend);
+    return backend.getInfo(path);
   }
 
   async exists(path) {
-    const data = await this.read(path);
-    return data !== null;
+    const backend = this.backends.get(this.currentBackend);
+    return backend.exists(path);
   }
 
   async clear() {
-    try {
-      const keys = Object.keys(localStorage);
-      keys.forEach(key => {
-        if (key.startsWith(this.prefix)) {
-          localStorage.removeItem(key);
-        }
-      });
-      this.metadata.clear();
-      console.log('[StorageManager] All data cleared from backend');
-      return true;
-    } catch (error) {
-      console.error('[StorageManager] Failed to clear storage:', error);
-      return false;
-    }
+    const backend = this.backends.get(this.currentBackend);
+    return backend.clear();
   }
 
-  // Helper: detect content type
-  _detectType(content) {
-    if (typeof content !== 'string') return 'unknown';
-    if (content.startsWith('{') || content.startsWith('[')) return 'json';
-    if (content.startsWith('<')) return 'html';
-    if (content.startsWith('#')) return 'markdown';
-    return 'text';
+  // =============================================
+  // BACKEND: LOCAL STORAGE
+  // =============================================
+
+  _localStorageBackend() {
+    const PREFIX = 'mamet_fs:';
+
+    return {
+      read: async (path) => {
+        try {
+          return localStorage.getItem(PREFIX + path);
+        } catch (e) {
+          console.error('[StorageManager:localStorage] Gagal membaca:', path, e);
+          return null;
+        }
+      },
+
+      write: async (path, content) => {
+        try {
+          localStorage.setItem(PREFIX + path, String(content));
+          return true;
+        } catch (e) {
+          console.error('[StorageManager:localStorage] Gagal menulis:', path, e);
+          return false;
+        }
+      },
+
+      delete: async (path) => {
+        try {
+          const key = PREFIX + path;
+          if (localStorage.getItem(key) === null) return false;
+          localStorage.removeItem(key);
+          return true;
+        } catch (e) {
+          console.error('[StorageManager:localStorage] Gagal menghapus:', path, e);
+          return false;
+        }
+      },
+
+      list: async (dir) => {
+        try {
+          const results = [];
+          const searchPrefix = PREFIX + dir;
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith(searchPrefix)) {
+              results.push(key.substring(PREFIX.length));
+            }
+          }
+          return results;
+        } catch (e) {
+          console.error('[StorageManager:localStorage] Gagal listing:', dir, e);
+          return [];
+        }
+      },
+
+      getInfo: async (path) => {
+        try {
+          const content = localStorage.getItem(PREFIX + path);
+          if (content === null) return null;
+          return {
+            path,
+            size: content.length,
+            type: 'text/plain',
+            backend: 'localStorage'
+          };
+        } catch (e) {
+          return null;
+        }
+      },
+
+      exists: async (path) => {
+        return localStorage.getItem(PREFIX + path) !== null;
+      },
+
+      clear: async () => {
+        try {
+          const keysToRemove = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith(PREFIX)) {
+              keysToRemove.push(key);
+            }
+          }
+          keysToRemove.forEach(key => localStorage.removeItem(key));
+          return true;
+        } catch (e) {
+          console.error('[StorageManager:localStorage] Gagal membersihkan:', e);
+          return false;
+        }
+      }
+    };
+  }
+
+  // =============================================
+  // BACKEND: FILE SYSTEM (ELECTRON)
+  // =============================================
+
+  _fileSystemBackend() {
+    const api = () => {
+      if (typeof window !== 'undefined' && window.electronAPI) {
+        return window.electronAPI;
+      }
+      return null;
+    };
+
+    return {
+      read: async (path) => {
+        const electron = api();
+        if (!electron) {
+          console.warn('[StorageManager:file-system] Electron API tidak tersedia');
+          return null;
+        }
+        try {
+          return await electron.readFile(path);
+        } catch (e) {
+          console.error('[StorageManager:file-system] Gagal membaca:', path, e);
+          return null;
+        }
+      },
+
+      write: async (path, content) => {
+        const electron = api();
+        if (!electron) {
+          console.warn('[StorageManager:file-system] Electron API tidak tersedia');
+          return false;
+        }
+        try {
+          return await electron.writeFile(path, content);
+        } catch (e) {
+          console.error('[StorageManager:file-system] Gagal menulis:', path, e);
+          return false;
+        }
+      },
+
+      delete: async (path) => {
+        const electron = api();
+        if (!electron) {
+          console.warn('[StorageManager:file-system] Electron API tidak tersedia');
+          return false;
+        }
+        try {
+          return await electron.deleteFile(path);
+        } catch (e) {
+          console.error('[StorageManager:file-system] Gagal menghapus:', path, e);
+          return false;
+        }
+      },
+
+      list: async (dir) => {
+        const electron = api();
+        if (!electron) {
+          console.warn('[StorageManager:file-system] Electron API tidak tersedia');
+          return [];
+        }
+        try {
+          return await electron.listFiles(dir);
+        } catch (e) {
+          console.error('[StorageManager:file-system] Gagal listing:', dir, e);
+          return [];
+        }
+      },
+
+      getInfo: async (path) => {
+        const electron = api();
+        if (!electron) return null;
+        try {
+          return await electron.getFileInfo(path);
+        } catch (e) {
+          return null;
+        }
+      },
+
+      exists: async (path) => {
+        const electron = api();
+        if (!electron) return false;
+        try {
+          return await electron.fileExists(path);
+        } catch (e) {
+          return false;
+        }
+      },
+
+      clear: async () => {
+        console.warn('[StorageManager:file-system] Clear tidak diizinkan untuk file system');
+        return false;
+      }
+    };
+  }
+
+  // =============================================
+  // BACKEND: MEMORY (FALLBACK)
+  // =============================================
+
+  _memoryBackend() {
+    const store = new Map();
+
+    return {
+      read: async (path) => {
+        return store.get(path) || null;
+      },
+
+      write: async (path, content) => {
+        store.set(path, String(content));
+        return true;
+      },
+
+      delete: async (path) => {
+        return store.delete(path);
+      },
+
+      list: async (dir) => {
+        const results = [];
+        for (const key of store.keys()) {
+          if (key.startsWith(dir)) {
+            results.push(key);
+          }
+        }
+        return results;
+      },
+
+      getInfo: async (path) => {
+        const content = store.get(path);
+        if (content === undefined) return null;
+        return {
+          path,
+          size: content.length,
+          type: 'text/plain',
+          backend: 'memory'
+        };
+      },
+
+      exists: async (path) => {
+        return store.has(path);
+      },
+
+      clear: async () => {
+        store.clear();
+        return true;
+      }
+    };
   }
 }
