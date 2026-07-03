@@ -7,9 +7,10 @@ import { EventBus } from './EventBus';
 import { VaultService } from './services/VaultService';
 import { BrainService } from './services/BrainService';
 import { Engineer } from './services/engineer.js';
-import { FileSystem } from './fs.js';
-import { ProcessManager } from './process.js';
+import { StorageManager } from './StorageManager.js';
+import { ProcessManager } from './ProcessManager.js';
 import { ModuleLoader } from './module-loader.js';
+import { DiscoveryManager } from './DiscoveryManager.js';
 import { MemoryService } from './services/MemoryService.js';
 import { KnowledgeService } from './services/KnowledgeService.js';
 import { AgentOrchestratorService } from './services/AgentOrchestratorService.js';
@@ -144,17 +145,22 @@ class Kernel {
       this.log('INFO', 'Event System Registered');
     }
 
-    // FileSystem
-    const fileSystem = new FileSystem();
-    serviceManager.register('FileSystem', fileSystem);
+    // StorageManager (evolusi dari FileSystem)
+    const storageManager = new StorageManager();
+    serviceManager.register('StorageManager', storageManager);
 
     // ProcessManager
     const processManager = new ProcessManager(eventBus);
     serviceManager.register('ProcessManager', processManager);
 
     // ModuleLoader
-    const moduleLoader = new ModuleLoader(fileSystem);
+    const moduleLoader = new ModuleLoader(storageManager);
     serviceManager.register('ModuleLoader', moduleLoader);
+
+    // DiscoveryManager
+    const discoveryManager = new DiscoveryManager(serviceManager);
+    await discoveryManager.initialize();
+    serviceManager.register('DiscoveryManager', discoveryManager);
 
     // Widget Registry
     let widgetRegistry;
