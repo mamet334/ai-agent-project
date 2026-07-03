@@ -1,9 +1,9 @@
 // module-loader.js
 export class ModuleLoader {
-  constructor(fs) {
-    // fs tetap dipertahankan untuk kompatibilitas antarmuka (Dependency Injection), 
+  constructor(storageManager) {
+    // storageManager dipertahankan untuk kompatibilitas antarmuka (Dependency Injection), 
     // meskipun dynamic import() menangani network/file loading secara internal.
-    this.fs = fs;
+    this.storageManager = storageManager;
     this.cache = new Map();
   }
 
@@ -36,7 +36,7 @@ export class ModuleLoader {
     let objectUrl = null;
     try {
       // 2. Baca string code dari Virtual File System (localStorage)
-      const code = await this.fs.read(`/packages/${modulePath}.js`);
+      const code = await this.storageManager.read(`/packages/${modulePath}.js`);
       if (!code) {
         throw new Error(`Code not found in FS for module: ${modulePath}`);
       }

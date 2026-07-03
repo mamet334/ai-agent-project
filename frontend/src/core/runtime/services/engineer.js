@@ -18,7 +18,7 @@ class Engineer {
   constructor(serviceManager) {
     this.serviceManager = serviceManager;
     this.eventBus = serviceManager.get('EventBus');
-    this.fs = serviceManager.get('FileSystem');
+    this.storageManager = serviceManager.get('StorageManager');
     this.process = serviceManager.get('ProcessManager');
     this.moduleLoader = serviceManager.get('ModuleLoader');
 
@@ -69,7 +69,7 @@ class Engineer {
       const staticData = {};
       for (const path of constitutionPaths) {
         try {
-          const content = await this.fs.read(path);
+          const content = await this.storageManager.read(path);
           if (content) {
             staticData[path] = content;
           }

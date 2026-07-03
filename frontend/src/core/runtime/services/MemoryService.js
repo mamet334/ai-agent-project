@@ -8,7 +8,7 @@ export class MemoryService {
   constructor(serviceManager) {
     this.serviceManager = serviceManager;
     this.eventBus = serviceManager.get('EventBus');
-    this.fileSystem = serviceManager.get('FileSystem'); // Optional deps
+    this.storageManager = serviceManager.get('StorageManager'); // Optional deps
     this.isInitialized = false;
   }
 
