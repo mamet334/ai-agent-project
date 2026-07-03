@@ -12,12 +12,15 @@ class ApplicationManager {
 
   subscribe(listener) {
     const eventBus = this.serviceManager.get('EventBus');
+    console.log('[ApplicationManager] Subscriber registered');
     return eventBus.on('App:StateChanged', listener);
   }
 
   notify() {
+    const state = this.getState();
+    console.log('[ApplicationManager] Notifying state change. Apps count:', state.apps.length);
     const eventBus = this.serviceManager.get('EventBus');
-    eventBus.emit('App:StateChanged', this.getState());
+    eventBus.emit('App:StateChanged', state);
   }
 
   getState() {
@@ -38,7 +41,7 @@ class ApplicationManager {
 
     this.apps.set(appDef.id, {
       ...appDef,
-      status: 'REGISTERED' // REGISTERED, LOADING, INITIALIZING, RUNNING, BACKGROUND, SUSPENDED, DESTROYED
+      status: 'REGISTERED'
     });
     
     console.log(`[ApplicationManager] Registered app: ${appDef.id}`);
@@ -53,14 +56,12 @@ class ApplicationManager {
 
     if (this.activeAppId === appId) return;
 
-    // Put current active app to background
     if (this.activeAppId) {
       const prevApp = this.apps.get(this.activeAppId);
       prevApp.status = 'BACKGROUND';
       console.log(`[ApplicationManager] App ${this.activeAppId} transitioned to BACKGROUND`);
     }
 
-    // Bring new app to foreground
     const nextApp = this.apps.get(appId);
     nextApp.status = 'RUNNING';
     this.activeAppId = appId;

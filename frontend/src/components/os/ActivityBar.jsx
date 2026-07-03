@@ -16,11 +16,25 @@ const ActivityIcon = ({ icon, active, tooltip, onClick }) => (
 
 export default function ActivityBar() {
   const applicationManager = serviceManager.get('ApplicationManager');
-  const [appState, setAppState] = useState(() => applicationManager.getState());
+  const [appState, setAppState] = useState(() => {
+    const initialState = applicationManager.getState();
+    console.log('[ActivityBar] Initial state:', initialState);
+    return initialState;
+  });
 
   useEffect(() => {
-    return applicationManager.subscribe((payload) => setAppState(payload?.data || payload));
+    console.log('[ActivityBar] Subscribing to App:StateChanged');
+    const unsub = applicationManager.subscribe((payload) => {
+      console.log('[ActivityBar] App state changed:', payload);
+      setAppState(payload?.data || payload);
+    });
+    return () => {
+      console.log('[ActivityBar] Unsubscribing');
+      unsub();
+    };
   }, [applicationManager]);
+
+  console.log('[ActivityBar] Rendering with apps:', appState.apps?.length || 0);
 
   return (
     <div className="w-14 h-full bg-slate-950 border-r border-slate-800 flex flex-col items-center py-4 shrink-0 z-50">
@@ -33,7 +47,10 @@ export default function ActivityBar() {
               icon={<Icon size={24} strokeWidth={1.5} />} 
               active={appState.activeAppId === app.id} 
               tooltip={app.name} 
-              onClick={() => applicationManager.activateApp(app.id)}
+              onClick={() => {
+                console.log('[ActivityBar] Activating app:', app.id);
+                applicationManager.activateApp(app.id);
+              }}
             />
           );
         })}
@@ -43,7 +60,10 @@ export default function ActivityBar() {
           icon={<Settings size={24} strokeWidth={1.5} />} 
           active={appState.activeAppId === 'app:settings'}
           tooltip="Settings" 
-          onClick={() => applicationManager.activateApp('app:settings')}
+          onClick={() => {
+            console.log('[ActivityBar] Activating settings');
+            applicationManager.activateApp('app:settings');
+          }}
         />
       </div>
     </div>

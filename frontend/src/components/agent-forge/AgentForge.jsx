@@ -14,9 +14,10 @@ export default function AgentForge() {
 
   // Load data dari services
   const loadData = async () => {
-    if (kernel.status !== 'RUNNING') {
-      console.warn('[AgentForge] Kernel belum siap');
-      setLoading(false);
+    // Tunggu hingga kernel siap
+    if (kernel.status !== 'RUNNING' || !kernel.serviceManager) {
+      console.warn('[AgentForge] Kernel belum siap, retry dalam 500ms...');
+      setTimeout(() => loadData(), 500);
       return;
     }
 
@@ -45,9 +46,11 @@ export default function AgentForge() {
         console.log('[AgentForge] ToolList:', toolList);
         setTools(toolList);
       }
+      
+      setLoading(false);
+      setRefreshing(false);
     } catch (err) {
       console.error('[AgentForge] Error loading data:', err);
-    } finally {
       setLoading(false);
       setRefreshing(false);
     }
@@ -55,18 +58,12 @@ export default function AgentForge() {
 
   // Initial load
   useEffect(() => {
-    const agentOrchestrator = kernel.serviceManager.get('AgentOrchestratorService');
-    const toolRegistry = kernel.serviceManager.get('ToolRegistryService');
-    console.log('[AgentForge] AgentOrchestrator:', agentOrchestrator);
-    console.log('[AgentForge] Agents:', agentOrchestrator?.agents);
-    console.log('[AgentForge] Tools:', toolRegistry?.tools);
-    
     loadData();
   }, []);
 
   // Listen to EventBus untuk refresh otomatis
   useEffect(() => {
-    if (kernel.status !== 'RUNNING') return;
+    if (kernel.status !== 'RUNNING' || !kernel.serviceManager) return;
 
     const eventBus = kernel.serviceManager.get('EventBus');
     
