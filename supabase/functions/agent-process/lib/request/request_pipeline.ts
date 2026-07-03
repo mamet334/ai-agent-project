@@ -42,6 +42,16 @@ export async function executeRequestPipeline(
   const { user, authErrorResponse } = await handleAuth(request, runtimeEnv.supabaseUrl, runtimeEnv.supabaseAnonKey, corsHeaders);
   if (authErrorResponse) return { ctx: {} as any, rctx: {} as any, response: authErrorResponse };
 
+  // UUID Validation - Fix for "SUPABASE" string error
+  const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id);
+  if (!isValidUUID) {
+    console.error('[RequestPipeline] Invalid user.id:', user.id);
+    return { ctx: {} as any, rctx: {} as any, response: new Response(JSON.stringify({ error: 'Invalid user ID' }), { 
+      status: 401, 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    }) };
+  }
+
   const parsed = await parseRequestParams(request, user);
   
   if (!parsed.finalMessage || !Array.isArray(parsed.tools)) {

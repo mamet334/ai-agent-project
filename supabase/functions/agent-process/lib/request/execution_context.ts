@@ -1,6 +1,12 @@
 import { UnifiedExecutionContext, MametCapabilityMode } from './types.ts';
 
 export function buildUnifiedExecutionContext(input: { message: string, desktopOSMode?: boolean, tools?: string[], ragEnabled?: boolean, userId: string, userName?: string, appSource?: string, mode?: string }): UnifiedExecutionContext {
+  // UUID Validation - Fix for "SUPABASE" string error
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.userId)) {
+    console.error('[ExecutionContext] Invalid userId:', input.userId);
+    input.userId = null as any;
+  }
+
   const isMametLite = input.appSource === 'mametlite' || input.mode === 'LITE';
   const isMametEngineer = input.appSource === 'engineer' || input.mode === 'ENGINEER';
   const mode: MametCapabilityMode = (input.mode as MametCapabilityMode) || (isMametEngineer ? "ENGINEER" : isMametLite ? "LITE" : (input.desktopOSMode ? "AI" : "LITE"));

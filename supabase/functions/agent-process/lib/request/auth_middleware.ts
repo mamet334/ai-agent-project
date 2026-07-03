@@ -13,6 +13,9 @@ export async function handleAuth(req: Request, supabaseUrl: string, supabaseAnon
   const authSupabase = createClient(supabaseUrl, supabaseAnonKey);
   const { data: { user }, error: authError } = await authSupabase.auth.getUser(token);
 
+  console.log('[AuthMiddleware] User dari Supabase:', JSON.stringify(user));
+  console.log('[AuthMiddleware] User ID:', user?.id);
+
   if (authError || !user || !user.id) {
       return { user: null, authErrorResponse: new Response(JSON.stringify({ error: "Unauthorized: Invalid or expired token" }), {
           status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
