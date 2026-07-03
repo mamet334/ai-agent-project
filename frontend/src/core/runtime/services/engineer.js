@@ -29,7 +29,7 @@ class Engineer {
     };
 
     this.capability = 'IMPLEMENTER';
-    this.pendingPatches = new Map(); // Patch yang menunggu persetujuan
+    this.pendingPatches = new Map();
 
     this.metrics = {
       tasksAnalyzed: 0,
@@ -53,13 +53,22 @@ class Engineer {
   async _loadStaticKnowledge() {
     try {
       const constitutionPaths = [
+        '/AGENTS.md',
         '/constitution/MAEF_v3.0.md',
         '/constitution/Mamet_AI_Constitution_v2.0.md',
         '/constitution/vision.md',
         '/constitution/master-architecture.md',
         '/docs/adr/ADR-001.md',
         '/docs/adr/ADR-002.md',
-        '/docs/adr/ADR-003.md'
+        '/docs/adr/ADR-003.md',
+        '/docs/adr/ADR-004.md',
+        '/docs/adr/ADR-005.md',
+        '/docs/adr/ADR-006.md',
+        '/docs/adr/ADR-007.md',
+        '/docs/adr/ADR-008.md',
+        '/docs/adr/ADR-009.md',
+        '/docs/adr/ADR-010.md',
+        '/docs/adr/ADR-011.md'
       ];
 
       const staticData = {};
@@ -111,10 +120,8 @@ class Engineer {
   async _handleAnalysisTask(task) {
     this.metrics.tasksAnalyzed++;
     console.log(`[Engineer] Analyzing task: ${task.title || task.id}`);
-
     this.brain.dynamic = await this._buildDynamicContext(task);
     const analysis = await this._analyze(task);
-
     this._emitRecommendation({
       type: 'ANALYSIS',
       taskId: task.id,
@@ -126,10 +133,8 @@ class Engineer {
   async _handleReviewTask(task) {
     this.metrics.recommendationsMade++;
     console.log(`[Engineer] Reviewing changes for: ${task.title || task.id}`);
-
     this.brain.dynamic = await this._buildDynamicContext(task);
     const review = await this._review(task);
-
     this._emitRecommendation({
       type: 'REVIEW',
       taskId: task.id,
@@ -143,7 +148,7 @@ class Engineer {
       this.eventBus.emit('Engineer:Recommendation', {
         type: 'ERROR',
         taskId: task.id,
-        message: 'Engineer belum memiliki kapabilitas IMPLEMENTER. Butuh upgrade bertahap.',
+        message: 'Engineer belum memiliki kapabilitas IMPLEMENTER.',
         requiresApproval: false
       });
       return;
@@ -151,11 +156,9 @@ class Engineer {
 
     this.metrics.patchesGenerated++;
     console.log(`[Engineer] Generating patch for: ${task.title || task.id}`);
-
     this.brain.dynamic = await this._buildDynamicContext(task);
     const patch = await this._generatePatch(task);
 
-    // JANGAN langsung tulis file. Minta persetujuan dulu.
     if (patch.ready) {
       const approved = await this._requestApproval(patch);
       
@@ -189,36 +192,72 @@ class Engineer {
     }
   }
 
-  /**
-   * Handler untuk respons persetujuan dari UI
-   * @private
-   */
   _handleApprovalResponse(response) {
     const { patchId, approved } = response;
     const pending = this.pendingPatches.get(patchId);
     
     if (pending) {
-      // Panggil resolver yang sudah disimpan
       pending.resolver(approved);
       this.pendingPatches.delete(patchId);
     }
   }
 
   // =============================================
+  // FILE OPERATIONS
+  // =============================================
+
+  /**
+   * Membaca file dari repository
+   * @param {string} filePath - Path relatif ke file
+   * @returns {Promise<string|null>} - Konten file atau null jika gagal
+   */
+  async readFile(filePath) {
+    try {
+      const content = await this.storageManager.read(filePath);
+      if (content === null) {
+        console.warn(`[Engineer] File tidak ditemukan: ${filePath}`);
+        return null;
+      }
+      console.log(`[Engineer] File dibaca: ${filePath} (${content.length} karakter)`);
+      return content;
+    } catch (error) {
+      console.error(`[Engineer] Gagal membaca file ${filePath}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Mencari file di repository berdasarkan pola
+   * @param {string} pattern - Pola pencarian (contoh: "*.js", "IntentParser*")
+   * @param {string} dir - Direktori untuk mencari
+   * @returns {Promise<string[]>} - Daftar path file yang cocok
+   */
+  async findFiles(pattern, dir = '/') {
+    try {
+      const allFiles = await this.storageManager.list(dir);
+      if (pattern === '*') return allFiles;
+      if (pattern.endsWith('*')) {
+        const prefix = pattern.replace('*', '');
+        return allFiles.filter(f => f.startsWith(dir + prefix) || f.includes(prefix));
+      }
+      if (pattern.startsWith('*.')) {
+        const ext = pattern.replace('*', '');
+        return allFiles.filter(f => f.endsWith(ext));
+      }
+      return allFiles.filter(f => f.includes(pattern));
+    } catch (error) {
+      console.error(`[Engineer] Gagal mencari file:`, error);
+      return [];
+    }
+  }
+
+  // =============================================
   // PERSETUJUAN (APPROVAL)
   // =============================================
-  /**
-   * Minta persetujuan User sebelum menerapkan patch
-   * @private
-   * @param {Object} patch - Patch yang akan diterapkan
-   * @returns {Promise<boolean>} - true jika disetujui, false jika ditolak
-   */
   async _requestApproval(patch) {
     return new Promise((resolve) => {
-      // Simpan resolver untuk dipanggil nanti
       this.pendingPatches.set(patch.id, { patch, resolver: resolve });
 
-      // Emit event ke UI
       this.eventBus.emit('Engineer:RequestApproval', {
         patchId: patch.id,
         summary: patch.description || 'Patch generated',
@@ -263,11 +302,9 @@ class Engineer {
       const fileContents = {};
       
       for (const filePath of relevantFiles) {
-        try {
-          const content = await this.storageManager.read(filePath);
+        const content = await this.readFile(filePath);
+        if (content !== null) {
           fileContents[filePath] = content;
-        } catch (e) {
-          console.warn(`[Engineer] Failed to read file ${filePath}:`, e);
         }
       }
       
@@ -284,7 +321,6 @@ class Engineer {
         generatedCode = this._generateFallbackPatch(task, fileContents);
       }
       
-      // JANGAN tulis file dulu. Simpan di memori, minta persetujuan nanti.
       const patchFiles = [];
       for (const [filePath, newContent] of Object.entries(generatedCode)) {
         patchFiles.push({
@@ -306,33 +342,32 @@ class Engineer {
       };
       
       this.eventBus.emit('Engineer:PatchGenerated', patch);
-      
       return patch;
     } catch (error) {
       console.error('[Engineer] Patch generation failed:', error);
-      return {
-        files: [],
-        description: `Patch generation failed: ${error.message}`,
-        ready: false,
-        error: error.message
-      };
+      return { files: [], description: `Patch generation failed: ${error.message}`, ready: false, error: error.message };
     }
   }
 
   _buildPatchPrompt(task, fileContents) {
-    let prompt = `You are an expert software engineer. Generate code changes for the following task:\n\n`;
-    prompt += `Task: ${task.title || task.id}\n`;
-    prompt += `Description: ${task.description || ''}\n\n`;
+    let prompt = `Anda adalah Mamet Engineer yang terikat AGENTS.md, MAEF v3.0, dan Mamet AI Constitution v2.0.\n\n`;
+    prompt += `Tugas: ${task.title || task.id}\n`;
+    prompt += `Deskripsi: ${task.description || 'Tidak ada deskripsi'}\n\n`;
     
     if (Object.keys(fileContents).length > 0) {
-      prompt += `Current file contents:\n`;
+      prompt += `File yang akan diubah:\n`;
       for (const [path, content] of Object.entries(fileContents)) {
         prompt += `\n--- ${path} ---\n${content}\n`;
       }
     }
     
-    prompt += `\n\nGenerate the new code for each file. Return in JSON format:\n`;
-    prompt += `{\n  "filePath1": "new content",\n  "filePath2": "new content"\n}`;
+    prompt += `\n\nHasilkan kode baru untuk setiap file. Return dalam format JSON:\n`;
+    prompt += `{\n  "path/ke/file1": "konten baru lengkap",\n  "path/ke/file2": "konten baru lengkap"\n}\n\n`;
+    prompt += `Aturan:\n`;
+    prompt += `- Jangan ubah file yang tidak perlu diubah\n`;
+    prompt += `- Pertahankan komentar dan dokumentasi yang ada\n`;
+    prompt += `- Ikuti standar ESModules\n`;
+    prompt += `- Jangan gunakan eval() atau new Function()\n`;
     
     return prompt;
   }
@@ -340,9 +375,7 @@ class Engineer {
   _extractCodeFromResponse(response) {
     try {
       const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
+      if (jsonMatch) return JSON.parse(jsonMatch[0]);
       return {};
     } catch (e) {
       console.warn('[Engineer] Failed to extract code from response:', e);
@@ -358,42 +391,64 @@ class Engineer {
     return result;
   }
 
-  /**
-   * Terapkan patch setelah User menyetujui
-   * @private
-   * @param {Object} patch - Patch yang akan diterapkan
-   */
   async _executePatchApplication(patch) {
     try {
-      console.log(`[Engineer] Executing patch application: ${patch.id}`);
+      console.log(`[Engineer] 🔧 Menerapkan patch: ${patch.id}`);
+      console.log(`[Engineer] 📋 Jumlah file yang akan diubah: ${patch.files.length}`);
       
-      // Tulis setiap file
+      let successCount = 0;
+      let failCount = 0;
+      
       for (const file of patch.files) {
         try {
-          await this.storageManager.write(file.path, file.newContent);
-          file.status = 'APPLIED';
-          console.log(`[Engineer] File written: ${file.path}`);
+          console.log(`[Engineer] ✍️ Menulis file: ${file.path} (${file.newContent.length} karakter)`);
+          const writeResult = await this.storageManager.write(file.path, file.newContent);
+          
+          if (writeResult) {
+            file.status = 'APPLIED';
+            successCount++;
+            console.log(`[Engineer] ✅ File berhasil ditulis: ${file.path}`);
+          } else {
+            file.status = 'FAILED';
+            file.error = 'StorageManager.write() mengembalikan false';
+            failCount++;
+            console.error(`[Engineer] ❌ Gagal menulis file: ${file.path}`);
+          }
         } catch (e) {
           file.status = 'FAILED';
           file.error = e.message;
-          console.error(`[Engineer] Failed to write file ${file.path}:`, e);
+          failCount++;
+          console.error(`[Engineer] ❌ Error menulis file ${file.path}:`, e);
         }
       }
       
       // Simpan ke Project Memory
-      const memoryService = this.serviceManager.get('MemoryService');
-      if (memoryService) {
-        await memoryService.storeMemory(
-          `Patch ${patch.id} applied`,
-          `Patch ${patch.id} was applied to ${patch.files.length} file(s).`
-        );
+      try {
+        const memoryService = this.serviceManager.get('MemoryService');
+        if (memoryService) {
+          await memoryService.storeMemory(
+            `Patch ${patch.id} applied`,
+            `Patch ${patch.id} berhasil diterapkan: ${successCount} file berhasil, ${failCount} file gagal.`
+          );
+        }
+      } catch (e) {
+        console.warn('[Engineer] Gagal menyimpan ke Project Memory:', e);
       }
       
-      this.eventBus.emit('Engineer:PatchApplied', { patchId: patch.id, files: patch.files });
+      const result = {
+        success: failCount === 0,
+        patchId: patch.id,
+        successCount,
+        failCount,
+        files: patch.files
+      };
       
-      return { success: true };
+      this.eventBus.emit('Engineer:PatchApplied', result);
+      console.log(`[Engineer] 🎯 Patch selesai: ${successCount} berhasil, ${failCount} gagal`);
+      
+      return result;
     } catch (error) {
-      console.error('[Engineer] Patch execution failed:', error);
+      console.error('[Engineer] ❌ Patch execution gagal total:', error);
       return { success: false, error: error.message };
     }
   }
@@ -402,11 +457,7 @@ class Engineer {
   // CONFIDENCE CALCULATION
   // =============================================
   _calculateConfidence(result) {
-    return {
-      coverage: 30,
-      evidence: 20,
-      level: 'LOW'
-    };
+    return { coverage: 30, evidence: 20, level: 'LOW' };
   }
 
   // =============================================
