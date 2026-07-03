@@ -47,7 +47,6 @@ function setupAutoUpdater() {
 
     autoUpdater.on('update-available', (info) => {
       console.log('[Auto-Updater] Pembaruan tersedia:', info.version);
-      // Tampilkan dialog pemberitahuan bahwa update tersedia
       if (mainWindow) {
         dialog.showMessageBox(mainWindow, {
           type: 'info',
@@ -107,14 +106,12 @@ function setupAutoUpdater() {
       console.error('[Auto-Updater] Error:', err.message);
     });
 
-    // Periksa pembaruan 5 detik setelah aplikasi siap
     setTimeout(() => {
       autoUpdater.checkForUpdatesAndNotify().catch(err => {
         console.error('[Auto-Updater] Gagal memeriksa pembaruan:', err.message);
       });
     }, 5000);
 
-    // Periksa pembaruan setiap 4 jam
     setInterval(() => {
       autoUpdater.checkForUpdatesAndNotify().catch(() => {});
     }, 4 * 60 * 60 * 1000);
@@ -142,8 +139,6 @@ function createWindow() {
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
   } else {
-    // ES Modules (type="module") TIDAK BISA diload via file:// protocol (CORS restriction).
-    // Gunakan custom protocol mamet:// yang sudah didaftarkan agar mendapat HTTP-like origin.
     mainWindow.loadURL('mamet://app/index.html').catch(err => {
       const logMsg = `[FATAL] loadURL mamet:// gagal: ${err.message}\n`;
       console.error(logMsg);
@@ -151,7 +146,6 @@ function createWindow() {
     });
   }
 
-  // Log console renderer ke terminal untuk debugging
   mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
     const levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR'];
     const logLine = `[Renderer ${levels[level] || 'LOG'}]: ${message} (at ${sourceId}:${line})\n`;
@@ -163,7 +157,6 @@ function createWindow() {
 app.commandLine.appendSwitch('allow-file-access-from-files');
 
 app.whenReady().then(() => {
-  // Protocol handler untuk mamet://
   protocol.handle('mamet', async (request) => {
     try {
       const cleanUrl = request.url.split('?')[0].split('#')[0];
@@ -415,5 +408,106 @@ ipcMain.handle('run-docker-sandbox', async (event, { code, language }) => {
     });
   } catch (err) {
     return { success: false, output: '', error: `Docker Sandbox error: ${err.message}` };
+  }
+});
+
+// =============================================
+// 8. FILE SYSTEM HANDLERS (StorageManager Backend)
+// =============================================
+
+ipcMain.handle('fs:readFile', async (event, filePath) => {
+  try {
+    const normalizedPath = path.resolve(filePath);
+    if (!fs.existsSync(normalizedPath)) {
+      return null;
+    }
+    return fs.readFileSync(normalizedPath, 'utf-8');
+  } catch (error) {
+    console.error('[FS] Gagal membaca file:', filePath, error);
+    return null;
+  }
+});
+
+ipcMain.handle('fs:writeFile', async (event, { filePath, content }) => {
+  try {
+    const normalizedPath = path.resolve(filePath);
+    const dir = path.dirname(normalizedPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(normalizedPath, String(content), 'utf-8');
+    return true;
+  } catch (error) {
+    console.error('[FS] Gagal menulis file:', filePath, error);
+    return false;
+  }
+});
+
+ipcMain.handle('fs:deleteFile', async (event, filePath) => {
+  try {
+    const normalizedPath = path.resolve(filePath);
+    if (!fs.existsSync(normalizedPath)) {
+      return false;
+    }
+    fs.unlinkSync(normalizedPath);
+    return true;
+  } catch (error) {
+    console.error('[FS] Gagal menghapus file:', filePath, error);
+    return false;
+  }
+});
+
+ipcMain.handle('fs:listFiles', async (event, dirPath) => {
+  try {
+    const normalizedPath = path.resolve(dirPath);
+    if (!fs.existsSync(normalizedPath) || !fs.statSync(normalizedPath).isDirectory()) {
+      return [];
+    }
+    const files = fs.readdirSync(normalizedPath);
+    return files.map(f => path.join(dirPath, f));
+  } catch (error) {
+    console.error('[FS] Gagal listing direktori:', dirPath, error);
+    return [];
+  }
+});
+
+ipcMain.handle('fs:getFileInfo', async (event, filePath) => {
+  try {
+    const normalizedPath = path.resolve(filePath);
+    if (!fs.existsSync(normalizedPath)) {
+      return null;
+    }
+    const stat = fs.statSync(normalizedPath);
+    const ext = path.extname(normalizedPath).toLowerCase();
+    const mimeTypes = {
+      '.md': 'text/markdown',
+      '.txt': 'text/plain',
+      '.js': 'text/javascript',
+      '.jsx': 'text/javascript',
+      '.ts': 'text/typescript',
+      '.json': 'application/json',
+      '.html': 'text/html',
+      '.css': 'text/css',
+    };
+    return {
+      path: filePath,
+      size: stat.size,
+      type: mimeTypes[ext] || 'application/octet-stream',
+      createdAt: stat.birthtimeMs,
+      modifiedAt: stat.mtimeMs,
+      backend: 'file-system'
+    };
+  } catch (error) {
+    console.error('[FS] Gagal mendapatkan info file:', filePath, error);
+    return null;
+  }
+});
+
+ipcMain.handle('fs:fileExists', async (event, filePath) => {
+  try {
+    const normalizedPath = path.resolve(filePath);
+    return fs.existsSync(normalizedPath);
+  } catch (error) {
+    return false;
   }
 });
