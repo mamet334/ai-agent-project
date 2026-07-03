@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Terminal, Loader2, RefreshCw } from 'lucide-react';
+import { Send, Terminal, Loader2, RefreshCw, Copy, Check } from 'lucide-react';
 import { useWorkspace } from '../../core/workspace/WorkspaceContext';
 import { supabase } from '../../supabase';
 import { kernel } from '../../core/runtime/Kernel';
@@ -36,6 +36,7 @@ export default function ConversationEngine({ sessionId }) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState('');
+  const [copiedIndex, setCopiedIndex] = useState(null);
   const messagesEndRef = useRef(null);
 
   // Auto-scroll
@@ -51,6 +52,16 @@ export default function ConversationEngine({ sessionId }) {
       focusStep: stepName,
       logs: logs
     });
+  };
+
+  const handleCopy = async (text, index) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedIndex(index);
+      setTimeout(() => setCopiedIndex(null), 2000);
+    } catch (err) {
+      console.warn('[ConversationEngine] Gagal menyalin:', err);
+    }
   };
 
   const handleSend = async (e, autoOverrideMsg = null) => {
@@ -100,7 +111,6 @@ export default function ConversationEngine({ sessionId }) {
       const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
       const endpoint = 'https://uuyzdjifhdfyyvpxsofu.supabase.co/functions/v1/agent-process';
       
-      // --- AI Brain Injection (OS Layer Integration) ---
       let aiProvider = 'gemini';
       let formattedModel = '';
       let aiKey = '';
@@ -228,10 +238,7 @@ export default function ConversationEngine({ sessionId }) {
       
       if (!response.ok) {
         let errorText = `HTTP error! status: ${response.status}`;
-        try {
-          const errorData = await response.json();
-          errorText = errorData.error || errorText;
-        } catch (_) {
+        try { const errorData = await response.json(); errorText = errorData.error || errorText; } catch (_) {
           errorText = await response.text() || errorText;
         }
         console.error("[LIFECYCLE] Edge Function Error:", errorText);
@@ -253,7 +260,6 @@ export default function ConversationEngine({ sessionId }) {
         }]);
         
         openLifecycleInspector('execution', jsonData);
-
         setIsLoading(false);
         return;
       }
@@ -290,47 +296,21 @@ export default function ConversationEngine({ sessionId }) {
               if (dataStr === '[DONE]') continue;
               try {
                 const parsed = JSON.parse(dataStr);
-                if (parsed.step) {
-                   processingSteps.push(parsed.step);
-                }
+                if (parsed.step) processingSteps.push(parsed.step);
                 let chunkText = '';
-                if (parsed.text) {
-                  chunkText = parsed.text;
-                } else if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) {
+                if (parsed.text) { chunkText = parsed.text; }
+                else if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) {
                   chunkText = parsed.choices[0].delta.content;
                 }
-                
-                if (chunkText) {
-                  aiResponseText += chunkText;
-                }
-                
+                if (chunkText) aiResponseText += chunkText;
                 console.log("[LIFECYCLE] Stream chunk received:", dataStr, "Extracted text:", chunkText);
-                
-                setMessages(prev => {
-                  const next = [...prev];
-                  next[next.length - 1] = {
-                    role: 'model',
-                    content: aiResponseText,
-                    steps: [...processingSteps],
-                    isStreaming: !done
-                  };
-                  return next;
-                });
+                setMessages(prev => { const next = [...prev]; next[next.length - 1] = { role: 'model', content: aiResponseText, steps: [...processingSteps], isStreaming: !done }; return next; });
                 console.log("[LIFECYCLE] Bubble updated");
               } catch (err) {
-                 console.error("[LIFECYCLE] Exception during chunk processing:", err);
-                 aiResponseText += `\n\n[System Error: Gagal memproses aliran data. Root Cause: ${err.message}]`;
-                 setMessages(prev => {
-                   const next = [...prev];
-                   next[next.length - 1] = {
-                     role: 'model',
-                     content: aiResponseText,
-                     steps: [...processingSteps],
-                     isStreaming: false
-                   };
-                   return next;
-                 });
-                 done = true;
+                console.error("[LIFECYCLE] Exception during chunk processing:", err);
+                aiResponseText += `\n\n[System Error: Gagal memproses aliran data. Root Cause: ${err.message}]`;
+                setMessages(prev => { const next = [...prev]; next[next.length - 1] = { role: 'model', content: aiResponseText, steps: [...processingSteps], isStreaming: false }; return next; });
+                done = true;
               }
             }
           }
@@ -338,12 +318,7 @@ export default function ConversationEngine({ sessionId }) {
       }
       
       console.log("[LIFECYCLE] Stream completed");
-      setMessages(prev => {
-        const next = [...prev];
-        next[next.length - 1].isStreaming = false;
-        return next;
-      });
-      
+      setMessages(prev => { const next = [...prev]; next[next.length - 1].isStreaming = false; return next; });
       const finalAiResponseText = aiResponseText;
 
       // === OS EXECUTION INTERCEPTOR (Local Sandbox Execution) ===
@@ -355,9 +330,8 @@ export default function ConversationEngine({ sessionId }) {
         const mdTermMatch = finalAiResponseText.match(/```(?:bash|sh|cmd|powershell|ps1)?\n([\s\S]*?)```/i);
         let rawCmd = null;
 
-        if (termMatch) {
-          rawCmd = termMatch[1].trim();
-        } else if (mdTermMatch) {
+        if (termMatch) { rawCmd = termMatch[1].trim(); }
+        else if (mdTermMatch) {
           const cmdCandidate = mdTermMatch[1].trim();
           if (cmdCandidate && !cmdCandidate.includes('import ') && !cmdCandidate.includes('function ') && cmdCandidate.length < 200) {
             rawCmd = cmdCandidate;
@@ -370,9 +344,7 @@ export default function ConversationEngine({ sessionId }) {
            try {
              const res = await window.electronAPI.runTerminalCommand(rawCmd);
              autoReply += `\n[SYSTEM: TERMINAL RESULT for "${rawCmd}"]\n${res.output || 'Sukses (Tidak ada output)'}\n`;
-           } catch(err) {
-             autoReply += `\n[SYSTEM: TERMINAL ERROR]\n${err.message}\n`;
-           }
+           } catch(err) { autoReply += `\n[SYSTEM: TERMINAL ERROR]\n${err.message}\n`; }
         }
 
         const fileMatch = finalAiResponseText.match(/<edit_file\s+path=["']([^"']+)["'][^>]*>([\s\S]*?)<\/edit_file>/i);
@@ -383,9 +355,7 @@ export default function ConversationEngine({ sessionId }) {
            try {
              const res = await window.electronAPI.editFileSurgical(filePath, fileContent);
              autoReply += `\n[SYSTEM: FILE EDIT RESULT for "${filePath}"]\n${res.success ? 'Berhasil disimpan' : 'Gagal: ' + (res.error || res.message)}\n`;
-           } catch(err) {
-             autoReply += `\n[SYSTEM: FILE EDIT ERROR]\n${err.message}\n`;
-           }
+           } catch(err) { autoReply += `\n[SYSTEM: FILE EDIT ERROR]\n${err.message}\n`; }
         }
 
         if (window.electronAPI.runDockerSandbox && !interceptHit) {
@@ -397,12 +367,9 @@ export default function ConversationEngine({ sessionId }) {
                 const codeLang = codeBlockMatch[1].toLowerCase();
                 const codeContent = codeBlockMatch[2].trim();
                 const language = (codeLang === 'py' || codeLang === 'python') ? 'python' : 'javascript';
-                
-                if (codeContent.length > 10 && codeContent.length < 50000 && 
-                    (codeContent.includes('print(') || codeContent.includes('console.log'))) {
+                if (codeContent.length > 10 && codeContent.length < 50000 && (codeContent.includes('print(') || codeContent.includes('console.log'))) {
                   console.log(`[Docker Sandbox] Mengeksekusi ulang kode ${language} via Docker...`);
                   const dockerResult = await window.electronAPI.runDockerSandbox(codeContent, language);
-                  
                   if (dockerResult.success) {
                     interceptHit = true;
                     autoReply += `\n[SYSTEM: DOCKER SANDBOX EXECUTION (${language.toUpperCase()})]\nStatus: ✅ Berhasil\nOutput:\n${dockerResult.output}\n`;
@@ -412,16 +379,12 @@ export default function ConversationEngine({ sessionId }) {
                   }
                 }
               }
-            } catch (dockerErr) {
-              console.warn('[Docker Sandbox] Interceptor error:', dockerErr.message);
-            }
+            } catch (dockerErr) { console.warn('[Docker Sandbox] Interceptor error:', dockerErr.message); }
           }
         }
 
         if (interceptHit) {
-           setTimeout(() => {
-              handleSend(null, `[OS EXECUTION REPORT]\nBerikut adalah hasil eksekusi dari tindakan otomatis Anda di sistem operasi lokal user.\n${autoReply}`);
-           }, 1000);
+           setTimeout(() => handleSend(null, `[OS EXECUTION REPORT]\nBerikut adalah hasil eksekusi dari tindakan otomatis Anda di sistem operasi lokal user.\n${autoReply}`), 1000);
         }
       }
 
@@ -436,7 +399,6 @@ export default function ConversationEngine({ sessionId }) {
   return (
     <div className="flex flex-col h-full bg-slate-950">
       
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar relative">
         {messages.length === 0 && (
           <div className="absolute inset-0 flex flex-col items-center justify-center opacity-30 pointer-events-none">
@@ -452,12 +414,26 @@ export default function ConversationEngine({ sessionId }) {
           
           return (
             <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[85%] lg:max-w-[75%] rounded-2xl px-5 py-4 ${m.role === 'user' ? 'bg-emerald-600/20 text-emerald-100 border border-emerald-500/30' : 'bg-slate-900 text-slate-300 border border-slate-800'}`}>
-                
+              <div className={`relative group max-w-[85%] lg:max-w-[75%] rounded-2xl px-5 py-4 ${m.role === 'user' ? 'bg-emerald-600/20 text-emerald-100 border border-emerald-500/30' : 'bg-slate-900 text-slate-300 border border-slate-800'}`}>
                 <div className="text-sm whitespace-pre-wrap font-sans leading-relaxed">
                   {displayText}
                   {m.isStreaming && parsed.isThinkingComplete && <span className="animate-pulse"> ▍</span>}
                 </div>
+                
+                {/* Tombol Copy */}
+                {m.role === 'model' && !m.isStreaming && displayText && (
+                  <button
+                    onClick={() => handleCopy(displayText, idx)}
+                    className="absolute top-2 right-2 p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Salin ke clipboard"
+                  >
+                    {copiedIndex === idx ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5 text-slate-400" />
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           )
@@ -475,35 +451,21 @@ export default function ConversationEngine({ sessionId }) {
       {/* Folder Selector — hanya untuk workspace Engineer */}
       {workspaceManager?.activeWorkspaceId === 'ws-engineer' && (
         <div className="px-4 py-2 border-t border-slate-800">
-          <FolderSelector 
-            onSelect={(path) => setSelectedFolder(path)}
-            currentPath={selectedFolder}
-            showLabel={true}
-          />
+          <FolderSelector onSelect={(path) => setSelectedFolder(path)} currentPath={selectedFolder} showLabel={true} />
         </div>
       )}
 
-      {/* Input Base */}
       <div className="p-4 bg-slate-950 border-t border-slate-900 shrink-0">
         <form onSubmit={handleSend} className="max-w-4xl mx-auto relative flex items-end gap-2 bg-slate-900 border border-slate-800 rounded-xl p-2 focus-within:border-emerald-500/50 transition-colors shadow-lg">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend(e, null);
-              }
-            }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(e, null); } }}
             placeholder="Ketik instruksi atau mulai percakapan dengan OS..."
             className="flex-1 max-h-48 min-h-[44px] bg-transparent resize-none py-2.5 px-3 text-sm text-slate-200 placeholder-slate-500 focus:outline-none custom-scrollbar"
             rows="1"
           />
-          <button
-            type="submit"
-            disabled={!input.trim() || isLoading}
-            className="p-3 mb-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:hover:bg-emerald-600 text-white transition-all shadow-md"
-          >
+          <button type="submit" disabled={!input.trim() || isLoading} className="p-3 mb-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:hover:bg-emerald-600 text-white transition-all shadow-md">
             <Send className="w-4 h-4" />
           </button>
         </form>
@@ -514,9 +476,3 @@ export default function ConversationEngine({ sessionId }) {
     </div>
   );
 }
-
-const CheckCircle = () => (
-  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-  </svg>
-);
