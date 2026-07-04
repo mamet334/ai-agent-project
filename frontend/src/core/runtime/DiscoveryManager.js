@@ -172,14 +172,22 @@ export class DiscoveryManager {
   async getStorageEstimate() {
     if ('storage' in navigator && 'estimate' in navigator.storage) {
       try {
-        const estimate = await navigator.storage.estimate();
+        // Add a 500ms timeout to prevent Firefox/browser hanging issues during boot
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('storage.estimate timeout')), 500)
+        );
+        const estimate = await Promise.race([
+          navigator.storage.estimate(),
+          timeoutPromise
+        ]);
+        
         return {
           quota: estimate.quota || 0,
           usage: estimate.usage || 0,
           percentage: estimate.quota ? ((estimate.usage / estimate.quota) * 100).toFixed(2) : 0
         };
       } catch (e) {
-        console.warn('[DiscoveryManager] Failed to get storage estimate:', e);
+        console.warn('[DiscoveryManager] Failed to get storage estimate:', e.message || e);
       }
     }
     

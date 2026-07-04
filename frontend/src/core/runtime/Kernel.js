@@ -460,6 +460,10 @@ class Kernel {
 
   _emitEvent(serviceManager, eventName, data) {
     try {
+      if (!serviceManager || !serviceManager.has('EventBus')) {
+        // Skip warning silently if EventBus is not yet registered (e.g., Phase 0)
+        return;
+      }
       const eventBus = serviceManager.get('EventBus');
       if (eventBus) {
         eventBus.emit(eventName, data);
