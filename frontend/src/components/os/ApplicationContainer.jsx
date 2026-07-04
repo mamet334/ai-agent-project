@@ -20,7 +20,9 @@ export default function ApplicationContainer() {
         // This ensures the React component tree and its local state (like Chat bubbles or open files) remains alive.
         return (
           <div key={app.id} className={`absolute inset-0 ${isActive ? 'flex' : 'hidden'} flex-col h-full w-full`}>
-            {<Component />}
+            <React.Suspense fallback={<div className="flex h-full w-full items-center justify-center text-emerald-500 text-xs font-mono">Loading OS Module...</div>}>
+              <Component />
+            </React.Suspense>
           </div>
         );
       })}
