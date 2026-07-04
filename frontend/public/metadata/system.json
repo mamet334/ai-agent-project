@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "1.0",
+  "version": "3.0.0",
+  "id": "meta-system",
+  "description": "System configuration and application definitions",
+  "owner": "mamet-os",
+  "updatedAt": "2026-07-05T00:00:00Z",
+  "system": {
+    "name": "Mamet Ecosystem",
+    "default_entry_point": "app:home"
+  },
+  "apps": [
+    { "id": "app:home", "name": "Home", "icon": "Home", "workspace": "global" },
+    { "id": "app:assistant", "name": "Assistant", "icon": "MessageSquare", "workspace": "ws-owner", "component": "ConversationEngine" },
+    { "id": "app:mametlite", "name": "Lite", "icon": "Zap", "workspace": "ws-lite", "component": "ConversationEngine" },
+    { "id": "app:engineer", "name": "Engineer", "icon": "Terminal", "workspace": "ws-engineer", "component": "ConversationEngine" },
+    { "id": "app:knowledge-base", "name": "Knowledge Base", "icon": "FlaskConical", "workspace": "ws-knowledge", "component": "ResearchApp" },
+    { "id": "app:memory-graph", "name": "Memory", "icon": "Database", "workspace": "ws-memory", "component": "MemoryApp" },
+    { "id": "app:agent-forge", "name": "Agent Forge", "icon": "Bot", "workspace": "ws-agent-forge", "component": "AgentForge" },
+    { "id": "app:settings", "name": "Settings", "icon": "Settings", "workspace": "global" },
+    { "id": "app:verification", "name": "Verification", "icon": "ShieldCheck", "workspace": "global" },
+    { "id": "app:event-stream", "name": "Event Stream", "icon": "Activity", "workspace": "global" },
+    { "id": "app:kernel", "name": "Kernel", "icon": "Cpu", "workspace": "global" }
+  ]
+}

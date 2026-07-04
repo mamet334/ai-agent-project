@@ -174,7 +174,7 @@ class Kernel {
     }
 
     // Register Default Widgets
-    await this._registerDefaultWidgets(widgetRegistry);
+    await this._registerDefaultWidgets(widgetRegistry, serviceManager);
 
     this._emitEvent(serviceManager, 'Kernel:PhaseCompleted', { phase: 1, name: 'SYSTEM_CORE_REGISTRATION' });
     this.log('INFO', 'PHASE 1 — SYSTEM CORE REGISTRATION: Completed');
@@ -347,13 +347,20 @@ class Kernel {
 
   async _phase9_SystemIntegrationCheck(serviceManager) {
     this.currentPhase = 9;
-    this.log('INFO', 'PHASE 9 — SYSTEM INTEGRATION CHECK: Started');
+    this.log('INFO', 'PHASE 9 — METADATA PARSING & SYSTEM INTEGRATION: Started');
+
+    // Init MetadataService
+    const { MetadataService } = await import('../metadata/MetadataService.js');
+    const metadataService = new MetadataService(serviceManager);
+    await metadataService.initialize();
+    serviceManager.register('MetadataService', metadataService);
+    this.log('INFO', 'MetadataService Initialized');
 
     const checks = [
       { name: 'Event Flow', passed: true },
       { name: 'Adapter Registry', passed: true },
       { name: 'Verification Pipeline', passed: true },
-      { name: 'Orchestrator Dry-Run', passed: true }
+      { name: 'Metadata Loaded', passed: !!metadataService.getSystemConfig() }
     ];
     const allPassed = checks.every(c => c.passed);
     if (!allPassed) {
@@ -361,13 +368,13 @@ class Kernel {
     }
     this.log('INFO', 'All integration checks passed', checks);
 
-    this._emitEvent(serviceManager, 'Kernel:PhaseCompleted', { phase: 9, name: 'SYSTEM_INTEGRATION_CHECK' });
-    this.log('INFO', 'PHASE 9 — SYSTEM INTEGRATION CHECK: Completed');
+    this._emitEvent(serviceManager, 'Kernel:PhaseCompleted', { phase: 9, name: 'METADATA_PARSING_AND_INTEGRATION' });
+    this.log('INFO', 'PHASE 9 — METADATA PARSING & SYSTEM INTEGRATION: Completed');
   }
 
   async _phase10_FullSystemActivation(serviceManager) {
     this.currentPhase = 10;
-    this.log('INFO', 'PHASE 10 — FULL SYSTEM ACTIVATION: Started');
+    this.log('INFO', 'PHASE 10 — SYSTEM REGISTRATION & ACTIVATION: Started');
 
     // Activate all registered adapters
     const adapterRegistry = serviceManager.get('AdapterRegistry');
@@ -386,69 +393,71 @@ class Kernel {
     if (orchestrator) orchestrator.mode = 'OPERATIONAL';
 
     // Register ApplicationManager, WindowManager, & WorkspaceManager
-    const applicationManager = new ApplicationManager(serviceManager);
-    serviceManager.register('ApplicationManager', applicationManager);
-    const windowManager = new WindowManager(serviceManager);
-    serviceManager.register('WindowManager', windowManager);
-    const workspaceManager = new WorkspaceManager('mamet-os', serviceManager);
-    serviceManager.register('WorkspaceManager', workspaceManager);
+    const applicationManager = (await import('../application/ApplicationManager.js')).ApplicationManager;
+    const appManagerInstance = new applicationManager(serviceManager);
+    serviceManager.register('ApplicationManager', appManagerInstance);
+    
+    const windowManager = (await import('../window/WindowManager.js')).WindowManager;
+    serviceManager.register('WindowManager', new windowManager(serviceManager));
+    
+    const workspaceManager = (await import('../workspace/WorkspaceManager.js')).WorkspaceManager;
+    serviceManager.register('WorkspaceManager', new workspaceManager('mamet-os', serviceManager));
     this.log('INFO', 'ApplicationManager, WindowManager & WorkspaceManager Activated');
 
+    // NavigationService
+    const { NavigationService } = await import('../metadata/NavigationService.js');
+    const navigationService = new NavigationService(serviceManager);
+    serviceManager.register('NavigationService', navigationService);
+
+    // Register Apps from Metadata
+    const { AppComponents } = await import('../application/AppRegistry.js');
+    const metadataService = serviceManager.get('MetadataService');
+    const apps = metadataService.getApps();
+    const Lucide = await import('lucide-react');
+
+    apps.forEach(app => {
+      if (app.disabled) return;
+      const IconComp = Lucide[app.icon] || Lucide.Box;
+      const RenderComp = AppComponents[app.component] || AppComponents['HomeDashboard'];
+      
+      appManagerInstance.registerApp({
+        id: app.id,
+        name: app.name,
+        iconComponent: IconComp,
+        renderComponent: (props) => <RenderComp {...props} appId={app.id} workspaceId={app.workspace} />
+      });
+    });
+
+    navigationService.buildTree();
+    
+    // Default Entry Point
+    const sysConfig = metadataService.getSystemConfig();
+    if (sysConfig && sysConfig.default_entry_point) {
+      appManagerInstance.activateApp(sysConfig.default_entry_point);
+    }
+
     this._emitEvent(serviceManager, 'System:Ready', { timestamp: new Date().toISOString() });
-    this._emitEvent(serviceManager, 'Kernel:PhaseCompleted', { phase: 10, name: 'FULL_SYSTEM_ACTIVATION' });
-    this.log('INFO', 'PHASE 10 — FULL SYSTEM ACTIVATION: Completed');
+    this._emitEvent(serviceManager, 'Kernel:PhaseCompleted', { phase: 10, name: 'SYSTEM_REGISTRATION_ACTIVATION' });
+    this.log('INFO', 'PHASE 10 — SYSTEM REGISTRATION & ACTIVATION: Completed');
   }
 
-  async _registerDefaultWidgets(widgetRegistry) {
-    widgetRegistry.register({
-      id: 'widget:workspace-nav',
-      name: 'Workspace Navigation',
-      icon: 'Compass',
-      version: '1.0.0',
-      allowed_workspaces: ['*'],
-      default_size: { width: 250, height: 400 },
-      default_workbench: 'left',
-      component: lazyLoadWithRetry(() => import('../../components/widgets/WorkspaceNavWidget.jsx'), 'widget:workspace-nav')
-    });
-    widgetRegistry.register({
-      id: 'widget:engineering-tasks',
-      name: 'Engineering Tasks',
-      icon: 'Target',
-      version: '1.0.0',
-      allowed_workspaces: ['ENGINEER', '*'],
-      default_size: { width: 300, height: 400 },
-      default_workbench: 'left',
-      component: lazyLoadWithRetry(() => import('../../components/widgets/EngineeringTasksWidget.jsx'), 'widget:engineering-tasks')
-    });
-    widgetRegistry.register({
-      id: 'widget:architecture-gaps',
-      name: 'Architecture Gaps',
-      icon: 'Activity',
-      version: '1.0.0',
-      allowed_workspaces: ['ENGINEER', '*'],
-      default_size: { width: 300, height: 400 },
-      default_workbench: 'left',
-      component: lazyLoadWithRetry(() => import('../../components/widgets/ArchitectureGapsWidget.jsx'), 'widget:architecture-gaps')
-    });
-    widgetRegistry.register({
-      id: 'widget:verification-log',
-      name: 'Verification Log',
-      icon: 'ShieldCheck',
-      version: '1.0.0',
-      allowed_workspaces: ['ENGINEER', '*'],
-      default_size: { width: 300, height: 400 },
-      default_workbench: 'right',
-      component: lazyLoadWithRetry(() => import('../../components/widgets/VerificationLogWidget.jsx'), 'widget:verification-log')
-    });
-    widgetRegistry.register({
-      id: 'widget:maef-monitor',
-      name: 'MAEF Execution Monitor',
-      icon: 'Activity',
-      version: '1.0.0',
-      allowed_workspaces: ['ENGINEER', '*'],
-      default_size: { width: 300, height: 400 },
-      default_workbench: 'right',
-      component: lazyLoadWithRetry(() => import('../../components/widgets/MaefExecutionMonitorWidget.jsx'), 'widget:maef-monitor')
+  async _registerDefaultWidgets(widgetRegistry, serviceManager) {
+    const metadataService = serviceManager.get('MetadataService');
+    if (!metadataService) return;
+
+    const { AppComponents } = await import('../application/AppRegistry.js');
+    const widgets = metadataService.getWidgets();
+    
+    widgets.forEach(w => {
+      const RenderComp = AppComponents[w.component];
+      if (RenderComp) {
+        widgetRegistry.register({
+          id: w.id,
+          name: w.name,
+          component: RenderComp,
+          capabilities: w.capabilities
+        });
+      }
     });
   }
 

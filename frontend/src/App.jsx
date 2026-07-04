@@ -1,57 +1,12 @@
 import React, { useEffect, useState } from 'react'
 import OSDesktopShell from './components/os/OSDesktopShell'
-import AppShell from './components/workbench/AppShell'
-import ConversationEngine from './components/workbench/ConversationEngine'
 import ErrorBoundary from './components/workbench/ErrorBoundary'
 import EngineerApprovalDialog from './components/workbench/EngineerApprovalDialog'
 import Login from './components/Login'
-import Settings from './components/Settings'
-import AgentForge from './components/agent-forge/AgentForge'
-import ResearchApp from './components/research/ResearchApp'
-import MemoryApp from './components/memory/MemoryApp'
 import { serviceManager } from './core/runtime/ServiceManager'
 import { kernel } from './core/runtime/Kernel'
-import { MessageSquare, Terminal, Database, FlaskConical, LogOut, Settings as SettingsIcon, Bot, Zap } from 'lucide-react'
-import { WorkspaceProvider } from './core/workspace/WorkspaceContext'
 import { supabase } from './supabase'
 import './App.css'
-
-const AssistantAppWrapper = () => (
-  <WorkspaceProvider appId="app:assistant" defaultWorkspaceId="ws-owner">
-    <AppShell mainPanel={ConversationEngine} />
-  </WorkspaceProvider>
-)
-
-const EngineerAppWrapper = () => (
-  <WorkspaceProvider appId="app:engineer" defaultWorkspaceId="ws-engineer">
-    <AppShell mainPanel={ConversationEngine} />
-  </WorkspaceProvider>
-)
-
-const MametLiteAppWrapper = () => (
-  <WorkspaceProvider appId="app:mametlite" defaultWorkspaceId="ws-lite">
-    <AppShell mainPanel={ConversationEngine} />
-  </WorkspaceProvider>
-)
-
-const AgentForgeAppWrapper = () => (
-  <WorkspaceProvider appId="app:agent-forge" defaultWorkspaceId="ws-agent-forge">
-    <AppShell mainPanel={AgentForge} />
-  </WorkspaceProvider>
-)
-
-const ResearchAppWrapper = () => (
-  <WorkspaceProvider appId="app:knowledge-base" defaultWorkspaceId="ws-knowledge">
-    <AppShell mainPanel={ResearchApp} />
-  </WorkspaceProvider>
-)
-
-const MemoryAppWrapper = () => (
-  <WorkspaceProvider appId="app:memory-graph" defaultWorkspaceId="ws-memory">
-    <AppShell mainPanel={MemoryApp} />
-  </WorkspaceProvider>
-)
-
 
 export default function App() {
   const [isBooted, setIsBooted] = React.useState(false)
@@ -87,16 +42,6 @@ export default function App() {
 
       await kernel.boot(serviceManager)
       setIsBooted(true)
-
-      const applicationManager = serviceManager.get('ApplicationManager')
-      applicationManager.registerApp({ id: 'app:assistant', name: 'Assistant', iconComponent: MessageSquare, renderComponent: AssistantAppWrapper })
-      applicationManager.registerApp({ id: 'app:engineer', name: 'Engineer', iconComponent: Terminal, renderComponent: EngineerAppWrapper })
-      applicationManager.registerApp({ id: 'app:mametlite', name: 'Lite', iconComponent: Zap, renderComponent: MametLiteAppWrapper })
-      applicationManager.registerApp({ id: 'app:agent-forge', name: 'Agent Forge', iconComponent: Bot, renderComponent: AgentForgeAppWrapper })
-      applicationManager.registerApp({ id: 'app:memory-graph', name: 'Memory', iconComponent: Database, renderComponent: MemoryAppWrapper })
-      applicationManager.registerApp({ id: 'app:knowledge-base', name: 'Knowledge Base', iconComponent: FlaskConical, renderComponent: ResearchAppWrapper })
-      applicationManager.registerApp({ id: 'app:settings', name: 'Settings', iconComponent: SettingsIcon, renderComponent: Settings })
-      applicationManager.activateApp('app:assistant')
     }
 
     initOS()
