@@ -41,7 +41,17 @@ export const SynthesisHandler = {
           evidenceReport,
           runtimeContext: ctx.state
         };
-        const vReport = VerificationEngine.verify(vContext);
+        
+        // Apply Capability-Based Verification (Mode-Aware)
+        // Refer to MAEF 4.5 and Mamet AI Constitution for Capability Separation.
+        // ENGINEER mode requires strict traceability (Source Trace, ADR).
+        // OWNER/LITE modes allow flexible memory retrieval without strict engineering formats.
+        let vReport;
+        if (ctx.request.mode === 'ENGINEER' || ctx.request.mode === 'engineer') {
+          vReport = VerificationEngine.verifyEngineering(vContext);
+        } else {
+          vReport = VerificationEngine.verifyPersonal(vContext);
+        }
         
         const auditRecord = VerificationEngine.createAuditRecord(vReport, vContext);
         
@@ -58,7 +68,8 @@ export const SynthesisHandler = {
                 console.warn(`[HARD GATE] BLOCKED. Keputusan verifikasi gagal (Skor: ${vReport.score}).`);
                 return { mode: 'DIRECT', aiResponse: { message: "Verification Failed" }, snapshot: maef.getSnapshot() };
             }
-            console.log(`[HARD GATE] Soft Warning: Verification failed but bypassed for mode=${ctx.request.mode}`);
+            // For OWNER/LITE modes, failures are typically related to missing dynamic memory rather than architecture violations.
+            console.warn(`[HARD GATE] Soft Warning: Capability-Based Verification failed for mode=${ctx.request.mode}. Proceeding without blocking.`);
         }
     } else {
         if (maef.shouldExecutePhase('POST_PROCESSING')) {
