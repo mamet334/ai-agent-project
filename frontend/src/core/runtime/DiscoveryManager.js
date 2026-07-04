@@ -24,7 +24,9 @@ export class DiscoveryManager {
     this.capabilities = this.detectCapabilities();
     this.network = this.getNetworkStatus();
     this.screen = this.getScreenInfo();
-    this.storage = await this.getStorageEstimate();
+    
+    // Async background task (Do not block Kernel Initialization!)
+    this._initializeStorageAsync();
 
     console.log('[DiscoveryManager] Platform:', this.platform);
     console.log('[DiscoveryManager] Device:', this.device);
@@ -37,6 +39,13 @@ export class DiscoveryManager {
       capabilities: this.capabilities,
       timestamp: Date.now() 
     });
+  }
+
+  async _initializeStorageAsync() {
+    this.storage = await this.getStorageEstimate();
+    if (this.eventBus) {
+      this.eventBus.emit('Discovery:StorageReady', { storage: this.storage });
+    }
   }
 
   // Detect platform: web, electron, mobile, unknown
@@ -172,22 +181,14 @@ export class DiscoveryManager {
   async getStorageEstimate() {
     if ('storage' in navigator && 'estimate' in navigator.storage) {
       try {
-        // Add a 500ms timeout to prevent Firefox/browser hanging issues during boot
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('storage.estimate timeout')), 500)
-        );
-        const estimate = await Promise.race([
-          navigator.storage.estimate(),
-          timeoutPromise
-        ]);
-        
+        const estimate = await navigator.storage.estimate();
         return {
           quota: estimate.quota || 0,
           usage: estimate.usage || 0,
           percentage: estimate.quota ? ((estimate.usage / estimate.quota) * 100).toFixed(2) : 0
         };
       } catch (e) {
-        console.warn('[DiscoveryManager] Failed to get storage estimate:', e.message || e);
+        console.warn('[DiscoveryManager] Failed to get storage estimate:', e);
       }
     }
     
