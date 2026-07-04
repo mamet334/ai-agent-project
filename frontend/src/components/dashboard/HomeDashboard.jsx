@@ -8,7 +8,8 @@ const iconMap = {
   'widget:current-activity': Zap,
   'widget:recent-events': Clock,
   'widget:pending-approval': CheckSquare,
-  'widget:verification-summary': ShieldCheck
+  'widget:verification-summary': ShieldCheck,
+  'widget:quick-actions': Zap
 };
 
 export default function HomeDashboard() {

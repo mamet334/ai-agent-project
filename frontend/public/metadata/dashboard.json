@@ -8,12 +8,13 @@
   "dashboard": {
     "id": "dashboard:home",
     "layout": [
-      { "widgetId": "widget:workspace-overview", "colSpan": "col-span-1 md:col-span-2 lg:col-span-2" },
-      { "widgetId": "widget:system-status", "colSpan": "col-span-1" },
-      { "widgetId": "widget:current-activity", "colSpan": "col-span-1" },
-      { "widgetId": "widget:recent-events", "colSpan": "col-span-1 md:col-span-2 lg:col-span-2" },
-      { "widgetId": "widget:pending-approval", "colSpan": "col-span-1 md:col-span-1 lg:col-span-1" },
-      { "widgetId": "widget:verification-summary", "colSpan": "col-span-1 md:col-span-2 lg:col-span-2" }
+      { "widgetId": "widget:system-status", "colSpan": "col-span-1 md:col-span-3 lg:col-span-3" },
+      { "widgetId": "widget:workspace-overview", "colSpan": "col-span-1 md:col-span-3 lg:col-span-3" },
+      { "widgetId": "widget:current-activity", "colSpan": "col-span-1 md:col-span-3 lg:col-span-3" },
+      { "widgetId": "widget:pending-approval", "colSpan": "col-span-1 md:col-span-3 lg:col-span-3" },
+      { "widgetId": "widget:recent-events", "colSpan": "col-span-1 md:col-span-3 lg:col-span-3" },
+      { "widgetId": "widget:verification-summary", "colSpan": "col-span-1 md:col-span-3 lg:col-span-3" },
+      { "widgetId": "widget:quick-actions", "colSpan": "col-span-1 md:col-span-3 lg:col-span-3" }
     ]
   }
 }

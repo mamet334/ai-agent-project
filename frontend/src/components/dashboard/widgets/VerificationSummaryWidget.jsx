@@ -2,18 +2,25 @@ import React, { useState, useEffect } from 'react';
 import { serviceManager } from '../../../core/runtime/ServiceManager';
 
 export default function VerificationSummaryWidget() {
-  const [verifications, setVerifications] = useState({ passed: 0, failed: 0, total: 0 });
+  const [metrics, setMetrics] = useState({
+    pass: 0,
+    fail: 0,
+    warning: 0,
+    confidence: '100%',
+    architectureGap: 0
+  });
 
   useEffect(() => {
     if (!serviceManager.has('EventBus')) return;
     const eventBus = serviceManager.get('EventBus');
     
     const unsub = eventBus.on('Verification:Completed', (payload) => {
-      const isPassed = payload.data?.vReport?.decision !== 'FAIL';
-      setVerifications(prev => ({
-        passed: prev.passed + (isPassed ? 1 : 0),
-        failed: prev.failed + (isPassed ? 0 : 1),
-        total: prev.total + 1
+      const decision = payload.data?.vReport?.decision || 'PASS';
+      setMetrics(prev => ({
+        ...prev,
+        pass: prev.pass + (decision === 'PASS' ? 1 : 0),
+        fail: prev.fail + (decision === 'FAIL' ? 1 : 0),
+        warning: prev.warning + (decision === 'WARNING' ? 1 : 0)
       }));
     });
 
@@ -21,18 +28,26 @@ export default function VerificationSummaryWidget() {
   }, []);
 
   return (
-    <div className="grid grid-cols-3 gap-2">
-      <div className="bg-slate-950 p-3 rounded border border-slate-800/50 flex flex-col items-center justify-center">
-        <span className="text-2xl font-bold text-slate-200">{verifications.total}</span>
-        <span className="text-xs text-slate-500">Total Scanned</span>
-      </div>
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
       <div className="bg-slate-950 p-3 rounded border border-emerald-900/30 flex flex-col items-center justify-center">
-        <span className="text-2xl font-bold text-emerald-500">{verifications.passed}</span>
-        <span className="text-xs text-slate-500">Passed</span>
+        <span className="text-xl font-bold text-emerald-500">{metrics.pass}</span>
+        <span className="text-[10px] uppercase text-slate-500">Pass</span>
       </div>
       <div className="bg-slate-950 p-3 rounded border border-rose-900/30 flex flex-col items-center justify-center">
-        <span className="text-2xl font-bold text-rose-500">{verifications.failed}</span>
-        <span className="text-xs text-slate-500">Blocked</span>
+        <span className="text-xl font-bold text-rose-500">{metrics.fail}</span>
+        <span className="text-[10px] uppercase text-slate-500">Fail</span>
+      </div>
+      <div className="bg-slate-950 p-3 rounded border border-amber-900/30 flex flex-col items-center justify-center">
+        <span className="text-xl font-bold text-amber-500">{metrics.warning}</span>
+        <span className="text-[10px] uppercase text-slate-500">Warning</span>
+      </div>
+      <div className="bg-slate-950 p-3 rounded border border-slate-800/50 flex flex-col items-center justify-center">
+        <span className="text-xl font-bold text-blue-400">{metrics.confidence}</span>
+        <span className="text-[10px] uppercase text-slate-500">Confidence</span>
+      </div>
+      <div className="bg-slate-950 p-3 rounded border border-slate-800/50 flex flex-col items-center justify-center">
+        <span className="text-xl font-bold text-purple-400">{metrics.architectureGap}</span>
+        <span className="text-[10px] uppercase text-slate-500">Arch Gap</span>
       </div>
     </div>
   );

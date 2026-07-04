@@ -41,6 +41,12 @@
       "name": "Verification Summary",
       "component": "VerificationSummaryWidget",
       "capabilities": ["cap:core-apps"]
+    },
+    {
+      "id": "widget:quick-actions",
+      "name": "Quick Actions",
+      "component": "QuickActionsWidget",
+      "capabilities": ["cap:core-apps"]
     }
   ]
 }
