@@ -14,7 +14,8 @@ export default defineConfig({
         'node_modules/**', 
         '**/node_modules/**',
         'src/core/workspace/WidgetRegistry.js',
-        'src/core/runtime/Kernel.js' // Critical: Obfuscator breaks static analysis of dynamic imports
+        'src/core/runtime/Kernel.js', // Critical: Obfuscator breaks static analysis of dynamic imports
+        'src/core/application/AppRegistry.js'
       ],
       compact: true,
       controlFlowFlattening: false,
