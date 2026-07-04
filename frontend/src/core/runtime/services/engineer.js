@@ -36,7 +36,8 @@ class Engineer {
       recommendationsMade: 0,
       patchesGenerated: 0,
       patchesApproved: 0,
-      patchesRejected: 0
+      patchesRejected: 0,
+      patchesFailedVerification: 0
     };
   }
 
@@ -159,9 +160,34 @@ class Engineer {
     this.brain.dynamic = await this._buildDynamicContext(task);
     const patch = await this._generatePatch(task);
 
+    // Verifikasi patch sebelum approval
+    if (patch.ready) {
+      const verificationEngine = this.serviceManager.get('VerificationEngine');
+      if (verificationEngine && verificationEngine.verifyPatch) {
+        const verificationResult = await verificationEngine.verifyPatch(patch, this.brain);
+        patch.verification = verificationResult;
+
+        if (!verificationResult.passed) {
+          console.warn('[Engineer] Patch gagal verifikasi:', verificationResult.issues);
+          this.metrics.patchesFailedVerification++;
+          patch.ready = false;
+
+          this._emitRecommendation({
+            type: 'PATCH_VERIFICATION_FAILED',
+            taskId: task.id,
+            patch,
+            verification: verificationResult,
+            message: `Patch tidak lolos verifikasi: ${verificationResult.criticalCount} masalah kritis.`,
+            confidence: this._calculateConfidence(patch)
+          });
+          return;
+        }
+      }
+    }
+
     if (patch.ready) {
       const approved = await this._requestApproval(patch);
-      
+
       if (approved) {
         await this._executePatchApplication(patch);
         this.metrics.patchesApproved++;
@@ -183,19 +209,22 @@ class Engineer {
         });
       }
     } else {
-      this._emitRecommendation({
-        type: 'PATCH_FAILED',
-        taskId: task.id,
-        patch,
-        confidence: this._calculateConfidence(patch)
-      });
+      // Patch tidak siap (verifikasi gagal atau error lain)
+      if (!patch.verification) {
+        this._emitRecommendation({
+          type: 'PATCH_FAILED',
+          taskId: task.id,
+          patch,
+          confidence: this._calculateConfidence(patch)
+        });
+      }
     }
   }
 
   _handleApprovalResponse(response) {
     const { patchId, approved } = response;
     const pending = this.pendingPatches.get(patchId);
-    
+
     if (pending) {
       pending.resolver(approved);
       this.pendingPatches.delete(patchId);
@@ -267,6 +296,7 @@ class Engineer {
           size: f.size || 0
         })),
         diff: patch.diff || '',
+        verification: patch.verification || null,
         timestamp: new Date().toISOString()
       });
     });
@@ -297,17 +327,17 @@ class Engineer {
   async _generatePatch(task) {
     try {
       console.log(`[Engineer] Generating patch for task: ${task.title || task.id}`);
-      
+
       const relevantFiles = task.files || [];
       const fileContents = {};
-      
+
       for (const filePath of relevantFiles) {
         const content = await this.readFile(filePath);
         if (content !== null) {
           fileContents[filePath] = content;
         }
       }
-      
+
       let generatedCode = null;
       try {
         const brainService = this.serviceManager.get('BrainService');
@@ -320,7 +350,7 @@ class Engineer {
         console.warn('[Engineer] BrainService not available, using fallback');
         generatedCode = this._generateFallbackPatch(task, fileContents);
       }
-      
+
       const patchFiles = [];
       for (const [filePath, newContent] of Object.entries(generatedCode)) {
         patchFiles.push({
@@ -331,7 +361,7 @@ class Engineer {
           size: newContent.length
         });
       }
-      
+
       const patch = {
         id: `PATCH-${Date.now()}`,
         taskId: task.id,
@@ -340,7 +370,7 @@ class Engineer {
         generatedAt: new Date().toISOString(),
         ready: patchFiles.length > 0
       };
-      
+
       this.eventBus.emit('Engineer:PatchGenerated', patch);
       return patch;
     } catch (error) {
@@ -353,14 +383,14 @@ class Engineer {
     let prompt = `Anda adalah Mamet Engineer yang terikat AGENTS.md, MAEF v3.0, dan Mamet AI Constitution v2.0.\n\n`;
     prompt += `Tugas: ${task.title || task.id}\n`;
     prompt += `Deskripsi: ${task.description || 'Tidak ada deskripsi'}\n\n`;
-    
+
     if (Object.keys(fileContents).length > 0) {
       prompt += `File yang akan diubah:\n`;
       for (const [path, content] of Object.entries(fileContents)) {
         prompt += `\n--- ${path} ---\n${content}\n`;
       }
     }
-    
+
     prompt += `\n\nHasilkan kode baru untuk setiap file. Return dalam format JSON:\n`;
     prompt += `{\n  "path/ke/file1": "konten baru lengkap",\n  "path/ke/file2": "konten baru lengkap"\n}\n\n`;
     prompt += `Aturan:\n`;
@@ -368,7 +398,8 @@ class Engineer {
     prompt += `- Pertahankan komentar dan dokumentasi yang ada\n`;
     prompt += `- Ikuti standar ESModules\n`;
     prompt += `- Jangan gunakan eval() atau new Function()\n`;
-    
+    prompt += `- Nama event EventBus harus pakai format Kategori:Nama (contoh: Engineer:Ready)\n`;
+
     return prompt;
   }
 
@@ -395,15 +426,15 @@ class Engineer {
     try {
       console.log(`[Engineer] 🔧 Menerapkan patch: ${patch.id}`);
       console.log(`[Engineer] 📋 Jumlah file yang akan diubah: ${patch.files.length}`);
-      
+
       let successCount = 0;
       let failCount = 0;
-      
+
       for (const file of patch.files) {
         try {
           console.log(`[Engineer] ✍️ Menulis file: ${file.path} (${file.newContent.length} karakter)`);
           const writeResult = await this.storageManager.write(file.path, file.newContent);
-          
+
           if (writeResult) {
             file.status = 'APPLIED';
             successCount++;
@@ -421,7 +452,7 @@ class Engineer {
           console.error(`[Engineer] ❌ Error menulis file ${file.path}:`, e);
         }
       }
-      
+
       // Simpan ke Project Memory
       try {
         const memoryService = this.serviceManager.get('MemoryService');
@@ -434,7 +465,7 @@ class Engineer {
       } catch (e) {
         console.warn('[Engineer] Gagal menyimpan ke Project Memory:', e);
       }
-      
+
       const result = {
         success: failCount === 0,
         patchId: patch.id,
@@ -442,10 +473,10 @@ class Engineer {
         failCount,
         files: patch.files
       };
-      
+
       this.eventBus.emit('Engineer:PatchApplied', result);
       console.log(`[Engineer] 🎯 Patch selesai: ${successCount} berhasil, ${failCount} gagal`);
-      
+
       return result;
     } catch (error) {
       console.error('[Engineer] ❌ Patch execution gagal total:', error);
