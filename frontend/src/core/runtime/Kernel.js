@@ -1,3 +1,4 @@
+import React from 'react';
 import { ApplicationManager } from '../application/ApplicationManager';
 import { WindowManager } from '../window/WindowManager';
 import { WidgetRegistry } from '../workspace/WidgetRegistry';
@@ -424,7 +425,7 @@ class Kernel {
         id: app.id,
         name: app.name,
         iconComponent: IconComp,
-        renderComponent: (props) => <RenderComp {...props} appId={app.id} workspaceId={app.workspace} />
+        renderComponent: (props) => React.createElement(RenderComp, { ...props, appId: app.id, workspaceId: app.workspace })
       });
     });
 
