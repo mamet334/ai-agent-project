@@ -34,10 +34,51 @@ export const ContextBuilderHandler = {
     const ragPromise = (async () => {
         if (!ctx.auth.userId || !ctx.request.isRagEnabled) return [];
         
-        // Disable embedding for OWNER/LITE modes to avoid quota issues
+        // For OWNER/LITE modes, use lightweight keyword-based text search to avoid vector embedding quota.
+        // For ENGINEER mode, use full vector embedding (semantic similarity).
+        // Ref: MAEF 4.5 — Capability-Based RAG Access.
         if (ctx.policy.mode === 'OWNER' || ctx.policy.mode === 'LITE') {
-            console.log('[RAG] Embedding disabled for mode:', ctx.policy.mode);
-            return [];
+            try {
+                console.log('[RAG] Mode:', ctx.policy.mode, '— using keyword text search (no embedding).');
+                const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.39.3');
+                const supabase = createClient(rctx.env.supabaseUrl, rctx.env.supabaseServiceKey);
+                
+                // Extract meaningful keywords (length > 2, skip stopwords)
+                const stopwords = new Set(['dan', 'yang', 'ini', 'itu', 'atau', 'ke', 'di', 'dari', 'untuk', 'dengan', 'adalah', 'ada', 'apa', 'saya', 'the', 'and', 'for', 'with']);
+                const keywords = (ctx.request.finalMessage || '')
+                    .toLowerCase()
+                    .split(/\s+/)
+                    .filter(w => w.length > 2 && !stopwords.has(w))
+                    .slice(0, 5); // limit to top 5 keywords
+                
+                if (keywords.length === 0) return [];
+                
+                // Build OR filter: match any keyword in the content column
+                const filterStr = keywords.map(k => `content.ilike.%${k}%`).join(',');
+                
+                const { data, error } = await supabase
+                    .from('document_chunks')
+                    .select('content, document_id')
+                    .or(filterStr)
+                    .limit(ctx.request.effectiveRagMatchCount || 5);
+                
+                if (error) {
+                    console.warn('[RAG] Keyword search error:', error.message);
+                    return [];
+                }
+                
+                if (!data || data.length === 0) return [];
+                
+                console.log(`[RAG] Keyword search found ${data.length} chunks.`);
+                return data.map((chunk: any) => ({
+                    type: 'rag',
+                    content: chunk.content,
+                    score: 0.5 // static score for keyword results
+                }));
+            } catch (err: any) {
+                console.warn('[RAG] Keyword search failed, skipping:', err.message);
+                return [];
+            }
         }
         
         try {
@@ -92,13 +133,17 @@ export const ContextBuilderHandler = {
     ctx.state.processingSteps.push(`[RAG CONTEXT GENERATED] ragArray size=${ragArray.length}`);
     ctx.state.processingSteps.push(`[MEMORY PROMPT GENERATED] memoryPrompt="${memoryPrompt.trim()}" memoryArray size=${projectMemResult.memoryArray.length}`);
 
-    // 4. FUSION
+    // 4. FUSION — inject semanticContext from frontend if present
+    const semanticContextPrompt = ctx.request.semanticContext
+        ? `\n\n[SEMANTIC CONTEXT — Entity & Intent dari UI]:\n${ctx.request.semanticContext}`
+        : '';
+
     const resolvedContext = buildContextPipeline({
         memoryArray: projectMemResult.memoryArray,
         ragArray: ragArray,
         message: ctx.request.finalMessage,
         agentIdentityPrompt: ctx.request.agentIdentityPrompt || '',
-        userContextPrompt: ctx.request.userContextPrompt || '',
+        userContextPrompt: (ctx.request.userContextPrompt || '') + semanticContextPrompt,
         memoryPrompt: memoryPrompt,
         engineerContextPrompt: engineerCtx.engineerContextPrompt,
         webHint: ctx.policy.webHint,
