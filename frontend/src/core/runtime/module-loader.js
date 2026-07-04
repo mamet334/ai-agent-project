@@ -17,7 +17,7 @@ export class ModuleLoader {
       // 2. Gunakan dynamic import() bawaan ESModules alih-alih membaca string dan eval.
       // Ini memanfaatkan standar keamanan browser/engine JS, menghapus kerentanan Eksekusi Kode Sembarang (RCE).
       // Mengembalikan Module Namespace Object (berisi semua export).
-      const module = await import(`/packages/${modulePath}.js`);
+      const module = await import(/* @vite-ignore */ `/packages/${modulePath}.js`);
       
       // 3. Simpan di Cache
       this.cache.set(modulePath, module);
