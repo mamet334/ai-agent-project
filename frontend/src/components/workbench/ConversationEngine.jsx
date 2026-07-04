@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Terminal, Loader2, Copy, Check } from 'lucide-react';
+import { Send, Terminal, Loader2, Copy, Check, Activity } from 'lucide-react';
 import { useWorkspace } from '../../core/workspace/WorkspaceContext';
 import { supabase } from '../../supabase';
 import { kernel } from '../../core/runtime/Kernel';
@@ -260,8 +260,6 @@ export default function ConversationEngine({ sessionId }) {
         }
       }
 
-      }
-
       // Bangun payload — LITE menggunakan konfigurasi ringan
       const isLiteMode = resolvedMode === 'LITE';
       const payload = {
@@ -493,8 +491,51 @@ export default function ConversationEngine({ sessionId }) {
             return (
               <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`relative group max-w-[85%] lg:max-w-[75%] rounded-2xl px-5 py-4 ${m.role === 'user' ? 'bg-emerald-600/20 text-emerald-100 border border-emerald-500/30' : 'bg-slate-900 text-slate-300 border border-slate-800'}`}>
-                  <div className="text-sm whitespace-pre-wrap font-sans leading-relaxed">
-                    {displayText}
+                  <div className="text-sm font-sans leading-relaxed">
+                    {/* Deep Link 1: AI Reasoning / Thinking */}
+                    {parsed.thinking && (
+                      <div 
+                        onClick={() => openLifecycleInspector('AI_REASONING', parsed.thinking)}
+                        className="mb-3 inline-flex items-center gap-2 px-2.5 py-1.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-mono rounded-md cursor-pointer hover:bg-indigo-500/20 hover:text-indigo-300 transition-all shadow-sm"
+                        title="Open AI thought trace in Right Workbench"
+                      >
+                        <Terminal className="w-3.5 h-3.5" />
+                        [Deep Link] View AI Reasoning Trace
+                      </div>
+                    )}
+                    
+                    {/* Deep Link 2: System & Execution Reports */}
+                    {(() => {
+                      if (!displayText) return null;
+                      // Pisahkan teks berdasarkan pola [OS EXECUTION REPORT] atau [SYSTEM: ...]
+                      const parts = displayText.split(/(\[OS EXECUTION REPORT\]|\[SYSTEM:[^\]]+\])/g);
+                      
+                      return parts.map((part, i) => {
+                        if (part === '[OS EXECUTION REPORT]') {
+                           return (
+                             <div key={i} className="my-2 block w-max items-center px-3 py-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold font-mono rounded cursor-pointer hover:bg-emerald-500/20 transition-colors shadow-sm"
+                                  onClick={() => openLifecycleInspector('OS_EXECUTION', displayText)}>
+                                <Activity className="w-3.5 h-3.5 inline-block mr-2 -mt-0.5" />
+                                OS EXECUTION REPORT (Click to Inspect)
+                             </div>
+                           );
+                        }
+                        
+                        if (part.startsWith('[SYSTEM:')) {
+                           const title = part.replace('[SYSTEM: ', '').replace(']', '');
+                           return (
+                             <div key={i} className="my-2 block w-max items-center px-3 py-2 bg-slate-800 border border-slate-700 text-slate-300 text-xs font-bold font-mono rounded cursor-pointer hover:bg-slate-700 transition-colors shadow-sm"
+                                  onClick={() => openLifecycleInspector(title, displayText)}>
+                                <Terminal className="w-3.5 h-3.5 inline-block mr-2 -mt-0.5" />
+                                {title} (Inspect Context)
+                             </div>
+                           );
+                        }
+                        
+                        return <span key={i} className="whitespace-pre-wrap">{part}</span>;
+                      });
+                    })()}
+                    
                     {m.isStreaming && parsed.isThinkingComplete && <span className="animate-pulse"> ▍</span>}
                   </div>
                   
