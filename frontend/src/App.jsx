@@ -7,6 +7,8 @@ import EngineerApprovalDialog from './components/workbench/EngineerApprovalDialo
 import Login from './components/Login'
 import Settings from './components/Settings'
 import AgentForge from './components/agent-forge/AgentForge'
+import ResearchApp from './components/research/ResearchApp'
+import MemoryApp from './components/memory/MemoryApp'
 import { serviceManager } from './core/runtime/ServiceManager'
 import { kernel } from './core/runtime/Kernel'
 import { MessageSquare, Terminal, Database, FlaskConical, LogOut, Settings as SettingsIcon, Bot } from 'lucide-react'
@@ -32,8 +34,17 @@ const AgentForgeAppWrapper = () => (
   </WorkspaceProvider>
 )
 
-const MemoryAppWrapper = () => <div className="p-8 text-slate-400">Memory App (Phase 3 Placeholder)</div>
-const ResearchAppWrapper = () => <div className="p-8 text-slate-400">Research App (Phase 3 Placeholder)</div>
+const ResearchAppWrapper = () => (
+  <WorkspaceProvider appId="app:knowledge-base" defaultWorkspaceId="ws-knowledge">
+    <AppShell mainPanel={ResearchApp} />
+  </WorkspaceProvider>
+)
+
+const MemoryAppWrapper = () => (
+  <WorkspaceProvider appId="app:memory-graph" defaultWorkspaceId="ws-memory">
+    <AppShell mainPanel={MemoryApp} />
+  </WorkspaceProvider>
+)
 
 
 export default function App() {
@@ -60,21 +71,17 @@ export default function App() {
     if (!session) return
 
     const initOS = async () => {
-      // Also poll as fallback - START BEFORE BOOT!
       pollInterval = setInterval(() => setBootPhase(kernel.getCurrentPhase()), 200)
 
-      // Set Owner Identity FIRST
       kernel.setOwner({
         id: session.user.id,
         email: session.user.email,
         name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Owner'
       })
 
-      // Boot Kernel with serviceManager
       await kernel.boot(serviceManager)
       setIsBooted(true)
 
-      // Register & Activate Apps
       const applicationManager = serviceManager.get('ApplicationManager')
       applicationManager.registerApp({ id: 'app:assistant', name: 'Assistant', iconComponent: MessageSquare, renderComponent: AssistantAppWrapper })
       applicationManager.registerApp({ id: 'app:engineer', name: 'Engineer', iconComponent: Terminal, renderComponent: EngineerAppWrapper })
@@ -87,7 +94,6 @@ export default function App() {
 
     initOS()
 
-    // Cleanup poll
     return () => { if (pollInterval) clearInterval(pollInterval) }
   }, [session])
 
@@ -100,7 +106,7 @@ export default function App() {
   }
 
   if (!session) {
-    return <Login onLoginSuccess={() => {}} />
+    return <Login onLoginSuccess={() => { }} />
   }
 
   if (!isBooted) {
@@ -116,7 +122,7 @@ export default function App() {
           [Kernel] Booting MAEF v3.0.0...
         </div>
         <div className="w-80 h-2 bg-slate-800 rounded-full overflow-hidden mb-4">
-          <div 
+          <div
             className="h-full bg-emerald-500 transition-all duration-500"
             style={{ width: `${(bootPhase / 10) * 100}%` }}
           />
