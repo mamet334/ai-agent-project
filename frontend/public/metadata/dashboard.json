@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1.0",
+  "version": "3.0.0",
+  "id": "meta-dashboard",
+  "description": "Home Dashboard layout configuration",
+  "owner": "mamet-os",
+  "updatedAt": "2026-07-05T00:00:00Z",
+  "dashboard": {
+    "id": "dashboard:home",
+    "layout": [
+      { "widgetId": "widget:workspace-overview", "colSpan": "col-span-1 md:col-span-2 lg:col-span-2" },
+      { "widgetId": "widget:system-status", "colSpan": "col-span-1" },
+      { "widgetId": "widget:current-activity", "colSpan": "col-span-1" },
+      { "widgetId": "widget:recent-events", "colSpan": "col-span-1 md:col-span-2 lg:col-span-2" },
+      { "widgetId": "widget:pending-approval", "colSpan": "col-span-1 md:col-span-1 lg:col-span-1" },
+      { "widgetId": "widget:verification-summary", "colSpan": "col-span-1 md:col-span-2 lg:col-span-2" }
+    ]
+  }
+}

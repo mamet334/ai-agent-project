@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Settings } from 'lucide-react';
+import { Home, MessageSquare, Zap, Terminal, FlaskConical, Database, Bot, ShieldCheck, Activity, Cpu, Settings } from 'lucide-react';
 import { serviceManager } from '../../core/runtime/ServiceManager';
 
-const ActivityIcon = ({ icon, active, tooltip, onClick }) => (
+const ActivityIcon = ({ icon, active, tooltip, onClick, disabled }) => (
   <div 
-    onClick={onClick}
-    className={`relative flex items-center justify-center w-full h-12 cursor-pointer transition-colors group
-      ${active ? 'text-emerald-500' : 'text-slate-500 hover:text-slate-300'}`}
+    onClick={disabled ? undefined : onClick}
+    className={`relative flex items-center justify-center w-full h-12 transition-colors group
+      ${disabled ? 'text-slate-700 cursor-not-allowed' : active ? 'text-emerald-500 cursor-pointer' : 'text-slate-500 hover:text-slate-300 cursor-pointer'}`}
     title={tooltip}
   >
     {active && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-emerald-500" />}
@@ -14,57 +14,69 @@ const ActivityIcon = ({ icon, active, tooltip, onClick }) => (
   </div>
 );
 
+const GroupSeparator = () => (
+  <div className="w-8 border-b border-slate-800 my-1 shrink-0" />
+);
+
 export default function ActivityBar() {
   const applicationManager = serviceManager.get('ApplicationManager');
-  const [appState, setAppState] = useState(() => {
-    const initialState = applicationManager.getState();
-    console.log('[ActivityBar] Initial state:', initialState);
-    return initialState;
-  });
+  const navigationService = serviceManager.get('NavigationService');
+  
+  const [appState, setAppState] = useState(() => applicationManager.getState());
+  const [navTree, setNavTree] = useState(() => navigationService ? navigationService.getTree() : []);
 
   useEffect(() => {
-    console.log('[ActivityBar] Subscribing to App:StateChanged');
     const unsub = applicationManager.subscribe((payload) => {
-      console.log('[ActivityBar] App state changed:', payload);
       setAppState(payload?.data || payload);
+      if (navigationService) {
+        setNavTree(navigationService.getTree());
+      }
     });
-    return () => {
-      console.log('[ActivityBar] Unsubscribing');
-      unsub();
-    };
-  }, [applicationManager]);
+    return () => unsub();
+  }, [applicationManager, navigationService]);
 
-  console.log('[ActivityBar] Rendering with apps:', appState.apps?.length || 0);
+  const activate = (id) => {
+    if (appState.apps.find(a => a.id === id)) {
+      applicationManager.activateApp(id);
+    }
+  };
+
+  const isActive = (id) => appState.activeAppId === id;
+
+  const renderNavNode = (node, idx) => {
+    if (node.type === 'separator') return <GroupSeparator key={`sep-${idx}`} />;
+    if (node.type === 'spacer') return <div key={`spacer-${idx}`} className="mt-auto" />;
+    
+    if (node.type === 'item') {
+      const app = node.app;
+      if (!app) return null;
+      const IconComp = app.iconComponent;
+      return (
+        <ActivityIcon 
+          key={app.id} 
+          icon={<IconComp size={22} strokeWidth={1.5} />} 
+          active={isActive(app.id)} 
+          tooltip={app.name} 
+          onClick={() => activate(app.id)} 
+          disabled={!node.isAvailable} 
+        />
+      );
+    }
+    
+    if (node.type === 'group') {
+      return (
+        <React.Fragment key={`group-${node.name}`}>
+          {node.items.map((subItem, sIdx) => renderNavNode(subItem, `${idx}-${sIdx}`))}
+        </React.Fragment>
+      );
+    }
+    return null;
+  };
 
   return (
-    <div className="w-14 h-full bg-slate-950 border-r border-slate-800 flex flex-col items-center py-4 shrink-0 z-50">
-      <div className="flex flex-col gap-4 w-full items-center">
-        {appState.apps.filter(app => app.id !== 'app:settings').map(app => {
-          const Icon = app.iconComponent;
-          return (
-            <ActivityIcon 
-              key={app.id}
-              icon={<Icon size={24} strokeWidth={1.5} />} 
-              active={appState.activeAppId === app.id} 
-              tooltip={app.name} 
-              onClick={() => {
-                console.log('[ActivityBar] Activating app:', app.id);
-                applicationManager.activateApp(app.id);
-              }}
-            />
-          );
-        })}
-      </div>
-      <div className="mt-auto flex flex-col gap-4 w-full items-center">
-        <ActivityIcon 
-          icon={<Settings size={24} strokeWidth={1.5} />} 
-          active={appState.activeAppId === 'app:settings'}
-          tooltip="Settings" 
-          onClick={() => {
-            console.log('[ActivityBar] Activating settings');
-            applicationManager.activateApp('app:settings');
-          }}
-        />
+    <div className="w-14 h-full bg-slate-950 border-r border-slate-800 flex flex-col items-center py-4 shrink-0 z-50 overflow-y-auto hide-scrollbar">
+      <div className="flex flex-col gap-2 w-full items-center h-full">
+        {navTree.map((node, idx) => renderNavNode(node, idx))}
       </div>
     </div>
   );

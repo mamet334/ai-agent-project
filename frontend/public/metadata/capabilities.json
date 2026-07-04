@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.0",
+  "version": "3.0.0",
+  "id": "meta-capabilities",
+  "description": "System capability flags and permissions",
+  "owner": "mamet-os",
+  "updatedAt": "2026-07-05T00:00:00Z",
+  "capabilities": [
+    { "id": "cap:core-apps", "name": "Core Applications", "enabled": true },
+    { "id": "cap:observability", "name": "System Observability", "enabled": false },
+    { "id": "cap:engineer", "name": "Engineering Operations", "enabled": true },
+    { "id": "cap:lite", "name": "Lite Operations", "enabled": true },
+    { "id": "cap:knowledge", "name": "Knowledge Management", "enabled": true },
+    { "id": "cap:settings", "name": "Settings Access", "enabled": true }
+  ]
+}

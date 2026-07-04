@@ -63,53 +63,37 @@ export class WorkspaceManager {
    * Phase 1 & 2: Load Manifest
    */
   async _loadManifest(workspaceId) {
-    // In a real implementation, this might fetch from an API or local JSON.
-    // For now, we mock the manifest structure based on the architecture doc.
-    if (workspaceId === 'ws-engineer') {
-      return {
-        id: 'ws-engineer',
-        type: 'ENGINEER',
-        name: 'Engineer Console',
-        context: { memory_source: 'PROJECT_MEMORY', knowledge_source: 'ENGINEERING_KNOWLEDGE' },
-        capabilities: ['cap:code-execution', 'cap:architecture-verification', 'cap:repository-access'],
-        default_layout: {
-          left_workbench: ['widget:engineering-tasks', 'widget:architecture-gaps'],
-          right_workbench: ['widget:verification-log'],
-          bottom_workbench: []
-        },
-        permissions: { allow_global_memory: false }
-      };
+    const metadataService = this.serviceManager.get('MetadataService');
+    if (!metadataService) {
+      console.warn('[WorkspaceManager] MetadataService not available. Falling back to default.');
+      return this._getDefaultManifest(workspaceId);
     }
 
-    if (workspaceId === 'ws-lite') {
-      return {
-        id: 'ws-lite',
-        type: 'LITE',
-        name: 'Mamet Lite',
-        context: { memory_source: 'USER_MEMORY', knowledge_source: 'PERSONAL_KNOWLEDGE' },
-        // Tidak ada cap:code-execution — mode ringan dan aman
-        capabilities: ['cap:web-search'],
-        default_layout: {
-          left_workbench: [],
-          right_workbench: [],
-          bottom_workbench: []
-        },
-        permissions: { allow_global_memory: true, read_only_memory: true }
-      };
+    const config = metadataService.getWorkspaceConfig(workspaceId);
+    if (!config) {
+      console.warn(`[WorkspaceManager] Workspace ${workspaceId} not found in metadata. Falling back.`);
+      return this._getDefaultManifest(workspaceId);
     }
 
-    // Default Fallback (Owner Workspace)
+    return {
+      id: config.id,
+      type: config.id.split('-')[1]?.toUpperCase() || 'GLOBAL',
+      name: config.name,
+      context: { memory_source: 'USER_MEMORY', knowledge_source: 'PERSONAL_KNOWLEDGE' },
+      capabilities: config.capabilities || [],
+      default_layout: config.default_layout || { left_workbench: [], right_workbench: [], bottom_workbench: [] },
+      permissions: config.permissions || { allow_global_memory: true }
+    };
+  }
+
+  _getDefaultManifest(workspaceId) {
     return {
       id: workspaceId || 'ws-owner',
       type: 'OWNER',
       name: 'Mamet OS',
       context: { memory_source: 'USER_MEMORY', knowledge_source: 'PERSONAL_KNOWLEDGE' },
       capabilities: ['cap:web-search', 'cap:automation'],
-      default_layout: {
-        left_workbench: ['widget:workspace-nav'],
-        right_workbench: [],
-        bottom_workbench: []
-      },
+      default_layout: { left_workbench: [], right_workbench: [], bottom_workbench: [] },
       permissions: { allow_global_memory: true }
     };
   }
