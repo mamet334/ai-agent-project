@@ -172,6 +172,23 @@ export default function ConversationEngine({ sessionId }) {
       let semanticContext = '';
       let memoryService = null;
 
+      const activeWorkspace = workspaceManager?.activeWorkspaceId || 'ASSISTANT';
+      
+      let resolvedMode = 'OWNER';
+      let resolvedAppSource = 'assistant';
+      
+      if (activeWorkspace === 'ws-engineer' || activeWorkspace === 'ENGINEER') {
+        resolvedMode = 'ENGINEER';
+        resolvedAppSource = 'engineer';
+      } else if (activeWorkspace === 'ws-lite' || activeWorkspace === 'MAMETLITE' || activeWorkspace === 'LITE') {
+        resolvedMode = 'LITE';
+        resolvedAppSource = 'mametlite';
+      } else {
+        // ws-owner, ASSISTANT, OWNER — semua fallback ke OWNER
+        resolvedMode = 'OWNER';
+        resolvedAppSource = 'assistant';
+      }
+
       if (kernel.status !== 'RUNNING') {
         console.warn('[ConversationEngine] Kernel belum siap, skip service injection');
       } else {
@@ -183,90 +200,87 @@ export default function ConversationEngine({ sessionId }) {
           aiKey = context.key || '';
         }
 
-        // --- Memory Injection (Layer 2) ---
-        try {
-          memoryService = kernel.serviceManager.get('MemoryService');
-          console.log('[ConversationEngine] MemoryService tersedia?', !!memoryService);
-          console.log('[ConversationEngine] Kernel status:', kernel?.status);
-          console.log('[ConversationEngine] ServiceManager ada?', !!kernel?.serviceManager);
-          
-          if (!memoryService) {
-              await new Promise(r => setTimeout(r, 1000));
-              const memoryServiceRetry = kernel.serviceManager.get('MemoryService');
-              console.log('[ConversationEngine] Setelah retry:', !!memoryServiceRetry);
-              memoryService = memoryServiceRetry;
+        // --- Memory Injection (Layer 2) — dilewati untuk mode LITE ---
+        if (resolvedMode !== 'LITE') {
+          try {
+            memoryService = kernel.serviceManager.get('MemoryService');
+            console.log('[ConversationEngine] MemoryService tersedia?', !!memoryService);
+            console.log('[ConversationEngine] Kernel status:', kernel?.status);
+            console.log('[ConversationEngine] ServiceManager ada?', !!kernel?.serviceManager);
+            
+            if (!memoryService) {
+                await new Promise(r => setTimeout(r, 1000));
+                const memoryServiceRetry = kernel.serviceManager.get('MemoryService');
+                console.log('[ConversationEngine] Setelah retry:', !!memoryServiceRetry);
+                memoryService = memoryServiceRetry;
+            }
+          } catch (err) {
+            console.warn('[ConversationEngine] ⚠️ Gagal mengakses ServiceManager:', err);
           }
-        } catch (err) {
-          console.warn('[ConversationEngine] ⚠️ Gagal mengakses ServiceManager:', err);
-        }
 
-        if (memoryService) {
-            try {
-                console.log('[ConversationEngine] 🔍 Mencari memori untuk:', userMsg);
-                const memories = await memoryService.getMemory(userMsg);
-                console.log('[ConversationEngine] 📋 Hasil memori:', JSON.stringify(memories));
-                if (memories && memories.length > 0) {
-                    localContext = memories.map(m => m.summary || m.content || '').filter(Boolean).join('\n');
-                }
-                console.log('[ConversationEngine] 📝 GlobalMemory yang dikirim:', localContext);
-            } catch (e) {
-                console.warn('[ConversationEngine] MemoryService query failed:', e);
-            }
-        }
+          if (memoryService) {
+              try {
+                  console.log('[ConversationEngine] 🔍 Mencari memori untuk:', userMsg);
+                  const memories = await memoryService.getMemory(userMsg);
+                  console.log('[ConversationEngine] 📋 Hasil memori:', JSON.stringify(memories));
+                  if (memories && memories.length > 0) {
+                      localContext = memories.map(m => m.summary || m.content || '').filter(Boolean).join('\n');
+                  }
+                  console.log('[ConversationEngine] 📝 GlobalMemory yang dikirim:', localContext);
+              } catch (e) {
+                  console.warn('[ConversationEngine] MemoryService query failed:', e);
+              }
+          }
 
-        // --- Semantic Context Injection (Layer 2) ---
-        try {
-            const semanticContextService = kernel.serviceManager.get('SemanticContextService');
-            if (semanticContextService) {
-                console.log('[ConversationEngine] 🔍 Parsing semantic intent untuk:', userMsg);
-                const intentResult = semanticContextService.parseIntent(userMsg);
-                console.log('[ConversationEngine] 📋 Intent result:', intentResult);
+          // --- Semantic Context Injection (Layer 2) ---
+          try {
+              const semanticContextService = kernel.serviceManager.get('SemanticContextService');
+              if (semanticContextService) {
+                  console.log('[ConversationEngine] 🔍 Parsing semantic intent untuk:', userMsg);
+                  const intentResult = semanticContextService.parseIntent(userMsg);
+                  console.log('[ConversationEngine] 📋 Intent result:', intentResult);
 
-                if (intentResult.entities && intentResult.entities.length > 0) {
-                    const { data: { session } } = await supabase.auth.getSession();
-                    const userId = session?.user?.id;
-                    
-                    if (userId) {
-                        semanticContextService.updateGraph(userId, intentResult.entities);
-                        const contextResult = semanticContextService.getContext(userId, userMsg);
-                        semanticContext = contextResult.context;
-                        console.log('[ConversationEngine] 📝 SemanticContext yang dikirim:', semanticContext);
-                    }
-                }
-            }
-        } catch (e) {
-            console.warn('[ConversationEngine] SemanticContextService failed:', e);
+                  if (intentResult.entities && intentResult.entities.length > 0) {
+                      const { data: { session } } = await supabase.auth.getSession();
+                      const userId = session?.user?.id;
+                      
+                      if (userId) {
+                          semanticContextService.updateGraph(userId, intentResult.entities);
+                          const contextResult = semanticContextService.getContext(userId, userMsg);
+                          semanticContext = contextResult.context;
+                          console.log('[ConversationEngine] 📝 SemanticContext yang dikirim:', semanticContext);
+                      }
+                  }
+              }
+          } catch (e) {
+              console.warn('[ConversationEngine] SemanticContextService failed:', e);
+          }
+        } else {
+          console.log('[ConversationEngine] Mode LITE — Memory & Semantic injection dilewati.');
         }
       }
 
-      const activeWorkspace = workspaceManager?.activeWorkspaceId || 'ASSISTANT';
-      
-      let resolvedMode = 'OWNER';
-      let resolvedAppSource = 'assistant';
-      
-      if (activeWorkspace === 'ENGINEER') {
-        resolvedMode = 'ENGINEER';
-        resolvedAppSource = 'engineer';
-      } else if (activeWorkspace === 'ASSISTANT' || activeWorkspace === 'OWNER') {
-        resolvedMode = 'OWNER';
-        resolvedAppSource = 'assistant';
-      } else if (activeWorkspace === 'MAMETLITE' || activeWorkspace === 'LITE') {
-        resolvedMode = 'LITE';
-        resolvedAppSource = 'mametlite';
       }
 
+      // Bangun payload — LITE menggunakan konfigurasi ringan
+      const isLiteMode = resolvedMode === 'LITE';
       const payload = {
         message: userMsg,
         mode: resolvedMode,
         appSource: resolvedAppSource,
         workspaceTarget: workspaceManager.activeWorkspaceId,
-        history: newMessages.slice(-10),
+        history: newMessages.slice(isLiteMode ? -5 : -10),
         globalMemory: localContext,
         semanticContext: semanticContext,
-        stream: false,
-        ragEnabled: true,
+        stream: false, // Stream false
+        ragEnabled: isLiteMode ? false : true, // LITE: ragEnabled false by default
+        tools: isLiteMode ? ['rag_search', 'web_search', 'deep_research'] : undefined, // LITE: tools terbatas
         model: formattedModel || undefined,
       };
+      
+      // Hapus key undefined agar payload bersih
+      if (payload.tools === undefined) delete payload.tools;
+      if (payload.model === undefined) delete payload.model;
       
       console.log('[ConversationEngine] Workspace:', activeWorkspace, 'Mode:', resolvedMode, 'AppSource:', resolvedAppSource);
 

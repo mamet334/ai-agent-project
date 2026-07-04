@@ -11,7 +11,7 @@ import ResearchApp from './components/research/ResearchApp'
 import MemoryApp from './components/memory/MemoryApp'
 import { serviceManager } from './core/runtime/ServiceManager'
 import { kernel } from './core/runtime/Kernel'
-import { MessageSquare, Terminal, Database, FlaskConical, LogOut, Settings as SettingsIcon, Bot } from 'lucide-react'
+import { MessageSquare, Terminal, Database, FlaskConical, LogOut, Settings as SettingsIcon, Bot, Zap } from 'lucide-react'
 import { WorkspaceProvider } from './core/workspace/WorkspaceContext'
 import { supabase } from './supabase'
 import './App.css'
@@ -24,6 +24,12 @@ const AssistantAppWrapper = () => (
 
 const EngineerAppWrapper = () => (
   <WorkspaceProvider appId="app:engineer" defaultWorkspaceId="ws-engineer">
+    <AppShell mainPanel={ConversationEngine} />
+  </WorkspaceProvider>
+)
+
+const MametLiteAppWrapper = () => (
+  <WorkspaceProvider appId="app:mametlite" defaultWorkspaceId="ws-lite">
     <AppShell mainPanel={ConversationEngine} />
   </WorkspaceProvider>
 )
@@ -85,6 +91,7 @@ export default function App() {
       const applicationManager = serviceManager.get('ApplicationManager')
       applicationManager.registerApp({ id: 'app:assistant', name: 'Assistant', iconComponent: MessageSquare, renderComponent: AssistantAppWrapper })
       applicationManager.registerApp({ id: 'app:engineer', name: 'Engineer', iconComponent: Terminal, renderComponent: EngineerAppWrapper })
+      applicationManager.registerApp({ id: 'app:mametlite', name: 'Lite', iconComponent: Zap, renderComponent: MametLiteAppWrapper })
       applicationManager.registerApp({ id: 'app:agent-forge', name: 'Agent Forge', iconComponent: Bot, renderComponent: AgentForgeAppWrapper })
       applicationManager.registerApp({ id: 'app:memory-graph', name: 'Memory', iconComponent: Database, renderComponent: MemoryAppWrapper })
       applicationManager.registerApp({ id: 'app:knowledge-base', name: 'Knowledge Base', iconComponent: FlaskConical, renderComponent: ResearchAppWrapper })

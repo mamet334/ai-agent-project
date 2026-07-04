@@ -81,6 +81,23 @@ export class WorkspaceManager {
       };
     }
 
+    if (workspaceId === 'ws-lite') {
+      return {
+        id: 'ws-lite',
+        type: 'LITE',
+        name: 'Mamet Lite',
+        context: { memory_source: 'USER_MEMORY', knowledge_source: 'PERSONAL_KNOWLEDGE' },
+        // Tidak ada cap:code-execution — mode ringan dan aman
+        capabilities: ['cap:web-search'],
+        default_layout: {
+          left_workbench: [],
+          right_workbench: [],
+          bottom_workbench: []
+        },
+        permissions: { allow_global_memory: true, read_only_memory: true }
+      };
+    }
+
     // Default Fallback (Owner Workspace)
     return {
       id: workspaceId || 'ws-owner',
