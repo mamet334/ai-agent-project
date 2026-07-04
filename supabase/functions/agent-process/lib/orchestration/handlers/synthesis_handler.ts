@@ -42,15 +42,14 @@ export const SynthesisHandler = {
           runtimeContext: ctx.state
         };
         
-        // Apply Capability-Based Verification (Mode-Aware)
-        // Refer to MAEF 4.5 and Mamet AI Constitution for Capability Separation.
-        // ENGINEER mode requires strict traceability (Source Trace, ADR).
-        // OWNER/LITE modes allow flexible memory retrieval without strict engineering formats.
+        // Mode-Aware Verification (MAEF 4.5 + Mamet AI Constitution Capability Separation)
         let vReport;
-        if (ctx.request.mode === 'ENGINEER' || ctx.request.mode === 'engineer') {
-          vReport = VerificationEngine.verifyEngineering(vContext);
+        if (ctx.request.mode === 'ENGINEER') {
+            // Jalur Insinyur: verifikasi ketat (ADR, source trace, evidence, format)
+            vReport = VerificationEngine.verifyEngineering(vContext);
         } else {
-          vReport = VerificationEngine.verifyPersonal(vContext);
+            // Jalur Personal: verifikasi relevan (response, forbidden phrases, confidence)
+            vReport = VerificationEngine.verifyPersonal(vContext);
         }
         
         const auditRecord = VerificationEngine.createAuditRecord(vReport, vContext);
