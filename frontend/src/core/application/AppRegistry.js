@@ -5,9 +5,9 @@ import AppShell from '../../components/workbench/AppShell';
 const GenericAppWrapper = ({ appId, workspaceId, mainPanel: MainPanel }) => {
   return React.createElement(WorkspaceProvider, { appId, defaultWorkspaceId: workspaceId },
     React.createElement(AppShell, {
-      mainPanel: React.createElement(Suspense, { 
+      mainPanel: (props) => React.createElement(Suspense, { 
         fallback: React.createElement('div', { className: "p-4 text-emerald-500" }, "Loading Module...") 
-      }, React.createElement(MainPanel))
+      }, React.createElement(MainPanel, props))
     })
   );
 };

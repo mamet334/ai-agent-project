@@ -31,7 +31,7 @@ export default function Sidebar() {
     if (node.type === 'separator') return <div key={`sep-${idx}`} className="my-2 border-b border-slate-800/50" />;
     if (node.type === 'spacer') return <div key={`spacer-${idx}`} className="mt-auto" />;
     
-    if (node.type === 'item') {
+    if (node.type === 'item' || node.appId) {
       const app = node.app;
       if (!app) return null;
       const active = isActive(app.id);

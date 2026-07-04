@@ -17,7 +17,7 @@
       "id": "ws-owner",
       "name": "Owner Workspace",
       "capabilities": ["cap:core-apps"],
-      "default_layout": { "left_workbench": ["widget:workspace-nav"], "right_workbench": [], "bottom_workbench": [] },
+      "default_layout": { "left_workbench": [], "right_workbench": [], "bottom_workbench": [] },
       "permissions": { "allow_global_memory": true }
     },
     {

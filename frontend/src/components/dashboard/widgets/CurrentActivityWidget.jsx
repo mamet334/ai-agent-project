@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { serviceManager } from '../../../core/runtime/ServiceManager';
+import { kernel } from '../../../core/runtime/Kernel';
 import { Activity, Loader2 } from 'lucide-react';
 
 export default function CurrentActivityWidget() {
@@ -31,7 +32,7 @@ export default function CurrentActivityWidget() {
     const unsub4 = eventBus.on('System:Ready', () => handleEvent('System Ready'));
 
     // Set initial
-    setActivity(serviceManager.get('Kernel')?.status === 'RUNNING' ? 'System Monitoring Active' : 'Waiting for Boot...');
+    setActivity(kernel.status === 'RUNNING' ? 'System Monitoring Active' : 'Waiting for Boot...');
 
     return () => {
       eventBus.off('Memory:Loading', unsub1);
