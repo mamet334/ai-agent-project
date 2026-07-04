@@ -164,18 +164,12 @@ class Kernel {
     await discoveryManager.initialize();
     serviceManager.register('DiscoveryManager', discoveryManager);
 
-    // Widget Registry
-    let widgetRegistry;
-    if (serviceManager.has('WidgetRegistry')) {
-      widgetRegistry = serviceManager.get('WidgetRegistry');
-    } else {
-      widgetRegistry = new WidgetRegistry(serviceManager);
-      serviceManager.register('WidgetRegistry', widgetRegistry);
-      this.log('INFO', 'Widget Registry Registered');
-    }
-
-    // Register Default Widgets
-    await this._registerDefaultWidgets(widgetRegistry, serviceManager);
+    // MetadataService
+    const { MetadataService } = await import('../metadata/MetadataService.js');
+    const metadataService = new MetadataService(serviceManager);
+    await metadataService.initialize();
+    serviceManager.register('MetadataService', metadataService);
+    this.log('INFO', 'MetadataService Initialized & Registered');
 
     this._emitEvent(serviceManager, 'Kernel:PhaseCompleted', { phase: 1, name: 'SYSTEM_CORE_REGISTRATION' });
     this.log('INFO', 'PHASE 1 — SYSTEM CORE REGISTRATION: Completed');
@@ -350,12 +344,28 @@ class Kernel {
     this.currentPhase = 9;
     this.log('INFO', 'PHASE 9 — METADATA PARSING & SYSTEM INTEGRATION: Started');
 
-    // Init MetadataService
-    const { MetadataService } = await import('../metadata/MetadataService.js');
-    const metadataService = new MetadataService(serviceManager);
-    await metadataService.initialize();
-    serviceManager.register('MetadataService', metadataService);
-    this.log('INFO', 'MetadataService Initialized');
+    if (!serviceManager) throw new Error("BOOT ABORTED: Missing dependency ServiceManager (Required by: Phase 9)");
+    const metadataService = serviceManager.has('MetadataService') ? serviceManager.get('MetadataService') : null;
+    if (!metadataService) {
+      throw new Error("BOOT ABORTED\n\nMissing dependency:\nMetadataService\n\nRequired by:\nSystem Integration Check\n\nCurrent Phase:\n9");
+    }
+
+    // Register ApplicationManager, WindowManager, & WorkspaceManager
+    const applicationManager = (await import('../application/ApplicationManager.js')).ApplicationManager;
+    const appManagerInstance = new applicationManager(serviceManager);
+    serviceManager.register('ApplicationManager', appManagerInstance);
+    
+    const windowManager = (await import('../window/WindowManager.js')).WindowManager;
+    serviceManager.register('WindowManager', new windowManager(serviceManager));
+    
+    const workspaceManager = (await import('../workspace/WorkspaceManager.js')).WorkspaceManager;
+    serviceManager.register('WorkspaceManager', new workspaceManager('mamet-os', serviceManager));
+    this.log('INFO', 'ApplicationManager, WindowManager & WorkspaceManager Activated');
+
+    // NavigationService
+    const { NavigationService } = await import('../metadata/NavigationService.js');
+    const navigationService = new NavigationService(serviceManager);
+    serviceManager.register('NavigationService', navigationService);
 
     const checks = [
       { name: 'Event Flow', passed: true },
@@ -377,6 +387,11 @@ class Kernel {
     this.currentPhase = 10;
     this.log('INFO', 'PHASE 10 — SYSTEM REGISTRATION & ACTIVATION: Started');
 
+    if (!serviceManager.has('MetadataService')) throw new Error("BOOT ABORTED\n\nMissing dependency:\nMetadataService\n\nRequired by:\nFull System Activation\n\nCurrent Phase:\n10");
+    if (!serviceManager.has('NavigationService')) throw new Error("BOOT ABORTED\n\nMissing dependency:\nNavigationService\n\nRequired by:\nFull System Activation\n\nCurrent Phase:\n10");
+    if (!serviceManager.has('WorkspaceManager')) throw new Error("BOOT ABORTED\n\nMissing dependency:\nWorkspaceManager\n\nRequired by:\nFull System Activation\n\nCurrent Phase:\n10");
+    if (!serviceManager.has('ApplicationManager')) throw new Error("BOOT ABORTED\n\nMissing dependency:\nApplicationManager\n\nRequired by:\nFull System Activation\n\nCurrent Phase:\n10");
+
     // Activate all registered adapters
     const adapterRegistry = serviceManager.get('AdapterRegistry');
     if (adapterRegistry) {
@@ -393,28 +408,25 @@ class Kernel {
     const orchestrator = serviceManager.get('AgentOrchestratorService');
     if (orchestrator) orchestrator.mode = 'OPERATIONAL';
 
-    // Register ApplicationManager, WindowManager, & WorkspaceManager
-    const applicationManager = (await import('../application/ApplicationManager.js')).ApplicationManager;
-    const appManagerInstance = new applicationManager(serviceManager);
-    serviceManager.register('ApplicationManager', appManagerInstance);
-    
-    const windowManager = (await import('../window/WindowManager.js')).WindowManager;
-    serviceManager.register('WindowManager', new windowManager(serviceManager));
-    
-    const workspaceManager = (await import('../workspace/WorkspaceManager.js')).WorkspaceManager;
-    serviceManager.register('WorkspaceManager', new workspaceManager('mamet-os', serviceManager));
-    this.log('INFO', 'ApplicationManager, WindowManager & WorkspaceManager Activated');
+    // Widget Registry
+    let widgetRegistry;
+    if (serviceManager.has('WidgetRegistry')) {
+      widgetRegistry = serviceManager.get('WidgetRegistry');
+    } else {
+      widgetRegistry = new WidgetRegistry(serviceManager);
+      serviceManager.register('WidgetRegistry', widgetRegistry);
+      this.log('INFO', 'Widget Registry Registered');
+    }
 
-    // NavigationService
-    const { NavigationService } = await import('../metadata/NavigationService.js');
-    const navigationService = new NavigationService(serviceManager);
-    serviceManager.register('NavigationService', navigationService);
+    // Register Default Widgets
+    await this._registerDefaultWidgets(widgetRegistry, serviceManager);
 
     // Register Apps from Metadata
     const { AppComponents } = await import('../application/AppRegistry.js');
     const metadataService = serviceManager.get('MetadataService');
     const apps = metadataService.getApps();
     const Lucide = await import('lucide-react');
+    const appManagerInstance = serviceManager.get('ApplicationManager');
 
     apps.forEach(app => {
       if (app.disabled) return;
@@ -429,6 +441,7 @@ class Kernel {
       });
     });
 
+    const navigationService = serviceManager.get('NavigationService');
     navigationService.buildTree();
     
     // Default Entry Point
@@ -443,11 +456,13 @@ class Kernel {
   }
 
   async _registerDefaultWidgets(widgetRegistry, serviceManager) {
-    const metadataService = serviceManager.get('MetadataService');
-    if (!metadataService) return;
+    const metadata = serviceManager.has('MetadataService') ? serviceManager.get('MetadataService') : null;
+    if (!metadata) {
+      throw new Error("MetadataService unavailable during WidgetRegistry initialization");
+    }
 
     const { AppComponents } = await import('../application/AppRegistry.js');
-    const widgets = metadataService.getWidgets();
+    const widgets = metadata.getWidgets();
     
     widgets.forEach(w => {
       const RenderComp = AppComponents[w.component];

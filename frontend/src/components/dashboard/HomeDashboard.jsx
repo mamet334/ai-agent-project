@@ -24,7 +24,7 @@ export default function HomeDashboard() {
       const capabilities = metadataService.getCapabilities();
       
       const loadedWidgets = layoutData.map(item => {
-        const widgetConfig = widgetRegistry.get(item.widgetId);
+        const widgetConfig = widgetRegistry.getWidget(item.widgetId);
         if (!widgetConfig) return null;
         
         // Capability Check
