@@ -28,5 +28,6 @@ export const AppComponents = {
   'CurrentActivityWidget': lazy(() => import('../components/dashboard/widgets/CurrentActivityWidget')),
   'RecentEventsWidget': lazy(() => import('../components/dashboard/widgets/RecentEventsWidget')),
   'PendingApprovalWidget': lazy(() => import('../components/dashboard/widgets/PendingApprovalWidget')),
-  'VerificationSummaryWidget': lazy(() => import('../components/dashboard/widgets/VerificationSummaryWidget'))
+  'VerificationSummaryWidget': lazy(() => import('../components/dashboard/widgets/VerificationSummaryWidget')),
+  'QuickActionsWidget': lazy(() => import('../components/dashboard/widgets/QuickActionsWidget'))
 };
