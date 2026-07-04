@@ -238,7 +238,7 @@ Wajib ikuti struktur persis seperti contoh di atas!`;
 
   ctx.request.agentIdentityPrompt = agentIdentityPrompt;
   ctx.request.userContextPrompt = userContextPrompt;
-  ctx.request.isRagEnabled = ctx.policy.ragTopK > 0;
+  ctx.request.isRagEnabled = (parsed.ragEnabled !== false) && (ctx.policy.ragTopK > 0);
   ctx.request.effectiveRagMatchCount = ctx.policy.ragTopK;
   ctx.request.effectiveRagThreshold = ctx.policy.ragThreshold;
 
