@@ -47,6 +47,42 @@
       "name": "Quick Actions",
       "component": "QuickActionsWidget",
       "capabilities": ["cap:core-apps"]
+    },
+    {
+      "id": "widget:engineering-tasks",
+      "name": "Engineering Tasks",
+      "component": "EngineeringTasksWidget",
+      "capabilities": ["cap:engineer"]
+    },
+    {
+      "id": "widget:architecture-gaps",
+      "name": "Architecture Gaps",
+      "component": "ArchitectureGapsWidget",
+      "capabilities": ["cap:engineer"]
+    },
+    {
+      "id": "widget:verification-log",
+      "name": "Verification Log",
+      "component": "VerificationLogWidget",
+      "capabilities": ["cap:engineer"]
+    },
+    {
+      "id": "widget:workspace-nav",
+      "name": "Workspace Nav",
+      "component": "WorkspaceNavWidget",
+      "capabilities": ["cap:engineer"]
+    },
+    {
+      "id": "widget:maef-monitor",
+      "name": "MAEF Monitor",
+      "component": "MaefExecutionMonitorWidget",
+      "capabilities": ["cap:engineer"]
+    },
+    {
+      "id": "widget:disaster-recovery",
+      "name": "Disaster Recovery",
+      "component": "DisasterRecoveryWidget",
+      "capabilities": ["cap:engineer", "cap:core-apps"]
     }
   ]
 }

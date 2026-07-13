@@ -12,7 +12,10 @@ export type EventType =
   | 'Tool.Invoked'
   | 'Tool.Requested'
   | 'Tool.Completed'
-  | 'Error.Occurred';
+  | 'Error.Occurred'
+  | 'EngineeringLifecycle.PhaseChanged'
+  | 'EngineeringLifecycle.ViolationAttempt'
+  | 'EngineeringLifecycle.ApprovalGranted';
 
 export interface MAEFEvent {
   id: string;

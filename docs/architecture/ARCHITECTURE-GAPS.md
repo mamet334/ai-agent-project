@@ -145,29 +145,29 @@ Status: **Resolved** ✅ (TASK-NEW-003, 2026-06-29)
 
 ## GAP-NEW-007: 4 dari 9 Engineering Metrics Tidak Dapat Dihitung
 
-Status: Open
+Status: **Resolved** ✅ (Wave 2)
 
 **Severity:** Major
 **Lokasi:** ADR-0007 + DB schema
 **Dampak:** Tidak ada cara mengukur apakah Engineer semakin baik — melanggar Vision §ENGINEERING METRICS.
-**Rencana:** Wave 2 — Schema migration untuk `confidence_score` dan `patch_accepted`.
+**Resolusi:** Telah dibuat skema migrasi `GAP-NEW-007_schema_migration.sql` yang menambahkan `patch_accepted`, `review_confirmed`, dan `bug_category` ke dalam database untuk mendukung 4 metrik yang tertunda. *Dashboard SQL* gabungan 9 metrik telah dibuat di `scratch/GAP-NEW-007_engineering_metrics_dashboard.sql` sebagai artefak engineering yang tervalidasi.
 
 ---
 
 ## GAP-NEW-008: `confidence_score` Tidak Disimpan ke `verification_runs`
 
-Status: Open
+Status: **Resolved** ✅ (Wave 2 - RFC-013)
 
 **Severity:** Major
-**Lokasi:** DB schema — tabel `verification_runs`
+**Lokasi:** DB schema — tabel `verification_audit_logs`
 **Dampak:** Average Confidence metric tidak dapat dihitung.
-**Rencana:** Wave 2 — `ALTER TABLE verification_runs ADD COLUMN confidence_score NUMERIC;`
+**Resolusi:** Berdasarkan RFC-013, kolom `confidence_score SMALLINT` telah ditambahkan ke skema DB. File `verification_service.ts` telah diintegrasikan untuk mengekstrak dan menyimpan skor *Evidence Confidence* secara persisten pada tahap *post-execution guarantee*.
 
 ---
 
 ## GAP-NEW-009: Self Engineering Lifecycle Tidak Ada Implementasinya
 
-Status: Open
+Status: **APPROVED_FOR_DESIGN** (Implementasi Ditangguhkan)
 
 **Severity:** Major
 **Lokasi:** Vision §SELF ENGINEERING LIFECYCLE
@@ -272,4 +272,26 @@ Status: Open
 **Lokasi:** `docs/` root
 **Dampak:** Perlu audit isi dan integrasi ke hirarki dokumen.
 **Rencana:** Masuk backlog.
+
+---
+
+## GAP-NEW-009: Self Engineering Lifecycle Belum Memiliki Implementasi Nyata
+
+Status: **APPROVED_FOR_DESIGN** (Menunggu Kematangan RFC-015 & Kesiapan Arsitektur RFC-016)
+
+**Severity:** Major
+**Lokasi:** Orchestrator (`core_engine.ts`, `engineering_lifecycle.ts`)
+**Dampak:** Agen beroperasi tanpa mematuhi tahapan Engineering System (Constitution 07), berpotensi melanggar Owner Sovereignty melalui eksekusi tool di luar fase.
+**Resolusi (Sementara):** Telah diimplementasikan `EngineeringLifecycleManager` yang menegakkan state machine deterministik, explicit intent routing (`ENGINEER:PROPOSAL`, dll), dan Tool Filter Layer yang memastikan eksekusi alat hanya terjadi jika diizinkan oleh fase saat ini. 
+
+---
+
+## GAP-NEW-019: Tool Dispatcher & Hard Gate Implementation Belum Tersentralisasi
+
+Status: Open
+
+**Severity:** Major
+**Lokasi:** `core_engine.ts`, `capability_adapter.ts` (Atau Desktop Bridge)
+**Dampak:** Proteksi eksekusi alat (Execution Guard) pada RFC-014 dapat di-bypass jika LLM menghalusinasi output JSON atau jika desktop frontend mengeksekusi tool secara mandiri tanpa validasi backend.
+**Rencana:** Telah diimplementasikan RFC-015 Phase 1-3 (*Shadow Mode*). Namun transisi final (*Hard Enforcement*) untuk mengunci kedaulatan Backend (*Backend Authoritative Execution Architecture*) akan ditangani melalui **RFC-016** dengan konsep *Signed Execution Token* (SET). Status *Open* dipertahankan sampai RFC-016 terimplementasi dan *Zero Rogue Edits* dijamin.
 

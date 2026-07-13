@@ -1,0 +1,45 @@
+version: "1.0"
+widgets:
+  - id: "widget-task"
+    title: "Current Task"
+    workspace: "workspace-engineer"
+    capability: "LIFECYCLE_READ"
+    source: "event_bus:lifecycle"
+    priority: 1
+    refresh_policy: "realtime-sse"
+    visibility: "owner_only"
+    active_phases: ["ALL"]
+    fallback_behavior: "readonly"
+
+  - id: "widget-approval"
+    title: "Approval Center"
+    workspace: "workspace-engineer"
+    capability: "LIFECYCLE_CONTROL"
+    source: "event_bus:lifecycle"
+    priority: 2
+    refresh_policy: "realtime-sse"
+    visibility: "owner_only"
+    active_phases: ["PROPOSAL", "VERIFICATION_DOCS"]
+    fallback_behavior: "disabled"
+
+  - id: "widget-proj-mem"
+    title: "Project Memory"
+    workspace: "workspace-engineer"
+    capability: "PROJECT_MEMORY_ACCESS"
+    source: "db:project_memory_entries"
+    priority: 3
+    refresh_policy: "fetch-on-load"
+    visibility: "owner_only"
+    active_phases: ["ALL"]
+    fallback_behavior: "readonly"
+
+  - id: "widget-repo"
+    title: "Repository"
+    workspace: "workspace-engineer"
+    capability: "FILE_SYSTEM_READ"
+    source: "system:fs"
+    priority: 4
+    refresh_policy: "fetch-on-load"
+    visibility: "owner_only"
+    active_phases: ["ALL"]
+    fallback_behavior: "readonly"

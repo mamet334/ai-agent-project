@@ -1,6 +1,7 @@
 import { eventBus, MAEFEvent } from '../event_bus.ts';
 import { getPluginByName } from '../../../plugins/registry.ts';
 import { CapabilityRegistry } from '../../adapters/adapter_registry.ts';
+import { ToolDispatcher } from '../../orchestration/dispatcher/tool_dispatcher.ts';
 
 const PER_PLUGIN_TIMEOUT_MS = 12000;
 
@@ -121,7 +122,10 @@ export const initializeToolSubscriber = () => {
 
         const isolatedExecutionPromise = (async () => {
             try {
-                const rawResult = await plugin.execute(executeContext);
+                const rawResult = await ToolDispatcher.execute(subagent, { task: fullTask }, rctx, async () => {
+                    return await plugin.execute(executeContext);
+                });
+                
                 if (lifecycleState !== 'RUNNING') {
                     console.warn(`[GATING_LAYER] Execution ${executionId} (${subagent}) late. Result DISCARDED.`);
                     return null; 

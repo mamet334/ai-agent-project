@@ -1,17 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { serviceManager } from '../../../core/runtime/ServiceManager';
 import { MessageSquare, Terminal, FlaskConical, Database, Settings } from 'lucide-react';
 
 export default function QuickActionsWidget() {
   const applicationManager = serviceManager.get('ApplicationManager');
 
-  const actions = [
-    { id: 'app:assistant', label: 'New Chat', icon: MessageSquare, color: 'text-emerald-400' },
-    { id: 'app:engineer', label: 'Engineer', icon: Terminal, color: 'text-blue-400' },
-    { id: 'app:knowledge-base', label: 'Knowledge', icon: FlaskConical, color: 'text-purple-400' },
-    { id: 'app:memory-graph', label: 'Memory', icon: Database, color: 'text-orange-400' },
-    { id: 'app:settings', label: 'Settings', icon: Settings, color: 'text-slate-400' }
-  ];
+  const [actions, setActions] = useState([]);
+  
+  React.useEffect(() => {
+    const metadataService = serviceManager.get('MetadataService');
+    if (metadataService) {
+      const apps = metadataService.getApps() || [];
+      // Filter out some system apps or just show a subset
+      const quickApps = apps.filter(app => 
+        ['app:assistant', 'app:engineer', 'app:knowledge-base', 'app:memory-graph', 'app:settings'].includes(app.id)
+      );
+      setActions(quickApps);
+    }
+  }, []);
 
   const handleAction = (id) => {
     if (applicationManager) {
@@ -27,8 +33,7 @@ export default function QuickActionsWidget() {
           onClick={() => handleAction(action.id)}
           className="flex items-center gap-2 bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-lg px-4 py-2 transition-colors flex-1 min-w-[120px] justify-center"
         >
-          <action.icon size={16} className={action.color} />
-          <span className="text-sm text-slate-300 font-medium">{action.label}</span>
+          <span className="text-sm text-slate-300 font-medium">{action.name || action.label}</span>
         </button>
       ))}
     </div>

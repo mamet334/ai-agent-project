@@ -29,12 +29,18 @@ const corsHeaders = {
 //   3. Ukuran terlalu besar untuk export JSON biasa
 const BACKUP_TABLES = [
   'knowledge_spaces',
+  'workspace_summaries',
   'documents',
   'project_memory_entries',
+  'knowledge_relationships',
+  'knowledge_conflicts',
+  'memory_relations',
   'engineering_tasks',
   'architecture_gaps',
   'verification_runs',
   'user_memories',
+  'chats',
+  'api_usage',
   'agent_logs',
   'evidence_audit_logs',
 ];

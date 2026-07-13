@@ -33,5 +33,13 @@ export const AppComponents = {
   'RecentEventsWidget': lazy(() => import('../../components/dashboard/widgets/RecentEventsWidget')),
   'PendingApprovalWidget': lazy(() => import('../../components/dashboard/widgets/PendingApprovalWidget')),
   'VerificationSummaryWidget': lazy(() => import('../../components/dashboard/widgets/VerificationSummaryWidget')),
-  'QuickActionsWidget': lazy(() => import('../../components/dashboard/widgets/QuickActionsWidget'))
+  'QuickActionsWidget': lazy(() => import('../../components/dashboard/widgets/QuickActionsWidget')),
+  
+  // Engineer Widgets
+  'EngineeringTasksWidget': lazy(() => import('../../components/widgets/EngineeringTasksWidget')),
+  'ArchitectureGapsWidget': lazy(() => import('../../components/widgets/ArchitectureGapsWidget')),
+  'VerificationLogWidget': lazy(() => import('../../components/widgets/VerificationLogWidget')),
+  'WorkspaceNavWidget': lazy(() => import('../../components/widgets/WorkspaceNavWidget')),
+  'MaefExecutionMonitorWidget': lazy(() => import('../../components/widgets/MaefExecutionMonitorWidget')),
+  'DisasterRecoveryWidget': lazy(() => import('../../components/widgets/DisasterRecoveryWidget'))
 };
