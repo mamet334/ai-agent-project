@@ -32,6 +32,7 @@
       "name": "Engineer Workspace",
       "capabilities": ["cap:engineer"],
       "default_layout": { 
+        "grid_columns": "1fr 1.5fr 1fr",
         "left_workbench": ["widget:engineering-tasks", "widget:architecture-gaps", "widget:workspace-nav"], 
         "right_workbench": ["widget:verification-log", "widget:disaster-recovery"], 
         "bottom_workbench": ["widget:maef-monitor"] 
@@ -68,9 +69,6 @@
     "app:knowledge-base": "cap:knowledge",
     "app:memory-graph": "cap:knowledge",
     "app:agent-forge": "cap:core-apps",
-    "app:settings": "cap:settings",
-    "app:verification": "cap:observability",
-    "app:event-stream": "cap:observability",
-    "app:kernel": "cap:observability"
+    "app:settings": "cap:settings"
   }
 }

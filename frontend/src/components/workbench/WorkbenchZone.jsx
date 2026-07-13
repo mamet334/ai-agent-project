@@ -121,13 +121,13 @@ export default function WorkbenchZone({
   const currentHeight = draftSize !== null ? draftSize : height;
 
   if (position === 'left' || position === 'right') {
-    style.width = isEmpty ? '60px' : (currentWidth ? `${currentWidth}px` : '300px');
+    style.width = '100%';
   } else if (position === 'bottom') {
     style.height = isEmpty ? '60px' : (currentHeight ? `${currentHeight}px` : '250px');
   }
 
   // Common wrapper styles
-  const baseClasses = "flex flex-col bg-slate-950 relative shrink-0";
+  const baseClasses = "flex flex-col bg-slate-950 relative min-h-0 min-w-0 h-full";
   const positionClasses = {
     'left': 'border-r border-slate-800 h-full',
     'right': 'border-l border-slate-800 h-full',
