@@ -90,7 +90,12 @@ export default function AppShell({ mainPanel: MainPanelComponent }) {
       </div>
 
       {/* Main OS Layout */}
-      <div className="flex-1 flex flex-row overflow-hidden relative">
+      <div 
+        className="flex-1 grid overflow-hidden relative"
+        style={{
+          gridTemplateColumns: layout?.grid_columns || `${layout?.left_size || 300}px 1fr ${layout?.right_size || 350}px`
+        }}
+      >
         
         {/* Left Workbench */}
         <WorkbenchZone 
