@@ -343,3 +343,44 @@ Files changed in Wave 1:
 
 Wave 2: Schema migration DB — `confidence_score` dan `patch_accepted` columns.
 
+---
+
+## 2026-07-11 — Tool Dispatcher Shadow Mode + Backend Authority Architecture
+
+Status: Saved
+
+### Trigger
+
+Penyelesaian *Architecture Gaps* yang berkaitan dengan kedaulatan kepemilikan (*Owner Sovereignty*) dan tata kelola eksekusi (*Execution Governance*). Agenda ini berfokus mengunci jalur eksekusi alat agar tak dapat dieksploitasi oleh halusinasi LLM atau manipulasi *frontend*.
+
+### Milestones Completed
+
+- **RFC-015 Tool Dispatcher (Phase 1-3):** 
+  Diimplementasikan di *agent-process* sebagai *Single Choke Point* untuk seluruh eksekusi alat. Menggunakan arsitektur *Shadow Mode* (hanya observasi/log) untuk menghimpun metrik telemetri `TOOL_DISPATCHER_AUDIT` tanpa memecah alur klien.
+- **Security Hardening (RuntimeContext & Recursive Dispatch):** 
+  Perlindungan *null-check* ketat dan penghitung kedalaman *dispatch* (maksimal 5) demi mencegah ancaman *infinite recursion loop*. Kegagalan validasi langsung dilempar sebagai `DENY_ON_INTERNAL_ERROR` (*fail-closed*).
+- **Risk Gate Expanded Evasion Patterns:** 
+  Perluasan daftar hitam (*blacklist*) regex untuk menjegal vektor destruktif berantai, *encoding payload* (base64, certutil), serta alias sistem seperti `Remove-Item` atau `shred`.
+- **Engineering Metrics Dashboards (GAP-NEW-007):** 
+  Pembaruan kolom database (`patch_accepted`, `review_confirmed`, `bug_category`) dan penyempurnaan skrip metrik berbasis SQL untuk menangkap ke-9 metrik sesuai *Vision Constitution*.
+- **RFC-016 Backend Authoritative Execution Architecture:** 
+  Pembuatan draf arsitektur masa depan yang mengajukan konsep *Signed Execution Token* (SET), dirancang untuk memangkas *authority* dari *Svelte Desktop* dan menyerahkannya secara absolut ke Backend, menargetkan keamanan absolut *Zero Rogue Edits*.
+
+### Lessons Learned
+
+- AI Agent tidak cukup memiliki intelijensi. Ia membutuhkan *governance*.
+- LLM bukanlah penguasa (*authority*), melainkan sekadar mesin *reasoning*. Eksekusi aktual tidak boleh serta merta tunduk pada *generation* LLM yang bersifat probabilistik.
+- Pemaksaan kontrol eksekusi (Hard Enforcement) secara sepihak rentan merusak pengalaman operasional (*false positives*). Arsitektur transisional semacam *Shadow Mode* sangat mendesak.
+- Telemetri asinkron tak bergaransi (*fire-and-forget*) di Edge Functions terbukti korup apabila proses mati; pemblokiran *await* tersinkronisasi adalah mitigasi terbaiknya.
+
+### Gaps Closed / Evolved
+
+- **GAP-NEW-007:** ✅ Resolved (Semua 9 Engineering Metrics kini berinfrastruktur penuh)
+- **GAP-NEW-019:** ⏳ Open / Transitioning (Masih *Shadow Mode*, tertunda menanti realisasi RFC-016)
+
+### Next Recommended Work
+
+1. Kumpulkan metrik operasional dari *Shadow Mode* (`TOOL_DISPATCHER_AUDIT`).
+2. Tinjau *False Positive* dan *False Negative* untuk validasi keamanan *Risk Gate*.
+3. Fokus penyelesaian Gaps yang bersisa seperti GAP-NEW-009 (Self Engineering Lifecycle).
+

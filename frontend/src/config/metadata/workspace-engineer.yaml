@@ -1,0 +1,10 @@
+version: "1.0"
+workspace:
+  id: "workspace-engineer"
+  title: "Mamet Engineer"
+  description: "Engineering Brain of Mamet Ecosystem"
+  icon: "engineer-icon"
+  layout_type: "bento-grid"
+  capabilities_required: 
+    - "ENGINEERING_SYSTEM"
+    - "PROJECT_MEMORY_ACCESS"

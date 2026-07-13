@@ -96,6 +96,20 @@ export interface PolicyConfig {
 // 6. RUNTIME STATE
 // ─────────────────────────────────────────────
 
+export type EngineeringPhase = 'OBSERVE_ANALYZE' | 'PROPOSAL' | 'IMPLEMENTATION' | 'VERIFICATION_DOCUMENTATION';
+
+export interface EphemeralApproval {
+  targetTaskId: string;
+  grantedAt: number;
+  status: 'ACTIVE' | 'EXHAUSTED' | 'REVOKED';
+}
+
+export interface EngineeringState {
+  phase: EngineeringPhase;
+  ownerApprovalGranted: boolean;
+  approval?: EphemeralApproval;
+}
+
 /**
  * State yang diakumulasi selama request lifecycle.
  * Ditulis oleh berbagai stage pipeline.
@@ -106,6 +120,8 @@ export interface PolicyConfig {
 export interface RuntimeState {
   /** Error string yang terakumulasi dari explicit model failures */
   explicitModelErrors: string;
+  /** State of the engineering lifecycle (only active for ENGINEER mode) */
+  engineeringState?: EngineeringState;
 }
 
 // ─────────────────────────────────────────────

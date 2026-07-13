@@ -84,12 +84,49 @@ export const getStreamResponse = (promptText: string, systemPromptText = '', cha
          await rctx.tasks.awaitAll();
       };
 
+      let fullLLMResponse = '';
+
       try {
         // === ITERATE THROUGH CAPABILITY ADAPTER STREAM ===
         const streamIter = runStreamLLM(promptText, systemPromptText, chatHistory, rctx);
         for await (const chunk of streamIter) {
+            fullLLMResponse += chunk;
             enqueueStr(chunk);
         }
+        
+        // === PHASE 3: SHADOW STREAM INTERCEPTOR ===
+        // Analyze the buffered text for potential rogue edits before closing
+        try {
+            const { ToolDispatcher } = await import('./orchestration/dispatcher/tool_dispatcher.ts');
+            
+            // 1. Terminal Tag interception
+            const terminalMatches = fullLLMResponse.match(/<terminal>([\s\S]*?)<\/terminal>/g);
+            if (terminalMatches) {
+                for (const match of terminalMatches) {
+                    const cmd = match.replace(/<\/?terminal>/g, '').trim();
+                    await ToolDispatcher.execute('run_command', { CommandLine: cmd }, rctx, async () => { /* shadow exec */ });
+                }
+            }
+
+            // 2. Desktop JSON Tool interception (heuristic parsing)
+            // Svelte desktop expects json blocks for tools
+            const jsonMatches = fullLLMResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/g);
+            if (jsonMatches) {
+                for (const block of jsonMatches) {
+                    try {
+                        const innerJson = block.replace(/```(?:json)?/g, '').trim();
+                        const parsed = JSON.parse(innerJson);
+                        if (parsed && typeof parsed === 'object' && (parsed.tool || parsed.TargetFile || parsed.command)) {
+                             const toolName = parsed.tool || 'desktop_tool_unknown';
+                             await ToolDispatcher.execute(toolName, parsed, rctx, async () => { /* shadow exec */ });
+                        }
+                    } catch (e) { /* Ignore invalid JSON */ }
+                }
+            }
+        } catch (interceptorErr) {
+            console.error('[StreamInterceptor] Failed shadow analysis:', interceptorErr);
+        }
+
       } catch(fatalErr: any) {
          console.error("Fatal Stream Error:", fatalErr);
          enqueueStr(`\n\n**Internal Server Error:** ${fatalErr.message}`);

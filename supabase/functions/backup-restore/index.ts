@@ -29,12 +29,18 @@ const corsHeaders = {
 // Re-embed dokumen via rag-process endpoint setelah restore selesai.
 const RESTORE_ORDER = [
   'knowledge_spaces',
+  'workspace_summaries',
   'documents',
   'project_memory_entries',
+  'knowledge_relationships',
+  'knowledge_conflicts',
+  'memory_relations',
   'engineering_tasks',
   'architecture_gaps',
   'verification_runs',
   'user_memories',
+  'chats',
+  'api_usage',
 ];
 
 serve(async (req) => {
@@ -91,6 +97,20 @@ serve(async (req) => {
     const results: Record<string, { status: string; rowsProcessed: number; errors: string[] }> = {};
     let totalRestored = 0;
     let totalErrors = 0;
+
+    // --- AUDIT TRAIL LOGGING ---
+    if (mode === 'restore') {
+      try {
+        await supabase.from('agent_logs').insert([{
+           user_id: user.id,
+           event_type: 'SYSTEM_RESTORE_INITIATED',
+           provider: 'system',
+           message: `Restore process initiated for user ${user.id}`
+        }]);
+      } catch (logErr) {
+        console.error('[AUDIT_LOG_ERROR]', logErr);
+      }
+    }
 
     // === PROSES RESTORE PER TABEL ===
     for (const tableName of tablesToRestore) {
@@ -159,6 +179,20 @@ serve(async (req) => {
         rowsProcessed,
         errors: tableErrors,
       };
+    }
+    
+    // --- AUDIT TRAIL LOGGING ---
+    if (mode === 'restore') {
+      try {
+        await supabase.from('agent_logs').insert([{
+           user_id: user.id,
+           event_type: 'SYSTEM_RESTORE_COMPLETED',
+           provider: 'system',
+           message: `Restore completed successfully for user ${user.id}. Tables processed: ${Object.keys(results).length}. Total rows: ${totalRestored}.`
+        }]);
+      } catch (logErr) {
+        console.error('[AUDIT_LOG_ERROR]', logErr);
+      }
     }
 
     const response = {

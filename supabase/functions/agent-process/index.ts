@@ -4,7 +4,53 @@ import { coreEngine } from './lib/orchestration/core_engine.ts';
 import { streamController } from './lib/streaming/stream_controller.ts';
 import { corsHeaders } from './lib/stream_handler.ts';
 
+// PRIORITY 2: ENVIRONMENT VALIDATION (STARTUP)
+const REQUIRED_ENV_VARS = [
+  'SUPABASE_URL', 
+  'SUPABASE_SERVICE_ROLE_KEY', 
+  'SUPABASE_ANON_KEY',
+  'GEMINI_API_KEY'
+];
+
+let envValidationStatus = 'OK';
+let missingEnvs: string[] = [];
+
+try {
+  missingEnvs = REQUIRED_ENV_VARS.filter(key => !Deno.env.get(key));
+  if (missingEnvs.length > 0) {
+    envValidationStatus = 'DEGRADED';
+    console.error(`[ENV_VALIDATOR] Missing critical environment variables: ${missingEnvs.join(', ')}`);
+  }
+} catch(e) {
+  envValidationStatus = 'ERROR';
+}
+
 serve(async (req) => {
+  // PRIORITY 2: DEEP HEALTH CHECK SYSTEM
+  const url = new URL(req.url);
+  if (req.method === 'GET' && url.pathname.endsWith('/health')) {
+    const healthReport = {
+       status: envValidationStatus === 'OK' ? 'HEALTHY' : envValidationStatus,
+       timestamp: new Date().toISOString(),
+       missing_env: missingEnvs,
+       services: {
+          backend: 'UP',
+          edge_function: 'UP',
+          database: Deno.env.get('SUPABASE_URL') ? 'CONFIGURED' : 'MISSING_URL',
+          llm_provider: Deno.env.get('GEMINI_API_KEY') ? 'CONFIGURED' : 'MISSING_KEY'
+       }
+    };
+    return new Response(JSON.stringify(healthReport), {
+      status: envValidationStatus === 'OK' ? 200 : 503,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  // Handle CORS for OPTIONS
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
   try {
     const pipelineResult = await executeRequestPipeline({ request: req, corsHeaders });
     if (pipelineResult.response) return pipelineResult.response;

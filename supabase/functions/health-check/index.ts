@@ -13,18 +13,41 @@ serve(async (req) => {
   }
 
   try {
-    // 2. Setup Supabase Client dengan Service Role (Bypass RLS untuk background job)
+    // 2. Validasi JWT Token (Security Layer)
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Unauthorized: Missing Authorization header' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-    
-    if (!supabaseUrl || !supabaseKey) {
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+
+    if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
       throw new Error('Missing Supabase environment variables');
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // Gunakan Anon Client untuk memvalidasi token pengguna
+    const anonClient = createClient(supabaseUrl, supabaseAnonKey);
+    const { data: { user }, error: authError } = await anonClient.auth.getUser(token);
+    
+    if (authError || !user) {
+      console.warn('Health Checker: Unauthorized access attempt');
+      return new Response(JSON.stringify({ error: 'Unauthorized: Invalid token' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
 
-    // 3. Ambil semua monitor yang berstatus aktif
-    console.log("Health Checker: Mengambil daftar monitor aktif...");
+    // 3. Setup Supabase Client dengan Service Role (Bypass RLS untuk background job)
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // 4. Ambil semua monitor yang berstatus aktif
+    console.log(`Health Checker: Request initiated by User ID: ${user.id}`);
     const { data: monitors, error: fetchError } = await supabase
       .from('monitors')
       .select('*')
@@ -79,7 +102,7 @@ serve(async (req) => {
       };
     }));
 
-    // 5. Simpan hasil ping ke tabel 'checks'
+    // 6. Simpan hasil ping ke tabel 'checks'
     console.log(`Health Checker: Menyimpan ${checkResults.length} hasil ping ke database...`);
     const { error: insertError } = await supabase
       .from('checks')

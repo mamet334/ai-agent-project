@@ -94,6 +94,7 @@ export async function persistVerificationAuditLog(
       failures: auditRecord.failures,
       source_trace: auditRecord.sourceTrace,
       confidence: auditRecord.confidence,
+      confidence_score: auditRecord.confidence?.score ?? null,
       evidence: auditRecord.evidence,
       request_id: null,
       user_id: userId
