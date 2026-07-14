@@ -249,9 +249,10 @@ export default function HomeDashboard() {
             nodeRelSize={1}
             linkColor={() => 'rgba(255,255,255,0.15)'}
             linkWidth={1}
-            linkDirectionalParticles={2}
-            linkDirectionalParticleWidth={1.5}
-            linkDirectionalParticleSpeed={0.005}
+            linkDirectionalParticles={3}
+            linkDirectionalParticleWidth={2}
+            linkDirectionalParticleSpeed={0.006}
+            linkDirectionalParticleColor={link => typeof link.source === 'object' ? getNodeColor(link.source) : 'rgba(255,255,255,0.5)'}
             backgroundColor="#00000000"
             d3AlphaDecay={0.02}
             d3VelocityDecay={0.3}
