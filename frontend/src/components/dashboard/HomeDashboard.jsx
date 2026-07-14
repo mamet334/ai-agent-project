@@ -61,12 +61,12 @@ export default function HomeDashboard() {
         const links = [];
 
         // 1. Central Node
-        nodes.push({ id: 'core-supabase', name: 'SUPABASE CORE', type: 'Core', group: 'core', val: 25, isCategory: true });
+        nodes.push({ id: 'core-supabase', name: 'SUPABASE CORE', type: 'Core', group: 'core', val: 35, isCategory: true });
 
         // 2. First Layer Nodes (Categories)
-        nodes.push({ id: 'cat-memory', name: 'USER MEMORY', type: 'Category', group: 'category', val: 15, isCategory: true });
-        nodes.push({ id: 'cat-rag', name: 'RAG KNOWLEDGE', type: 'Category', group: 'category', val: 15, isCategory: true });
-        nodes.push({ id: 'cat-chat', name: 'CONVERSATION', type: 'Category', group: 'category', val: 15, isCategory: true });
+        nodes.push({ id: 'cat-memory', name: 'USER MEMORY', type: 'Category', group: 'category', val: 20, isCategory: true });
+        nodes.push({ id: 'cat-rag', name: 'RAG KNOWLEDGE', type: 'Category', group: 'category', val: 20, isCategory: true });
+        nodes.push({ id: 'cat-chat', name: 'CONVERSATION', type: 'Category', group: 'category', val: 20, isCategory: true });
 
         links.push({ source: 'core-supabase', target: 'cat-memory' });
         links.push({ source: 'core-supabase', target: 'cat-rag' });
@@ -79,19 +79,37 @@ export default function HomeDashboard() {
           return '#22c55e'; // GREEN (Healthy)
         };
 
-        // 3. Second Layer Nodes (Actual Data)
+        const dynamicSubclusters = {};
+        const registerSubcluster = (id, name, parent) => {
+          if (!dynamicSubclusters[id]) {
+            dynamicSubclusters[id] = { id, name: name.toUpperCase(), type: 'Subcluster', group: 'subcategory', val: 12, isCategory: true, parent };
+          }
+        };
+
+        // 3. Process Actual Data into Subclusters
         memories.forEach(m => {
+          const type = m.metadata?.type || m.metadata?.category || 'General';
+          const subcatId = `subcat-mem-${type.toLowerCase()}`;
+          registerSubcluster(subcatId, type, 'cat-memory');
+
           const hits = m.memory_hits || 0;
           const causalLinks = m.causal_links || [];
-          const relationsCount = causalLinks.length;
           
+          let relationsCount = causalLinks.length;
+          // Feature 4: Detect cross-relations to chat or document
+          const sourceChatId = m.metadata?.chat_id || m.metadata?.source_id;
+          const sourceDocId = m.metadata?.document_id;
+          
+          if (sourceChatId) relationsCount++;
+          if (sourceDocId) relationsCount++;
+
           nodes.push({ 
             id: `mem-${m.id}`, 
             name: m.summary || 'Memory', 
             type: 'Memory',
             group: 'memory', 
-            val: Math.max(3, Math.min(25, 3 + hits * 2)), // Feature 1: Node Size by Importance
-            color: getHealthColor(relationsCount), // Feature 3: Orphan Detector
+            val: Math.max(3, Math.min(25, 3 + hits * 2)), 
+            color: getHealthColor(relationsCount), 
             data: {
               created: m.created_at,
               used: hits,
@@ -99,15 +117,29 @@ export default function HomeDashboard() {
               metadata: m.metadata || {}
             }
           });
-          links.push({ source: 'cat-memory', target: `mem-${m.id}` });
           
-          // Connect actual causal links if they exist
+          // Connect to its subcluster instead of main category
+          links.push({ source: subcatId, target: `mem-${m.id}` });
+          
+          // Connect causal links
           causalLinks.forEach(targetId => {
             links.push({ source: `mem-${m.id}`, target: `mem-${targetId}` });
           });
+
+          // Connect cross-cluster relations if they exist
+          if (sourceChatId && chats.some(c => c.id === sourceChatId)) {
+            links.push({ source: `chat-${sourceChatId}`, target: `mem-${m.id}` });
+          }
+          if (sourceDocId && documents.some(d => d.id === sourceDocId)) {
+            links.push({ source: `doc-${sourceDocId}`, target: `mem-${m.id}` });
+          }
         });
 
         documents.forEach(d => {
+          const type = d.metadata?.file_type || d.metadata?.type || 'Document';
+          const subcatId = `subcat-rag-${type.toLowerCase()}`;
+          registerSubcluster(subcatId, type, 'cat-rag');
+
           const chunkCount = docChunkCounts[d.id] || 0;
           
           nodes.push({ 
@@ -119,22 +151,27 @@ export default function HomeDashboard() {
             color: getHealthColor(chunkCount),
             data: {
               created: d.created_at,
-              used: 'N/A', // Documents don't track hits directly in this schema yet
+              used: 'N/A', 
               relations: chunkCount,
               metadata: d.metadata || {}
             }
           });
-          links.push({ source: 'cat-rag', target: `doc-${d.id}` });
+          
+          links.push({ source: subcatId, target: `doc-${d.id}` });
         });
 
         chats.forEach(c => {
+          const type = c.workspace_type || 'Unknown';
+          const subcatId = `subcat-chat-${type.toLowerCase()}`;
+          registerSubcluster(subcatId, type, 'cat-chat');
+
           nodes.push({ 
             id: `chat-${c.id}`, 
             name: c.title || 'Chat', 
             type: 'Conversation',
             group: 'chat', 
-            val: 8, // Standard size for chats unless we add chat metrics
-            color: '#22c55e', // Chats inherently healthy
+            val: 8, 
+            color: '#22c55e', 
             data: {
               created: c.created_at,
               used: 1,
@@ -142,7 +179,14 @@ export default function HomeDashboard() {
               relations: 1
             }
           });
-          links.push({ source: 'cat-chat', target: `chat-${c.id}` });
+          
+          links.push({ source: subcatId, target: `chat-${c.id}` });
+        });
+
+        // Add dynamic subclusters to graph
+        Object.values(dynamicSubclusters).forEach(sc => {
+          nodes.push(sc);
+          links.push({ source: sc.parent, target: sc.id });
         });
 
         setGraphData({ nodes, links });
@@ -160,7 +204,8 @@ export default function HomeDashboard() {
     switch(node.group) {
       case 'core': return '#ffffff'; // White
       case 'category': return '#94a3b8'; // Slate
-      default: return '#64748b';
+      case 'subcategory': return '#64748b'; // Darker Slate
+      default: return '#475569';
     }
   };
 
@@ -215,7 +260,7 @@ export default function HomeDashboard() {
             MAMET BRAIN
           </h1>
           <p className="text-slate-400 text-sm mt-2 tracking-[0.2em] uppercase font-mono">
-            Knowledge Observatory V2.0
+            Brain Cluster Visualization V3
           </p>
           
           <div className="mt-6 flex items-center gap-4 text-xs font-mono">
@@ -348,7 +393,7 @@ export default function HomeDashboard() {
 
         <div className="mt-auto pt-6 border-t border-white/5">
            <div className="text-[9px] text-slate-600 font-mono text-center tracking-widest uppercase">
-             MAEF Observatory V2.0
+             MAEF Observatory V3.0
            </div>
         </div>
       </div>
