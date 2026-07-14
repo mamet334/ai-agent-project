@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Mamet OS - Settings</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=Inter:wght@100..900&amp;family=JetBrains+Mono:wght@100..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .rim-light {
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-panel {
+            backdrop-filter: blur(20px);
+            background: rgba(22, 22, 26, 0.7);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #0a0a0c;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #27272a;
+            border-radius: 10px;
+        }
+        .pulse-focus:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px #0052ff;
+            animation: pulse-border 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse-border {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "tertiary-fixed": "#e4e1e5",
+                      "on-secondary-fixed-variant": "#47464b",
+                      "on-surface-variant": "#c3c5d9",
+                      "surface-container-low": "#1c1b1d",
+                      "on-surface": "#e5e1e4",
+                      "on-primary-container": "#dfe3ff",
+                      "surface-bright": "#39393b",
+                      "error": "#ffb4ab",
+                      "surface-tint": "#b7c4ff",
+                      "primary-fixed": "#dde1ff",
+                      "outline-variant": "#434656",
+                      "on-tertiary-container": "#e6e3e7",
+                      "secondary-container": "#47464b",
+                      "tertiary-container": "#666569",
+                      "primary-container": "#0052ff",
+                      "outline": "#8d90a2",
+                      "surface-variant": "#353437",
+                      "on-tertiary-fixed-variant": "#47464a",
+                      "on-secondary-container": "#b6b4b9",
+                      "secondary-fixed": "#e4e1e7",
+                      "on-primary-fixed-variant": "#0038b6",
+                      "surface": "#131315",
+                      "surface-container-high": "#2a2a2c",
+                      "inverse-primary": "#004ced",
+                      "surface-container": "#201f21",
+                      "on-error": "#690005",
+                      "on-error-container": "#ffdad6",
+                      "tertiary": "#c8c6c9",
+                      "on-secondary-fixed": "#1b1b1f",
+                      "surface-dim": "#131315",
+                      "secondary-fixed-dim": "#c8c5cb",
+                      "error-container": "#93000a",
+                      "on-tertiary": "#303033",
+                      "tertiary-fixed-dim": "#c8c6c9",
+                      "secondary": "#c8c5cb",
+                      "on-primary-fixed": "#001452",
+                      "background": "#131315",
+                      "on-secondary": "#303034",
+                      "surface-container-lowest": "#0e0e10",
+                      "inverse-surface": "#e5e1e4",
+                      "surface-container-highest": "#353437",
+                      "on-background": "#e5e1e4",
+                      "inverse-on-surface": "#313032",
+                      "primary-fixed-dim": "#b7c4ff",
+                      "primary": "#b7c4ff",
+                      "on-tertiary-fixed": "#1b1b1e",
+                      "on-primary": "#002682"
+              },
+              "borderRadius": {
+                      "DEFAULT": "1rem",
+                      "lg": "2rem",
+                      "xl": "3rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "margin-mobile": "16px",
+                      "container-max": "1440px",
+                      "gutter": "24px",
+                      "unit": "4px",
+                      "margin-desktop": "64px"
+              },
+              "fontFamily": {
+                      "label-mono": ["JetBrains Mono"],
+                      "display-lg": ["Geist"],
+                      "body-base": ["Inter"],
+                      "headline-md": ["Geist"],
+                      "body-sm": ["Inter"]
+              },
+              "fontSize": {
+                      "label-mono": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                      "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "body-base": ["16px", {"lineHeight": "24px", "letterSpacing": "0", "fontWeight": "400"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "body-sm": ["14px", {"lineHeight": "20px", "letterSpacing": "0", "fontWeight": "400"}]
+              }
+            },
+          },
+        }
+      </script>
+</head>
+<body class="bg-background text-on-surface font-body-base overflow-hidden selection:bg-primary/30">
+<!-- Global Layout Shell -->
+<div class="flex h-screen overflow-hidden">
+<!-- SideNavBar - Identity Locked from JSON -->
+<aside class="fixed left-0 top-0 h-full w-64 flex flex-col bg-surface-container-low border-r border-outline-variant z-40">
+<div class="p-6 flex flex-col gap-1">
+<div class="font-headline-md text-headline-md font-bold text-on-surface">Deep Dark Workspace</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant">Professional Plan</div>
+</div>
+<nav class="flex-1 px-4 space-y-1 custom-scrollbar overflow-y-auto mt-4">
+<div class="mb-6">
+<button class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary-container text-on-primary-container rounded-lg font-headline-md transition-all active:scale-95 hover:shadow-[0_0_20px_rgba(0,82,255,0.3)]">
+<span class="material-symbols-outlined">add</span>
+<span class="text-body-base">New Chat</span>
+</button>
+</div>
+<!-- Navigation Items -->
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-variant rounded-lg transition-colors group" href="#">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-on-surface">chat_bubble</span>
+<span class="font-body-base">Recent: UI Design</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-variant rounded-lg transition-colors group" href="#">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-on-surface">history</span>
+<span class="font-body-base">Recent: API Integration</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-variant rounded-lg transition-colors group" href="#">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-on-surface">architecture</span>
+<span class="font-body-base">Recent: Project Roadmap</span>
+</a>
+<!-- Active Tab: Settings -->
+<a class="flex items-center gap-3 px-4 py-3 bg-secondary-container text-on-secondary-container rounded-lg border-l-4 border-primary transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-primary">settings</span>
+<span class="font-body-base font-semibold">Settings</span>
+</a>
+</nav>
+<div class="p-4 border-t border-outline-variant">
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-variant rounded-lg transition-colors group" href="#">
+<span class="material-symbols-outlined">help_outline</span>
+<span class="font-body-base">Help &amp; Support</span>
+</a>
+<div class="mt-4 flex items-center gap-3 px-4 py-2">
+<div class="w-8 h-8 rounded-full overflow-hidden bg-surface-container-highest">
+<img class="w-full h-full object-cover" data-alt="A professional user profile avatar for a technology specialist, styled with sleek neon accents against a dark obsidian background to match a high-performance OS environment. The lighting is focused and cinematic, emphasizing a modern tech-expert persona in a minimalist digital workspace." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDgKSwKZ1Mk_iUmeLVgU5_Ux5P0KK7-8jig5yHjkXvLBPiWqo1t-7Sw2osIFvtva8q5yfywzdu3AeTUkp8a18iHxafKgVSfpsrpkLBKsGCRJW1dxbYyVDP-PDvmoaxj9cJJy0lpf10sRU7T0EliE0G5dr6_7-lA0QuTmRi0DnWxt50nwoOjaEzwFcfxFNxyH-eLprZRlVQnkdD3C__bJd06iTQSo2OwN2iZJlGZv-dtz3PvYaM5dEG1owsqNGYugExboxLKjwx-Zm5p"/>
+</div>
+<div class="flex flex-col">
+<span class="text-body-sm font-semibold">mametdev</span>
+<span class="text-[10px] font-label-mono text-on-surface-variant tracking-wider uppercase">Online</span>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 ml-64 overflow-y-auto relative bg-background custom-scrollbar">
+<!-- TopAppBar Placeholder/Header -->
+<header class="sticky top-0 z-50 backdrop-blur-xl bg-background/80 flex justify-between items-center px-margin-desktop h-16 w-full">
+<div class="font-headline-md text-headline-md font-black text-on-surface">Obsidian Chat</div>
+<div class="flex items-center gap-6">
+<div class="hidden lg:flex gap-8">
+<span class="text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer text-body-base">Models</span>
+<span class="text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer text-body-base">Knowledge</span>
+<span class="text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer text-body-base">Plugins</span>
+</div>
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-on-surface-variant hover:text-on-surface cursor-pointer">search</span>
+<span class="material-symbols-outlined text-on-surface-variant hover:text-on-surface cursor-pointer">notifications</span>
+<button class="px-4 py-1.5 bg-outline-variant/20 border border-outline-variant hover:bg-outline-variant/30 text-on-surface rounded-full text-body-sm transition-all">Upgrade</button>
+</div>
+</div>
+</header>
+<!-- Dashboard Content Container -->
+<div class="max-w-screen-container-max mx-auto px-margin-desktop py-12 pb-32">
+<!-- Title & Header -->
+<div class="mb-12">
+<h1 class="font-display-lg text-display-lg text-on-surface mb-2">Settings</h1>
+<p class="text-on-surface-variant text-body-base">Configure your deep-dark AI workspace and management parameters.</p>
+</div>
+<!-- Settings Grid -->
+<div class="grid grid-cols-12 gap-gutter">
+<!-- 1. AI Model Management -->
+<section class="col-span-12 lg:col-span-8 glass-panel rim-light p-gutter rounded-xl border border-outline-variant relative overflow-hidden group">
+<div class="flex items-center justify-between mb-8">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-primary-container/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">psychology</span>
+</div>
+<div>
+<h2 class="font-headline-md text-headline-md">AI Model Management</h2>
+<p class="text-body-sm text-on-surface-variant">Select and provision inference engines</p>
+</div>
+</div>
+<button class="px-5 py-2.5 bg-primary text-on-primary rounded-lg font-semibold flex items-center gap-2 hover:shadow-[0_0_15px_rgba(0,82,255,0.4)] transition-all active:scale-95">
+<span class="material-symbols-outlined text-[20px]">add_box</span>
+<span>Add Custom Model</span>
+</button>
+</div>
+<div class="space-y-6">
+<div class="flex flex-col gap-2">
+<label class="text-label-mono text-on-surface-variant uppercase tracking-widest pl-1">Primary Engine</label>
+<div class="relative group/select">
+<select class="w-full appearance-none bg-surface-container-lowest border border-outline-variant px-5 py-4 rounded-lg text-on-surface font-body-base focus:border-primary focus:ring-0 pulse-focus transition-all">
+<option value="lite">Mamet Lite - Fast &amp; Efficient</option>
+<option selected="" value="assistant">Mamet Assistant - Balanced Intelligence</option>
+<option value="engineer">Mamet Engineer - Advanced Problem Solving</option>
+</select>
+<div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant">
+<span class="material-symbols-outlined">expand_more</span>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-4">
+<div class="bg-surface-container-low border border-outline-variant/50 p-4 rounded-lg flex flex-col items-center gap-2 text-center group/card hover:border-primary/50 transition-colors">
+<span class="material-symbols-outlined text-primary-fixed-dim" style="font-variation-settings: 'FILL' 1;">speed</span>
+<span class="text-label-mono text-[10px] uppercase">Latency</span>
+<span class="text-on-surface font-semibold">120ms</span>
+</div>
+<div class="bg-surface-container-low border border-outline-variant/50 p-4 rounded-lg flex flex-col items-center gap-2 text-center group/card hover:border-primary/50 transition-colors">
+<span class="material-symbols-outlined text-primary-fixed-dim" style="font-variation-settings: 'FILL' 1;">memory</span>
+<span class="text-label-mono text-[10px] uppercase">Context</span>
+<span class="text-on-surface font-semibold">128k</span>
+</div>
+<div class="bg-surface-container-low border border-outline-variant/50 p-4 rounded-lg flex flex-col items-center gap-2 text-center group/card hover:border-primary/50 transition-colors">
+<span class="material-symbols-outlined text-primary-fixed-dim" style="font-variation-settings: 'FILL' 1;">token</span>
+<span class="text-label-mono text-[10px] uppercase">Cost</span>
+<span class="text-on-surface font-semibold">$0.02/1k</span>
+</div>
+</div>
+</div>
+</section>
+<!-- 2. API Key Management (Multi-key) -->
+<section class="col-span-12 lg:col-span-4 glass-panel rim-light p-gutter rounded-xl border border-outline-variant flex flex-col">
+<div class="flex items-center gap-3 mb-8">
+<div class="w-10 h-10 rounded-lg bg-secondary-container/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-on-secondary-container">key</span>
+</div>
+<div>
+<h2 class="font-headline-md text-headline-md">API Key Management</h2>
+<p class="text-body-sm text-on-surface-variant">Multi-key API AI Access</p>
+</div>
+</div>
+<div class="space-y-4 flex-1" id="key-container">
+<div class="flex items-center gap-2">
+<div class="relative flex-1">
+<input class="w-full bg-surface-container-lowest border border-outline-variant px-4 py-3 rounded-lg text-on-surface font-label-mono focus:border-primary focus:ring-0 pulse-focus transition-all" placeholder="Enter OpenRouter API Key" type="password" value="sk-or-v1-88273...9281"/>
+<div class="absolute right-3 top-1/2 -translate-y-1/2 flex gap-2">
+<span class="material-symbols-outlined text-on-surface-variant hover:text-on-surface cursor-pointer text-[18px]">visibility</span>
+</div>
+</div>
+<button class="w-12 h-12 flex items-center justify-center bg-surface-container-highest border border-outline-variant hover:border-primary text-primary rounded-lg transition-all active:scale-90" onclick="addKeyRow()">
+<span class="material-symbols-outlined">add</span>
+</button>
+</div>
+</div>
+<div class="mt-6 p-4 rounded-lg bg-primary-container/5 border border-primary/20">
+<p class="text-body-sm text-primary/80 leading-relaxed italic">"Enabling multi-key support allows the system to intelligently load-balance requests across different quotas."</p>
+</div>
+</section>
+<!-- 3. Data Management (RAG & Backup) -->
+<section class="col-span-12 glass-panel rim-light p-gutter rounded-xl border border-outline-variant">
+<div class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-tertiary-container/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-tertiary">database</span>
+</div>
+<div>
+<h2 class="font-headline-md text-headline-md">Data &amp; RAG Management</h2>
+<p class="text-body-sm text-on-surface-variant">Maintain your local knowledge base and system backups</p>
+</div>
+</div>
+<button class="px-6 py-2.5 bg-secondary text-on-secondary rounded-lg font-semibold flex items-center gap-2 hover:bg-secondary-fixed transition-all active:scale-95 self-start md:self-center shadow-lg">
+<span class="material-symbols-outlined text-[20px]">cloud_upload</span>
+<span>Initiate Backup</span>
+</button>
+</div>
+<!-- RAG Content Table -->
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant overflow-hidden">
+<div class="px-6 py-4 border-b border-outline-variant flex items-center justify-between bg-surface-container">
+<span class="text-label-mono text-[11px] uppercase tracking-widest text-on-surface-variant">Uploaded Reference Files</span>
+<div class="flex gap-4">
+<span class="text-label-mono text-[11px] uppercase text-primary">3 Files Active</span>
+<span class="text-label-mono text-[11px] uppercase text-on-surface-variant">2.4 MB Total</span>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="text-label-mono text-[11px] text-on-surface-variant/70 border-b border-outline-variant">
+<th class="px-6 py-4 font-medium uppercase">File Name</th>
+<th class="px-6 py-4 font-medium uppercase">Type</th>
+<th class="px-6 py-4 font-medium uppercase text-center">Status</th>
+<th class="px-6 py-4 font-medium uppercase text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/30">
+<tr class="hover:bg-surface-variant/30 transition-colors">
+<td class="px-6 py-4 text-body-sm font-semibold text-on-surface flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-[20px]">description</span>
+                                                mamet_os_manual_v2.pdf
+                                            </td>
+<td class="px-6 py-4 text-body-sm text-on-surface-variant">PDF Document</td>
+<td class="px-6 py-4 text-center">
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-label-mono border border-primary/20">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                                                    INDEXED
+                                                </span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="p-2 hover:bg-surface-container-high rounded-full transition-all text-on-surface-variant hover:text-error">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-variant/30 transition-colors">
+<td class="px-6 py-4 text-body-sm font-semibold text-on-surface flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-[20px]">code</span>
+                                                api_definitions.json
+                                            </td>
+<td class="px-6 py-4 text-body-sm text-on-surface-variant">JSON Data</td>
+<td class="px-6 py-4 text-center">
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-label-mono border border-primary/20">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                                                    INDEXED
+                                                </span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="p-2 hover:bg-surface-container-high rounded-full transition-all text-on-surface-variant hover:text-error">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-variant/30 transition-colors">
+<td class="px-6 py-4 text-body-sm font-semibold text-on-surface flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-[20px]">article</span>
+                                                system_architecture.txt
+                                            </td>
+<td class="px-6 py-4 text-body-sm text-on-surface-variant">Plain Text</td>
+<td class="px-6 py-4 text-center">
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-label-mono border border-primary/20">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                                                    INDEXED
+                                                </span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="p-2 hover:bg-surface-container-high rounded-full transition-all text-on-surface-variant hover:text-error">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="px-6 py-4 bg-surface-container/30 text-center">
+<button class="text-label-mono text-[11px] text-primary hover:underline transition-all">View All Reference Files</button>
+</div>
+</div>
+</section>
+</div>
+<!-- Footer Watermark -->
+<footer class="mt-20 flex flex-col items-center justify-center gap-2 opacity-30 group hover:opacity-100 transition-opacity">
+<div class="w-12 h-[1px] bg-gradient-to-r from-transparent via-on-surface-variant to-transparent mb-4"></div>
+<span class="font-label-mono text-[10px] tracking-[0.4em] uppercase text-on-surface-variant">@2026 mametdev</span>
+<span class="text-[10px] text-on-surface-variant italic">Refined Minimalist Obsidian Interface</span>
+</footer>
+</div>
+</main>
+</div>
+<script>
+        function addKeyRow() {
+            const container = document.getElementById('key-container');
+            const newRow = document.createElement('div');
+            newRow.className = 'flex items-center gap-2 animate-in fade-in slide-in-from-top-4 duration-300';
+            newRow.innerHTML = `
+                <div class="relative flex-1">
+                    <input type="password" class="w-full bg-surface-container-lowest border border-outline-variant px-4 py-3 rounded-lg text-on-surface font-label-mono focus:border-primary focus:ring-0 pulse-focus transition-all" placeholder="Enter Secondary API Key">
+                </div>
+                <button onclick="this.parentElement.remove()" class="w-12 h-12 flex items-center justify-center bg-surface-container-highest border border-outline-variant hover:border-error text-error/60 hover:text-error rounded-lg transition-all">
+                    <span class="material-symbols-outlined">delete</span>
+                </button>
+            `;
+            container.appendChild(newRow);
+        }
+
+        // Atmospheric Micro-interaction for Glass Panels
+        document.querySelectorAll('.glass-panel').forEach(panel => {
+            panel.addEventListener('mousemove', (e) => {
+                const rect = panel.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                panel.style.setProperty('--mouse-x', `${x}px`);
+                panel.style.setProperty('--mouse-y', `${y}px`);
+            });
+        });
+    </script>
+<div class="fixed inset-0 z-[100] flex items-center justify-center p-4" id="custom-model-modal">
+<div class="absolute inset-0 bg-background/60 backdrop-blur-md"></div>
+<div class="relative w-full max-w-lg glass-panel rim-light border border-outline-variant rounded-xl p-gutter shadow-2xl animate-in fade-in zoom-in duration-300">
+<div class="flex items-center justify-between mb-6">
+<h2 class="font-headline-md text-headline-md text-on-surface">Tambah Model Kustom</h2>
+<button class="p-2 hover:bg-surface-variant rounded-full transition-colors text-on-surface-variant hover:text-on-surface" onclick="document.getElementById('custom-model-modal').remove()">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<div class="space-y-6">
+<div class="flex flex-col gap-2">
+<label class="text-label-mono text-on-surface-variant uppercase tracking-widest pl-1">Nama Model</label>
+<input class="w-full bg-surface-container-lowest border border-outline-variant px-4 py-3 rounded-lg text-on-surface focus:border-primary focus:ring-0 pulse-focus transition-all" placeholder="e.g. My Custom Claude" type="text"/>
+</div>
+<div class="flex flex-col gap-2">
+<label class="text-label-mono text-on-surface-variant uppercase tracking-widest pl-1">Model ID</label>
+<input class="w-full bg-surface-container-lowest border border-outline-variant px-4 py-3 rounded-lg text-on-surface font-label-mono focus:border-primary focus:ring-0 pulse-focus transition-all" placeholder="e.g. anthropic/claude-3-opus" type="text"/>
+</div>
+<div class="flex flex-col gap-2">
+<label class="text-label-mono text-on-surface-variant uppercase tracking-widest pl-1">Base URL (Optional)</label>
+<input class="w-full bg-surface-container-lowest border border-outline-variant px-4 py-3 rounded-lg text-on-surface focus:border-primary focus:ring-0 pulse-focus transition-all" placeholder="https://api.your-provider.com/v1" type="text"/>
+</div>
+<div class="flex flex-col gap-3">
+<label class="text-label-mono text-on-surface-variant uppercase tracking-widest pl-1">Model Capabilities</label>
+<div class="flex gap-3">
+<label class="flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border border-outline-variant bg-surface-container-low cursor-pointer hover:border-primary/50 transition-all">
+<input checked="" class="hidden" type="checkbox"/>
+<span class="material-symbols-outlined text-primary text-[20px]">subject</span>
+<span class="text-body-sm">Text</span>
+</label>
+<label class="flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border border-outline-variant bg-surface-container-low cursor-pointer hover:border-primary/50 transition-all">
+<input class="hidden" type="checkbox"/>
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">image</span>
+<span class="text-body-sm">Image</span>
+</label>
+<label class="flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border border-outline-variant bg-surface-container-low cursor-pointer hover:border-primary/50 transition-all">
+<input class="hidden" type="checkbox"/>
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">code</span>
+<span class="text-body-sm">Code</span>
+</label>
+</div>
+</div>
+</div>
+<div class="mt-8 flex gap-4">
+<button class="flex-1 py-3 bg-surface-container-highest text-on-surface rounded-lg font-semibold hover:bg-surface-variant transition-all active:scale-95" onclick="document.getElementById('custom-model-modal').remove()">Batal</button>
+<button class="flex-1 py-3 bg-primary text-on-primary rounded-lg font-semibold hover:shadow-[0_0_20px_rgba(0,82,255,0.4)] transition-all active:scale-95">Simpan Model</button>
+</div>
+</div>
+</div></body></html>

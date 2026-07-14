@@ -10,7 +10,7 @@ export default function ApplicationContainer() {
   }, [applicationManager]);
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden relative bg-slate-950">
+    <main className="flex-1 ml-16 h-full overflow-hidden relative bg-background custom-scrollbar">
       {appState.apps.map(app => {
         const isActive = appState.activeAppId === app.id;
         const Component = app.renderComponent;
@@ -20,12 +20,12 @@ export default function ApplicationContainer() {
         // This ensures the React component tree and its local state (like Chat bubbles or open files) remains alive.
         return (
           <div key={app.id} className={`absolute inset-0 ${isActive ? 'flex' : 'hidden'} flex-col h-full w-full`}>
-            <React.Suspense fallback={<div className="flex h-full w-full items-center justify-center text-emerald-500 text-xs font-mono">Loading OS Module...</div>}>
+            <React.Suspense fallback={<div className="flex h-full w-full items-center justify-center text-primary text-[10px] font-label-mono uppercase tracking-widest">Loading OS Module...</div>}>
               <Component />
             </React.Suspense>
           </div>
         );
       })}
-    </div>
+    </main>
   );
 }

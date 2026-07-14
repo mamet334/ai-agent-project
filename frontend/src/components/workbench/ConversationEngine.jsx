@@ -39,12 +39,19 @@ export default function ConversationEngine({ sessionId }) {
   const [currentChatId, setCurrentChatId] = useState(null);
   const messagesEndRef = useRef(null);
 
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
   // Auto-scroll
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
+  
+  // Update browser window layout when chat history toggles
+  useEffect(() => {
+     window.dispatchEvent(new Event('resize'));
+  }, [isSidebarOpen]);
 
   // =============================================
   // PERSISTENSI CHAT KE SUPABASE
@@ -98,6 +105,9 @@ export default function ConversationEngine({ sessionId }) {
     if (error) { console.error(error); return; }
     setMessages(data.messages || []);
     setCurrentChatId(chatId);
+    if (window.innerWidth < 768) {
+       setIsSidebarOpen(false);
+    }
   };
 
   // Handle Event Flow (Integrasi UI Event ke Right Workbench)
@@ -465,22 +475,37 @@ export default function ConversationEngine({ sessionId }) {
   };
 
   return (
-    <div className="flex h-full bg-slate-950">
-      {/* Sidebar Riwayat Chat */}
-      <ChatHistory 
-        onSelectChat={handleLoadChat} 
-        onNewChat={handleNewChat} 
-        activeChatId={currentChatId} 
-      />
+    <div className="flex h-full bg-background font-body-base text-on-surface">
+      {/* Sidebar Riwayat Chat (Toggleable) */}
+      <div className={`transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'w-0 overflow-hidden'}`}>
+        <ChatHistory 
+          onSelectChat={handleLoadChat} 
+          onNewChat={handleNewChat} 
+          activeChatId={currentChatId} 
+          collapsed={false}
+        />
+      </div>
       
       {/* Area Chat Utama */}
-      <div className="flex-1 flex flex-col">
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar relative">
+      <div className="flex-1 flex flex-col relative overflow-hidden">
+        
+        {/* Top Toggle Button for Sidebar */}
+        <div className="absolute top-4 left-4 z-50">
+          <button 
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="w-10 h-10 flex items-center justify-center bg-surface-container-low border border-outline-variant rounded-xl hover:bg-surface-variant text-on-surface transition-all shadow-sm"
+            title="Toggle Chat History"
+          >
+            <span className="material-symbols-outlined text-[20px]">{isSidebarOpen ? 'keyboard_double_arrow_left' : 'menu'}</span>
+          </button>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar relative z-10">
           {messages.length === 0 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center opacity-30 pointer-events-none">
-              <Terminal className="w-16 h-16 mb-4" />
-              <div className="font-mono text-sm tracking-widest text-emerald-500">CONVERSATION ENGINE</div>
-              <div className="text-xs text-slate-500 mt-2">Waiting for input...</div>
+              <span className="material-symbols-outlined text-[64px] mb-4 text-primary">chat_bubble</span>
+              <div className="font-headline-md text-headline-md tracking-widest text-primary">CONVERSATION ENGINE</div>
+              <div className="text-body-sm text-on-surface-variant mt-2">Waiting for input...</div>
             </div>
           )}
 
@@ -490,16 +515,16 @@ export default function ConversationEngine({ sessionId }) {
             
             return (
               <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`relative group max-w-[85%] lg:max-w-[75%] rounded-2xl px-5 py-4 ${m.role === 'user' ? 'bg-emerald-600/20 text-emerald-100 border border-emerald-500/30' : 'bg-slate-900 text-slate-300 border border-slate-800'}`}>
-                  <div className="text-sm font-sans leading-relaxed">
+                <div className={`relative group max-w-[85%] lg:max-w-[75%] rounded-2xl px-5 py-4 ${m.role === 'user' ? 'bg-primary-container/20 text-on-surface border border-primary/30' : 'glass-panel rim-light text-on-surface border border-outline-variant'}`}>
+                  <div className="text-body-base leading-relaxed">
                     {/* Deep Link 1: AI Reasoning / Thinking */}
                     {parsed.thinking && (
                       <div 
                         onClick={() => openLifecycleInspector('AI_REASONING', parsed.thinking)}
-                        className="mb-3 inline-flex items-center gap-2 px-2.5 py-1.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-mono rounded-md cursor-pointer hover:bg-indigo-500/20 hover:text-indigo-300 transition-all shadow-sm"
+                        className="mb-3 inline-flex items-center gap-2 px-3 py-2 bg-surface-container border border-outline-variant text-on-surface-variant text-body-sm rounded-lg cursor-pointer hover:bg-surface-variant hover:text-on-surface transition-all shadow-sm"
                         title="Open AI thought trace in Right Workbench"
                       >
-                        <Terminal className="w-3.5 h-3.5" />
+                        <span className="material-symbols-outlined text-[16px]">psychology</span>
                         [Deep Link] View AI Reasoning Trace
                       </div>
                     )}
@@ -507,15 +532,14 @@ export default function ConversationEngine({ sessionId }) {
                     {/* Deep Link 2: System & Execution Reports */}
                     {(() => {
                       if (!displayText) return null;
-                      // Pisahkan teks berdasarkan pola [OS EXECUTION REPORT] atau [SYSTEM: ...]
                       const parts = displayText.split(/(\[OS EXECUTION REPORT\]|\[SYSTEM:[^\]]+\])/g);
                       
                       return parts.map((part, i) => {
                         if (part === '[OS EXECUTION REPORT]') {
                            return (
-                             <div key={i} className="my-2 block w-max items-center px-3 py-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold font-mono rounded cursor-pointer hover:bg-emerald-500/20 transition-colors shadow-sm"
+                             <div key={i} className="my-2 block w-max items-center px-3 py-2 bg-primary/10 border border-primary/30 text-primary text-body-sm font-bold rounded-lg cursor-pointer hover:bg-primary/20 transition-colors shadow-sm"
                                   onClick={() => openLifecycleInspector('OS_EXECUTION', displayText)}>
-                                <Activity className="w-3.5 h-3.5 inline-block mr-2 -mt-0.5" />
+                                <span className="material-symbols-outlined inline-block mr-2 text-[16px] align-text-bottom">terminal</span>
                                 OS EXECUTION REPORT (Click to Inspect)
                              </div>
                            );
@@ -524,9 +548,9 @@ export default function ConversationEngine({ sessionId }) {
                         if (part.startsWith('[SYSTEM:')) {
                            const title = part.replace('[SYSTEM: ', '').replace(']', '');
                            return (
-                             <div key={i} className="my-2 block w-max items-center px-3 py-2 bg-slate-800 border border-slate-700 text-slate-300 text-xs font-bold font-mono rounded cursor-pointer hover:bg-slate-700 transition-colors shadow-sm"
+                             <div key={i} className="my-2 block w-max items-center px-3 py-2 bg-surface-container-high border border-outline-variant text-on-surface-variant text-body-sm font-bold rounded-lg cursor-pointer hover:bg-surface-variant transition-colors shadow-sm"
                                   onClick={() => openLifecycleInspector(title, displayText)}>
-                                <Terminal className="w-3.5 h-3.5 inline-block mr-2 -mt-0.5" />
+                                <span className="material-symbols-outlined inline-block mr-2 text-[16px] align-text-bottom">settings_system_daydream</span>
                                 {title} (Inspect Context)
                              </div>
                            );
@@ -536,20 +560,20 @@ export default function ConversationEngine({ sessionId }) {
                       });
                     })()}
                     
-                    {m.isStreaming && parsed.isThinkingComplete && <span className="animate-pulse"> ▍</span>}
+                    {m.isStreaming && parsed.isThinkingComplete && <span className="animate-pulse text-primary"> ▍</span>}
                   </div>
                   
                   {/* Tombol Copy */}
                   {m.role === 'model' && !m.isStreaming && displayText && (
                     <button
                       onClick={() => handleCopy(displayText, idx)}
-                      className="absolute top-2 right-2 p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute top-2 right-2 p-1.5 rounded-lg bg-surface-container hover:bg-surface-variant border border-outline-variant opacity-0 group-hover:opacity-100 transition-opacity"
                       title="Salin ke clipboard"
                     >
                       {copiedIndex === idx ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="material-symbols-outlined text-[16px] text-primary">check</span>
                       ) : (
-                        <Copy className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="material-symbols-outlined text-[16px] text-on-surface-variant">content_copy</span>
                       )}
                     </button>
                   )}
@@ -559,8 +583,8 @@ export default function ConversationEngine({ sessionId }) {
           })}
           {isLoading && messages[messages.length - 1]?.role !== 'model' && (
              <div className="flex justify-start">
-              <div className="bg-slate-900 px-5 py-3 rounded-2xl border border-slate-800 text-slate-400 text-xs flex items-center gap-3">
-                <Loader2 className="w-4 h-4 animate-spin text-emerald-500" /> Awaiting Intent Dispatch...
+              <div className="glass-panel rim-light px-5 py-3 rounded-2xl border border-outline-variant text-on-surface-variant text-body-sm flex items-center gap-3">
+                <Loader2 className="w-4 h-4 animate-spin text-primary" /> Awaiting Intent Dispatch...
               </div>
             </div>
           )}
@@ -569,30 +593,35 @@ export default function ConversationEngine({ sessionId }) {
 
         {/* Folder Selector — hanya untuk workspace Engineer */}
         {workspaceManager?.activeWorkspaceId === 'ws-engineer' && (
-          <div className="px-4 py-2 border-t border-slate-800">
+          <div className="px-4 py-2 border-t border-outline-variant bg-surface-container-low z-10">
             <FolderSelector onSelect={(path) => setSelectedFolder(path)} currentPath={selectedFolder} showLabel={true} />
           </div>
         )}
 
         {/* Input Area */}
-        <div className="p-4 bg-slate-950 border-t border-slate-900 shrink-0">
-          <form onSubmit={handleSend} className="max-w-4xl mx-auto relative flex items-end gap-2 bg-slate-900 border border-slate-800 rounded-xl p-2 focus-within:border-emerald-500/50 transition-colors shadow-lg">
+        <div className="p-4 md:p-6 bg-background z-10">
+          <form onSubmit={handleSend} className="max-w-4xl mx-auto relative flex items-end gap-2 bg-surface-container-lowest border border-outline-variant rounded-2xl p-2 focus-within:border-primary transition-all shadow-lg pulse-focus">
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(e, null); } }}
               placeholder="Ketik instruksi atau mulai percakapan dengan OS..."
-              className="flex-1 max-h-48 min-h-[44px] bg-transparent resize-none py-2.5 px-3 text-sm text-slate-200 placeholder-slate-500 focus:outline-none custom-scrollbar"
+              className="flex-1 max-h-48 min-h-[44px] bg-transparent resize-none py-3 px-4 text-body-base text-on-surface placeholder-on-surface-variant focus:outline-none custom-scrollbar"
               rows="1"
             />
-            <button type="submit" disabled={!input.trim() || isLoading} className="p-3 mb-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:hover:bg-emerald-600 text-white transition-all shadow-md">
-              <Send className="w-4 h-4" />
+            <button type="submit" disabled={!input.trim() || isLoading} className="p-3 mb-1 mr-1 rounded-xl bg-primary hover:bg-primary-fixed text-on-primary disabled:opacity-50 disabled:hover:bg-primary transition-all shadow-md">
+              <span className="material-symbols-outlined text-[20px]">send</span>
             </button>
           </form>
-          <div className="text-center mt-2 text-[10px] text-slate-500 font-mono">
+          <div className="text-center mt-3 text-label-mono text-[10px] text-on-surface-variant tracking-widest uppercase">
             MAEF Conversation Engine v2.0 • Workspace: {workspaceManager.activeWorkspaceId}
           </div>
         </div>
+
+        {/* Atmospheric Background Glow */}
+        <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-primary/5 blur-[120px] rounded-full pointer-events-none z-0"></div>
+        <div className="absolute -top-32 -left-32 w-96 h-96 bg-secondary/5 blur-[120px] rounded-full pointer-events-none z-0"></div>
+
       </div>
     </div>
   );

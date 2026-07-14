@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Mamet OS - Lite Model</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Geist:wght@600;700;800;900&amp;family=JetBrains+Mono:wght@500&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;family=Inter:wght@100..900&amp;family=JetBrains+Mono:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            backdrop-filter: blur(20px);
+            background: rgba(22, 22, 26, 0.7);
+            border: 1px solid rgba(39, 39, 42, 1);
+        }
+        .rim-light {
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .message-glow {
+            box-shadow: 0px 20px 40px rgba(0, 82, 255, 0.05);
+        }
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0a0a0c;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #27272a;
+            border-radius: 10px;
+        }
+        @keyframes pulse-soft {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .animate-pulse-soft {
+            animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-fixed": "#e4e1e5",
+                        "surface-dim": "#131315",
+                        "on-secondary": "#303034",
+                        "surface-container-highest": "#353437",
+                        "on-tertiary": "#303033",
+                        "surface-container-high": "#2a2a2c",
+                        "on-primary-container": "#dfe3ff",
+                        "inverse-on-surface": "#313032",
+                        "surface": "#131315",
+                        "secondary": "#c8c5cb",
+                        "inverse-primary": "#004ced",
+                        "on-secondary-fixed": "#1b1b1f",
+                        "surface-bright": "#39393b",
+                        "on-surface": "#e5e1e4",
+                        "tertiary-container": "#666569",
+                        "on-primary": "#002682",
+                        "outline": "#8d90a2",
+                        "surface-tint": "#b7c4ff",
+                        "on-error": "#690005",
+                        "inverse-surface": "#e5e1e4",
+                        "on-secondary-fixed-variant": "#47464b",
+                        "error-container": "#93000a",
+                        "on-tertiary-fixed": "#1b1b1e",
+                        "primary-container": "#0052ff",
+                        "error": "#ffb4ab",
+                        "surface-container": "#201f21",
+                        "outline-variant": "#434656",
+                        "on-tertiary-container": "#e6e3e7",
+                        "surface-container-low": "#1c1b1d",
+                        "on-secondary-container": "#b6b4b9",
+                        "primary": "#b7c4ff",
+                        "background": "#131315",
+                        "tertiary": "#c8c6c9",
+                        "on-tertiary-fixed-variant": "#47464a",
+                        "surface-variant": "#353437",
+                        "primary-fixed-dim": "#b7c4ff",
+                        "secondary-fixed": "#e4e1e7",
+                        "on-background": "#e5e1e4",
+                        "on-surface-variant": "#c3c5d9",
+                        "on-primary-fixed": "#001452",
+                        "primary-fixed": "#dde1ff",
+                        "on-primary-fixed-variant": "#0038b6",
+                        "tertiary-fixed-dim": "#c8c6c9",
+                        "secondary-fixed-dim": "#c8c5cb",
+                        "secondary-container": "#47464b",
+                        "on-error-container": "#ffdad6",
+                        "surface-container-lowest": "#0e0e10"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "gutter": "24px",
+                        "margin-mobile": "16px",
+                        "container-max": "1440px",
+                        "margin-desktop": "64px"
+                    },
+                    "fontFamily": {
+                        "display-lg-mobile": ["Geist"],
+                        "headline-md": ["Geist"],
+                        "display-lg": ["Geist"],
+                        "body-sm": ["Inter"],
+                        "body-base": ["Inter"],
+                        "label-mono": ["JetBrains Mono"]
+                    },
+                    "fontSize": {
+                        "display-lg-mobile": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-sm": ["14px", {"lineHeight": "20px", "letterSpacing": "0", "fontWeight": "400"}],
+                        "body-base": ["16px", {"lineHeight": "24px", "letterSpacing": "0", "fontWeight": "400"}],
+                        "label-mono": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-base antialiased selection:bg-primary-container selection:text-white">
+<!-- Sidebar Component (Deep Dark Workspace) -->
+<aside class="fixed left-0 top-0 h-screen w-64 flex flex-col bg-surface-container-low border-r border-outline-variant z-40">
+<!-- Header -->
+<div class="p-6 border-b border-outline-variant/30">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center shadow-lg">
+<span class="material-symbols-outlined text-white" style="font-variation-settings: 'FILL' 1;">fluid_med</span>
+</div>
+<div>
+<h1 class="font-headline-md text-[18px] font-bold text-on-surface leading-tight">Deep Dark</h1>
+<p class="font-label-mono text-[10px] uppercase tracking-widest text-primary-fixed-dim">Professional Plan</p>
+</div>
+</div>
+</div>
+<!-- Navigation Clusters -->
+<nav class="flex-1 px-3 py-6 space-y-8 overflow-y-auto">
+<!-- Main Actions -->
+<div class="space-y-1">
+<button class="flex items-center gap-3 px-4 py-3 bg-secondary-container text-on-secondary-container rounded-lg border-l-4 border-primary w-full text-left transition-all duration-200 active:scale-95 group">
+<span class="material-symbols-outlined text-primary group-hover:scale-110 transition-transform">add</span>
+<span class="font-body-base">New Chat</span>
+</button>
+</div>
+<!-- Recent Activity -->
+<div>
+<p class="px-4 font-label-mono text-[11px] text-outline uppercase tracking-wider mb-3">Recents</p>
+<div class="space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-variant rounded-lg transition-colors group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-primary transition-colors">chat_bubble</span>
+<span class="font-body-base truncate">UI Design</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-variant rounded-lg transition-colors group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-primary transition-colors">history</span>
+<span class="font-body-base truncate">API Integration</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-variant rounded-lg transition-colors group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-primary transition-colors">architecture</span>
+<span class="font-body-base truncate">Project Roadmap</span>
+</a>
+</div>
+</div>
+</nav>
+<!-- Footer Actions -->
+<div class="p-4 border-t border-outline-variant/30 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-variant rounded-lg transition-colors" href="#">
+<span class="material-symbols-outlined">help_outline</span>
+<span class="font-body-base">Help &amp; Support</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-variant rounded-lg transition-colors" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-body-base">Settings</span>
+</a>
+<div class="mt-4 pt-4 flex items-center gap-3 px-4">
+<div class="w-8 h-8 rounded-full overflow-hidden border border-primary/20">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a software engineer in a dimly lit studio, focusing on high-contrast lighting with cool blue and deep charcoal tones. The subject has a neutral, intelligent expression. The aesthetic is clean, sharp, and high-performance, reflecting a premium technical workspace environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDhA-AEdctAuxdskZfDfrc8R--ol3cJWlDS0YWLxnOIHupWXpJCG4If43VlZCC2aBPD0vJlOmUf1NGfB19zdD8dNJxTsb_RdoOALzHp-eyM1YtO1wrdpPU6WXNoJlXUMEFc5z6n7-lP1gCZrv5lj9vy5FL68j2ss_CFUiqgbEYFcY4dUZ64HFFhzUQaR-OHNiJe1sV5sjcZg_e9DKyBJpoXxzNi5fqNKQsDFbsMIji0svNnGXFmolVjA09h1HxMXb1zU8FctmEtKDIZ"/>
+</div>
+<div class="flex flex-col">
+<span class="font-label-mono text-[12px] text-on-surface">Alex Dev</span>
+<span class="font-label-mono text-[10px] text-outline uppercase">Active Now</span>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content Shell -->
+<main class="ml-64 min-h-screen flex flex-col relative overflow-hidden">
+<!-- Subtle Ambient Background Animation -->
+
+<!-- Top Navigation Bar -->
+<header class="sticky top-0 z-50 flex justify-between items-center px-margin-desktop h-16 w-full backdrop-blur-xl bg-background/80 border-b border-outline-variant/10">
+<div class="flex items-center gap-6">
+<h2 class="font-headline-md text-headline-md font-black text-on-surface tracking-tighter">Obsidian Chat</h2>
+<nav class="hidden md:flex gap-8">
+<a class="text-on-surface-variant hover:text-on-surface font-label-mono text-[13px] uppercase tracking-widest transition-colors" href="#">Models</a>
+<a class="text-primary font-bold border-b-2 border-primary pb-1 font-label-mono text-[13px] uppercase tracking-widest" href="#">Lite Interface</a>
+<a class="text-on-surface-variant hover:text-on-surface font-label-mono text-[13px] uppercase tracking-widest transition-colors" href="#">Knowledge</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 bg-surface-container rounded-full px-4 py-1.5 border border-outline-variant/30">
+<span class="w-2 h-2 rounded-full bg-primary-container animate-pulse-soft"></span>
+<span class="font-label-mono text-[11px] text-on-surface-variant uppercase tracking-tighter">RAG Context Loaded</span>
+</div>
+<button class="bg-primary-container text-white px-5 py-2 rounded-full font-label-mono text-[12px] uppercase font-bold hover:shadow-[0_0_15px_rgba(0,82,255,0.4)] transition-all active:scale-95">Upgrade</button>
+</div>
+</header>
+<!-- Chat Canvas -->
+<div class="flex-1 max-w-4xl mx-auto w-full px-margin-mobile md:px-0 py-12 flex flex-col gap-8 relative">
+<!-- Context Header Badge -->
+<div class="flex justify-center sticky top-20 z-30">
+<div class="glass-panel rim-light px-6 py-2 rounded-full flex items-center gap-3">
+<span class="material-symbols-outlined text-[18px] text-primary" style="font-variation-settings: 'FILL' 1;">bolt</span>
+<span class="font-label-mono text-[12px] text-on-surface font-medium uppercase tracking-widest">Lite Mode Active</span>
+<div class="h-4 w-px bg-outline-variant"></div>
+<span class="font-label-mono text-[11px] text-outline">Optimized for Speed</span>
+</div>
+</div>
+<!-- Conversation History -->
+<div class="space-y-10 mb-32">
+<!-- User Message -->
+<div class="flex flex-col items-end gap-3 group">
+<div class="flex items-center gap-2 mb-1 px-4">
+<span class="font-label-mono text-[10px] text-outline uppercase tracking-tighter">User • 10:42 AM</span>
+</div>
+<div class="max-w-[85%] glass-panel rim-light px-6 py-4 rounded-2xl rounded-tr-none text-on-surface message-glow">
+<p class="font-body-base leading-relaxed text-on-surface-variant">
+                            Could you help me optimize this React component for rendering large datasets? I need it to stay performant while maintaining the glassmorphism aesthetic of the Mamet Ecosystem.
+                        </p>
+</div>
+</div>
+<!-- Model Message -->
+<div class="flex flex-col items-start gap-3">
+<div class="flex items-center gap-2 mb-1 px-4">
+<span class="material-symbols-outlined text-primary text-[16px]" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
+<span class="font-label-mono text-[10px] text-primary uppercase tracking-tighter">Lite Model • Active</span>
+</div>
+<div class="max-w-[90%] bg-surface-container-high border border-outline-variant/30 px-6 py-5 rounded-2xl rounded-tl-none text-on-surface-variant shadow-inner">
+<p class="font-body-base leading-relaxed mb-4">
+                            Based on your **RAG Context (Project: Obsidian-UI)**, I suggest implementing a virtualized list strategy coupled with CSS variables for the glassmorphism effects. This minimizes re-paints while keeping the high-fidelity visuals.
+                        </p>
+<div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/20 font-label-mono text-[13px] text-primary-fixed-dim leading-6">
+<code>
+                                const VirtualList = memo(({ items }) =&gt; {<br/>
+                                  // Use windowing for 10k+ rows<br/>
+                                  return <list height="{600}" itemcount="{items.length}"></list>;<br/>
+                                });
+                            </code>
+</div>
+<div class="mt-4 flex gap-4">
+<button class="flex items-center gap-2 text-outline hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[18px]">content_copy</span>
+<span class="font-label-mono text-[11px] uppercase">Copy</span>
+</button>
+<button class="flex items-center gap-2 text-outline hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[18px]">refresh</span>
+<span class="font-label-mono text-[11px] uppercase">Retry</span>
+</button>
+</div>
+</div>
+</div>
+<!-- User Message -->
+<div class="flex flex-col items-end gap-3 group">
+<div class="flex items-center gap-2 mb-1 px-4">
+<span class="font-label-mono text-[10px] text-outline uppercase tracking-tighter">User • 10:45 AM</span>
+</div>
+<div class="max-w-[85%] glass-panel rim-light px-6 py-4 rounded-2xl rounded-tr-none text-on-surface message-glow">
+<p class="font-body-base leading-relaxed text-on-surface-variant">
+                            Perfect. How do I handle the backdrop-blur performance on mobile browsers using this approach?
+                        </p>
+</div>
+</div>
+</div>
+</div>
+<!-- Sticky Input Area -->
+<div class="fixed bottom-0 left-64 right-0 p-8 flex flex-col items-center pointer-events-none">
+<!-- Reference Indicator -->
+<div class="mb-4 translate-y-2 pointer-events-auto">
+<div class="bg-surface-container-low border border-outline-variant/30 px-3 py-1 rounded-full flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px] text-primary">attach_file_add</span>
+<span class="font-label-mono text-[10px] text-on-surface-variant uppercase tracking-widest">Type '/' to reference workspace files</span>
+</div>
+</div>
+<div class="w-full max-w-3xl glass-panel rim-light rounded-2xl p-2 flex items-center gap-2 pointer-events-auto shadow-2xl">
+<button class="p-3 text-outline hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">add_circle</span>
+</button>
+<input class="flex-1 bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-outline font-body-base px-2" placeholder="Send a message to Lite Model..." type="text"/>
+<div class="flex items-center gap-1 pr-1">
+<button class="p-3 text-outline hover:text-on-surface transition-colors group">
+<span class="material-symbols-outlined group-active:scale-90 transition-transform">mic</span>
+</button>
+<button class="bg-primary-container text-white p-3 rounded-xl hover:shadow-[0_0_15px_rgba(0,82,255,0.4)] transition-all active:scale-95">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">send</span>
+</button>
+</div>
+</div>
+<!-- Brand Footer -->
+<footer class="mt-4 opacity-40">
+<p class="font-label-mono text-[10px] uppercase tracking-[0.3em] text-outline">@2026 mametdev ecosystem</p>
+</footer>
+</div>
+</main>
+<!-- Micro-interaction Scripts -->
+<script>
+        // Simple scroll behavior to keep input grounded visually
+        const chatCanvas = document.querySelector('main');
+        const inputArea = document.querySelector('.fixed.bottom-0');
+
+        window.addEventListener('scroll', () => {
+            const scrollDepth = window.scrollY;
+            if (scrollDepth > 10) {
+                inputArea.classList.add('backdrop-blur-sm');
+            } else {
+                inputArea.classList.remove('backdrop-blur-sm');
+            }
+        });
+
+        // Focus handling for input
+        const mainInput = document.querySelector('input');
+        const inputWrapper = mainInput.closest('.glass-panel');
+
+        mainInput.addEventListener('focus', () => {
+            inputWrapper.style.borderColor = 'rgba(0, 82, 255, 0.5)';
+            inputWrapper.style.boxShadow = '0 0 20px rgba(0, 82, 255, 0.15)';
+        });
+
+        mainInput.addEventListener('blur', () => {
+            inputWrapper.style.borderColor = 'rgba(39, 39, 42, 1)';
+            inputWrapper.style.boxShadow = 'none';
+        });
+    </script>
+</body></html>
