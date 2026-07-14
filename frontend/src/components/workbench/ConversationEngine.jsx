@@ -475,7 +475,7 @@ export default function ConversationEngine({ sessionId }) {
   };
 
   return (
-    <div className="flex h-full bg-background font-body-base text-on-surface">
+    <div className="flex flex-1 h-full w-full bg-background font-body-base text-on-surface">
       {/* Sidebar Riwayat Chat (Toggleable) */}
       <div className={`transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'w-0 overflow-hidden'}`}>
         <ChatHistory 
@@ -592,7 +592,7 @@ export default function ConversationEngine({ sessionId }) {
         </div>
 
         {/* Compact Input Area */}
-        <div className="px-4 pb-4 bg-transparent z-10 flex flex-col items-center w-full">
+        <div className="px-4 pb-2 bg-transparent z-10 flex flex-col items-center w-full">
           {workspaceManager?.activeWorkspaceId === 'ws-engineer' && (
             <div className="w-full max-w-3xl mb-2">
               <FolderSelector onSelect={(path) => setSelectedFolder(path)} currentPath={selectedFolder} showLabel={true} />
