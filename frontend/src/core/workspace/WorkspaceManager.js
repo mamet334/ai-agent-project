@@ -4,12 +4,13 @@
  */
 
 import { supabase } from '../../supabase';
+import { EventBus } from '../runtime/EventBus';
 
 export class WorkspaceManager {
   constructor(appId = 'global', serviceManager) {
     this.appId = appId;
     this.serviceManager = serviceManager;
-    this.eventBus = serviceManager.get('EventBus'); // Use global EventBus
+    this.eventBus = new EventBus(); // Isolated Local EventBus to prevent state leakage
     this.activeWorkspaceId = null;
     this.activeSessionId = null;
 
@@ -88,8 +89,8 @@ export class WorkspaceManager {
 
   _getDefaultManifest(workspaceId) {
     return {
-      id: workspaceId || 'ws-owner',
-      type: 'OWNER',
+      id: workspaceId || 'ws-assistant',
+      type: 'ASSISTANT',
       name: 'Mamet OS',
       context: { memory_source: 'USER_MEMORY', knowledge_source: 'PERSONAL_KNOWLEDGE' },
       capabilities: ['cap:web-search', 'cap:automation'],

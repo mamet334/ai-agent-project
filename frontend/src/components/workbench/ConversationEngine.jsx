@@ -68,7 +68,7 @@ export default function ConversationEngine({ sessionId }) {
       title: title,
       messages: msgs,
       updated_at: new Date().toISOString(),
-      workspace_type: osState?.workspaceId || 'OWNER'
+      workspace_type: osState?.workspaceId || 'ws-assistant'
     };
 
     let result;
@@ -182,9 +182,9 @@ export default function ConversationEngine({ sessionId }) {
       let semanticContext = '';
       let memoryService = null;
 
-      const activeWorkspace = workspaceManager?.activeWorkspaceId || 'ASSISTANT';
+      const activeWorkspace = workspaceManager?.activeWorkspaceId || 'ws-assistant';
       
-      let resolvedMode = 'OWNER';
+      let resolvedMode = 'ASSISTANT';
       let resolvedAppSource = 'assistant';
       
       if (activeWorkspace === 'ws-engineer' || activeWorkspace === 'ENGINEER') {
@@ -194,8 +194,8 @@ export default function ConversationEngine({ sessionId }) {
         resolvedMode = 'LITE';
         resolvedAppSource = 'mametlite';
       } else {
-        // ws-owner, ASSISTANT, OWNER — semua fallback ke OWNER
-        resolvedMode = 'OWNER';
+        // ws-assistant, ASSISTANT — semua fallback ke ASSISTANT
+        resolvedMode = 'ASSISTANT';
         resolvedAppSource = 'assistant';
       }
 
