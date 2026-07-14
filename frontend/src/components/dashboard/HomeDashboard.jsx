@@ -317,10 +317,6 @@ export default function HomeDashboard() {
     if (window.triggerReasoningHighlight) {
       window.triggerReasoningHighlight(node.id);
     }
-    if (fgRef.current) {
-      fgRef.current.centerAt(node.x, node.y, 1000);
-      fgRef.current.zoom(8, 2000);
-    }
   };
 
   const formatDate = (dateString) => {
