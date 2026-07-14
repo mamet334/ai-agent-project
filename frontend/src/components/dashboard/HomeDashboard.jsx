@@ -5,6 +5,8 @@ import { supabase } from '../../supabase';
 export default function HomeDashboard() {
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
   const [stats, setStats] = useState({ memories: 0, documents: 0, chats: 0 });
+  const [selectedNode, setSelectedNode] = useState(null);
+  
   const fgRef = useRef();
   const containerRef = useRef();
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -28,15 +30,26 @@ export default function HomeDashboard() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [memRes, docRes, chatRes] = await Promise.all([
-          supabase.from('user_memories').select('id, summary').limit(500),
-          supabase.from('documents').select('id, title').limit(500),
-          supabase.from('chats').select('id, title, workspace_type').limit(500)
+        const [memRes, docRes, chatRes, chunkRes] = await Promise.all([
+          // Try to fetch causal_links and memory_hits, ignore errors if missing using graceful fallback in map
+          supabase.from('user_memories').select('id, summary, created_at, memory_hits, causal_links, metadata').limit(500),
+          supabase.from('documents').select('id, title, created_at, metadata').limit(500),
+          supabase.from('chats').select('id, title, workspace_type, created_at').limit(500),
+          supabase.from('document_chunks').select('id, document_id').limit(5000)
         ]);
 
         const memories = memRes.data || [];
         const documents = docRes.data || [];
         const chats = chatRes.data || [];
+        const chunks = chunkRes.data || [];
+
+        // Precompute chunk counts
+        const docChunkCounts = {};
+        chunks.forEach(c => {
+          if (c.document_id) {
+            docChunkCounts[c.document_id] = (docChunkCounts[c.document_id] || 0) + 1;
+          }
+        });
 
         setStats({
           memories: memories.length,
@@ -48,34 +61,87 @@ export default function HomeDashboard() {
         const links = [];
 
         // 1. Central Node
-        nodes.push({ id: 'core-supabase', name: 'SUPABASE', group: 'core', val: 25 });
+        nodes.push({ id: 'core-supabase', name: 'SUPABASE CORE', type: 'Core', group: 'core', val: 25, isCategory: true });
 
         // 2. First Layer Nodes (Categories)
-        nodes.push({ id: 'cat-memory', name: 'USER MEMORY', group: 'category', val: 15 });
-        nodes.push({ id: 'cat-rag', name: 'RAG KNOWLEDGE', group: 'category', val: 15 });
-        nodes.push({ id: 'cat-chat', name: 'CONVERSATION', group: 'category', val: 15 });
-        nodes.push({ id: 'cat-workspace', name: 'WORKSPACE', group: 'category', val: 15 });
+        nodes.push({ id: 'cat-memory', name: 'USER MEMORY', type: 'Category', group: 'category', val: 15, isCategory: true });
+        nodes.push({ id: 'cat-rag', name: 'RAG KNOWLEDGE', type: 'Category', group: 'category', val: 15, isCategory: true });
+        nodes.push({ id: 'cat-chat', name: 'CONVERSATION', type: 'Category', group: 'category', val: 15, isCategory: true });
 
-        // Connect Central to First Layer
         links.push({ source: 'core-supabase', target: 'cat-memory' });
         links.push({ source: 'core-supabase', target: 'cat-rag' });
         links.push({ source: 'core-supabase', target: 'cat-chat' });
-        links.push({ source: 'core-supabase', target: 'cat-workspace' });
+
+        // Helper to determine health color
+        const getHealthColor = (relations) => {
+          if (relations === 0) return '#ef4444'; // RED (Orphan)
+          if (relations < 3) return '#eab308'; // YELLOW (Few relations)
+          return '#22c55e'; // GREEN (Healthy)
+        };
 
         // 3. Second Layer Nodes (Actual Data)
         memories.forEach(m => {
-          nodes.push({ id: `mem-${m.id}`, name: m.summary || 'Memory', group: 'memory', val: 3 });
+          const hits = m.memory_hits || 0;
+          const causalLinks = m.causal_links || [];
+          const relationsCount = causalLinks.length;
+          
+          nodes.push({ 
+            id: `mem-${m.id}`, 
+            name: m.summary || 'Memory', 
+            type: 'Memory',
+            group: 'memory', 
+            val: Math.max(3, Math.min(25, 3 + hits * 2)), // Feature 1: Node Size by Importance
+            color: getHealthColor(relationsCount), // Feature 3: Orphan Detector
+            data: {
+              created: m.created_at,
+              used: hits,
+              relations: relationsCount,
+              metadata: m.metadata || {}
+            }
+          });
           links.push({ source: 'cat-memory', target: `mem-${m.id}` });
+          
+          // Connect actual causal links if they exist
+          causalLinks.forEach(targetId => {
+            links.push({ source: `mem-${m.id}`, target: `mem-${targetId}` });
+          });
         });
 
         documents.forEach(d => {
-          nodes.push({ id: `doc-${d.id}`, name: d.title || 'Document', group: 'rag', val: 5 });
+          const chunkCount = docChunkCounts[d.id] || 0;
+          
+          nodes.push({ 
+            id: `doc-${d.id}`, 
+            name: d.title || 'Document', 
+            type: 'Document',
+            group: 'rag', 
+            val: Math.max(3, Math.min(25, 3 + chunkCount * 0.5)),
+            color: getHealthColor(chunkCount),
+            data: {
+              created: d.created_at,
+              used: 'N/A', // Documents don't track hits directly in this schema yet
+              relations: chunkCount,
+              metadata: d.metadata || {}
+            }
+          });
           links.push({ source: 'cat-rag', target: `doc-${d.id}` });
         });
 
         chats.forEach(c => {
-          // Group chats by workspace_type if needed, for now just connect to conversation
-          nodes.push({ id: `chat-${c.id}`, name: c.title || 'Chat', group: 'chat', val: 3 });
+          nodes.push({ 
+            id: `chat-${c.id}`, 
+            name: c.title || 'Chat', 
+            type: 'Conversation',
+            group: 'chat', 
+            val: 8, // Standard size for chats unless we add chat metrics
+            color: '#22c55e', // Chats inherently healthy
+            data: {
+              created: c.created_at,
+              used: 1,
+              source: c.workspace_type,
+              relations: 1
+            }
+          });
           links.push({ source: 'cat-chat', target: `chat-${c.id}` });
         });
 
@@ -89,15 +155,28 @@ export default function HomeDashboard() {
   }, []);
 
   const getNodeColor = (node) => {
+    if (node.color) return node.color; // From Orphan Detector
+    
     switch(node.group) {
       case 'core': return '#ffffff'; // White
       case 'category': return '#94a3b8'; // Slate
-      case 'memory': return '#22c55e'; // Green
-      case 'rag': return '#a855f7'; // Purple
-      case 'chat': return '#eab308'; // Yellow
-      case 'workspace': return '#3b82f6'; // Blue
       default: return '#64748b';
     }
+  };
+
+  const handleNodeClick = (node) => {
+    setSelectedNode(node);
+    if (fgRef.current) {
+      fgRef.current.centerAt(node.x, node.y, 1000);
+      fgRef.current.zoom(8, 2000);
+    }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Unknown';
+    return new Date(dateString).toLocaleDateString('id-ID', {
+      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
   };
 
   return (
@@ -113,17 +192,14 @@ export default function HomeDashboard() {
             graphData={graphData}
             nodeLabel="name"
             nodeColor={getNodeColor}
-            nodeRelSize={6}
+            nodeRelSize={1}
             linkColor={() => 'rgba(255,255,255,0.15)'}
             linkWidth={1}
             linkDirectionalParticles={2}
             linkDirectionalParticleWidth={1.5}
             linkDirectionalParticleSpeed={0.005}
             backgroundColor="#00000000"
-            onNodeClick={(node) => {
-              fgRef.current.centerAt(node.x, node.y, 1000);
-              fgRef.current.zoom(8, 2000);
-            }}
+            onNodeClick={handleNodeClick}
           />
         ) : (
           <div className="flex items-center justify-center h-full w-full">
@@ -139,68 +215,140 @@ export default function HomeDashboard() {
             MAMET BRAIN
           </h1>
           <p className="text-slate-400 text-sm mt-2 tracking-[0.2em] uppercase font-mono">
-            Ecosystem Knowledge Graph
+            Knowledge Observatory V2.0
           </p>
+          
+          <div className="mt-6 flex items-center gap-4 text-xs font-mono">
+            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#22c55e]"></div> Healthy</div>
+            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#eab308]"></div> Low Relations</div>
+            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#ef4444]"></div> Orphan</div>
+          </div>
         </div>
       </div>
 
-      {/* Right Panel */}
-      <div className="w-72 border-l border-white/10 bg-[#0a0a0a]/80 backdrop-blur-xl p-6 flex flex-col z-20 overflow-y-auto">
-        <h2 className="text-xs font-bold text-slate-500 tracking-[0.2em] mb-8 uppercase border-b border-white/5 pb-4">
-          Realtime Metrics
-        </h2>
+      {/* Right Panel: Detail / Metrics */}
+      <div className="w-80 border-l border-white/10 bg-[#0a0a0a]/90 backdrop-blur-xl p-6 flex flex-col z-20 overflow-y-auto">
         
-        <div className="space-y-6">
-          <div className="group">
-            <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono group-hover:text-green-400 transition-colors">
-              Total Memories
+        {/* Feature 2: Node Detail Panel */}
+        {selectedNode && !selectedNode.isCategory ? (
+          <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+            <div className="flex items-center justify-between mb-6 border-b border-white/10 pb-4">
+              <h2 className="text-xs font-bold text-primary tracking-[0.2em] uppercase">
+                Node Inspector
+              </h2>
+              <button onClick={() => setSelectedNode(null)} className="text-slate-500 hover:text-white transition-colors">
+                <span className="material-symbols-outlined text-[16px]">close</span>
+              </button>
             </div>
-            <div className="text-3xl font-light text-green-400 font-mono drop-shadow-[0_0_15px_rgba(34,197,94,0.4)]">
-              {stats.memories}
+            
+            <div className="space-y-4">
+              <div className="mb-6">
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">Label</div>
+                <div className="text-sm font-semibold text-white break-words">{selectedNode.name}</div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">Type</div>
+                  <div className="text-xs text-slate-300 bg-white/5 py-1 px-2 rounded inline-block">{selectedNode.type}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">Used</div>
+                  <div className="text-xs text-slate-300">{selectedNode.data?.used ?? '0'} times</div>
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">Relations</div>
+                <div className={`text-xs font-bold ${
+                  selectedNode.data?.relations === 0 ? 'text-red-400' : 
+                  selectedNode.data?.relations < 3 ? 'text-yellow-400' : 'text-green-400'
+                }`}>
+                  {selectedNode.data?.relations ?? 0} active links
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">Created</div>
+                <div className="text-xs text-slate-300">{formatDate(selectedNode.data?.created)}</div>
+              </div>
+
+              {selectedNode.data?.source && (
+                <div>
+                  <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">Source Workspace</div>
+                  <div className="text-xs text-slate-300 capitalize">{selectedNode.data.source}</div>
+                </div>
+              )}
+
+              {selectedNode.data?.metadata && Object.keys(selectedNode.data.metadata).length > 0 && (
+                <div className="mt-4 pt-4 border-t border-white/5">
+                  <div className="text-[10px] text-slate-500 mb-2 uppercase tracking-wider font-mono">Metadata</div>
+                  <pre className="text-[10px] text-slate-400 bg-black/50 p-2 rounded overflow-x-auto">
+                    {JSON.stringify(selectedNode.data.metadata, null, 2)}
+                  </pre>
+                </div>
+              )}
             </div>
           </div>
-          
-          <div className="group">
-            <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono group-hover:text-purple-400 transition-colors">
-              Total Documents
-            </div>
-            <div className="text-3xl font-light text-purple-400 font-mono drop-shadow-[0_0_15px_rgba(168,85,247,0.4)]">
-              {stats.documents}
+        ) : (
+          <div className="animate-in fade-in duration-300">
+            <h2 className="text-xs font-bold text-slate-500 tracking-[0.2em] mb-8 uppercase border-b border-white/5 pb-4">
+              Realtime Metrics
+            </h2>
+            
+            <div className="space-y-6">
+              <div className="group">
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono group-hover:text-green-400 transition-colors">
+                  Total Memories
+                </div>
+                <div className="text-3xl font-light text-green-400 font-mono drop-shadow-[0_0_15px_rgba(34,197,94,0.4)]">
+                  {stats.memories}
+                </div>
+              </div>
+              
+              <div className="group">
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono group-hover:text-purple-400 transition-colors">
+                  Total Documents
+                </div>
+                <div className="text-3xl font-light text-purple-400 font-mono drop-shadow-[0_0_15px_rgba(168,85,247,0.4)]">
+                  {stats.documents}
+                </div>
+              </div>
+              
+              <div className="group">
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono group-hover:text-yellow-400 transition-colors">
+                  Total Conversations
+                </div>
+                <div className="text-3xl font-light text-yellow-400 font-mono drop-shadow-[0_0_15px_rgba(234,179,8,0.4)]">
+                  {stats.chats}
+                </div>
+              </div>
+              
+              <div className="group pt-4 border-t border-white/5">
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">
+                  Database Core
+                </div>
+                <div className="text-lg font-light text-white tracking-widest">
+                  SUPABASE
+                </div>
+              </div>
+              
+              <div className="group">
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">
+                  Health Score
+                </div>
+                <div className="text-lg font-light text-emerald-400 tracking-widest flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  OPTIMAL
+                </div>
+              </div>
             </div>
           </div>
-          
-          <div className="group">
-            <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono group-hover:text-yellow-400 transition-colors">
-              Total Conversations
-            </div>
-            <div className="text-3xl font-light text-yellow-400 font-mono drop-shadow-[0_0_15px_rgba(234,179,8,0.4)]">
-              {stats.chats}
-            </div>
-          </div>
-          
-          <div className="group pt-4 border-t border-white/5">
-            <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">
-              Database Core
-            </div>
-            <div className="text-lg font-light text-white tracking-widest">
-              SUPABASE
-            </div>
-          </div>
-          
-          <div className="group">
-            <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">
-              Health Score
-            </div>
-            <div className="text-lg font-light text-emerald-400 tracking-widest flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              OPTIMAL
-            </div>
-          </div>
-        </div>
+        )}
 
         <div className="mt-auto pt-6 border-t border-white/5">
            <div className="text-[9px] text-slate-600 font-mono text-center tracking-widest uppercase">
-             MAEF Observatory V1.0
+             MAEF Observatory V2.0
            </div>
         </div>
       </div>
