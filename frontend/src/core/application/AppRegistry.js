@@ -21,9 +21,9 @@ export const AppComponents = {
   // Apps
   'HomeDashboard': lazy(() => import('../../components/dashboard/HomeDashboard')),
   'ConversationEngine': lazyWithWrapper(() => import('../../components/workbench/ConversationEngine')),
-  'AgentForge': lazyWithWrapper(() => import('../../components/agent-forge/AgentForge')),
-  'ResearchApp': lazyWithWrapper(() => import('../../components/research/ResearchApp')),
-  'MemoryApp': lazyWithWrapper(() => import('../../components/memory/MemoryApp')),
+  'AgentForge': lazy(() => import('../../components/agent-forge/AgentForge')),
+  'ResearchApp': lazy(() => import('../../components/research/ResearchApp')),
+  'MemoryApp': lazy(() => import('../../components/memory/MemoryApp')),
   'Settings': lazy(() => import('../../components/Settings')),
   
   // Widgets

@@ -18,9 +18,12 @@ export const executeRoutingDecision = async (query: string, userId: string, rctx
 
     // Use explicit workspace ID from UI if provided
     if (explicitWorkspaceId && explicitWorkspaceId.trim() !== '' && explicitWorkspaceId !== 'global') {
+        const allowedWorkspaces = ['ws-lite', 'ws-assistant', 'ws-engineer'];
+        const safeWorkspaceId = allowedWorkspaces.includes(explicitWorkspaceId) ? explicitWorkspaceId : 'ws-assistant';
+        
         return {
             scope: "WORKSPACE",
-            workspace_id: explicitWorkspaceId,
+            workspace_id: safeWorkspaceId,
             reason_code: "EXPLICIT_UI_WORKSPACE_SELECTION"
         };
     }
