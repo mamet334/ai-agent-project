@@ -4,7 +4,7 @@ import { supabase } from '../../supabase';
 
 export default function HomeDashboard() {
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
-  const [stats, setStats] = useState({ memories: 0, documents: 0, chats: 0, orphans: 0 });
+  const [stats, setStats] = useState({ memories: 0, documents: 0, chats: 0, orphans: 0, connected: 0 });
   const [vitals, setVitals] = useState({
     supabase: '⚪', auth: '⚪', realtime: '⚪', storage: '⚪', 
     edge: '⚪', memory: '⚪', rag: '⚪', embedding: '⚪'
@@ -314,12 +314,15 @@ export default function HomeDashboard() {
         });
 
         const orphanCount = nodes.filter(n => !n.isCategory && n.data && n.data.relations === 0).length;
+        const totalDataNodes = nodes.filter(n => !n.isCategory && n.data).length;
+        const connectedCount = totalDataNodes - orphanCount;
         
         setStats({
           memories: memories.length,
           documents: documents.length,
           chats: chats.length,
-          orphans: orphanCount
+          orphans: orphanCount,
+          connected: connectedCount
         });
 
         setGraphData({ nodes, links });
@@ -610,6 +613,23 @@ export default function HomeDashboard() {
                   return (
                     <div className={`text-3xl font-light font-mono ${colorClass}`}>
                       {oc}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div className="group pt-4 border-t border-white/5" title="Nodes with at least one active relation.">
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">
+                  Connected Nodes
+                </div>
+                {(() => {
+                  const cc = stats.connected || 0;
+                  let colorClass = 'text-[#00ff88] drop-shadow-[0_0_15px_rgba(0,255,136,0.4)]'; // Neon Green for >20
+                  if (cc === 0) colorClass = 'text-[#ff4444] drop-shadow-[0_0_15px_rgba(255,68,68,0.4)]'; // Red for 0
+                  else if (cc >= 1 && cc <= 20) colorClass = 'text-[#ffcc00] drop-shadow-[0_0_15px_rgba(255,204,0,0.4)]'; // Yellow for 1-20
+                  return (
+                    <div className={`text-3xl font-light font-mono ${colorClass}`}>
+                      {cc}
                     </div>
                   );
                 })()}
