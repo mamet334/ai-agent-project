@@ -100,9 +100,9 @@ export default function AppShell({ mainPanel: MainPanelComponent }) {
         />
 
         {/* Center: The Main Panel */}
-        <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-surface-container-lowest relative z-0">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-surface-container-lowest relative z-0 h-full">
           
-          <div className="flex-1 overflow-hidden relative">
+          <div className="flex-1 overflow-hidden relative h-full w-full flex flex-col">
             {/* Phase 5: Window Manager Foundation */}
             {MainPanelComponent ? (
               <MainPanelComponent sessionId={workspaceState.sessionId} />
