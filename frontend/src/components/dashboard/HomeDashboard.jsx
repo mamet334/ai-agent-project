@@ -7,9 +7,97 @@ export default function HomeDashboard() {
   const [stats, setStats] = useState({ memories: 0, documents: 0, chats: 0 });
   const [selectedNode, setSelectedNode] = useState(null);
   
+  const [activePath, setActivePath] = useState(null);
+  
   const fgRef = useRef();
   const containerRef = useRef();
+  const graphDataRef = useRef(graphData);
+  const timeoutRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+
+  useEffect(() => {
+    graphDataRef.current = graphData;
+  }, [graphData]);
+
+  // Realtime Reasoning Path Listener
+  useEffect(() => {
+    const triggerReasoningHighlight = (nodeId) => {
+      if (!graphDataRef.current) return;
+      const { nodes, links } = graphDataRef.current;
+      
+      const activeNodes = new Set(['core-supabase']);
+      const activeLinks = new Set();
+      
+      const targetNode = nodes.find(n => n.id === nodeId);
+      if (targetNode) {
+        activeNodes.add(nodeId);
+        
+        // 1. Find direct connections
+        links.forEach(l => {
+          const sourceId = l.source.id || l.source;
+          const targetId = l.target.id || l.target;
+          if (sourceId === nodeId || targetId === nodeId) {
+            activeNodes.add(sourceId);
+            activeNodes.add(targetId);
+            activeLinks.add(`${sourceId}->${targetId}`);
+          }
+        });
+        
+        // 2. Trace back to core
+        activeNodes.forEach(nId => {
+          links.forEach(l => {
+            const sId = l.source.id || l.source;
+            const tId = l.target.id || l.target;
+            
+            if (activeNodes.has(tId) && (sId.startsWith('subcat-') || sId.startsWith('cat-'))) {
+               activeNodes.add(sId);
+               activeLinks.add(`${sId}->${tId}`);
+               // Trace subcat to cat
+               links.forEach(l2 => {
+                 const s2Id = l2.source.id || l2.source;
+                 const t2Id = l2.target.id || l2.target;
+                 if (t2Id === sId && s2Id.startsWith('cat-')) {
+                   activeNodes.add(s2Id);
+                   activeLinks.add(`${s2Id}->${t2Id}`);
+                 }
+               });
+            }
+          });
+        });
+        
+        // 3. Ensure categories link back to core
+        activeNodes.forEach(nId => {
+          if (nId.startsWith('cat-')) {
+            activeLinks.add(`core-supabase->${nId}`);
+          }
+        });
+
+        setActivePath({ nodes: activeNodes, links: activeLinks });
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        timeoutRef.current = setTimeout(() => setActivePath(null), 3000);
+      }
+    };
+
+    // Listen to real data insertions to highlight reasoning in realtime
+    const channel = supabase.channel('brain-activity')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'user_memories' }, payload => {
+        triggerReasoningHighlight(`mem-${payload.new.id}`);
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chats' }, payload => {
+        triggerReasoningHighlight(`chat-${payload.new.id}`);
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'documents' }, payload => {
+        triggerReasoningHighlight(`doc-${payload.new.id}`);
+      })
+      .subscribe();
+
+    window.triggerReasoningHighlight = triggerReasoningHighlight;
+
+    return () => {
+      supabase.removeChannel(channel);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
 
   // Handle Resize for ForceGraph
   useEffect(() => {
@@ -208,18 +296,27 @@ export default function HomeDashboard() {
   }, []);
 
   const getNodeColor = (node) => {
-    if (node.color) return node.color; // From Orphan Detector
-    
-    switch(node.group) {
-      case 'core': return '#ffffff'; // White
-      case 'category': return '#94a3b8'; // Slate
-      case 'subcategory': return '#64748b'; // Darker Slate
-      default: return '#475569';
+    let baseColor = node.color;
+    if (!baseColor) {
+      switch(node.group) {
+        case 'core': baseColor = '#ffffff'; break;
+        case 'category': baseColor = '#94a3b8'; break;
+        case 'subcategory': baseColor = '#64748b'; break;
+        default: baseColor = '#475569'; break;
+      }
     }
+    
+    if (activePath && !activePath.nodes.has(node.id)) {
+      return baseColor + '20'; // Extreme fade out (hex alpha ~12%)
+    }
+    return baseColor;
   };
 
   const handleNodeClick = (node) => {
     setSelectedNode(node);
+    if (window.triggerReasoningHighlight) {
+      window.triggerReasoningHighlight(node.id);
+    }
     if (fgRef.current) {
       fgRef.current.centerAt(node.x, node.y, 1000);
       fgRef.current.zoom(8, 2000);
@@ -247,12 +344,41 @@ export default function HomeDashboard() {
             nodeLabel="name"
             nodeColor={getNodeColor}
             nodeRelSize={1}
-            linkColor={() => 'rgba(255,255,255,0.15)'}
-            linkWidth={1}
-            linkDirectionalParticles={3}
-            linkDirectionalParticleWidth={2}
-            linkDirectionalParticleSpeed={0.006}
-            linkDirectionalParticleColor={link => typeof link.source === 'object' ? getNodeColor(link.source) : 'rgba(255,255,255,0.5)'}
+            linkColor={(link) => {
+              const sourceId = link.source.id || link.source;
+              const targetId = link.target.id || link.target;
+              if (activePath) {
+                if (activePath.links.has(`${sourceId}->${targetId}`)) return '#00ffcc'; // Active Glow
+                return 'rgba(255,255,255,0.02)'; // Faded
+              }
+              return 'rgba(255,255,255,0.15)';
+            }}
+            linkWidth={(link) => {
+              const sourceId = link.source.id || link.source;
+              const targetId = link.target.id || link.target;
+              return activePath && activePath.links.has(`${sourceId}->${targetId}`) ? 3 : 1;
+            }}
+            linkDirectionalParticles={(link) => {
+              const sourceId = link.source.id || link.source;
+              const targetId = link.target.id || link.target;
+              return activePath && activePath.links.has(`${sourceId}->${targetId}`) ? 6 : 3;
+            }}
+            linkDirectionalParticleWidth={(link) => {
+              const sourceId = link.source.id || link.source;
+              const targetId = link.target.id || link.target;
+              return activePath && activePath.links.has(`${sourceId}->${targetId}`) ? 4 : 2;
+            }}
+            linkDirectionalParticleSpeed={(link) => {
+              const sourceId = link.source.id || link.source;
+              const targetId = link.target.id || link.target;
+              return activePath && activePath.links.has(`${sourceId}->${targetId}`) ? 0.02 : 0.006;
+            }}
+            linkDirectionalParticleColor={(link) => {
+              const sourceId = link.source.id || link.source;
+              const targetId = link.target.id || link.target;
+              if (activePath && activePath.links.has(`${sourceId}->${targetId}`)) return '#ffffff';
+              return typeof link.source === 'object' ? getNodeColor(link.source) : 'rgba(255,255,255,0.5)';
+            }}
             backgroundColor="#00000000"
             d3AlphaDecay={0.02}
             d3VelocityDecay={0.3}
