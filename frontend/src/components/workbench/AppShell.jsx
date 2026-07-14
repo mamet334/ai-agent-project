@@ -79,26 +79,7 @@ export default function AppShell({ mainPanel: MainPanelComponent }) {
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
     <div className="flex flex-col h-full w-full bg-background overflow-hidden font-body-base text-on-surface custom-scrollbar">
-      {/* Top Header / App Bar */}
-      <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/80 flex justify-between items-center px-16 h-16 w-full shrink-0">
-        <div className="font-headline-md text-headline-md font-black text-on-surface">
-          Obsidian Workspace
-        </div>
-        <div className="flex items-center gap-6">
-          <div className="hidden lg:flex gap-8">
-            <span className="text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer text-body-base">Models</span>
-            <span className="text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer text-body-base">Knowledge</span>
-            <span className="text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer text-body-base">Plugins</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="material-symbols-outlined text-on-surface-variant hover:text-on-surface cursor-pointer">search</span>
-            <span className="material-symbols-outlined text-on-surface-variant hover:text-on-surface cursor-pointer">notifications</span>
-            <button className="px-4 py-1.5 bg-outline-variant/20 border border-outline-variant hover:bg-outline-variant/30 text-on-surface rounded-full text-body-sm transition-all">
-              {workspaceState.status}
-            </button>
-          </div>
-        </div>
-      </header>
+
 
       {/* Main OS Layout */}
       <div 

@@ -109,7 +109,11 @@ export default function Sidebar() {
           <span className="material-symbols-outlined">settings</span>
         </a>
         <div className="mt-2 flex items-center justify-center">
-          <div className="w-8 h-8 rounded-full overflow-hidden bg-surface-container-highest flex items-center justify-center border border-outline-variant relative cursor-pointer" title="mametdev (Online)">
+          <div 
+            onClick={(e) => { e.preventDefault(); activate('app:settings'); }}
+            className="w-8 h-8 rounded-full overflow-hidden bg-surface-container-highest flex items-center justify-center border border-outline-variant relative cursor-pointer hover:border-primary transition-colors" 
+            title="mametdev (Online)"
+          >
             <span className="material-symbols-outlined text-on-surface-variant text-[20px]">person</span>
             <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-primary animate-pulse border border-surface-container-low"></span>
           </div>

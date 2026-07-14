@@ -51,3 +51,7 @@ This changelog documents the radical shift in the Mamet OS visual philosophy bas
 ### 3. WorkspaceManager Layout Cache Buster
 - **Issue**: Persistent layout caching stored in `localStorage` caused deprecated widgets (like `WorkspaceNavWidget` and `Verification Log`) to still render despite removal from `workspace.json`.
 - **Fix**: Incremented the persistence namespace prefix from `mamet_v2_` to `mamet_v3_` in `WorkspaceManager.js`. This cache-bust forces all clients to drop legacy layout states and adopt the new, clean Constitutional defaults upon reload.
+
+### 4. Destruction of the Global Header
+- **Issue**: The static top bar (`Obsidian Workspace | Models | Knowledge...`) was consuming 64px of vertical space globally and causing z-index visual overlaps with chat content.
+- **Fix**: Deleted the entire `<header>` block from `AppShell.jsx`. The application now renders completely edge-to-edge vertically, identical to Claude Desktop.
