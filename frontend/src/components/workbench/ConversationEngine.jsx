@@ -486,10 +486,10 @@ export default function ConversationEngine({ sessionId }) {
         />
       </div>
       
-      {/* Area Chat Utama */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-0 relative overflow-hidden pt-4">
+      {/* Area Chat Utama (Outer Wrapper, No Overflow) */}
+      <div className="flex-1 flex flex-col relative min-w-0 min-h-0">
         
-        {/* Top Action Buttons (Toggle History & New Chat) */}
+        {/* SessionToolbar Layer (Absolute to Outer Wrapper) */}
         <div className="absolute top-6 left-6 z-50 flex items-center gap-2">
           <button 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -508,7 +508,9 @@ export default function ConversationEngine({ sessionId }) {
           </button>
         </div>
         
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar relative z-10">
+        {/* Inner Wrapper (Holds overflow-hidden and glows) */}
+        <div className="flex-1 flex flex-col relative overflow-hidden pt-4 min-h-0">
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar relative z-10">
           {messages.length === 0 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center opacity-30 pointer-events-none">
               <span className="material-symbols-outlined text-[64px] mb-4 text-primary">chat_bubble</span>
@@ -628,6 +630,7 @@ export default function ConversationEngine({ sessionId }) {
         <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-primary/5 blur-[120px] rounded-full pointer-events-none z-0"></div>
         <div className="absolute -top-32 -left-32 w-96 h-96 bg-secondary/5 blur-[120px] rounded-full pointer-events-none z-0"></div>
 
+        </div>
       </div>
     </div>
   );
