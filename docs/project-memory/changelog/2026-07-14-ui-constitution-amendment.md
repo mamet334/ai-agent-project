@@ -55,3 +55,7 @@ This changelog documents the radical shift in the Mamet OS visual philosophy bas
 ### 4. Destruction of the Global Header
 - **Issue**: The static top bar (`Obsidian Workspace | Models | Knowledge...`) was consuming 64px of vertical space globally and causing z-index visual overlaps with chat content.
 - **Fix**: Deleted the entire `<header>` block from `AppShell.jsx`. The application now renders completely edge-to-edge vertically, identical to Claude Desktop.
+
+### 5. Resolution of the Vertical Stacking Grid Bug (Engineer Workspace)
+- **Issue**: When an AI execution finished, `widget:maef-monitor` was automatically opened in the `right_workbench`. However, `workspace.json` had a hardcoded `"grid_columns": "1fr"` rule for `ws-engineer`. This broke the `AppShell` 3-column CSS grid, forcing the Right Workbench to render as a full-width block *underneath* the chat interface, consuming half the screen.
+- **Fix**: Removed the `"grid_columns": "1fr"` override from `workspace.json` and bumped the `WorkspaceManager` cache namespace to `v4_`. The Right Workbench will now correctly render on the far right as a 320px column, keeping the Conversation Engine's vertical space undisturbed.

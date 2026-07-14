@@ -591,16 +591,14 @@ export default function ConversationEngine({ sessionId }) {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Folder Selector — hanya untuk workspace Engineer */}
-        {workspaceManager?.activeWorkspaceId === 'ws-engineer' && (
-          <div className="px-4 py-2 border-t border-outline-variant bg-surface-container-low z-10">
-            <FolderSelector onSelect={(path) => setSelectedFolder(path)} currentPath={selectedFolder} showLabel={true} />
-          </div>
-        )}
-
-        {/* Input Area */}
-        <div className="p-4 md:p-6 bg-background z-10">
-          <form onSubmit={handleSend} className="max-w-4xl mx-auto relative flex items-end gap-2 bg-surface-container-lowest border border-outline-variant rounded-2xl p-2 focus-within:border-primary transition-all shadow-lg pulse-focus">
+        {/* Compact Input Area */}
+        <div className="px-4 pb-4 bg-transparent z-10 flex flex-col items-center w-full">
+          {workspaceManager?.activeWorkspaceId === 'ws-engineer' && (
+            <div className="w-full max-w-3xl mb-2">
+              <FolderSelector onSelect={(path) => setSelectedFolder(path)} currentPath={selectedFolder} showLabel={true} />
+            </div>
+          )}
+          <form onSubmit={handleSend} className="w-full max-w-3xl relative flex items-end gap-2 bg-surface-container-low border border-outline-variant rounded-2xl p-2 focus-within:border-primary transition-all shadow-lg pulse-focus">
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -613,7 +611,7 @@ export default function ConversationEngine({ sessionId }) {
               <span className="material-symbols-outlined text-[20px]">send</span>
             </button>
           </form>
-          <div className="text-center mt-3 text-label-mono text-[10px] text-on-surface-variant tracking-widest uppercase">
+          <div className="text-center mt-2 text-label-mono text-[10px] text-on-surface-variant tracking-widest uppercase">
             MAEF Conversation Engine v2.0 • Workspace: {workspaceManager.activeWorkspaceId}
           </div>
         </div>
