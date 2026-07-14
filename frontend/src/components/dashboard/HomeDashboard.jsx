@@ -60,17 +60,26 @@ export default function HomeDashboard() {
         const nodes = [];
         const links = [];
 
-        // 1. Central Node
-        nodes.push({ id: 'core-supabase', name: 'SUPABASE CORE', type: 'Core', group: 'core', val: 35, isCategory: true });
+        // 1. Central Node (The Sun) - Fixed at center with strongest visual weight
+        nodes.push({ id: 'core-supabase', name: 'SUPABASE CORE', type: 'Core', group: 'core', val: 50, isCategory: true, fx: 0, fy: 0 });
 
-        // 2. First Layer Nodes (Categories)
-        nodes.push({ id: 'cat-memory', name: 'USER MEMORY', type: 'Category', group: 'category', val: 20, isCategory: true });
-        nodes.push({ id: 'cat-rag', name: 'RAG KNOWLEDGE', type: 'Category', group: 'category', val: 20, isCategory: true });
-        nodes.push({ id: 'cat-chat', name: 'CONVERSATION', type: 'Category', group: 'category', val: 20, isCategory: true });
+        // 2. First Layer Nodes (Primary Planets)
+        const primaryClusters = [
+          { id: 'cat-memory', name: 'USER MEMORY' },
+          { id: 'cat-rag', name: 'RAG KNOWLEDGE' },
+          { id: 'cat-chat', name: 'CONVERSATION' },
+          { id: 'cat-workspace', name: 'WORKSPACE' },
+          { id: 'cat-auth', name: 'AUTH' },
+          { id: 'cat-storage', name: 'STORAGE' },
+          { id: 'cat-edge', name: 'EDGE FUNCTIONS' },
+          { id: 'cat-realtime', name: 'REALTIME' }
+        ];
 
-        links.push({ source: 'core-supabase', target: 'cat-memory' });
-        links.push({ source: 'core-supabase', target: 'cat-rag' });
-        links.push({ source: 'core-supabase', target: 'cat-chat' });
+        primaryClusters.forEach(cluster => {
+          nodes.push({ id: cluster.id, name: cluster.name, type: 'Category', group: 'category', val: 20, isCategory: true });
+          // Link planets to the sun
+          links.push({ source: 'core-supabase', target: cluster.id });
+        });
 
         // Helper to determine health color
         const getHealthColor = (relations) => {
@@ -244,6 +253,14 @@ export default function HomeDashboard() {
             linkDirectionalParticleWidth={1.5}
             linkDirectionalParticleSpeed={0.005}
             backgroundColor="#00000000"
+            d3AlphaDecay={0.02}
+            d3VelocityDecay={0.3}
+            onEngineStop={() => {
+              // Re-center after physics stabilizes
+              if (fgRef.current) {
+                fgRef.current.zoomToFit(400, 50);
+              }
+            }}
             onNodeClick={handleNodeClick}
           />
         ) : (
@@ -260,7 +277,7 @@ export default function HomeDashboard() {
             MAMET BRAIN
           </h1>
           <p className="text-slate-400 text-sm mt-2 tracking-[0.2em] uppercase font-mono">
-            Brain Cluster Visualization V3
+            Brain Cluster Visualization V4
           </p>
           
           <div className="mt-6 flex items-center gap-4 text-xs font-mono">
@@ -393,7 +410,7 @@ export default function HomeDashboard() {
 
         <div className="mt-auto pt-6 border-t border-white/5">
            <div className="text-[9px] text-slate-600 font-mono text-center tracking-widest uppercase">
-             MAEF Observatory V3.0
+             MAEF Observatory V4.0
            </div>
         </div>
       </div>
