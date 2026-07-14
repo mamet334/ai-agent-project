@@ -1,72 +1,40 @@
-import React, { useState, useEffect } from 'react';
-import { serviceManager } from '../../core/runtime/ServiceManager';
-import { LayoutGrid, Activity, Clock, ShieldCheck, CheckSquare, Zap, Box } from 'lucide-react';
-
-const iconMap = {
-  'widget:workspace-overview': LayoutGrid,
-  'widget:system-status': Activity,
-  'widget:current-activity': Zap,
-  'widget:recent-events': Clock,
-  'widget:pending-approval': CheckSquare,
-  'widget:verification-summary': ShieldCheck,
-  'widget:quick-actions': Zap
-};
+import React from 'react';
 
 export default function HomeDashboard() {
-  const [widgets, setWidgets] = useState([]);
-
-  useEffect(() => {
-    const metadataService = serviceManager.get('MetadataService');
-    const widgetRegistry = serviceManager.get('WidgetRegistry');
-    
-    if (metadataService && widgetRegistry) {
-      const layoutData = metadataService.getDashboardLayout()?.layout || [];
-      const capabilities = metadataService.getCapabilities();
-      
-      const loadedWidgets = layoutData.map(item => {
-        const widgetConfig = widgetRegistry.getWidget(item.widgetId);
-        if (!widgetConfig) return null;
-        
-        // Capability Check
-        const hasCapability = widgetConfig.capabilities.every(capId => {
-          const cap = capabilities.find(c => c.id === capId);
-          return cap ? cap.enabled : false;
-        });
-
-        if (!hasCapability) return null;
-
-        return { ...widgetConfig, colSpan: item.colSpan || 'col-span-1' };
-      }).filter(Boolean);
-
-      setWidgets(loadedWidgets);
-    }
-  }, []);
-
   return (
-    <div className="flex flex-col h-full w-full bg-slate-950 overflow-y-auto text-slate-200 p-6 font-sans">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-emerald-500 mb-1">Mamet OS Ecosystem</h1>
-        <p className="text-slate-400 text-sm">System Overview & Live Status</p>
+    <div className="flex flex-col h-full w-full bg-background items-center justify-center relative overflow-hidden font-body-base">
+      
+      <div className="max-w-2xl w-full px-6 z-10 flex flex-col gap-8 text-center items-center">
+        <div className="w-16 h-16 rounded-2xl bg-primary-container/10 flex items-center justify-center mb-4">
+          <span className="material-symbols-outlined text-primary text-[32px]" style={{ fontVariationSettings: "'FILL' 1" }}>architecture</span>
+        </div>
+        <div className="flex flex-col gap-4">
+          <h1 className="font-display-lg text-[40px] text-on-surface font-black tracking-tight leading-tight">Good evening</h1>
+          <p className="text-on-surface-variant text-body-base max-w-md mx-auto leading-relaxed">
+            Welcome to your Mamet AI Workspace. Select an intelligence engine or start a new conversation to begin.
+          </p>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full mt-8">
+          <button className="glass-panel p-6 text-left rounded-2xl hover:bg-surface-container transition-all group border border-outline-variant/30 flex flex-col gap-3">
+            <span className="material-symbols-outlined text-primary">chat</span>
+            <div>
+              <p className="font-semibold text-on-surface text-sm mb-1">Start a Conversation</p>
+              <p className="text-on-surface-variant text-xs leading-relaxed">Interact with Mamet OS core intelligence.</p>
+            </div>
+          </button>
+          <button className="glass-panel p-6 text-left rounded-2xl hover:bg-surface-container transition-all group border border-outline-variant/30 flex flex-col gap-3">
+            <span className="material-symbols-outlined text-primary">terminal</span>
+            <div>
+              <p className="font-semibold text-on-surface text-sm mb-1">Engineering Workspace</p>
+              <p className="text-on-surface-variant text-xs leading-relaxed">Advanced tools, local execution, and deeper context.</p>
+            </div>
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {widgets.map((widget) => {
-          const WidgetComp = widget.component;
-          const IconComp = iconMap[widget.id] || Box;
-          
-          return (
-            <div key={widget.id} className={`${widget.colSpan} bg-slate-900 border border-slate-800 rounded-lg p-4`}>
-              <div className="flex items-center gap-2 mb-4 text-emerald-400 border-b border-slate-800 pb-2">
-                <IconComp size={18} />
-                <h2 className="font-semibold text-sm">{widget.name}</h2>
-              </div>
-              <React.Suspense fallback={<div className="text-slate-500 text-xs animate-pulse">Loading...</div>}>
-                <WidgetComp />
-              </React.Suspense>
-            </div>
-          );
-        })}
-      </div>
+      {/* Atmospheric Background Glow */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/5 blur-[120px] rounded-full pointer-events-none z-0"></div>
     </div>
   );
 }

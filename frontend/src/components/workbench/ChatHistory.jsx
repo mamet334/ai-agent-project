@@ -111,32 +111,32 @@ export default function ChatHistory({ onSelectChat, onNewChat, activeChatId, col
   // Mode collapsed: hanya tampilkan tombol baru chat + ikon
   if (collapsed) {
     return (
-      <div className="flex flex-col items-center h-full bg-slate-950 border-r border-slate-800 py-3 px-1 space-y-3 w-12 shrink-0">
+      <div className="flex flex-col items-center h-full bg-surface-container-low border-r border-outline-variant py-3 px-1 space-y-3 w-16 shrink-0">
         <button
           onClick={onNewChat}
-          className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+          className="p-2 rounded-lg hover:bg-surface-variant text-on-surface-variant hover:text-on-surface transition-colors"
           title="Percakapan Baru"
         >
-          <PlusCircle size={18} />
+          <span className="material-symbols-outlined">add_circle</span>
         </button>
-        <div className="flex-1 overflow-y-auto space-y-1 w-full">
+        <div className="flex-1 overflow-y-auto space-y-1 w-full flex flex-col items-center custom-scrollbar">
           {loading ? (
             <div className="flex justify-center py-2">
-              <Loader2 size={14} className="animate-spin text-slate-500" />
+              <Loader2 size={14} className="animate-spin text-on-surface-variant" />
             </div>
           ) : (
             chats.map(chat => (
               <button
                 key={chat.id}
                 onClick={() => onSelectChat(chat.id)}
-                className={`w-full p-2 rounded-lg transition-colors ${
+                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${
                   chat.id === activeChatId
-                    ? 'bg-slate-800 text-emerald-400'
-                    : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900'
+                    ? 'bg-secondary-container text-primary border-l-2 border-primary'
+                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-variant'
                 }`}
                 title={chat.title || 'Percakapan Baru'}
               >
-                <MessageSquare size={16} />
+                <span className="material-symbols-outlined text-[20px]">chat_bubble</span>
               </button>
             ))
           )}
@@ -147,66 +147,61 @@ export default function ChatHistory({ onSelectChat, onNewChat, activeChatId, col
 
   // Mode penuh: tampilkan judul, tombol baru, daftar chat lengkap
   return (
-    <div className="flex flex-col h-full bg-slate-950 border-r border-slate-800 w-64 shrink-0">
+    <div className="flex flex-col h-full bg-surface-container-low border-r border-outline-variant w-64 shrink-0 font-body-base">
       {/* Header */}
-      <div className="p-3 border-b border-slate-800">
+      <div className="p-4 border-b border-outline-variant">
         <button
           onClick={onNewChat}
-          className="flex items-center justify-center gap-2 w-full p-2.5 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-200 transition-colors text-sm font-medium"
+          className="flex items-center justify-center gap-2 w-full p-2.5 rounded-xl border border-outline-variant hover:bg-surface-variant text-on-surface transition-colors font-semibold"
         >
-          <PlusCircle size={16} />
+          <span className="material-symbols-outlined text-[18px]">add_circle</span>
           Percakapan Baru
         </button>
       </div>
 
       {/* Daftar Chat */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-1">
         {loading ? (
-          <div className="flex items-center justify-center py-8 text-slate-500">
+          <div className="flex items-center justify-center py-8 text-on-surface-variant">
             <Loader2 size={18} className="animate-spin mr-2" />
-            <span className="text-xs">Memuat riwayat...</span>
+            <span className="text-body-sm">Memuat riwayat...</span>
           </div>
         ) : error ? (
           <div className="text-center py-8">
-            <p className="text-xs text-red-400 mb-2">{error}</p>
+            <p className="text-body-sm text-error mb-2">{error}</p>
             <button
               onClick={fetchChats}
-              className="text-xs text-blue-400 hover:underline"
+              className="text-body-sm text-primary hover:underline"
             >
               Coba lagi
             </button>
           </div>
         ) : chats.length === 0 ? (
-          <div className="text-center py-8 text-slate-600">
-            <MessageSquare size={24} className="mx-auto mb-2 opacity-50" />
-            <p className="text-xs">Belum ada percakapan</p>
+          <div className="text-center py-8 text-on-surface-variant">
+            <span className="material-symbols-outlined text-[32px] mx-auto mb-2 opacity-50">chat_bubble</span>
+            <p className="text-body-sm">Belum ada percakapan</p>
           </div>
         ) : (
           chats.map(chat => (
             <div
               key={chat.id}
               onClick={() => onSelectChat(chat.id)}
-              className={`group flex items-center gap-2 p-2.5 rounded-lg cursor-pointer transition-all ${
+              className={`group flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${
                 chat.id === activeChatId
-                  ? 'bg-slate-800 border border-slate-700 shadow-sm'
-                  : 'hover:bg-slate-900 border border-transparent'
+                  ? 'bg-secondary-container text-on-secondary-container border border-primary/20'
+                  : 'hover:bg-surface-variant border border-transparent text-on-surface-variant'
               }`}
             >
-              <MessageSquare
-                size={14}
-                className={`shrink-0 ${
-                  chat.id === activeChatId ? 'text-emerald-400' : 'text-slate-500'
-                }`}
-              />
+              <span className={`material-symbols-outlined text-[18px] shrink-0 ${chat.id === activeChatId ? 'text-primary' : ''}`}>chat_bubble</span>
               <div className="flex-1 min-w-0">
                 <p
-                  className={`text-xs truncate ${
-                    chat.id === activeChatId ? 'text-slate-200 font-medium' : 'text-slate-400'
+                  className={`text-body-sm truncate ${
+                    chat.id === activeChatId ? 'font-semibold text-on-surface' : 'text-on-surface-variant group-hover:text-on-surface'
                   }`}
                 >
                   {chat.title || 'Percakapan Baru'}
                 </p>
-                <p className="text-[10px] text-slate-600 mt-0.5">
+                <p className="text-[10px] text-on-surface-variant mt-0.5 opacity-70">
                   {formatDate(chat.updated_at || chat.created_at)}
                 </p>
               </div>
@@ -216,13 +211,13 @@ export default function ChatHistory({ onSelectChat, onNewChat, activeChatId, col
                   handleDelete(chat.id);
                 }}
                 disabled={deletingId === chat.id}
-                className="p-1 rounded-md text-slate-600 hover:text-red-400 hover:bg-red-400/10 opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50"
+                className="p-1.5 rounded-md text-on-surface-variant hover:text-error hover:bg-error/10 opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50"
                 title="Hapus percakapan"
               >
                 {deletingId === chat.id ? (
-                  <Loader2 size={12} className="animate-spin" />
+                  <Loader2 size={14} className="animate-spin" />
                 ) : (
-                  <Trash2 size={12} />
+                  <span className="material-symbols-outlined text-[16px]">delete</span>
                 )}
               </button>
             </div>
@@ -231,9 +226,9 @@ export default function ChatHistory({ onSelectChat, onNewChat, activeChatId, col
       </div>
 
       {/* Footer */}
-      <div className="p-2 border-t border-slate-800 text-center">
-        <p className="text-[10px] text-slate-600">
-          {chats.length} percakapan
+      <div className="p-3 border-t border-outline-variant text-center">
+        <p className="text-label-mono text-[10px] text-on-surface-variant tracking-widest uppercase">
+          {chats.length} Percakapan
         </p>
       </div>
     </div>

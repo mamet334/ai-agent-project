@@ -78,22 +78,34 @@ export default function AppShell({ mainPanel: MainPanelComponent }) {
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-    <div className="flex flex-col h-full w-full bg-black overflow-hidden font-sans text-slate-200">
-      {/* Top Header / App Bar (Optional, depending on OS design) */}
-      <div className="h-10 bg-slate-900 border-b border-slate-800 flex items-center px-4 shrink-0 justify-between">
-        <div className="text-xs font-bold text-slate-400">
-          MAMET OS <span className="text-emerald-500 mx-2">/</span> {workspaceState.workspaceId}
+    <div className="flex flex-col h-full w-full bg-background overflow-hidden font-body-base text-on-surface custom-scrollbar">
+      {/* Top Header / App Bar */}
+      <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/80 flex justify-between items-center px-16 h-16 w-full shrink-0">
+        <div className="font-headline-md text-headline-md font-black text-on-surface">
+          Obsidian Workspace
         </div>
-        <div className="text-[10px] text-slate-500 font-mono">
-          Session: {workspaceState.sessionId} | Status: {workspaceState.status}
+        <div className="flex items-center gap-6">
+          <div className="hidden lg:flex gap-8">
+            <span className="text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer text-body-base">Models</span>
+            <span className="text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer text-body-base">Knowledge</span>
+            <span className="text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer text-body-base">Plugins</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="material-symbols-outlined text-on-surface-variant hover:text-on-surface cursor-pointer">search</span>
+            <span className="material-symbols-outlined text-on-surface-variant hover:text-on-surface cursor-pointer">notifications</span>
+            <button className="px-4 py-1.5 bg-outline-variant/20 border border-outline-variant hover:bg-outline-variant/30 text-on-surface rounded-full text-body-sm transition-all">
+              {workspaceState.status}
+            </button>
+          </div>
         </div>
-      </div>
+      </header>
 
       {/* Main OS Layout */}
       <div 
-        className="flex-1 grid overflow-hidden relative"
+        className="flex-1 grid overflow-hidden relative transition-all duration-300"
         style={{
-          gridTemplateColumns: layout?.grid_columns || `${layout?.left_size || 300}px 1fr ${layout?.right_size || 350}px`
+          gridTemplateColumns: layout?.grid_columns || 
+            `${leftWidgets.length > 0 ? (layout?.left_size || 300) + 'px' : '0px'} 1fr ${rightWidgets.length > 0 ? (layout?.right_size || 350) + 'px' : '0px'}`
         }}
       >
         
@@ -106,7 +118,7 @@ export default function AppShell({ mainPanel: MainPanelComponent }) {
         />
 
         {/* Center: The Main Panel */}
-        <div className="flex-1 flex flex-col min-w-0 bg-[#0a0a0f] relative z-0">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-surface-container-lowest relative z-0">
           
           <div className="flex-1 overflow-hidden relative">
             {/* Phase 5: Window Manager Foundation */}

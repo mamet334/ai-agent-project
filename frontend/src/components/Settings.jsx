@@ -78,224 +78,143 @@ export default function Settings() {
   };
 
   return (
-    <div className="flex-1 overflow-auto bg-slate-950 p-6 md:p-8 custom-scrollbar">
-      <div className="max-w-4xl mx-auto space-y-8">
+    <div className="flex-1 overflow-auto bg-background p-6 md:p-8 custom-scrollbar font-body-base text-on-surface">
+      <div className="max-w-screen-container-max mx-auto space-y-8">
         
         {/* Header */}
-        <div>
-          <h2 className="text-2xl font-bold text-slate-100 mb-2">System Settings</h2>
-          <p className="text-slate-400 text-sm">Manage your Mamet Ecosystem profile and preferences.</p>
+        <div className="mb-12">
+          <h1 className="font-display-lg text-display-lg text-on-surface mb-2">Settings</h1>
+          <p className="text-on-surface-variant text-body-base">Configure your deep-dark AI workspace and management parameters.</p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-12 gap-gutter">
           
-          {/* Left Column - Profile & Danger Zone */}
-          <div className="space-y-6">
-            
-            {/* Identity Card */}
-            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg shadow-black/20">
-              <div className="p-4 bg-slate-800/50 border-b border-slate-800 flex items-center gap-3">
-                <div className="p-2 bg-emerald-500/10 rounded-lg">
-                  <User className="w-5 h-5 text-emerald-500" />
-                </div>
-                <h3 className="font-medium text-slate-200">Owner Identity</h3>
+          {/* AI Model Management (from HTML) combined with Identity */}
+          <section className="col-span-12 lg:col-span-8 glass-panel rim-light p-gutter rounded-xl border border-outline-variant relative overflow-hidden">
+            <div className="flex items-center gap-3 mb-8">
+              <div className="w-10 h-10 rounded-lg bg-primary-container/20 flex items-center justify-center">
+                <span className="material-symbols-outlined text-primary">psychology</span>
               </div>
-              <div className="p-5 space-y-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">Full Name</label>
-                  <div className="text-sm text-slate-300 font-medium bg-slate-950/50 px-3 py-2 rounded-md border border-slate-800/50">
-                    {owner?.name || 'Loading...'}
+              <div>
+                <h2 className="font-headline-md text-headline-md">AI Model Management</h2>
+                <p className="text-body-sm text-on-surface-variant">Select and provision inference engines</p>
+              </div>
+            </div>
+            
+            <div className="space-y-6">
+              <div className="flex flex-col gap-2">
+                <label className="text-label-mono text-on-surface-variant uppercase tracking-widest pl-1">Provider</label>
+                <div className="relative">
+                  <select 
+                    value={aiProvider}
+                    onChange={(e) => handleProviderChange(e.target.value)}
+                    className="w-full appearance-none bg-surface-container-lowest border border-outline-variant px-5 py-4 rounded-lg text-on-surface font-body-base focus:border-primary focus:ring-0 pulse-focus transition-all"
+                  >
+                    <option value="openrouter">OpenRouter (Recommended)</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="groq">Groq</option>
+                    <option value="gemini">Google Gemini</option>
+                    <option value="local">Local (Ollama/LMStudio)</option>
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant">
+                    <span className="material-symbols-outlined">expand_more</span>
                   </div>
                 </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block flex items-center gap-1">
-                    <Mail className="w-3 h-3" /> Email Address
-                  </label>
-                  <div className="text-sm text-slate-300 bg-slate-950/50 px-3 py-2 rounded-md border border-slate-800/50">
-                    {owner?.email || 'Loading...'}
-                  </div>
+              </div>
+              
+              <div className="flex flex-col gap-2">
+                <label className="text-label-mono text-on-surface-variant uppercase tracking-widest pl-1">Model ID</label>
+                <input 
+                  type="text"
+                  value={aiModel}
+                  onChange={(e) => setAiModel(e.target.value)}
+                  placeholder="e.g. anthropic/claude-3.5-sonnet"
+                  className="w-full bg-surface-container-lowest border border-outline-variant px-5 py-4 rounded-lg text-on-surface font-body-base focus:border-primary focus:ring-0 pulse-focus transition-all"
+                />
+              </div>
+
+              {/* Status Grid */}
+              <div className="grid grid-cols-3 gap-4 mt-4">
+                <div className="bg-surface-container-low border border-outline-variant/50 p-4 rounded-lg flex flex-col items-center gap-2 text-center group/card hover:border-primary/50 transition-colors">
+                  <span className="material-symbols-outlined text-primary-fixed-dim" style={{fontVariationSettings: "'FILL' 1"}}>speed</span>
+                  <span className="text-label-mono text-[10px] uppercase">Status</span>
+                  <span className="text-on-surface font-semibold">{health?.status || 'UNKNOWN'}</span>
                 </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block flex items-center gap-1">
-                    <Shield className="w-3 h-3" /> System Role
-                  </label>
-                  <div className="text-sm text-emerald-400 bg-emerald-950/30 px-3 py-2 rounded-md border border-emerald-900/50 flex items-center gap-2 font-mono">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
-                    ADMINISTRATOR
-                  </div>
+                <div className="bg-surface-container-low border border-outline-variant/50 p-4 rounded-lg flex flex-col items-center gap-2 text-center group/card hover:border-primary/50 transition-colors">
+                  <span className="material-symbols-outlined text-primary-fixed-dim" style={{fontVariationSettings: "'FILL' 1"}}>memory</span>
+                  <span className="text-label-mono text-[10px] uppercase">Uptime</span>
+                  <span className="text-on-surface font-semibold">{formatUptime(health?.uptime)}</span>
+                </div>
+                <div className="bg-surface-container-low border border-outline-variant/50 p-4 rounded-lg flex flex-col items-center gap-2 text-center group/card hover:border-primary/50 transition-colors">
+                  <span className="material-symbols-outlined text-primary-fixed-dim" style={{fontVariationSettings: "'FILL' 1"}}>token</span>
+                  <span className="text-label-mono text-[10px] uppercase">Events</span>
+                  <span className="text-on-surface font-semibold">{health?.totalEvents || 0}</span>
                 </div>
               </div>
             </div>
+          </section>
 
-            {/* Danger Zone */}
-            <div className="bg-slate-900 border border-red-900/30 rounded-xl overflow-hidden shadow-lg shadow-black/20 relative overflow-hidden group">
-              <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent pointer-events-none"></div>
-              <div className="p-4 bg-red-950/20 border-b border-red-900/30 flex items-center gap-3">
-                <LogOut className="w-5 h-5 text-red-500" />
-                <h3 className="font-medium text-red-200">Session</h3>
+          {/* API Key Management */}
+          <section className="col-span-12 lg:col-span-4 glass-panel rim-light p-gutter rounded-xl border border-outline-variant flex flex-col">
+            <div className="flex items-center gap-3 mb-8">
+              <div className="w-10 h-10 rounded-lg bg-secondary-container/20 flex items-center justify-center">
+                <span className="material-symbols-outlined text-on-secondary-container">key</span>
               </div>
-              <div className="p-5">
-                <p className="text-xs text-slate-400 mb-4">
-                  Terminating your session will lock the control plane and stop background UI polling. Kernel state may persist locally.
-                </p>
-                <button
-                  onClick={async () => await supabase.auth.signOut()}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-lg transition-all duration-300 hover:shadow-[0_0_15px_rgba(239,68,68,0.15)] font-medium text-sm"
+              <div>
+                <h2 className="font-headline-md text-headline-md">API Key</h2>
+                <p className="text-body-sm text-on-surface-variant">Multi-key AI Access</p>
+              </div>
+            </div>
+            
+            <div className="space-y-4 flex-1">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <input 
+                    type="password" 
+                    value={aiKey}
+                    onChange={(e) => setAiKey(e.target.value)}
+                    placeholder="Enter API Key" 
+                    className="w-full bg-surface-container-lowest border border-outline-variant px-4 py-3 rounded-lg text-on-surface font-label-mono focus:border-primary focus:ring-0 pulse-focus transition-all"
+                  />
+                </div>
+                <button 
+                  onClick={handleSaveAiConfig}
+                  className="w-12 h-12 flex items-center justify-center bg-surface-container-highest border border-outline-variant hover:border-primary text-primary rounded-lg transition-all active:scale-90"
                 >
-                  <LogOut className="w-4 h-4" />
-                  Sign Out of Ecosystem
+                  <span className="material-symbols-outlined">{saveStatus ? 'check' : 'save'}</span>
                 </button>
               </div>
             </div>
             
-          </div>
-
-          {/* Right Column - System & Preferences */}
-          <div className="lg:col-span-2 space-y-6">
-            
-            {/* AI Engine Configuration */}
-            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg shadow-black/20">
-              <div className="p-4 bg-slate-800/50 border-b border-slate-800 flex items-center gap-3">
-                <div className="p-2 bg-purple-500/10 rounded-lg">
-                  <Brain className="w-5 h-5 text-purple-400" />
-                </div>
-                <h3 className="font-medium text-slate-200">AI Brain Configuration</h3>
-              </div>
-              <div className="p-5 space-y-4">
-                <p className="text-xs text-slate-400 mb-2">Configure the core language model (brain) powering Mamet Ecosystem. Changes apply globally across the Orchestrator.</p>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">Provider</label>
-                    <select 
-                      value={aiProvider}
-                      onChange={(e) => handleProviderChange(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-purple-500 transition-colors"
-                    >
-                      <option value="openrouter">OpenRouter (Recommended)</option>
-                      <option value="openai">OpenAI</option>
-                      <option value="anthropic">Anthropic</option>
-                      <option value="groq">Groq</option>
-                      <option value="gemini">Google Gemini</option>
-                      <option value="local">Local (Ollama/LMStudio)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">Model ID</label>
-                    <input 
-                      type="text"
-                      value={aiModel}
-                      onChange={(e) => setAiModel(e.target.value)}
-                      placeholder="e.g. anthropic/claude-3.5-sonnet"
-                      className="w-full bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-purple-500 transition-colors font-mono"
-                    />
-                    <p className="text-[10px] text-slate-500 mt-1 mt-1">Leave empty to use default, or enter any valid ID.</p>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
-                    <Key className="w-3 h-3" /> API Key
-                  </label>
-                  <div className="relative">
-                    <input 
-                      type="password" 
-                      value={aiKey}
-                      onChange={(e) => setAiKey(e.target.value)}
-                      placeholder="sk-or-v1-..." 
-                      className="w-full bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-lg pl-3 pr-16 py-2 outline-none focus:border-purple-500 transition-colors font-mono placeholder:text-slate-700"
-                    />
-                    <button 
-                      onClick={handleSaveAiConfig}
-                      className={`absolute right-2 top-1/2 -translate-y-1/2 text-xs px-2 py-1 rounded transition-colors border ${saveStatus ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300'}`}
-                    >
-                      {saveStatus || 'Save'}
-                    </button>
-                  </div>
-                </div>
-              </div>
+            <div className="mt-6 p-4 rounded-lg bg-primary-container/5 border border-primary/20">
+              <p className="text-body-sm text-primary/80 leading-relaxed italic">"Enabling multi-key support allows the system to intelligently load-balance requests across different quotas."</p>
             </div>
+          </section>
 
-            {/* Preferences */}
-            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg shadow-black/20">
-              <div className="p-4 bg-slate-800/50 border-b border-slate-800 flex items-center gap-3">
-                <div className="p-2 bg-indigo-500/10 rounded-lg">
-                  <Palette className="w-5 h-5 text-indigo-400" />
-                </div>
-                <h3 className="font-medium text-slate-200">Preferences</h3>
-              </div>
-              <div className="p-0 divide-y divide-slate-800/50">
-                <div className="p-4 flex items-center justify-between hover:bg-slate-800/30 transition-colors">
-                  <div>
-                    <div className="text-sm font-medium text-slate-300">Interface Theme</div>
-                    <div className="text-xs text-slate-500 mt-0.5">Customize the visual appearance</div>
+          {/* Identity & Danger Zone */}
+          <section className="col-span-12 glass-panel rim-light p-gutter rounded-xl border border-outline-variant">
+             <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex-1">
+                  <h3 className="font-headline-md text-headline-md mb-2">Owner Identity</h3>
+                  <div className="text-body-base text-on-surface-variant">
+                    Name: {owner?.name || 'Loading...'} <br/>
+                    Email: {owner?.email || 'Loading...'}
                   </div>
-                  <select className="bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-lg px-3 py-1.5 outline-none focus:border-indigo-500 transition-colors">
-                    <option>MAEF Dark (Default)</option>
-                    <option>Light Mode</option>
-                    <option>System Sync</option>
-                  </select>
                 </div>
-                <div className="p-4 flex items-center justify-between hover:bg-slate-800/30 transition-colors">
-                  <div>
-                    <div className="text-sm font-medium text-slate-300">Notification Sounds</div>
-                    <div className="text-xs text-slate-500 mt-0.5">Play sounds on orchestration events</div>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" value="" className="sr-only peer" defaultChecked />
-                    <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-500"></div>
-                  </label>
+                <div className="flex-1 flex justify-end">
+                  <button
+                    onClick={async () => await supabase.auth.signOut()}
+                    className="px-6 py-3 bg-error-container/20 text-error rounded-lg font-semibold flex items-center gap-2 hover:bg-error-container/40 transition-all active:scale-95 border border-error/30"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">logout</span>
+                    <span>Sign Out of Ecosystem</span>
+                  </button>
                 </div>
-              </div>
-            </div>
+             </div>
+          </section>
 
-            {/* Kernel Status */}
-            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg shadow-black/20 relative">
-              <div className="absolute top-0 right-0 p-4">
-                <div className="flex h-2 w-2 relative">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </div>
-              </div>
-              <div className="p-4 bg-slate-800/50 border-b border-slate-800 flex items-center gap-3">
-                <div className="p-2 bg-blue-500/10 rounded-lg">
-                  <Activity className="w-5 h-5 text-blue-400" />
-                </div>
-                <h3 className="font-medium text-slate-200">MAEF Kernel Diagnostics</h3>
-              </div>
-              
-              <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-slate-950/50 p-3 rounded-lg border border-slate-800/50">
-                  <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">
-                    <Activity className="w-3 h-3" /> Status
-                  </div>
-                  <div className="text-emerald-400 font-mono text-sm">{health?.status || 'UNKNOWN'}</div>
-                </div>
-                <div className="bg-slate-950/50 p-3 rounded-lg border border-slate-800/50">
-                  <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">
-                    <Clock className="w-3 h-3" /> Uptime
-                  </div>
-                  <div className="text-slate-300 font-mono text-sm">{formatUptime(health?.uptime)}</div>
-                </div>
-                <div className="bg-slate-950/50 p-3 rounded-lg border border-slate-800/50">
-                  <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">
-                    <Cpu className="w-3 h-3" /> Phase
-                  </div>
-                  <div className="text-slate-300 font-mono text-sm">Level {health?.phase || 0}</div>
-                </div>
-                <div className="bg-slate-950/50 p-3 rounded-lg border border-slate-800/50">
-                  <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">
-                    <Monitor className="w-3 h-3" /> Events
-                  </div>
-                  <div className="text-slate-300 font-mono text-sm">{health?.totalEvents || 0} Traced</div>
-                </div>
-              </div>
-              
-            </div>
-
-          </div>
         </div>
-        
       </div>
     </div>
   );

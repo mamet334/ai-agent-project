@@ -1,0 +1,117 @@
+=== UI Audit Log ===
+
+[System] Starting Electron application...
+[System] Waiting for Kernel boot...
+[Electron STDERR] 
+DevTools listening on ws://127.0.0.1:9222/devtools/browser/27d4a34b-7f73-42e4-b0f0-1b69b048358e
+[Electron STDERR] (electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
+[System] Boot complete detected. Connecting Puppeteer...
+[System] Connected to page: mamet://app/index.html
+[Page Console] [LOG] [WorkspaceManager] Workspace Knowledge Workspace is READY.
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [WorkspaceManager] Workspace Memory Workspace is READY.
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [WorkspaceManager] Workspace Agent Forge Workspace is READY.
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Action] Saved 01_initial_home.png
+[Action] Attempting to click Engineer menu...
+[Page Console] [LOG] [ApplicationManager] App app:home transitioned to BACKGROUND
+[Page Console] [LOG] [ApplicationManager] App app:engineer transitioned to RUNNING
+[Page Console] [LOG] [ApplicationManager] Notifying state change. Apps count: 8
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Metrics] Engineer Grid Layout Dimensions: {
+  "container": {
+    "width": 0,
+    "height": 0
+  },
+  "children": [
+    {
+      "width": 0,
+      "height": 0,
+      "tag": "DIV",
+      "classes": "flex flex-col bg-slate-950 relative min-h-0 min-w-0 h-full border-r border-slate-800 h-full"
+    },
+    {
+      "width": 0,
+      "height": 0,
+      "tag": "DIV",
+      "classes": "flex-1 flex flex-col min-w-0 bg-[#0a0a0f] relative z-0"
+    },
+    {
+      "width": 0,
+      "height": 0,
+      "tag": "DIV",
+      "classes": "flex flex-col bg-slate-950 relative min-h-0 min-w-0 h-full border-l border-slate-800 h-full"
+    }
+  ]
+}
+[Metrics] Widget Overlap Status: OVERLAP_DETECTED
+[Action] Saved 02_engineer_workspace.png
+[Action] Attempting to click Home menu...
+[Page Console] [LOG] [ApplicationManager] App app:engineer transitioned to BACKGROUND
+[Page Console] [LOG] [ApplicationManager] App app:home transitioned to RUNNING
+[Page Console] [LOG] [ApplicationManager] Notifying state change. Apps count: 8
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Page Console] [LOG] [AppShell] Workspace state: [object Object]
+[Page Console] [LOG] [LIFECYCLE] WorkspaceNavWidget loaded
+[Action] Saved 03_back_to_home.png
+[System] Test finished and Electron process killed.

@@ -32,10 +32,10 @@
       "name": "Engineer Workspace",
       "capabilities": ["cap:engineer"],
       "default_layout": { 
-        "grid_columns": "1fr 1.5fr 1fr",
-        "left_workbench": ["widget:engineering-tasks", "widget:architecture-gaps", "widget:workspace-nav"], 
-        "right_workbench": ["widget:verification-log", "widget:disaster-recovery"], 
-        "bottom_workbench": ["widget:maef-monitor"] 
+        "grid_columns": "1fr",
+        "left_workbench": [], 
+        "right_workbench": [], 
+        "bottom_workbench": [] 
       },
       "permissions": { "allow_global_memory": false }
     },

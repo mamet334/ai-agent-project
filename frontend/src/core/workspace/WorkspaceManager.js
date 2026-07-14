@@ -33,8 +33,8 @@ export class WorkspaceManager {
     window.addEventListener('beforeunload', () => {
       if (this.activeWorkspaceId) {
         // Synchronously save to local storage before tab closes
-        localStorage.setItem(`mamet_v2_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(this.state.layout));
-        localStorage.setItem(`mamet_v2_${this.appId}_widgets_${this.activeWorkspaceId}`, JSON.stringify(this.state.widgets));
+        localStorage.setItem(`mamet_v3_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(this.state.layout));
+        localStorage.setItem(`mamet_v3_${this.appId}_widgets_${this.activeWorkspaceId}`, JSON.stringify(this.state.widgets));
       }
     });
   }
@@ -134,11 +134,11 @@ export class WorkspaceManager {
       userLayouts = user.user_metadata.workspace_layouts;
     }
 
-    const storedLayoutStr = localStorage.getItem(`mamet_v2_${this.appId}_layout_${manifest.id}`);
-    const storedWidgetsStr = localStorage.getItem(`mamet_v2_${this.appId}_widgets_${manifest.id}`);
+    const storedLayoutStr = localStorage.getItem(`mamet_v3_${this.appId}_layout_${manifest.id}`);
+    const storedWidgetsStr = localStorage.getItem(`mamet_v3_${this.appId}_widgets_${manifest.id}`);
     
-    let rawLayout = userLayouts[`v2_${this.appId}_layout_${manifest.id}`];
-    let rawWidgets = userLayouts[`v2_${this.appId}_widgets_${manifest.id}`];
+    let rawLayout = userLayouts[`v3_${this.appId}_layout_${manifest.id}`];
+    let rawWidgets = userLayouts[`v3_${this.appId}_widgets_${manifest.id}`];
 
     if (!rawLayout) {
       if (storedLayoutStr) {
@@ -199,8 +199,8 @@ export class WorkspaceManager {
       const currentLayouts = user.user_metadata?.workspace_layouts || {};
       const newLayouts = {
         ...currentLayouts,
-        [`v2_${this.appId}_layout_${workspaceId}`]: layout,
-        [`v2_${this.appId}_widgets_${workspaceId}`]: widgets
+        [`v3_${this.appId}_layout_${workspaceId}`]: layout,
+        [`v3_${this.appId}_widgets_${workspaceId}`]: widgets
       };
 
       await supabase.auth.updateUser({
@@ -232,8 +232,8 @@ export class WorkspaceManager {
     this._updateState({ status: 'SUSPENDING' });
     
     // Save Layout Persistence locally and remotely
-    localStorage.setItem(`mamet_v2_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(this.state.layout));
-    localStorage.setItem(`mamet_v2_${this.appId}_widgets_${this.activeWorkspaceId}`, JSON.stringify(this.state.widgets));
+    localStorage.setItem(`mamet_v3_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(this.state.layout));
+    localStorage.setItem(`mamet_v3_${this.appId}_widgets_${this.activeWorkspaceId}`, JSON.stringify(this.state.widgets));
     
     if (this.syncTimeout) clearTimeout(this.syncTimeout);
     await this._syncLayoutToSupabase(this.activeWorkspaceId, this.state.layout, this.state.widgets);
@@ -247,7 +247,7 @@ export class WorkspaceManager {
   updateLayout(workbench, newSize) {
     const newLayout = { ...this.state.layout, [`${workbench}_size`]: newSize };
     this._updateState({ layout: newLayout });
-    localStorage.setItem(`mamet_v2_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(newLayout));
+    localStorage.setItem(`mamet_v3_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(newLayout));
     
     // Throttled remote sync to prevent API limit drain
     this._debouncedSyncLayoutToSupabase(this.activeWorkspaceId, newLayout, this.state.widgets);
@@ -279,7 +279,7 @@ export class WorkspaceManager {
     }
     
     this._updateState({ layout });
-    localStorage.setItem(`mamet_v2_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(layout));
+    localStorage.setItem(`mamet_v3_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(layout));
     this._debouncedSyncLayoutToSupabase(this.activeWorkspaceId, layout, this.state.widgets);
   }
 
@@ -301,7 +301,7 @@ export class WorkspaceManager {
         [workbenchKey]: [...currentWidgets, widgetId] 
       };
       this._updateState({ layout: newLayout });
-      localStorage.setItem(`mamet_v2_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(newLayout));
+      localStorage.setItem(`mamet_v3_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(newLayout));
       this._debouncedSyncLayoutToSupabase(this.activeWorkspaceId, newLayout, this.state.widgets);
     }
     
