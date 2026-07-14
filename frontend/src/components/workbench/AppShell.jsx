@@ -119,12 +119,14 @@ export default function AppShell({ mainPanel: MainPanelComponent }) {
           </div>
 
           {/* Bottom Workbench */}
-          <WorkbenchZone 
-            position="bottom" 
-            widgets={bottomWidgets} 
-            height={layout?.bottom_size || 250}
-            onResize={handleResize}
-          />
+          {bottomWidgets.length > 0 && (
+            <WorkbenchZone 
+              position="bottom" 
+              widgets={bottomWidgets} 
+              height={layout?.bottom_size || 250}
+              onResize={handleResize}
+            />
+          )}
         </div>
 
         {/* Right Workbench */}
