@@ -85,6 +85,7 @@ export default function AppShell({ mainPanel: MainPanelComponent }) {
       <div 
         className="flex-1 grid overflow-hidden relative transition-all duration-300"
         style={{
+          gridTemplateRows: '1fr',
           gridTemplateColumns: layout?.grid_columns || 
             `${leftWidgets.length > 0 ? (layout?.left_size || 300) + 'px' : '0px'} 1fr ${rightWidgets.length > 0 ? (layout?.right_size || 350) + 'px' : '0px'}`
         }}

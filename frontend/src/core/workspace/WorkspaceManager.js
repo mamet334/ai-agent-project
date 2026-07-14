@@ -12,7 +12,7 @@ export class WorkspaceManager {
     this.eventBus = serviceManager.get('EventBus'); // Use global EventBus
     this.activeWorkspaceId = null;
     this.activeSessionId = null;
-    
+
     // Runtime State
     this.state = {
       layout: {},          // Sizes and positions of workbenches
@@ -47,10 +47,10 @@ export class WorkspaceManager {
   }
 
   _notify() {
-    this.eventBus.emit('Workspace:StateChanged', { 
-      ...this.state, 
-      workspaceId: this.activeWorkspaceId, 
-      sessionId: this.activeSessionId 
+    this.eventBus.emit('Workspace:StateChanged', {
+      ...this.state,
+      workspaceId: this.activeWorkspaceId,
+      sessionId: this.activeSessionId
     });
   }
 
@@ -103,7 +103,7 @@ export class WorkspaceManager {
    */
   async switchWorkspace(workspaceId) {
     console.log(`[WorkspaceManager] Switching to workspace: ${workspaceId}`);
-    
+
     // 1. Unmount Phase (Save current layout/state)
     if (this.activeWorkspaceId && this.activeSessionId) {
       await this.suspendCurrentSession();
@@ -114,7 +114,7 @@ export class WorkspaceManager {
     // 2. Load Manifest Phase
     const manifest = await this._loadManifest(workspaceId);
     this.activeWorkspaceId = manifest.id;
-    
+
     // 3 & 4. Bind Context & Load Capability Phase
     this._updateState({
       memoryContext: manifest.context.memory_source,
@@ -136,16 +136,16 @@ export class WorkspaceManager {
 
     const storedLayoutStr = localStorage.getItem(`mamet_v4_${this.appId}_layout_${manifest.id}`);
     const storedWidgetsStr = localStorage.getItem(`mamet_v4_${this.appId}_widgets_${manifest.id}`);
-    
+
     let rawLayout = userLayouts[`v4_${this.appId}_layout_${manifest.id}`];
     let rawWidgets = userLayouts[`v4_${this.appId}_widgets_${manifest.id}`];
 
     if (!rawLayout) {
       if (storedLayoutStr) {
-        try { rawLayout = JSON.parse(storedLayoutStr); } catch (e) {}
+        try { rawLayout = JSON.parse(storedLayoutStr); } catch (e) { }
       }
       if (storedWidgetsStr) {
-        try { rawWidgets = JSON.parse(storedWidgetsStr); } catch (e) {}
+        try { rawWidgets = JSON.parse(storedWidgetsStr); } catch (e) { }
       }
     }
 
@@ -159,7 +159,7 @@ export class WorkspaceManager {
     });
 
     // 6. Restore Session (Chat History) -> handled by Conversation Engine listening to activeSessionId
-    
+
     // 7. Ready Phase
     this._updateState({ status: 'READY' });
     console.log(`[WorkspaceManager] Workspace ${manifest.name} is READY.`);
@@ -174,9 +174,9 @@ export class WorkspaceManager {
     if (!rawLayout || typeof rawLayout !== 'object') {
       return defaultLayout;
     }
-    
+
     const sanitized = { ...rawLayout };
-    
+
     // Enforce array types for workbenches and floating windows
     ['left_workbench', 'right_workbench', 'bottom_workbench', 'floating_windows'].forEach(key => {
       if (sanitized[key] && !Array.isArray(sanitized[key])) {
@@ -195,7 +195,7 @@ export class WorkspaceManager {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      
+
       const currentLayouts = user.user_metadata?.workspace_layouts || {};
       const newLayouts = {
         ...currentLayouts,
@@ -230,14 +230,14 @@ export class WorkspaceManager {
   async suspendCurrentSession() {
     if (!this.activeWorkspaceId) return;
     this._updateState({ status: 'SUSPENDING' });
-    
+
     // Save Layout Persistence locally and remotely
     localStorage.setItem(`mamet_v4_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(this.state.layout));
     localStorage.setItem(`mamet_v4_${this.appId}_widgets_${this.activeWorkspaceId}`, JSON.stringify(this.state.widgets));
-    
+
     if (this.syncTimeout) clearTimeout(this.syncTimeout);
     await this._syncLayoutToSupabase(this.activeWorkspaceId, this.state.layout, this.state.widgets);
-    
+
     console.log(`[WorkspaceManager] Suspended workspace: ${this.activeWorkspaceId}`);
   }
 
@@ -248,7 +248,7 @@ export class WorkspaceManager {
     const newLayout = { ...this.state.layout, [`${workbench}_size`]: newSize };
     this._updateState({ layout: newLayout });
     localStorage.setItem(`mamet_v4_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(newLayout));
-    
+
     // Throttled remote sync to prevent API limit drain
     this._debouncedSyncLayoutToSupabase(this.activeWorkspaceId, newLayout, this.state.widgets);
   }
@@ -258,26 +258,26 @@ export class WorkspaceManager {
    */
   moveWidget(widgetId, fromWorkbench, toWorkbench, newIndex) {
     const layout = { ...this.state.layout };
-    
+
     const fromList = [...(layout[`${fromWorkbench}_workbench`] || [])];
     const toList = fromWorkbench === toWorkbench ? fromList : [...(layout[`${toWorkbench}_workbench`] || [])];
-    
+
     const currentIndex = fromList.indexOf(widgetId);
     if (currentIndex === -1) return;
-    
+
     fromList.splice(currentIndex, 1);
-    
+
     if (newIndex === undefined || newIndex === -1) {
       toList.push(widgetId);
     } else {
       toList.splice(newIndex, 0, widgetId);
     }
-    
+
     layout[`${fromWorkbench}_workbench`] = fromList;
     if (fromWorkbench !== toWorkbench) {
       layout[`${toWorkbench}_workbench`] = toList;
     }
-    
+
     this._updateState({ layout });
     localStorage.setItem(`mamet_v4_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(layout));
     this._debouncedSyncLayoutToSupabase(this.activeWorkspaceId, layout, this.state.widgets);
@@ -288,23 +288,23 @@ export class WorkspaceManager {
    */
   openWidgetInWorkbench(workbenchPosition, widgetId, widgetData) {
     console.log(`[WorkspaceManager] Opening ${widgetId} in ${workbenchPosition} workbench`);
-    
+
     // In a full implementation, widgetData would be passed via an EventBus to the widget.
     // For now, we ensure the widget is visible in the layout.
     const currentLayout = this.state.layout;
     const workbenchKey = `${workbenchPosition}_workbench`;
     const currentWidgets = currentLayout[workbenchKey] || [];
-    
+
     if (!currentWidgets.includes(widgetId)) {
-      const newLayout = { 
-        ...currentLayout, 
-        [workbenchKey]: [...currentWidgets, widgetId] 
+      const newLayout = {
+        ...currentLayout,
+        [workbenchKey]: [...currentWidgets, widgetId]
       };
       this._updateState({ layout: newLayout });
       localStorage.setItem(`mamet_v4_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(newLayout));
       this._debouncedSyncLayoutToSupabase(this.activeWorkspaceId, newLayout, this.state.widgets);
     }
-    
+
     if (widgetData) {
       this.widgetDataStore = this.widgetDataStore || {};
       this.widgetDataStore[widgetId] = widgetData;

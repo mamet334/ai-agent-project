@@ -487,10 +487,10 @@ export default function ConversationEngine({ sessionId }) {
       </div>
       
       {/* Area Chat Utama */}
-      <div className="flex-1 flex flex-col relative overflow-hidden">
+      <div className="flex-1 flex flex-col relative overflow-hidden pt-4">
         
         {/* Top Toggle Button for Sidebar */}
-        <div className="absolute top-4 left-4 z-50">
+        <div className="absolute top-6 left-6 z-50">
           <button 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             className="w-10 h-10 flex items-center justify-center bg-surface-container-low border border-outline-variant rounded-xl hover:bg-surface-variant text-on-surface transition-all shadow-sm"
