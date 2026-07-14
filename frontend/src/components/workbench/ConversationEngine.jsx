@@ -475,7 +475,7 @@ export default function ConversationEngine({ sessionId }) {
   };
 
   return (
-    <div className="flex flex-1 h-full w-full bg-background font-body-base text-on-surface">
+    <div className="flex flex-1 min-w-0 min-h-0 h-full w-full bg-background font-body-base text-on-surface">
       {/* Sidebar Riwayat Chat (Toggleable) */}
       <div className={`transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'w-0 overflow-hidden'}`}>
         <ChatHistory 
@@ -487,7 +487,7 @@ export default function ConversationEngine({ sessionId }) {
       </div>
       
       {/* Area Chat Utama */}
-      <div className="flex-1 flex flex-col relative overflow-hidden pt-4">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 relative overflow-hidden pt-4">
         
         {/* Top Action Buttons (Toggle History & New Chat) */}
         <div className="absolute top-6 left-6 z-50 flex items-center gap-2">
@@ -508,7 +508,7 @@ export default function ConversationEngine({ sessionId }) {
           </button>
         </div>
         
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar relative z-10">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar relative z-10">
           {messages.length === 0 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center opacity-30 pointer-events-none">
               <span className="material-symbols-outlined text-[64px] mb-4 text-primary">chat_bubble</span>
