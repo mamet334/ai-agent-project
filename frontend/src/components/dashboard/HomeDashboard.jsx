@@ -5,8 +5,11 @@ import { supabase } from '../../supabase';
 export default function HomeDashboard() {
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
   const [stats, setStats] = useState({ memories: 0, documents: 0, chats: 0 });
+  const [vitals, setVitals] = useState({
+    supabase: '⚪', auth: '⚪', realtime: '⚪', storage: '⚪', 
+    edge: '⚪', memory: '⚪', rag: '⚪', embedding: '⚪'
+  });
   const [selectedNode, setSelectedNode] = useState(null);
-  
   const [activePath, setActivePath] = useState(null);
   
   const fgRef = useRef();
@@ -89,7 +92,9 @@ export default function HomeDashboard() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'documents' }, payload => {
         triggerReasoningHighlight(`doc-${payload.new.id}`);
       })
-      .subscribe();
+      .subscribe((status) => {
+        setVitals(v => ({ ...v, realtime: status === 'SUBSCRIBED' ? '🟢' : '🔴' }));
+      });
 
     window.triggerReasoningHighlight = triggerReasoningHighlight;
 
@@ -138,6 +143,30 @@ export default function HomeDashboard() {
             docChunkCounts[c.document_id] = (docChunkCounts[c.document_id] || 0) + 1;
           }
         });
+
+        const authRes = await supabase.auth.getSession();
+        const storageRes = await supabase.storage.listBuckets();
+        
+        let edgeStatus = '🟡';
+        try {
+          const edgeRes = await supabase.functions.invoke('ping');
+          // If it throws a network error it's red, if it's just not found it's green/yellow
+          if (edgeRes.error && edgeRes.error.message.includes('fetch')) edgeStatus = '🔴';
+          else edgeStatus = '🟢';
+        } catch (e) {
+          edgeStatus = '🔴';
+        }
+
+        setVitals(v => ({
+          ...v,
+          supabase: (memRes.error || docRes.error) ? '🔴' : '🟢',
+          auth: authRes.error ? '🔴' : '🟢',
+          storage: storageRes.error ? '🔴' : '🟢',
+          edge: edgeStatus,
+          memory: memRes.error ? '🔴' : '🟢',
+          rag: docRes.error ? '🔴' : '🟢',
+          embedding: (chunks && chunks.length > 0) ? '🟢' : (chunkRes.error ? '🔴' : '🟡')
+        }));
 
         setStats({
           memories: memories.length,
@@ -509,22 +538,20 @@ export default function HomeDashboard() {
                 </div>
               </div>
               
-              <div className="group pt-4 border-t border-white/5">
-                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">
-                  Database Core
-                </div>
-                <div className="text-lg font-light text-white tracking-widest">
-                  SUPABASE
-                </div>
-              </div>
               
-              <div className="group">
-                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">
-                  Health Score
+              <div className="group pt-4 border-t border-white/5">
+                <div className="text-[10px] text-slate-500 mb-4 uppercase tracking-wider font-mono">
+                  Ecosystem Health
                 </div>
-                <div className="text-lg font-light text-emerald-400 tracking-widest flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  OPTIMAL
+                <div className="space-y-2 text-[10px] font-mono tracking-widest text-slate-300">
+                  <div className="flex items-center gap-2"><span>{vitals.supabase}</span> SUPABASE CONNECTION</div>
+                  <div className="flex items-center gap-2"><span>{vitals.auth}</span> AUTH SERVICE</div>
+                  <div className="flex items-center gap-2"><span>{vitals.realtime}</span> REALTIME SERVICE</div>
+                  <div className="flex items-center gap-2"><span>{vitals.storage}</span> STORAGE SERVICE</div>
+                  <div className="flex items-center gap-2"><span>{vitals.edge}</span> EDGE FUNCTIONS</div>
+                  <div className="flex items-center gap-2"><span>{vitals.memory}</span> MEMORY SYSTEM</div>
+                  <div className="flex items-center gap-2"><span>{vitals.rag}</span> RAG SYSTEM</div>
+                  <div className="flex items-center gap-2"><span>{vitals.embedding}</span> EMBEDDING SYSTEM</div>
                 </div>
               </div>
             </div>
