@@ -4,7 +4,7 @@ import { supabase } from '../../supabase';
 
 export default function HomeDashboard() {
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
-  const [stats, setStats] = useState({ memories: 0, documents: 0, chats: 0 });
+  const [stats, setStats] = useState({ memories: 0, documents: 0, chats: 0, orphans: 0 });
   const [vitals, setVitals] = useState({
     supabase: '⚪', auth: '⚪', realtime: '⚪', storage: '⚪', 
     edge: '⚪', memory: '⚪', rag: '⚪', embedding: '⚪'
@@ -170,12 +170,6 @@ export default function HomeDashboard() {
           embedding: (chunks && chunks.length > 0) ? '🟢' : (chunkRes.error ? '🔴' : '🟡')
         }));
 
-        setStats({
-          memories: memories.length,
-          documents: documents.length,
-          chats: chats.length,
-        });
-
         setLastCheckTime(new Date().toLocaleTimeString('id-ID', { hour12: false }));
 
         const nodes = [];
@@ -317,6 +311,15 @@ export default function HomeDashboard() {
         Object.values(dynamicSubclusters).forEach(sc => {
           nodes.push(sc);
           links.push({ source: sc.parent, target: sc.id });
+        });
+
+        const orphanCount = nodes.filter(n => !n.isCategory && n.data && n.data.relations === 0).length;
+        
+        setStats({
+          memories: memories.length,
+          documents: documents.length,
+          chats: chats.length,
+          orphans: orphanCount
         });
 
         setGraphData({ nodes, links });
@@ -593,6 +596,23 @@ export default function HomeDashboard() {
                   <div className="flex items-center gap-2"><span>{vitals.rag}</span> RAG SYSTEM</div>
                   <div className="flex items-center gap-2"><span>{vitals.embedding}</span> EMBEDDING SYSTEM</div>
                 </div>
+              </div>
+
+              <div className="group pt-4 border-t border-white/5" title="Nodes that exist but are not connected to the Mamet knowledge graph.">
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">
+                  Orphan Nodes
+                </div>
+                {(() => {
+                  const oc = stats.orphans || 0;
+                  let colorClass = 'text-[#00ff88] drop-shadow-[0_0_15px_rgba(0,255,136,0.4)]'; // Green for 0
+                  if (oc >= 1 && oc <= 5) colorClass = 'text-[#ffcc00] drop-shadow-[0_0_15px_rgba(255,204,0,0.4)]'; // Yellow for 1-5
+                  else if (oc > 5) colorClass = 'text-[#ff4444] drop-shadow-[0_0_15px_rgba(255,68,68,0.4)]'; // Red for >5
+                  return (
+                    <div className={`text-3xl font-light font-mono ${colorClass}`}>
+                      {oc}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
