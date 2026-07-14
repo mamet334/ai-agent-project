@@ -1,5 +1,23 @@
 # Changelog
 
+## Mamet AI v4.0.0 - Layout Engine & UI Constitution Amendment
+**Release Date: 14 Juli 2026**
+
+### Overview
+Pembaruan kritikal pada mesin tata letak (*layout engine*) untuk memastikan stabilitas *Native Desktop App* dan restrukturisasi navigasi mengikuti Amandemen Konstitusi UI. Fokus rilis ini adalah perbaikan *Scroll-to-Focus bug* yang menyebabkan antarmuka melompat keluar layar, serta pemisahan tegas antara Navigasi Global dan Navigasi Sesi.
+
+### Architecture Improvements
+
+#### UI Constitution Amendment
+* Pemisahan fungsi navigasi: `Sidebar` murni digunakan untuk Navigasi Global (perpindahan Mode, Knowledge, Settings).
+* Tombol *Percakapan Baru* (`+`) dipindahkan dari Global Sidebar ke dalam `ConversationEngine`.
+* *Session Toolbar* (☰ dan `+`) sekarang berdampingan di sudut obrolan dan sepenuhnya dienkapsulasi untuk mengelola riwayat sesi dalam mode aktif (Assistant, Engineer, Lite), setara dengan arsitektur Claude Desktop / Cursor.
+
+#### Layout Engine & Scroll Isolation (Native Desktop Feel)
+* **CSS Grid Clamping**: Mengubah `gridTemplateRows: '1fr'` menjadi `minmax(0, 1fr)` di `AppShell` untuk mencegah perenggangan tinggi baris (*flex/grid leakage*) melebihi tinggi layar.
+* **Scroll-to-Focus Fix**: Menambahkan `overflow: hidden` pada elemen `html` dan `body` global untuk mematikan perilaku *Native Browser Scroll* yang sering menyebabkan layar bergeser (layout shift) saat kotak teks difokuskan.
+* **Toolbar Render Restructure**: Memindahkan posisi *SessionToolbar* (☰ dan `+`) ke luar *Inner Wrapper* pada `ConversationEngine`. Hal ini mengisolasi tombol dari pergeseran posisi absolut yang disebabkan oleh ekspansi *scrollHeight* dari elemen visual *Atmospheric Glow*.
+
 ## Mamet AI v3.0.0 - Context Isolation & Identity Engine
 **Release Date: 30 Juni 2026**
 
