@@ -156,9 +156,11 @@ Menjelaskan Core Architecture.
 
 19_REFERENCE_IMPLEMENTATION.md
 
+23_HOME_DASHBOARD_SPEC.md
+
 ↓
 
-Menjelaskan implementasi teknis.
+Menjelaskan implementasi teknis dan spesifikasi UI spesifik.
 
 ---
 
