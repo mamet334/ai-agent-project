@@ -11,6 +11,7 @@ export default function HomeDashboard() {
   });
   const [selectedNode, setSelectedNode] = useState(null);
   const [activePath, setActivePath] = useState(null);
+  const [lastCheckTime, setLastCheckTime] = useState('...');
   
   const fgRef = useRef();
   const containerRef = useRef();
@@ -94,6 +95,7 @@ export default function HomeDashboard() {
       })
       .subscribe((status) => {
         setVitals(v => ({ ...v, realtime: status === 'SUBSCRIBED' ? '🟢' : '🔴' }));
+        setLastCheckTime(new Date().toLocaleTimeString('id-ID', { hour12: false }));
       });
 
     window.triggerReasoningHighlight = triggerReasoningHighlight;
@@ -173,6 +175,8 @@ export default function HomeDashboard() {
           documents: documents.length,
           chats: chats.length,
         });
+
+        setLastCheckTime(new Date().toLocaleTimeString('id-ID', { hour12: false }));
 
         const nodes = [];
         const links = [];
@@ -540,10 +544,46 @@ export default function HomeDashboard() {
               
               
               <div className="group pt-4 border-t border-white/5">
-                <div className="text-[10px] text-slate-500 mb-4 uppercase tracking-wider font-mono">
-                  Ecosystem Health
+                <div className="flex items-center justify-between mb-4">
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wider font-mono">
+                    Ecosystem Health
+                  </div>
+                  <div className="text-[9px] text-slate-600 font-mono">
+                    LAST CHECK: {lastCheckTime}
+                  </div>
                 </div>
-                <div className="space-y-2 text-[10px] font-mono tracking-widest text-slate-300">
+                
+                {(() => {
+                  const vitalsValues = Object.values(vitals);
+                  const hasRed = vitalsValues.includes('🔴');
+                  const hasYellow = vitalsValues.includes('🟡');
+                  const hasPending = vitalsValues.includes('⚪');
+                  
+                  let overallStatus = '🟢 HEALTHY';
+                  let overallColor = 'text-green-400';
+                  let overallGlow = 'drop-shadow-[0_0_15px_rgba(34,197,94,0.4)]';
+                  
+                  if (hasRed) {
+                    overallStatus = '🔴 CRITICAL';
+                    overallColor = 'text-red-400';
+                    overallGlow = 'drop-shadow-[0_0_15px_rgba(239,68,68,0.4)]';
+                  } else if (hasYellow || hasPending) {
+                    overallStatus = '🟡 DEGRADED';
+                    overallColor = 'text-yellow-400';
+                    overallGlow = 'drop-shadow-[0_0_15px_rgba(234,179,8,0.4)]';
+                  }
+
+                  return (
+                    <div className="mb-4">
+                      <div className="text-[9px] text-slate-500 mb-1 uppercase tracking-wider font-mono">System Status</div>
+                      <div className={`text-lg font-light tracking-widest font-mono ${overallColor} ${overallGlow}`}>
+                        {overallStatus}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                <div className="space-y-2 text-[10px] font-mono tracking-widest text-slate-300 border-t border-white/5 pt-4">
                   <div className="flex items-center gap-2"><span>{vitals.supabase}</span> SUPABASE CONNECTION</div>
                   <div className="flex items-center gap-2"><span>{vitals.auth}</span> AUTH SERVICE</div>
                   <div className="flex items-center gap-2"><span>{vitals.realtime}</span> REALTIME SERVICE</div>
