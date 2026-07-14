@@ -85,16 +85,6 @@ export default function Sidebar() {
       </div>
       
       <nav className="flex-1 w-full space-y-2 custom-scrollbar overflow-y-auto">
-        <div className="mb-6 flex justify-center">
-          <button 
-            onClick={() => activate('app:home')}
-            title="New Chat"
-            className="w-10 h-10 flex items-center justify-center bg-primary-container text-on-primary-container rounded-xl transition-all active:scale-95 hover:shadow-[0_0_20px_rgba(0,82,255,0.3)]"
-          >
-            <span className="material-symbols-outlined">add</span>
-          </button>
-        </div>
-        
         {navTree.map((node, idx) => renderNavNode(node, idx))}
       </nav>
       

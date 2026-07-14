@@ -489,14 +489,22 @@ export default function ConversationEngine({ sessionId }) {
       {/* Area Chat Utama */}
       <div className="flex-1 flex flex-col relative overflow-hidden pt-4">
         
-        {/* Top Toggle Button for Sidebar */}
-        <div className="absolute top-6 left-6 z-50">
+        {/* Top Action Buttons (Toggle History & New Chat) */}
+        <div className="absolute top-6 left-6 z-50 flex items-center gap-2">
           <button 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             className="w-10 h-10 flex items-center justify-center bg-surface-container-low border border-outline-variant rounded-xl hover:bg-surface-variant text-on-surface transition-all shadow-sm"
             title="Toggle Chat History"
           >
             <span className="material-symbols-outlined text-[20px]">{isSidebarOpen ? 'keyboard_double_arrow_left' : 'menu'}</span>
+          </button>
+
+          <button 
+            onClick={handleNewChat}
+            className="w-10 h-10 flex items-center justify-center bg-surface-container-low border border-outline-variant rounded-xl hover:bg-surface-variant text-on-surface transition-all shadow-sm"
+            title="Percakapan Baru"
+          >
+            <span className="material-symbols-outlined text-[20px]">add</span>
           </button>
         </div>
         
