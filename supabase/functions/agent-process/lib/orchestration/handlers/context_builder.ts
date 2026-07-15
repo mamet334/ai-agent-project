@@ -34,10 +34,10 @@ export const ContextBuilderHandler = {
     const ragPromise = (async () => {
         if (!ctx.auth.userId || !ctx.request.isRagEnabled) return [];
         
-        // For OWNER/LITE modes, use lightweight keyword-based text search to avoid vector embedding quota.
+        // For ASSISTANT/LITE modes, use lightweight keyword-based text search to avoid vector embedding quota.
         // For ENGINEER mode, use full vector embedding (semantic similarity).
         // Ref: MAEF 4.5 — Capability-Based RAG Access.
-        if (ctx.policy.mode === 'OWNER' || ctx.policy.mode === 'LITE') {
+        if (ctx.policy.mode === 'ASSISTANT' || ctx.policy.mode === 'LITE') {
             try {
                 console.log('[RAG] Mode:', ctx.policy.mode, '— using keyword text search (no embedding).');
                 const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.39.3');

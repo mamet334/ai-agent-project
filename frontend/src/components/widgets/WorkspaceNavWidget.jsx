@@ -1,23 +1,24 @@
 import React from 'react';
-import { LayoutDashboard, Code, Database, Search } from 'lucide-react';
+import { LayoutDashboard, Code, Zap } from 'lucide-react';
 import { useWorkspace } from '../../core/workspace/WorkspaceContext';
 
 export default function WorkspaceNavWidget() {
   const { osState, manager } = useWorkspace();
   console.log("[LIFECYCLE] WorkspaceNavWidget loaded");
-  const activeWorkspace = osState.workspaceId || 'ws-owner';
+  const activeWorkspace = osState.workspaceId || 'ws-assistant';
 
   let workspaces = [
-    { id: 'ws-owner', name: 'Owner Workspace', icon: LayoutDashboard, type: 'OWNER' },
-    { id: 'ws-engineer', name: 'Engineer Console', icon: Code, type: 'ENGINEER' },
-    { id: 'ws-memory', name: 'Memory Core', icon: Database, type: 'MEMORY' },
-    { id: 'ws-research', name: 'Research Lab', icon: Search, type: 'RESEARCH' }
+    { id: 'ws-assistant', name: 'Assistant', icon: LayoutDashboard, type: 'ASSISTANT' },
+    { id: 'ws-lite', name: 'Lite', icon: Zap, type: 'LITE' },
+    { id: 'ws-engineer', name: 'Engineer', icon: Code, type: 'ENGINEER' }
   ];
 
   // Phase 3: Context Isolation.
   // Prevent cross-app navigation that traps the user by hiding workspaces that belong to other Apps.
   if (manager.appId === 'app:assistant') {
-    workspaces = workspaces.filter(w => w.id === 'ws-owner');
+    workspaces = workspaces.filter(w => w.id === 'ws-assistant');
+  } else if (manager.appId === 'app:mametlite') {
+    workspaces = workspaces.filter(w => w.id === 'ws-lite');
   } else if (manager.appId === 'app:engineer') {
     workspaces = workspaces.filter(w => w.id === 'ws-engineer');
   }

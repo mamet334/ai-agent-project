@@ -185,7 +185,7 @@ export default function EngineerChat({ userId }) {
         {messages.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-slate-500 text-center px-4">
             <Terminal className="w-8 h-8 mb-3 opacity-50" />
-            <p className="text-sm">Engineer Workspace terisolasi.<br/>Konteks tidak akan bocor ke Owner.</p>
+            <p className="text-sm">Engineer Workspace terisolasi.<br/>Konteks tidak akan bocor ke User.</p>
           </div>
         )}
         {messages.map((m, idx) => (

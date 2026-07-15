@@ -18,7 +18,7 @@ class WidgetRegistry {
    * @param {string} metadata.name - Human readable name
    * @param {string} metadata.icon - Lucide icon name (string representation)
    * @param {string} metadata.version - Widget version
-   * @param {string[]} metadata.allowed_workspaces - Array of workspace types (e.g. 'ENGINEER', 'OWNER')
+   * @param {string[]} metadata.allowed_workspaces - Array of workspace types (e.g. 'ENGINEER', 'ASSISTANT')
    * @param {Object} metadata.default_size - { width, height }
    * @param {string} metadata.default_workbench - 'left', 'right', 'bottom', 'floating'
    * @param {Function} metadata.component - React component (often lazy loaded)

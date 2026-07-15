@@ -9,7 +9,7 @@ export async function parseRequestParams(req: Request, user: any) {
     reqJson = {};
   }
   let { message, tools, model, userId: _clientUserId, userName, file, history, globalMemory, semanticContext, stream, desktopOSMode, ragEnabled, appSource: clientAppSource = 'assistant', workspaceTarget = 'AUTO', localWorkspaceEnabled = false, auditMode = 'OFF', mode: clientMode } = reqJson;
-  const mode = clientMode || 'OWNER';
+  const mode = clientMode || 'ASSISTANT';
   console.log('[RequestParser] Mode diterima:', mode);
 
   const jwtAppSource = user.user_metadata?.app_source as string | undefined;

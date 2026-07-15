@@ -7,7 +7,7 @@ widgets:
     source: "event_bus:lifecycle"
     priority: 1
     refresh_policy: "realtime-sse"
-    visibility: "owner_only"
+    visibility: "user_only"
     active_phases: ["ALL"]
     fallback_behavior: "readonly"
 
@@ -18,7 +18,7 @@ widgets:
     source: "event_bus:lifecycle"
     priority: 2
     refresh_policy: "realtime-sse"
-    visibility: "owner_only"
+    visibility: "user_only"
     active_phases: ["PROPOSAL", "VERIFICATION_DOCS"]
     fallback_behavior: "disabled"
 
@@ -29,7 +29,7 @@ widgets:
     source: "db:project_memory_entries"
     priority: 3
     refresh_policy: "fetch-on-load"
-    visibility: "owner_only"
+    visibility: "user_only"
     active_phases: ["ALL"]
     fallback_behavior: "readonly"
 
@@ -40,6 +40,6 @@ widgets:
     source: "system:fs"
     priority: 4
     refresh_policy: "fetch-on-load"
-    visibility: "owner_only"
+    visibility: "user_only"
     active_phases: ["ALL"]
     fallback_behavior: "readonly"

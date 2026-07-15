@@ -308,7 +308,7 @@ export class VerificationEngine {
   }
 
   /**
-   * Verifikasi untuk mode PERSONAL (OWNER/ASSISTANT)
+   * Verifikasi untuk mode PERSONAL (ASSISTANT)
    * Sesuai MAEF 4.5 dan Mamet AI Constitution Capability Separation.
    * Hanya memeriksa hal yang relevan untuk asisten pribadi.
    */

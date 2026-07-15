@@ -26,10 +26,10 @@ export default function App() {
 
   useEffect(() => {
     if (session) {
-      kernel.setOwner({
+      kernel.setUser({
         id: session.user.id,
         email: session.user.email,
-        name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Owner'
+        name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User'
       })
     }
   }, [session])
