@@ -1,5 +1,6 @@
 import { EngineeringLifecycleManager } from '../lifecycle/engineering_lifecycle.ts';
 import { RuntimeContext } from '../../runtime_context.ts';
+import { PolicyEnforcer } from '../../policy/policy_enforcer.ts';
 
 export type DispatcherDecision = 'ALLOW' | 'ALLOW_WITH_LIMIT' | 'DENY' | 'REQUIRE_USER_APPROVAL' | 'WOULD_DENY' | 'WOULD_REQUIRE_APPROVAL';
 
@@ -54,6 +55,21 @@ export class ToolDispatcher {
       if (finalDecision === 'ALLOW' && this.isHighRisk(toolName, args)) {
          finalDecision = shadowMode ? 'WOULD_DENY' : 'DENY';
          denyReason = 'Risk Gate: High risk operation detected (e.g. destructive commands or outside workspace).';
+      }
+
+      // 3. HARD POLICY ENFORCEMENT
+      if (finalDecision === 'ALLOW') {
+         // Determine workspace from mode
+         let workspaceId = 'ws-assistant';
+         if (rctx.policy.mode === 'ENGINEER') workspaceId = 'ws-engineer';
+         if (rctx.policy.mode === 'LITE') workspaceId = 'ws-lite';
+         if (rctx.policy.mode === 'ASSISTANT') workspaceId = 'ws-assistant';
+
+         const toolPolicyDecision = PolicyEnforcer.canUseTool(workspaceId, toolName);
+         if (toolPolicyDecision === 'DENY') {
+             finalDecision = shadowMode ? 'WOULD_DENY' : 'DENY';
+             denyReason = `HARD POLICY ENFORCEMENT: Workspace ${workspaceId} is not permitted to use tool ${toolName}.`;
+         }
       }
 
     } catch (e: any) {
