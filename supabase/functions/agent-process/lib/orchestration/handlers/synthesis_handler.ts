@@ -67,7 +67,7 @@ export const SynthesisHandler = {
                 console.warn(`[HARD GATE] BLOCKED. Keputusan verifikasi gagal (Skor: ${vReport.score}).`);
                 return { mode: 'DIRECT', aiResponse: { message: "Verification Failed" }, snapshot: maef.getSnapshot() };
             }
-            // For OWNER/LITE modes, failures are typically related to missing dynamic memory rather than architecture violations.
+            // For ASSISTANT/LITE modes, failures are typically related to missing dynamic memory rather than architecture violations.
             console.warn(`[HARD GATE] Soft Warning: Capability-Based Verification failed for mode=${ctx.request.mode}. Proceeding without blocking.`);
         }
     } else {

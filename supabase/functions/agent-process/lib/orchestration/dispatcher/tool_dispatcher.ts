@@ -1,7 +1,7 @@
 import { EngineeringLifecycleManager } from '../lifecycle/engineering_lifecycle.ts';
 import { RuntimeContext } from '../../runtime_context.ts';
 
-export type DispatcherDecision = 'ALLOW' | 'ALLOW_WITH_LIMIT' | 'DENY' | 'REQUIRE_OWNER_APPROVAL' | 'WOULD_DENY' | 'WOULD_REQUIRE_APPROVAL';
+export type DispatcherDecision = 'ALLOW' | 'ALLOW_WITH_LIMIT' | 'DENY' | 'REQUIRE_USER_APPROVAL' | 'WOULD_DENY' | 'WOULD_REQUIRE_APPROVAL';
 
 export interface DispatcherResult {
   decision: DispatcherDecision;
@@ -69,7 +69,7 @@ export class ToolDispatcher {
     await this.logTelemetry(toolName, args, finalDecision, denyReason, rctx);
 
     // Final Execution
-    if (!shadowMode && (finalDecision === 'DENY' || finalDecision === 'REQUIRE_OWNER_APPROVAL')) {
+    if (!shadowMode && (finalDecision === 'DENY' || finalDecision === 'REQUIRE_USER_APPROVAL')) {
       if (rctx?.state?._dispatchDepth) rctx.state._dispatchDepth--;
       throw new Error(denyReason);
     }

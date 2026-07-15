@@ -4,7 +4,7 @@ import { kernel } from '../core/runtime/Kernel';
 import { User, Mail, Shield, LogOut, Palette, Activity, Monitor, Bell, Cpu, Clock, Brain, Key } from 'lucide-react';
 
 export default function Settings() {
-  const [owner, setOwner] = useState(null);
+  const [user, setUser] = useState(null);
   const [health, setHealth] = useState(null);
   
   // AI Config State
@@ -14,8 +14,8 @@ export default function Settings() {
   const [saveStatus, setSaveStatus] = useState('');
   
   useEffect(() => {
-    // Get owner from Kernel identity
-    setOwner(kernel.identity.owner);
+    // Get user from Kernel identity
+    setUser(kernel.identity.user);
     setHealth(kernel.getHealth());
 
     // Fetch initial state from services
@@ -196,10 +196,10 @@ export default function Settings() {
           <section className="col-span-12 glass-panel rim-light p-gutter rounded-xl border border-outline-variant">
              <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex-1">
-                  <h3 className="font-headline-md text-headline-md mb-2">Owner Identity</h3>
+                  <h3 className="font-headline-md text-headline-md mb-2">User Identity</h3>
                   <div className="text-body-base text-on-surface-variant">
-                    Name: {owner?.name || 'Loading...'} <br/>
-                    Email: {owner?.email || 'Loading...'}
+                    Name: {user?.name || 'Loading...'} <br/>
+                    Email: {user?.email || 'Loading...'}
                   </div>
                 </div>
                 <div className="flex-1 flex justify-end">

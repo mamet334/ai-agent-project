@@ -44,7 +44,7 @@ class Kernel {
     this.identity = {
       systemName: 'Mamet Ecosystem',
       version: '3.0.0',
-      owner: null,
+      user: null,
       createdAt: null
     };
     this._shutdownHandlers = [];
@@ -328,7 +328,7 @@ class Kernel {
       { id: 'maef_principles', type: 'core', name: 'MAEF Core Principles' }
     ];
     const memorySeed = {
-      ownerIdentity: this.identity.owner,
+      userIdentity: this.identity.user,
       bootstrapContext: { phase: 8, timestamp: new Date().toISOString() },
       configSnapshot: { ...this.config }
     };
@@ -499,9 +499,9 @@ class Kernel {
   }
 
   // Identity Management
-  setOwner(ownerInfo) {
-    this.identity.owner = ownerInfo;
-    this.log('INFO', 'Owner identity set', { ownerName: ownerInfo?.name || 'Unknown' });
+  setUser(userInfo) {
+    this.identity.user = userInfo;
+    this.log('INFO', 'User identity set', { userName: userInfo?.name || 'Unknown' });
   }
 
   // Health Monitoring
