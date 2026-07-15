@@ -487,7 +487,11 @@ export default function AIAgent() {
   const [conversations, setConversations] = useState([{ id: 'default', title: 'Percakapan Baru', messages: [], updated_at: new Date().toISOString() }]);
   const [currentConversationId, setCurrentConversationId] = useState('default');
   const [currentlyTypingId, setCurrentlyTypingId] = useState(null);
-  const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('ai_agent_selected_model') || 'gemini-2.5-flash');
+  // Perbaikan: Inisialisasi selectedModel dari localStorage dan pastikan sinkron dengan metadata nanti
+  const [selectedModel, setSelectedModel] = useState(() => {
+    const local = localStorage.getItem('ai_agent_selected_model');
+    return local || 'gemini-2.5-flash';
+  });
   const [globalMemory, setGlobalMemory] = useState('');
   const [customModels, setCustomModels] = useState(() => {
     const storedCustom = localStorage.getItem('ai_agent_custom_models');
@@ -899,11 +903,11 @@ export default function AIAgent() {
     localStorage.setItem('ai_agent_selected_model', selectedModel);
   }, [selectedModel]);
 
+  // Perbaikan: Simpan globalMemory ke Supabase metadata dengan debounce
   useEffect(() => {
     const userKey = user ? user.id : 'anon';
     localStorage.setItem(`ai_agent_global_memory_${userKey}`, globalMemory);
     
-    // Save to DB metadata dynamically with debounce to avoid spamming
     if (user && globalMemory !== (user.user_metadata?.global_memory || '')) {
       const timeoutId = setTimeout(() => {
         supabase.auth.updateUser({
@@ -914,10 +918,10 @@ export default function AIAgent() {
     }
   }, [globalMemory, user]);
 
+  // Perbaikan: Simpan customModels ke Supabase metadata
   useEffect(() => {
     localStorage.setItem('ai_agent_custom_models', JSON.stringify(customModels));
     
-    // Save to DB metadata dynamically with debounce to avoid spamming
     if (user && JSON.stringify(customModels) !== JSON.stringify(user.user_metadata?.custom_models || [])) {
       const timeoutId = setTimeout(() => {
         supabase.auth.updateUser({
@@ -927,6 +931,35 @@ export default function AIAgent() {
       return () => clearTimeout(timeoutId);
     }
   }, [customModels, user]);
+
+  // Perbaikan: Simpan selectedModel ke Supabase metadata agar persist saat refresh
+  useEffect(() => {
+    // Simpan ke localStorage (untuk akses cepat saat booting)
+    localStorage.setItem('ai_agent_selected_model', selectedModel);
+    
+    // Simpan ke Supabase User Metadata
+    if (user) {
+      const timeoutId = setTimeout(async () => {
+        const { error } = await supabase.auth.updateUser({
+          data: { selected_model: selectedModel }
+        });
+        if (error) console.error('Gagal update metadata model:', error);
+      }, 1000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [selectedModel, user]);
+
+  // Perbaikan: Sinkronisasi Model dari Metadata User saat login
+  useEffect(() => {
+    if (user && user.user_metadata?.selected_model) {
+      const metaModel = user.user_metadata.selected_model;
+      const localModel = localStorage.getItem('ai_agent_selected_model');
+      // Jika model di metadata berbeda dengan local, pilih metadata (karena ini Source of Truth)
+      if (metaModel !== localModel) {
+        setSelectedModel(metaModel);
+      }
+    }
+  }, [user]);
 
   // Supabase Sync Helper
   const syncConversationToDB = async (conv) => {
