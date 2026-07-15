@@ -125,14 +125,29 @@ export class OpenRouterAdapter implements CapabilityAdapter {
     }
     messages.push({ role: 'user', content: promptText });
     
-    let openRouterModel = 'anthropic/claude-sonnet-4.6';
-    if (!forceDefaultModel) {
-      if (this.rctx.model.model && this.rctx.model.model.startsWith('openrouter/')) {
-        openRouterModel = this.rctx.model.model.replace('openrouter/', '');
-      } else if (this.rctx.model.model === 'openrouter-llama-3') {
-        openRouterModel = 'anthropic/claude-sonnet-4.6';
-      } else if (this.rctx.model.model === 'openrouter-google-gemini-2.0-flash-exp') {
-        openRouterModel = 'anthropic/claude-sonnet-4.6';
+    // --- PERBAIKAN: HAPUS HARCODE CLAUDE, GUNAKAN MODEL DARI UI ---
+    let openRouterModel: string;
+    if (forceDefaultModel) {
+      // Jika fallback darurat, pakai Llama 3.1 8B gratis
+      openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
+    } else {
+      const rawModel = this.rctx.model.model;
+      if (!rawModel) {
+        openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
+      } else if (rawModel.startsWith('openrouter/')) {
+        // Jika model sudah dalam format openrouter/xxx, langsung pakai
+        openRouterModel = rawModel.replace('openrouter/', '');
+      } else {
+        // Mapping untuk model yang dipilih dari dropdown UI
+        const modelMap: Record<string, string> = {
+          'openrouter-llama-3': 'meta-llama/llama-3-8b-instruct:free',
+          'openrouter-google-gemini-2.0-flash-exp': 'google/gemini-2.0-flash-exp:free',
+          'gpt-4o-mini': 'openai/gpt-4o-mini',
+          'gpt-4o': 'openai/gpt-4o',
+          'claude-3.5-sonnet': 'anthropic/claude-3.5-sonnet:beta',
+          // Tambahkan mapping lain sesuai kebutuhan
+        };
+        openRouterModel = modelMap[rawModel] || 'meta-llama/llama-3.1-8b-instruct:free';
       }
     }
 
@@ -160,8 +175,23 @@ export class OpenRouterAdapter implements CapabilityAdapter {
 
   async *stream(input: any, context: AdapterContext): AsyncGenerator<string, void, unknown> {
     const { promptText, systemPromptText, chatHistory } = input;
-    let orModel = 'meta-llama/llama-3.1-8b-instruct:free';
-    if (this.rctx.model.model && this.rctx.model.model.startsWith('openrouter/')) orModel = this.rctx.model.model.replace('openrouter/', '');
+    // --- PERBAIKAN: HAPUS HARCODE CLAUDE, GUNAKAN MODEL DARI UI ---
+    let orModel: string;
+    const rawModel = this.rctx.model.model;
+    if (!rawModel) {
+      orModel = 'meta-llama/llama-3.1-8b-instruct:free';
+    } else if (rawModel.startsWith('openrouter/')) {
+      orModel = rawModel.replace('openrouter/', '');
+    } else {
+      const modelMap: Record<string, string> = {
+        'openrouter-llama-3': 'meta-llama/llama-3-8b-instruct:free',
+        'openrouter-google-gemini-2.0-flash-exp': 'google/gemini-2.0-flash-exp:free',
+        'gpt-4o-mini': 'openai/gpt-4o-mini',
+        'gpt-4o': 'openai/gpt-4o',
+        'claude-3.5-sonnet': 'anthropic/claude-3.5-sonnet:beta',
+      };
+      orModel = modelMap[rawModel] || 'meta-llama/llama-3.1-8b-instruct:free';
+    }
     
     const messages = [];
     if (systemPromptText) messages.push({ role: 'system', content: systemPromptText });
