@@ -209,9 +209,19 @@ export default function HomeDashboard() {
           }
         };
 
+        // Helper untuk mapping legacy name ke arsitektur baru
+        const mapLegacyName = (name) => {
+          if (!name) return 'General';
+          const n = name.toLowerCase();
+          if (n === 'owner' || n === 'ws-owner') return 'engineer';
+          if (n === 'ws-agent-forge') return 'assistant';
+          return name;
+        };
+
         // 3. Process Actual Data into Subclusters
         memories.forEach(m => {
-          const type = m.metadata?.type || m.metadata?.category || 'General';
+          let type = m.metadata?.type || m.metadata?.category || 'General';
+          type = mapLegacyName(type);
           const subcatId = `subcat-mem-${type.toLowerCase()}`;
           registerSubcluster(subcatId, type, 'cat-memory');
 
@@ -259,7 +269,8 @@ export default function HomeDashboard() {
         });
 
         documents.forEach(d => {
-          const type = d.metadata?.file_type || d.metadata?.type || 'Document';
+          let type = d.metadata?.file_type || d.metadata?.type || 'Document';
+          type = mapLegacyName(type);
           const subcatId = `subcat-rag-${type.toLowerCase()}`;
           registerSubcluster(subcatId, type, 'cat-rag');
 
@@ -284,7 +295,8 @@ export default function HomeDashboard() {
         });
 
         chats.forEach(c => {
-          const type = c.workspace_type || 'Unknown';
+          let type = c.workspace_type || 'Unknown';
+          type = mapLegacyName(type);
           const subcatId = `subcat-chat-${type.toLowerCase()}`;
           registerSubcluster(subcatId, type, 'cat-chat');
 
