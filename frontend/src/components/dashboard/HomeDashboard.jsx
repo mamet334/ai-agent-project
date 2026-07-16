@@ -401,10 +401,38 @@ export default function HomeDashboard() {
           try {
             const res = await fetchExecutionTrace({ traceId: activeTraceId, limit: EXEC_TRACE_MAX });
             setExecutionTrace({ traceId: res.traceId, timeline: res.timeline, loading: false, error: null });
+
+            // Minimal mapping untuk monitoring tata surya:
+            // - bila ada failed/timeout di timeline → highlight kategori komunikasi/pipeline
+            // KISS: highlight cat-edge + cat-chat saja agar terlihat "putus" secara cepat.
+            const hasTimeout = (res.timeline || []).some(e => (e.status || '').toLowerCase() === 'timeout');
+            const hasFailed = (res.timeline || []).some(e => (e.status || '').toLowerCase() === 'failed');
+
+            if (hasTimeout || hasFailed) {
+              const edgeNodeId = 'cat-edge';
+              const chatNodeId = 'cat-chat';
+
+              const nodesToActivate = new Set(['core-maef', edgeNodeId, chatNodeId]);
+              const linksToActivate = new Set();
+
+              // add direct links from core -> categories we care about
+              links.forEach(l => {
+                const sId = l.source.id || l.source;
+                const tId = l.target.id || l.target;
+                if (sId === 'core-maef' && (tId === edgeNodeId || tId === chatNodeId)) {
+                  linksToActivate.add(`${sId}->${tId}`);
+                }
+              });
+
+              setActivePath({ nodes: nodesToActivate, links: linksToActivate });
+              if (timeoutRef.current) clearTimeout(timeoutRef.current);
+              timeoutRef.current = setTimeout(() => setActivePath(null), 4000);
+            }
           } catch (e) {
             setExecutionTrace({ traceId: activeTraceId, timeline: [], loading: false, error: e?.message || 'Failed to load execution trace' });
           }
         }
+
 
         setGraphData({ nodes, links });
       } catch (err) {
