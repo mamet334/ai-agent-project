@@ -29,7 +29,7 @@ export default function HomeDashboard() {
       if (!graphDataRef.current) return;
       const { nodes, links } = graphDataRef.current;
       
-      const activeNodes = new Set(['core-supabase']);
+      const activeNodes = new Set(['core-maef']);
       const activeLinks = new Set();
       
       const targetNode = nodes.find(n => n.id === nodeId);
@@ -72,7 +72,7 @@ export default function HomeDashboard() {
         // 3. Ensure categories link back to core
         activeNodes.forEach(nId => {
           if (nId.startsWith('cat-')) {
-            activeLinks.add(`core-supabase->${nId}`);
+            activeLinks.add(`core-maef->${nId}`);
           }
         });
 
@@ -176,24 +176,23 @@ export default function HomeDashboard() {
         const links = [];
 
         // 1. Central Node (The Sun) - Fixed at center with strongest visual weight
-        nodes.push({ id: 'core-supabase', name: 'SUPABASE CORE', type: 'Core', group: 'core', val: 50, isCategory: true, fx: 0, fy: 0 });
+        nodes.push({ id: 'core-maef', name: 'MAEF KERNEL', type: 'Core', group: 'core', val: 50, isCategory: true, fx: 0, fy: 0 });
 
-        // 2. First Layer Nodes (Primary Planets)
         const primaryClusters = [
-          { id: 'cat-memory', name: 'USER MEMORY' },
-          { id: 'cat-rag', name: 'RAG KNOWLEDGE' },
-          { id: 'cat-chat', name: 'CONVERSATION' },
-          { id: 'cat-workspace', name: 'WORKSPACE' },
-          { id: 'cat-auth', name: 'AUTH' },
-          { id: 'cat-storage', name: 'STORAGE' },
-          { id: 'cat-edge', name: 'EDGE FUNCTIONS' },
-          { id: 'cat-realtime', name: 'REALTIME' }
+          { id: 'cat-memory', name: 'MEMORY SYSTEM' },
+          { id: 'cat-rag', name: 'KNOWLEDGE BASE' },
+          { id: 'cat-chat', name: 'SESSION CONTEXT' },
+          { id: 'cat-workspace', name: 'WORKSPACE ENV' },
+          { id: 'cat-auth', name: 'IDENTITY (AUTH)' },
+          { id: 'cat-storage', name: 'VAULT STORAGE' },
+          { id: 'cat-edge', name: 'CAPABILITY PORTS' },
+          { id: 'cat-realtime', name: 'EVENT BUS' }
         ];
 
         primaryClusters.forEach(cluster => {
           nodes.push({ id: cluster.id, name: cluster.name, type: 'Category', group: 'category', val: 20, isCategory: true });
           // Link planets to the sun
-          links.push({ source: 'core-supabase', target: cluster.id });
+          links.push({ source: 'core-maef', target: cluster.id });
         });
 
         // Helper to determine health color
