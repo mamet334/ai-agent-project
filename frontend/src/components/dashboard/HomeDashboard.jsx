@@ -6,13 +6,13 @@ export default function HomeDashboard() {
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
   const [stats, setStats] = useState({ memories: 0, documents: 0, chats: 0, orphans: 0, connected: 0 });
   const [vitals, setVitals] = useState({
-    supabase: '⚪', auth: '⚪', realtime: '⚪', storage: '⚪', 
+    supabase: '⚪', auth: '⚪', realtime: '⚪', storage: '⚪',
     edge: '⚪', memory: '⚪', rag: '⚪', embedding: '⚪'
   });
   const [selectedNode, setSelectedNode] = useState(null);
   const [activePath, setActivePath] = useState(null);
   const [lastCheckTime, setLastCheckTime] = useState('...');
-  
+
   const fgRef = useRef();
   const containerRef = useRef();
   const graphDataRef = useRef(graphData);
@@ -28,14 +28,14 @@ export default function HomeDashboard() {
     const triggerReasoningHighlight = (nodeId) => {
       if (!graphDataRef.current) return;
       const { nodes, links } = graphDataRef.current;
-      
+
       const activeNodes = new Set(['core-maef']);
       const activeLinks = new Set();
-      
+
       const targetNode = nodes.find(n => n.id === nodeId);
       if (targetNode) {
         activeNodes.add(nodeId);
-        
+
         // 1. Find direct connections
         links.forEach(l => {
           const sourceId = l.source.id || l.source;
@@ -46,29 +46,29 @@ export default function HomeDashboard() {
             activeLinks.add(`${sourceId}->${targetId}`);
           }
         });
-        
+
         // 2. Trace back to core
         activeNodes.forEach(nId => {
           links.forEach(l => {
             const sId = l.source.id || l.source;
             const tId = l.target.id || l.target;
-            
+
             if (activeNodes.has(tId) && (sId.startsWith('subcat-') || sId.startsWith('cat-'))) {
-               activeNodes.add(sId);
-               activeLinks.add(`${sId}->${tId}`);
-               // Trace subcat to cat
-               links.forEach(l2 => {
-                 const s2Id = l2.source.id || l2.source;
-                 const t2Id = l2.target.id || l2.target;
-                 if (t2Id === sId && s2Id.startsWith('cat-')) {
-                   activeNodes.add(s2Id);
-                   activeLinks.add(`${s2Id}->${t2Id}`);
-                 }
-               });
+              activeNodes.add(sId);
+              activeLinks.add(`${sId}->${tId}`);
+              // Trace subcat to cat
+              links.forEach(l2 => {
+                const s2Id = l2.source.id || l2.source;
+                const t2Id = l2.target.id || l2.target;
+                if (t2Id === sId && s2Id.startsWith('cat-')) {
+                  activeNodes.add(s2Id);
+                  activeLinks.add(`${s2Id}->${t2Id}`);
+                }
+              });
             }
           });
         });
-        
+
         // 3. Ensure categories link back to core
         activeNodes.forEach(nId => {
           if (nId.startsWith('cat-')) {
@@ -148,7 +148,7 @@ export default function HomeDashboard() {
 
         const authRes = await supabase.auth.getSession();
         const storageRes = await supabase.storage.listBuckets();
-        
+
         let edgeStatus = '🟡';
         try {
           const edgeRes = await supabase.functions.invoke('ping');
@@ -227,22 +227,22 @@ export default function HomeDashboard() {
 
           const hits = m.memory_hits || 0;
           const causalLinks = m.causal_links || [];
-          
+
           let relationsCount = causalLinks.length;
           // Feature 4: Detect cross-relations to chat or document
           const sourceChatId = m.metadata?.chat_id || m.metadata?.source_id;
           const sourceDocId = m.metadata?.document_id;
-          
+
           if (sourceChatId) relationsCount++;
           if (sourceDocId) relationsCount++;
 
-          nodes.push({ 
-            id: `mem-${m.id}`, 
-            name: m.summary || 'Memory', 
+          nodes.push({
+            id: `mem-${m.id}`,
+            name: m.summary || 'Memory',
             type: 'Memory',
-            group: 'memory', 
-            val: Math.max(3, Math.min(25, 3 + hits * 2)), 
-            color: getHealthColor(relationsCount), 
+            group: 'memory',
+            val: Math.max(3, Math.min(25, 3 + hits * 2)),
+            color: getHealthColor(relationsCount),
             data: {
               created: m.created_at,
               used: hits,
@@ -250,10 +250,10 @@ export default function HomeDashboard() {
               metadata: m.metadata || {}
             }
           });
-          
+
           // Connect to its subcluster instead of main category
           links.push({ source: subcatId, target: `mem-${m.id}` });
-          
+
           // Connect causal links
           causalLinks.forEach(targetId => {
             links.push({ source: `mem-${m.id}`, target: `mem-${targetId}` });
@@ -275,22 +275,22 @@ export default function HomeDashboard() {
           registerSubcluster(subcatId, type, 'cat-rag');
 
           const chunkCount = docChunkCounts[d.id] || 0;
-          
-          nodes.push({ 
-            id: `doc-${d.id}`, 
-            name: d.title || 'Document', 
+
+          nodes.push({
+            id: `doc-${d.id}`,
+            name: d.title || 'Document',
             type: 'Document',
-            group: 'rag', 
+            group: 'rag',
             val: Math.max(3, Math.min(25, 3 + chunkCount * 0.5)),
             color: getHealthColor(chunkCount),
             data: {
               created: d.created_at,
-              used: 'N/A', 
+              used: 'N/A',
               relations: chunkCount,
               metadata: d.metadata || {}
             }
           });
-          
+
           links.push({ source: subcatId, target: `doc-${d.id}` });
         });
 
@@ -300,13 +300,13 @@ export default function HomeDashboard() {
           const subcatId = `subcat-chat-${type.toLowerCase()}`;
           registerSubcluster(subcatId, type, 'cat-chat');
 
-          nodes.push({ 
-            id: `chat-${c.id}`, 
-            name: c.title || 'Chat', 
+          nodes.push({
+            id: `chat-${c.id}`,
+            name: c.title || 'Chat',
             type: 'Conversation',
-            group: 'chat', 
-            val: 8, 
-            color: '#22c55e', 
+            group: 'chat',
+            val: 8,
+            color: '#22c55e',
             data: {
               created: c.created_at,
               used: 1,
@@ -314,7 +314,7 @@ export default function HomeDashboard() {
               relations: 1
             }
           });
-          
+
           links.push({ source: subcatId, target: `chat-${c.id}` });
         });
 
@@ -327,7 +327,7 @@ export default function HomeDashboard() {
         const orphanCount = nodes.filter(n => !n.isCategory && n.data && n.data.relations === 0).length;
         const totalDataNodes = nodes.filter(n => !n.isCategory && n.data).length;
         const connectedCount = totalDataNodes - orphanCount;
-        
+
         setStats({
           memories: memories.length,
           documents: documents.length,
@@ -348,14 +348,14 @@ export default function HomeDashboard() {
   const getNodeColor = (node) => {
     let baseColor = node.color;
     if (!baseColor) {
-      switch(node.group) {
+      switch (node.group) {
         case 'core': baseColor = '#ffffff'; break;
         case 'category': baseColor = '#94a3b8'; break;
         case 'subcategory': baseColor = '#64748b'; break;
         default: baseColor = '#475569'; break;
       }
     }
-    
+
     if (activePath && !activePath.nodes.has(node.id)) {
       return baseColor + '20'; // Extreme fade out (hex alpha ~12%)
     }
@@ -377,8 +377,8 @@ export default function HomeDashboard() {
   };
 
   return (
-    <div className="flex h-full w-full bg-[#050505] text-slate-200 relative overflow-hidden font-body-base">
-      
+    <div className="flex flex-col md:flex-row h-full w-full bg-[#050505] text-slate-200 relative overflow-hidden font-body-base">
+
       {/* Main Graph Area */}
       <div ref={containerRef} className="flex-1 relative h-full w-full z-10">
         {graphData.nodes.length > 0 ? (
@@ -452,7 +452,7 @@ export default function HomeDashboard() {
           <p className="text-slate-400 text-sm mt-2 tracking-[0.2em] uppercase font-mono">
             Brain Cluster Visualization V4
           </p>
-          
+
           <div className="mt-6 flex items-center gap-4 text-xs font-mono">
             <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#22c55e]"></div> Healthy</div>
             <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#eab308]"></div> Low Relations</div>
@@ -462,8 +462,8 @@ export default function HomeDashboard() {
       </div>
 
       {/* Right Panel: Detail / Metrics */}
-      <div className="w-80 border-l border-white/10 bg-[#0a0a0a]/90 backdrop-blur-xl p-6 flex flex-col z-20 overflow-y-auto">
-        
+      <div className="w-full md:w-80 border-t md:border-t-0 md:border-l border-white/10 bg-[#0a0a0a]/90 backdrop-blur-xl p-6 flex flex-col z-20 overflow-y-auto h-1/2 md:h-full shrink-0">
+
         {/* Feature 2: Node Detail Panel */}
         {selectedNode && !selectedNode.isCategory ? (
           <div className="animate-in fade-in slide-in-from-right-4 duration-300">
@@ -475,7 +475,7 @@ export default function HomeDashboard() {
                 <span className="material-symbols-outlined text-[16px]">close</span>
               </button>
             </div>
-            
+
             <div className="space-y-4">
               <div className="mb-6">
                 <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">Label</div>
@@ -495,10 +495,9 @@ export default function HomeDashboard() {
 
               <div>
                 <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">Relations</div>
-                <div className={`text-xs font-bold ${
-                  selectedNode.data?.relations === 0 ? 'text-red-400' : 
-                  selectedNode.data?.relations < 3 ? 'text-yellow-400' : 'text-green-400'
-                }`}>
+                <div className={`text-xs font-bold ${selectedNode.data?.relations === 0 ? 'text-red-400' :
+                    selectedNode.data?.relations < 3 ? 'text-yellow-400' : 'text-green-400'
+                  }`}>
                   {selectedNode.data?.relations ?? 0} active links
                 </div>
               </div>
@@ -530,7 +529,7 @@ export default function HomeDashboard() {
             <h2 className="text-xs font-bold text-slate-500 tracking-[0.2em] mb-8 uppercase border-b border-white/5 pb-4">
               Realtime Metrics
             </h2>
-            
+
             <div className="space-y-6">
               <div className="group">
                 <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono group-hover:text-green-400 transition-colors">
@@ -540,7 +539,7 @@ export default function HomeDashboard() {
                   {stats.memories}
                 </div>
               </div>
-              
+
               <div className="group">
                 <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono group-hover:text-purple-400 transition-colors">
                   Total Documents
@@ -549,7 +548,7 @@ export default function HomeDashboard() {
                   {stats.documents}
                 </div>
               </div>
-              
+
               <div className="group">
                 <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono group-hover:text-yellow-400 transition-colors">
                   Total Conversations
@@ -558,8 +557,8 @@ export default function HomeDashboard() {
                   {stats.chats}
                 </div>
               </div>
-              
-              
+
+
               <div className="group pt-4 border-t border-white/5">
                 <div className="flex items-center justify-between mb-4">
                   <div className="text-[10px] text-slate-500 uppercase tracking-wider font-mono">
@@ -569,17 +568,17 @@ export default function HomeDashboard() {
                     LAST CHECK: {lastCheckTime}
                   </div>
                 </div>
-                
+
                 {(() => {
                   const vitalsValues = Object.values(vitals);
                   const hasRed = vitalsValues.includes('🔴');
                   const hasYellow = vitalsValues.includes('🟡');
                   const hasPending = vitalsValues.includes('⚪');
-                  
+
                   let overallStatus = '🟢 HEALTHY';
                   let overallColor = 'text-green-400';
                   let overallGlow = 'drop-shadow-[0_0_15px_rgba(34,197,94,0.4)]';
-                  
+
                   if (hasRed) {
                     overallStatus = '🔴 CRITICAL';
                     overallColor = 'text-red-400';
@@ -650,9 +649,9 @@ export default function HomeDashboard() {
         )}
 
         <div className="mt-auto pt-6 border-t border-white/5">
-           <div className="text-[9px] text-slate-600 font-mono text-center tracking-widest uppercase">
-             MAEF Observatory V4.0
-           </div>
+          <div className="text-[9px] text-slate-600 font-mono text-center tracking-widest uppercase">
+            MAEF Observatory V4.0
+          </div>
         </div>
       </div>
 
