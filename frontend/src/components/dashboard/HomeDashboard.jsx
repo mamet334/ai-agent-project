@@ -605,16 +605,45 @@ Activity Cluster Visualization V4
 
               {/* Feature: Execution Trace Timeline */}
               <div className="group pt-2 border-t border-white/5">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <div className="text-[10px] text-slate-500 uppercase tracking-wider font-mono">
-                      Execution Trace Timeline
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <div className="text-[10px] text-slate-500 uppercase tracking-wider font-mono">
+                        Execution Trace Timeline
+                      </div>
+                      {/* minimal pipeline/chat health derived from timeline */}
+                      {(() => {
+                        if (!executionTrace?.timeline || executionTrace.timeline.length === 0) return null;
+                        const hasTimeout = executionTrace.timeline.some(e => (e.status || '').toLowerCase() === 'timeout');
+                        const hasFailed = executionTrace.timeline.some(e => (e.status || '').toLowerCase() === 'failed');
+                        const hasRunning = executionTrace.timeline.some(e => (e.status || '').toLowerCase() === 'running' || (e.status || '').toLowerCase() === 'pending');
+
+                        if (hasTimeout) return (
+                          <div className="text-[9px] mt-1 text-amber-300 font-mono">
+                            Status: ⏳ TIMEOUT (possible disconnect)
+                          </div>
+                        );
+                        if (hasFailed) return (
+                          <div className="text-[9px] mt-1 text-red-400 font-mono">
+                            Status: ❌ FAILED (possible disconnect)
+                          </div>
+                        );
+                        if (hasRunning) return (
+                          <div className="text-[9px] mt-1 text-sky-300 font-mono">
+                            Status: 🟡 RUNNING
+                          </div>
+                        );
+                        return (
+                          <div className="text-[9px] mt-1 text-emerald-300 font-mono">
+                            Status: ✅ CONNECTED
+                          </div>
+                        );
+                      })()}
+                    </div>
+                    <div className="text-[9px] text-slate-600 font-mono">
+                      {executionTrace?.traceId ? String(executionTrace.traceId).slice(0, 10) + '…' : '—'}
                     </div>
                   </div>
-                  <div className="text-[9px] text-slate-600 font-mono">
-                    {executionTrace?.traceId ? String(executionTrace.traceId).slice(0, 10) + '…' : '—'}
-                  </div>
-                </div>
+
 
                 {executionTrace.loading ? (
                   <div className="text-[10px] text-slate-400 font-mono">Loading timeline…</div>
