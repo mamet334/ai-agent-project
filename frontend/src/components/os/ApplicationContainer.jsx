@@ -10,7 +10,7 @@ export default function ApplicationContainer() {
   }, [applicationManager]);
 
   return (
-    <main className="flex-1 ml-16 h-full overflow-hidden relative bg-background custom-scrollbar">
+    <main className="flex-1 h-full overflow-hidden relative bg-background custom-scrollbar">
       {appState.apps.map(app => {
         const isActive = appState.activeAppId === app.id;
         const Component = app.renderComponent;

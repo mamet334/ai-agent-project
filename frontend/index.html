@@ -2,13 +2,21 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co https://*.supabase.in https://generativelanguage.googleapis.com https://r.jina.ai https://lite.duckduckgo.com https://images.search.yahoo.com https://*.apify.com wss://*.supabase.co; media-src 'self' blob:;" />
+    <!-- viewport-fit=cover: penting untuk safe-area (iPhone notch & Android cutout) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co https://*.supabase.in https://generativelanguage.googleapis.com https://r.jina.ai https://lite.duckduckgo.com https://images.search.yahoo.com https://*.apify.com wss://*.supabase.co https://openrouter.ai https://api.openai.com https://api.groq.com https://api.anthropic.com; media-src 'self' blob:;" />
+    
+    <!-- Mobile Web App meta -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Mamet OS" />
+    <meta name="theme-color" content="#0a0a0c" />
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Geist:wght@100..900&family=JetBrains+Mono:wght@100..900&display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
     
-    <title>AI Agent</title>
+    <title>Mamet OS</title>
   </head>
   <body>
     <div id="root"></div>

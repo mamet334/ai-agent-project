@@ -106,19 +106,19 @@ export default function Settings() {
   };
 
   return (
-    <div className="flex-1 overflow-auto bg-background p-6 md:p-8 custom-scrollbar font-body-base text-on-surface">
-      <div className="max-w-screen-container-max mx-auto space-y-8">
+    <div className="flex-1 overflow-auto bg-background p-4 md:p-6 lg:p-8 custom-scrollbar font-body-base text-on-surface">
+      <div className="max-w-screen-container-max mx-auto space-y-6 md:space-y-8">
         
         {/* Header */}
-        <div className="mb-12">
+        <div className="mb-6 md:mb-12">
           <h1 className="font-display-lg text-display-lg text-on-surface mb-2">Settings</h1>
           <p className="text-on-surface-variant text-body-base">Configure your deep-dark AI workspace and management parameters.</p>
         </div>
 
-        <div className="grid grid-cols-12 gap-gutter">
+        <div className="grid grid-cols-12 gap-4 md:gap-gutter">
           
-          {/* AI Model Management (from HTML) combined with Identity */}
-          <section className="col-span-12 lg:col-span-8 glass-panel rim-light p-gutter rounded-xl border border-outline-variant relative overflow-hidden">
+          {/* AI Model Management — full width di mobile, 8/12 di desktop */}
+          <section className="col-span-12 lg:col-span-8 glass-panel rim-light p-4 md:p-gutter rounded-xl border border-outline-variant relative overflow-hidden">
             <div className="flex items-center gap-3 mb-8">
               <div className="w-10 h-10 rounded-lg bg-primary-container/20 flex items-center justify-center">
                 <span className="material-symbols-outlined text-primary">psychology</span>
