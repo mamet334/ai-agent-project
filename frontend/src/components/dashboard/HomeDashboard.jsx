@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import { supabase } from '../../supabase';
+import { fetchExecutionTrace } from '../../services/ExecutionTraceService';
 
 export default function HomeDashboard() {
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
@@ -12,6 +13,20 @@ export default function HomeDashboard() {
   const [selectedNode, setSelectedNode] = useState(null);
   const [activePath, setActivePath] = useState(null);
   const [lastCheckTime, setLastCheckTime] = useState('...');
+
+  const [observability, setObservability] = useState({
+    memoryReads: 0,
+    memoryWrites: 0,
+    llmCalls: 0,
+    avgLatencyMs: 0,
+    errorCount: 0,
+    costAlertCount: 0,
+    pipelineIncidentsDown: 0,
+    pipelineIncidentsTotal: 0,
+    verificationFail: 0,
+    verificationWarn: 0
+  });
+
 
   const fgRef = useRef();
   const containerRef = useRef();
@@ -144,6 +159,39 @@ export default function HomeDashboard() {
           if (c.document_id) {
             docChunkCounts[c.document_id] = (docChunkCounts[c.document_id] || 0) + 1;
           }
+        });
+
+        // ---- Observability telemetry (ai_system_logs, verification, pipeline health) ----
+        const [logsRes, checksRes, incidentsRes, verRes] = await Promise.all([
+          supabase.from('ai_system_logs').select('*').order('created_at', { ascending: false }).limit(100),
+          supabase.from('checks').select('status_code,response_time_ms,checked_at').order('checked_at', { ascending: false }).limit(100),
+          supabase.from('incidents').select('status,started_at,resolved_at').order('started_at', { ascending: false }).limit(100),
+          supabase.from('verification_audit_logs').select('decision,status,failures,execution_time_ms,created_at').order('created_at', { ascending: false }).limit(100)
+        ]);
+
+        const logs = logsRes.data || [];
+        const errors = logs.filter(l => l.error_flag);
+        const costAlerts = logs.filter(l => l.cost_alert_flag);
+        const avgLatency = logs.length > 0 ? Math.round(logs.reduce((acc, l) => acc + (l.latency_ms || 0), 0) / logs.length) : 0;
+
+        const pipelineIncidentsTotal = (incidentsRes.data || []).length;
+        const pipelineIncidentsDown = (incidentsRes.data || []).filter(i => (i.status || '').toUpperCase() === 'DOWN').length;
+
+        const verificationItems = verRes.data || [];
+        const verificationFail = verificationItems.filter(v => (v.decision || '').toUpperCase() === 'FAIL' || (v.status || '').toUpperCase() === 'FAIL').length;
+        const verificationWarn = verificationItems.filter(v => (v.decision || '').toUpperCase() === 'WARNING' || (v.decision || '').toUpperCase() === 'WARN' || (v.status || '').toUpperCase() === 'WARN' || (v.status || '').toUpperCase() === 'WARNING').length;
+
+        setObservability({
+          memoryReads: logs.reduce((acc, l) => acc + (l.memory_fetch_count || 0), 0),
+          memoryWrites: logs.reduce((acc, l) => acc + (l.memory_write_count || 0), 0),
+          llmCalls: logs.reduce((acc, l) => acc + (l.llm_call_count || 0), 0),
+          avgLatencyMs: avgLatency,
+          errorCount: errors.length,
+          costAlertCount: costAlerts.length,
+          pipelineIncidentsDown: pipelineIncidentsDown,
+          pipelineIncidentsTotal: pipelineIncidentsTotal,
+          verificationFail,
+          verificationWarn
         });
 
         const authRes = await supabase.auth.getSession();
@@ -467,6 +515,7 @@ Activity Cluster Visualization V4
         {/* Feature 2: Node Detail Panel */}
         {selectedNode && !selectedNode.isCategory ? (
           <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+
             <div className="flex items-center justify-between mb-6 border-b border-white/10 pb-4">
               <h2 className="text-xs font-bold text-primary tracking-[0.2em] uppercase">
                 Node Inspector
@@ -526,40 +575,73 @@ Activity Cluster Visualization V4
           </div>
         ) : (
           <div className="animate-in fade-in duration-300">
-            <h2 className="text-xs font-bold text-slate-500 tracking-[0.2em] mb-8 uppercase border-b border-white/5 pb-4">
-              Realtime Metrics
+              <h2 className="text-xs font-bold text-slate-500 tracking-[0.2em] mb-8 uppercase border-b border-white/5 pb-4">
+              Observability Dashboard
             </h2>
 
-            <div className="space-y-6">
-              <div className="group">
-                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono group-hover:text-green-400 transition-colors">
-                  Total Memories
+            <div className="space-y-5">
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="group">
+                  <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono group-hover:text-green-400 transition-colors">
+                    Memory Reads
+                  </div>
+                  <div className="text-2xl font-light text-green-400 font-mono drop-shadow-[0_0_15px_rgba(34,197,94,0.4)]">
+                    {observability.memoryReads}
+                  </div>
                 </div>
-                <div className="text-3xl font-light text-green-400 font-mono drop-shadow-[0_0_15px_rgba(34,197,94,0.4)]">
-                  {stats.memories}
+
+                <div className="group">
+                  <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono group-hover:text-emerald-300 transition-colors">
+                    Memory Writes
+                  </div>
+                  <div className="text-2xl font-light text-emerald-300 font-mono drop-shadow-[0_0_15px_rgba(16,185,129,0.35)]">
+                    {observability.memoryWrites}
+                  </div>
+                </div>
+
+                <div className="group">
+                  <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono group-hover:text-blue-300 transition-colors">
+                    LLM Calls
+                  </div>
+                  <div className="text-2xl font-light text-blue-300 font-mono drop-shadow-[0_0_15px_rgba(59,130,246,0.35)]">
+                    {observability.llmCalls}
+                  </div>
+                </div>
+
+                <div className="group">
+                  <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono group-hover:text-amber-200 transition-colors">
+                    Avg Latency
+                  </div>
+                  <div className="text-2xl font-light text-amber-200 font-mono drop-shadow-[0_0_15px_rgba(245,158,11,0.35)]">
+                    {observability.avgLatencyMs}
+                    <span className="text-[10px] text-slate-400 ml-1">ms</span>
+                  </div>
                 </div>
               </div>
 
-              <div className="group">
-                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono group-hover:text-purple-400 transition-colors">
-                  Total Documents
+              <div className="grid grid-cols-2 gap-4">
+                <div className="group">
+                  <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">
+                    Errors
+                  </div>
+                  <div className="text-2xl font-light text-red-400 font-mono drop-shadow-[0_0_15px_rgba(239,68,68,0.35)]">
+                    {observability.errorCount}
+                  </div>
                 </div>
-                <div className="text-3xl font-light text-purple-400 font-mono drop-shadow-[0_0_15px_rgba(168,85,247,0.4)]">
-                  {stats.documents}
+
+                <div className="group">
+                  <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">
+                    Cost Alerts
+                  </div>
+                  <div className="text-2xl font-light text-amber-400 font-mono drop-shadow-[0_0_15px_rgba(234,179,8,0.35)]">
+                    {observability.costAlertCount}
+                  </div>
                 </div>
               </div>
-
-              <div className="group">
-                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono group-hover:text-yellow-400 transition-colors">
-                  Total Conversations
-                </div>
-                <div className="text-3xl font-light text-yellow-400 font-mono drop-shadow-[0_0_15px_rgba(234,179,8,0.4)]">
-                  {stats.chats}
-                </div>
-              </div>
-
 
               <div className="group pt-4 border-t border-white/5">
+
                 <div className="flex items-center justify-between mb-4">
                   <div className="text-[10px] text-slate-500 uppercase tracking-wider font-mono">
                     Ecosystem Health
