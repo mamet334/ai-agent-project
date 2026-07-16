@@ -10,7 +10,7 @@ const parseThinkingContent = (text) => {
   if (!text) return { thinking: '', answer: '', isThinkingComplete: false };
   const startIndex = text.indexOf('<think>');
   const endIndex = text.indexOf('</think>');
-  
+
   if (startIndex !== -1) {
     if (endIndex !== -1) {
       return {
@@ -47,10 +47,10 @@ export default function ConversationEngine({ sessionId }) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
-  
+
   // Update browser window layout when chat history toggles
   useEffect(() => {
-     window.dispatchEvent(new Event('resize'));
+    window.dispatchEvent(new Event('resize'));
   }, [isSidebarOpen]);
 
   // =============================================
@@ -58,7 +58,7 @@ export default function ConversationEngine({ sessionId }) {
   // =============================================
   const saveChatToDB = useCallback(async (msgs, chatId = currentChatId) => {
     if (!msgs || msgs.length === 0) return;
-    
+
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user?.id) return;
 
@@ -106,7 +106,7 @@ export default function ConversationEngine({ sessionId }) {
     setMessages(data.messages || []);
     setCurrentChatId(chatId);
     if (window.innerWidth < 768) {
-       setIsSidebarOpen(false);
+      setIsSidebarOpen(false);
     }
   };
 
@@ -143,7 +143,7 @@ export default function ConversationEngine({ sessionId }) {
     const memoryKeywords = ['ingat', 'simpan', 'catat', 'remember', 'save', 'store'];
     const lowerMsg = userMsg.toLowerCase();
     const hasMemoryKeyword = memoryKeywords.some(keyword => lowerMsg.includes(keyword));
-    
+
     if (hasMemoryKeyword && kernel.status === 'RUNNING') {
       try {
         const memoryService = kernel.serviceManager.get('MemoryService');
@@ -151,14 +151,14 @@ export default function ConversationEngine({ sessionId }) {
           const contentToRemember = userMsg
             .replace(/(ingat|simpan|catat|remember|save|store)/gi, '')
             .trim();
-          
+
           if (contentToRemember.length > 0) {
             console.log('[ConversationEngine] Memory trigger detected, storing:', contentToRemember);
             const stored = await memoryService.storeMemory(contentToRemember, contentToRemember);
             if (stored) {
-              setMessages(prev => [...prev, { 
-                role: 'model', 
-                content: `✅ Saya telah menyimpan: "${contentToRemember}" ke memori.` 
+              setMessages(prev => [...prev, {
+                role: 'model',
+                content: `✅ Saya telah menyimpan: "${contentToRemember}" ke memori.`
               }]);
               setIsLoading(false);
               return;
@@ -174,7 +174,7 @@ export default function ConversationEngine({ sessionId }) {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
       const endpoint = 'https://uuyzdjifhdfyyvpxsofu.supabase.co/functions/v1/agent-process';
-      
+
       let aiProvider = 'gemini';
       let formattedModel = '';
       let aiKey = '';
@@ -183,10 +183,10 @@ export default function ConversationEngine({ sessionId }) {
       let memoryService = null;
 
       const activeWorkspace = workspaceManager?.activeWorkspaceId || 'ws-assistant';
-      
+
       let resolvedMode = 'ASSISTANT';
       let resolvedAppSource = 'assistant';
-      
+
       if (activeWorkspace === 'ws-engineer' || activeWorkspace === 'ENGINEER') {
         resolvedMode = 'ENGINEER';
         resolvedAppSource = 'engineer';
@@ -217,53 +217,53 @@ export default function ConversationEngine({ sessionId }) {
             console.log('[ConversationEngine] MemoryService tersedia?', !!memoryService);
             console.log('[ConversationEngine] Kernel status:', kernel?.status);
             console.log('[ConversationEngine] ServiceManager ada?', !!kernel?.serviceManager);
-            
+
             if (!memoryService) {
-                await new Promise(r => setTimeout(r, 1000));
-                const memoryServiceRetry = kernel.serviceManager.get('MemoryService');
-                console.log('[ConversationEngine] Setelah retry:', !!memoryServiceRetry);
-                memoryService = memoryServiceRetry;
+              await new Promise(r => setTimeout(r, 1000));
+              const memoryServiceRetry = kernel.serviceManager.get('MemoryService');
+              console.log('[ConversationEngine] Setelah retry:', !!memoryServiceRetry);
+              memoryService = memoryServiceRetry;
             }
           } catch (err) {
             console.warn('[ConversationEngine] ⚠️ Gagal mengakses ServiceManager:', err);
           }
 
           if (memoryService) {
-              try {
-                  console.log('[ConversationEngine] 🔍 Mencari memori untuk:', userMsg);
-                  const memories = await memoryService.getMemory(userMsg);
-                  console.log('[ConversationEngine] 📋 Hasil memori:', JSON.stringify(memories));
-                  if (memories && memories.length > 0) {
-                      localContext = memories.map(m => m.summary || m.content || '').filter(Boolean).join('\n');
-                  }
-                  console.log('[ConversationEngine] 📝 GlobalMemory yang dikirim:', localContext);
-              } catch (e) {
-                  console.warn('[ConversationEngine] MemoryService query failed:', e);
+            try {
+              console.log('[ConversationEngine] 🔍 Mencari memori untuk:', userMsg);
+              const memories = await memoryService.getMemory(userMsg);
+              console.log('[ConversationEngine] 📋 Hasil memori:', JSON.stringify(memories));
+              if (memories && memories.length > 0) {
+                localContext = memories.map(m => m.summary || m.content || '').filter(Boolean).join('\n');
               }
+              console.log('[ConversationEngine] 📝 GlobalMemory yang dikirim:', localContext);
+            } catch (e) {
+              console.warn('[ConversationEngine] MemoryService query failed:', e);
+            }
           }
 
           // --- Semantic Context Injection (Layer 2) ---
           try {
-              const semanticContextService = kernel.serviceManager.get('SemanticContextService');
-              if (semanticContextService) {
-                  console.log('[ConversationEngine] 🔍 Parsing semantic intent untuk:', userMsg);
-                  const intentResult = semanticContextService.parseIntent(userMsg);
-                  console.log('[ConversationEngine] 📋 Intent result:', intentResult);
+            const semanticContextService = kernel.serviceManager.get('SemanticContextService');
+            if (semanticContextService) {
+              console.log('[ConversationEngine] 🔍 Parsing semantic intent untuk:', userMsg);
+              const intentResult = semanticContextService.parseIntent(userMsg);
+              console.log('[ConversationEngine] 📋 Intent result:', intentResult);
 
-                  if (intentResult.entities && intentResult.entities.length > 0) {
-                      const { data: { session } } = await supabase.auth.getSession();
-                      const userId = session?.user?.id;
-                      
-                      if (userId) {
-                          semanticContextService.updateGraph(userId, intentResult.entities);
-                          const contextResult = semanticContextService.getContext(userId, userMsg);
-                          semanticContext = contextResult.context;
-                          console.log('[ConversationEngine] 📝 SemanticContext yang dikirim:', semanticContext);
-                      }
-                  }
+              if (intentResult.entities && intentResult.entities.length > 0) {
+                const { data: { session } } = await supabase.auth.getSession();
+                const userId = session?.user?.id;
+
+                if (userId) {
+                  semanticContextService.updateGraph(userId, intentResult.entities);
+                  const contextResult = semanticContextService.getContext(userId, userMsg);
+                  semanticContext = contextResult.context;
+                  console.log('[ConversationEngine] 📝 SemanticContext yang dikirim:', semanticContext);
+                }
               }
+            }
           } catch (e) {
-              console.warn('[ConversationEngine] SemanticContextService failed:', e);
+            console.warn('[ConversationEngine] SemanticContextService failed:', e);
           }
         } else {
           console.log('[ConversationEngine] Mode LITE — Memory & Semantic injection dilewati.');
@@ -285,11 +285,11 @@ export default function ConversationEngine({ sessionId }) {
         tools: isLiteMode ? ['rag_search', 'web_search', 'deep_research'] : undefined, // LITE: tools terbatas
         model: formattedModel || undefined,
       };
-      
+
       // Hapus key undefined agar payload bersih
       if (payload.tools === undefined) delete payload.tools;
       if (payload.model === undefined) delete payload.model;
-      
+
       console.log('[ConversationEngine] Workspace:', activeWorkspace, 'Mode:', resolvedMode, 'AppSource:', resolvedAppSource);
 
       // Headers dengan pembersihan karakter non-ASCII
@@ -313,7 +313,7 @@ export default function ConversationEngine({ sessionId }) {
       });
 
       console.log(`[LIFECYCLE] LLM response received (HTTP Status: ${response.status})`);
-      
+
       if (!response.ok) {
         let errorText = `HTTP error! status: ${response.status}`;
         try { const errorData = await response.json(); errorText = errorData.error || errorText; } catch (_) {
@@ -330,13 +330,13 @@ export default function ConversationEngine({ sessionId }) {
         console.log("[LIFECYCLE] Received JSON response (DIRECT mode)");
         const jsonData = await response.json();
         const messageContent = jsonData.message || jsonData;
-        setMessages(prev => [...prev, { 
-          role: 'model', 
+        setMessages(prev => [...prev, {
+          role: 'model',
           content: messageContent,
           steps: jsonData.processingSteps || [],
           metadata: jsonData
         }]);
-        
+
         openLifecycleInspector('execution', jsonData);
         setIsLoading(false);
         return;
@@ -394,7 +394,7 @@ export default function ConversationEngine({ sessionId }) {
           }
         }
       }
-      
+
       console.log("[LIFECYCLE] Stream completed");
       setMessages(prev => { const next = [...prev]; next[next.length - 1].isStreaming = false; return next; });
       const finalAiResponseText = aiResponseText;
@@ -417,23 +417,23 @@ export default function ConversationEngine({ sessionId }) {
         }
 
         if (rawCmd) {
-           interceptHit = true;
-           rawCmd = rawCmd.split('\n').map(l => l.replace(/^\$\s*/, '').replace(/^>\s*/, '').trim()).filter(l => l && !l.startsWith('#')).join(' && ');
-           try {
-             const res = await window.electronAPI.runTerminalCommand(rawCmd);
-             autoReply += `\n[SYSTEM: TERMINAL RESULT for "${rawCmd}"]\n${res.output || 'Sukses (Tidak ada output)'}\n`;
-           } catch(err) { autoReply += `\n[SYSTEM: TERMINAL ERROR]\n${err.message}\n`; }
+          interceptHit = true;
+          rawCmd = rawCmd.split('\n').map(l => l.replace(/^\$\s*/, '').replace(/^>\s*/, '').trim()).filter(l => l && !l.startsWith('#')).join(' && ');
+          try {
+            const res = await window.electronAPI.runTerminalCommand(rawCmd);
+            autoReply += `\n[SYSTEM: TERMINAL RESULT for "${rawCmd}"]\n${res.output || 'Sukses (Tidak ada output)'}\n`;
+          } catch (err) { autoReply += `\n[SYSTEM: TERMINAL ERROR]\n${err.message}\n`; }
         }
 
         const fileMatch = finalAiResponseText.match(/<edit_file\s+path=["']([^"']+)["'][^>]*>([\s\S]*?)<\/edit_file>/i);
         if (fileMatch) {
-           interceptHit = true;
-           const filePath = fileMatch[1].trim();
-           const fileContent = fileMatch[2].trim();
-           try {
-             const res = await window.electronAPI.editFileSurgical(filePath, fileContent);
-             autoReply += `\n[SYSTEM: FILE EDIT RESULT for "${filePath}"]\n${res.success ? 'Berhasil disimpan' : 'Gagal: ' + (res.error || res.message)}\n`;
-           } catch(err) { autoReply += `\n[SYSTEM: FILE EDIT ERROR]\n${err.message}\n`; }
+          interceptHit = true;
+          const filePath = fileMatch[1].trim();
+          const fileContent = fileMatch[2].trim();
+          try {
+            const res = await window.electronAPI.editFileSurgical(filePath, fileContent);
+            autoReply += `\n[SYSTEM: FILE EDIT RESULT for "${filePath}"]\n${res.success ? 'Berhasil disimpan' : 'Gagal: ' + (res.error || res.message)}\n`;
+          } catch (err) { autoReply += `\n[SYSTEM: FILE EDIT ERROR]\n${err.message}\n`; }
         }
 
         if (window.electronAPI.runDockerSandbox && !interceptHit) {
@@ -462,7 +462,7 @@ export default function ConversationEngine({ sessionId }) {
         }
 
         if (interceptHit) {
-           setTimeout(() => handleSend(null, `[OS EXECUTION REPORT]\nBerikut adalah hasil eksekusi dari tindakan otomatis Anda di sistem operasi lokal user.\n${autoReply}`), 1000);
+          setTimeout(() => handleSend(null, `[OS EXECUTION REPORT]\nBerikut adalah hasil eksekusi dari tindakan otomatis Anda di sistem operasi lokal user.\n${autoReply}`), 1000);
         }
       }
 
@@ -478,20 +478,20 @@ export default function ConversationEngine({ sessionId }) {
     <div className="flex flex-1 min-w-0 min-h-0 h-full w-full bg-background font-body-base text-on-surface">
       {/* Sidebar Riwayat Chat (Toggleable) */}
       <div className={`transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'w-0 overflow-hidden'}`}>
-        <ChatHistory 
-          onSelectChat={handleLoadChat} 
-          onNewChat={handleNewChat} 
-          activeChatId={currentChatId} 
+        <ChatHistory
+          onSelectChat={handleLoadChat}
+          onNewChat={handleNewChat}
+          activeChatId={currentChatId}
           collapsed={false}
         />
       </div>
-      
+
       {/* Area Chat Utama (Outer Wrapper, No Overflow) */}
       <div className="flex-1 flex flex-col relative min-w-0 min-h-0">
-        
+
         {/* SessionToolbar Layer (Absolute to Outer Wrapper) */}
         <div className="absolute top-6 left-6 z-50 flex items-center gap-2">
-          <button 
+          <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             className="w-10 h-10 flex items-center justify-center bg-surface-container-low border border-outline-variant rounded-xl hover:bg-surface-variant text-on-surface transition-all shadow-sm"
             title="Toggle Chat History"
@@ -499,7 +499,7 @@ export default function ConversationEngine({ sessionId }) {
             <span className="material-symbols-outlined text-[20px]">{isSidebarOpen ? 'keyboard_double_arrow_left' : 'menu'}</span>
           </button>
 
-          <button 
+          <button
             onClick={handleNewChat}
             className="w-10 h-10 flex items-center justify-center bg-surface-container-low border border-outline-variant rounded-xl hover:bg-surface-variant text-on-surface transition-all shadow-sm"
             title="Percakapan Baru"
@@ -507,128 +507,127 @@ export default function ConversationEngine({ sessionId }) {
             <span className="material-symbols-outlined text-[20px]">add</span>
           </button>
         </div>
-        
+
         {/* Inner Wrapper (Holds overflow-hidden and glows) */}
         <div className="flex-1 flex flex-col relative overflow-hidden pt-4 min-h-0">
-          <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar relative z-10">
-          {messages.length === 0 && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center opacity-30 pointer-events-none">
-              <span className="material-symbols-outlined text-[64px] mb-4 text-primary">chat_bubble</span>
-              <div className="font-headline-md text-headline-md tracking-widest text-primary">CONVERSATION ENGINE</div>
-              <div className="text-body-sm text-on-surface-variant mt-2">Waiting for input...</div>
-            </div>
-          )}
+          <div className="flex-1 min-h-0 overflow-y-auto p-3 md:p-4 space-y-3 custom-scrollbar relative z-10">
+            {messages.length === 0 && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center opacity-20 pointer-events-none gap-1">
+                <span className="material-symbols-outlined text-[28px] text-primary">chat_bubble</span>
+                <div className="text-[10px] tracking-widest text-primary uppercase font-mono">Conversation Engine</div>
+              </div>
+            )}
 
-          {messages.map((m, idx) => {
-            const parsed = parseThinkingContent(m.content);
-            const displayText = parsed.answer || m.content || '';
-            
-            return (
-              <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`relative group max-w-[85%] lg:max-w-[75%] rounded-2xl px-5 py-4 ${m.role === 'user' ? 'bg-primary-container/20 text-on-surface border border-primary/30' : 'glass-panel rim-light text-on-surface border border-outline-variant'}`}>
-                  <div className="text-body-base leading-relaxed">
-                    {/* Deep Link 1: AI Reasoning / Thinking */}
-                    {parsed.thinking && (
-                      <div 
-                        onClick={() => openLifecycleInspector('AI_REASONING', parsed.thinking)}
-                        className="mb-3 inline-flex items-center gap-2 px-3 py-2 bg-surface-container border border-outline-variant text-on-surface-variant text-body-sm rounded-lg cursor-pointer hover:bg-surface-variant hover:text-on-surface transition-all shadow-sm"
-                        title="Open AI thought trace in Right Workbench"
-                      >
-                        <span className="material-symbols-outlined text-[16px]">psychology</span>
-                        [Deep Link] View AI Reasoning Trace
-                      </div>
-                    )}
-                    
-                    {/* Deep Link 2: System & Execution Reports */}
-                    {(() => {
-                      if (!displayText) return null;
-                      const parts = displayText.split(/(\[OS EXECUTION REPORT\]|\[SYSTEM:[^\]]+\])/g);
-                      
-                      return parts.map((part, i) => {
-                        if (part === '[OS EXECUTION REPORT]') {
-                           return (
-                             <div key={i} className="my-2 block w-max items-center px-3 py-2 bg-primary/10 border border-primary/30 text-primary text-body-sm font-bold rounded-lg cursor-pointer hover:bg-primary/20 transition-colors shadow-sm"
-                                  onClick={() => openLifecycleInspector('OS_EXECUTION', displayText)}>
+            {messages.map((m, idx) => {
+              const parsed = parseThinkingContent(m.content);
+              const displayText = parsed.answer || m.content || '';
+
+              return (
+                <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`relative group max-w-[85%] lg:max-w-[75%] rounded-2xl px-5 py-4 ${m.role === 'user' ? 'bg-primary-container/20 text-on-surface border border-primary/30' : 'glass-panel rim-light text-on-surface border border-outline-variant'}`}>
+                    <div className="text-body-base leading-relaxed">
+                      {/* Deep Link 1: AI Reasoning / Thinking */}
+                      {parsed.thinking && (
+                        <div
+                          onClick={() => openLifecycleInspector('AI_REASONING', parsed.thinking)}
+                          className="mb-3 inline-flex items-center gap-2 px-3 py-2 bg-surface-container border border-outline-variant text-on-surface-variant text-body-sm rounded-lg cursor-pointer hover:bg-surface-variant hover:text-on-surface transition-all shadow-sm"
+                          title="Open AI thought trace in Right Workbench"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">psychology</span>
+                          [Deep Link] View AI Reasoning Trace
+                        </div>
+                      )}
+
+                      {/* Deep Link 2: System & Execution Reports */}
+                      {(() => {
+                        if (!displayText) return null;
+                        const parts = displayText.split(/(\[OS EXECUTION REPORT\]|\[SYSTEM:[^\]]+\])/g);
+
+                        return parts.map((part, i) => {
+                          if (part === '[OS EXECUTION REPORT]') {
+                            return (
+                              <div key={i} className="my-2 block w-max items-center px-3 py-2 bg-primary/10 border border-primary/30 text-primary text-body-sm font-bold rounded-lg cursor-pointer hover:bg-primary/20 transition-colors shadow-sm"
+                                onClick={() => openLifecycleInspector('OS_EXECUTION', displayText)}>
                                 <span className="material-symbols-outlined inline-block mr-2 text-[16px] align-text-bottom">terminal</span>
                                 OS EXECUTION REPORT (Click to Inspect)
-                             </div>
-                           );
-                        }
-                        
-                        if (part.startsWith('[SYSTEM:')) {
-                           const title = part.replace('[SYSTEM: ', '').replace(']', '');
-                           return (
-                             <div key={i} className="my-2 block w-max items-center px-3 py-2 bg-surface-container-high border border-outline-variant text-on-surface-variant text-body-sm font-bold rounded-lg cursor-pointer hover:bg-surface-variant transition-colors shadow-sm"
-                                  onClick={() => openLifecycleInspector(title, displayText)}>
+                              </div>
+                            );
+                          }
+
+                          if (part.startsWith('[SYSTEM:')) {
+                            const title = part.replace('[SYSTEM: ', '').replace(']', '');
+                            return (
+                              <div key={i} className="my-2 block w-max items-center px-3 py-2 bg-surface-container-high border border-outline-variant text-on-surface-variant text-body-sm font-bold rounded-lg cursor-pointer hover:bg-surface-variant transition-colors shadow-sm"
+                                onClick={() => openLifecycleInspector(title, displayText)}>
                                 <span className="material-symbols-outlined inline-block mr-2 text-[16px] align-text-bottom">settings_system_daydream</span>
                                 {title} (Inspect Context)
-                             </div>
-                           );
-                        }
-                        
-                        return <span key={i} className="whitespace-pre-wrap">{part}</span>;
-                      });
-                    })()}
-                    
-                    {m.isStreaming && parsed.isThinkingComplete && <span className="animate-pulse text-primary"> ▍</span>}
+                              </div>
+                            );
+                          }
+
+                          return <span key={i} className="whitespace-pre-wrap">{part}</span>;
+                        });
+                      })()}
+
+                      {m.isStreaming && parsed.isThinkingComplete && <span className="animate-pulse text-primary"> ▍</span>}
+                    </div>
+
+                    {/* Tombol Copy */}
+                    {m.role === 'model' && !m.isStreaming && displayText && (
+                      <button
+                        onClick={() => handleCopy(displayText, idx)}
+                        className="absolute top-2 right-2 p-1.5 rounded-lg bg-surface-container hover:bg-surface-variant border border-outline-variant opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Salin ke clipboard"
+                      >
+                        {copiedIndex === idx ? (
+                          <span className="material-symbols-outlined text-[16px] text-primary">check</span>
+                        ) : (
+                          <span className="material-symbols-outlined text-[16px] text-on-surface-variant">content_copy</span>
+                        )}
+                      </button>
+                    )}
                   </div>
-                  
-                  {/* Tombol Copy */}
-                  {m.role === 'model' && !m.isStreaming && displayText && (
-                    <button
-                      onClick={() => handleCopy(displayText, idx)}
-                      className="absolute top-2 right-2 p-1.5 rounded-lg bg-surface-container hover:bg-surface-variant border border-outline-variant opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Salin ke clipboard"
-                    >
-                      {copiedIndex === idx ? (
-                        <span className="material-symbols-outlined text-[16px] text-primary">check</span>
-                      ) : (
-                        <span className="material-symbols-outlined text-[16px] text-on-surface-variant">content_copy</span>
-                      )}
-                    </button>
-                  )}
+                </div>
+              )
+            })}
+            {isLoading && messages[messages.length - 1]?.role !== 'model' && (
+              <div className="flex justify-start">
+                <div className="glass-panel rim-light px-5 py-3 rounded-2xl border border-outline-variant text-on-surface-variant text-body-sm flex items-center gap-3">
+                  <Loader2 className="w-4 h-4 animate-spin text-primary" /> Awaiting Intent Dispatch...
                 </div>
               </div>
-            )
-          })}
-          {isLoading && messages[messages.length - 1]?.role !== 'model' && (
-             <div className="flex justify-start">
-              <div className="glass-panel rim-light px-5 py-3 rounded-2xl border border-outline-variant text-on-surface-variant text-body-sm flex items-center gap-3">
-                <Loader2 className="w-4 h-4 animate-spin text-primary" /> Awaiting Intent Dispatch...
-              </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Compact Input Area */}
-        <div className="px-4 pb-2 bg-transparent z-10 flex flex-col items-center w-full">
-          {workspaceManager?.activeWorkspaceId === 'ws-engineer' && (
-            <div className="w-full max-w-3xl mb-2">
-              <FolderSelector onSelect={(path) => setSelectedFolder(path)} currentPath={selectedFolder} showLabel={true} />
-            </div>
-          )}
-          <form onSubmit={handleSend} className="w-full max-w-3xl relative flex items-end gap-2 bg-surface-container-low border border-outline-variant rounded-2xl p-2 focus-within:border-primary transition-all shadow-lg pulse-focus">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(e, null); } }}
-              placeholder="Ketik instruksi atau mulai percakapan dengan OS..."
-              className="flex-1 max-h-48 min-h-[44px] bg-transparent resize-none py-3 px-4 text-body-base text-on-surface placeholder-on-surface-variant focus:outline-none custom-scrollbar"
-              rows="1"
-            />
-            <button type="submit" disabled={!input.trim() || isLoading} className="p-3 mb-1 mr-1 rounded-xl bg-primary hover:bg-primary-fixed text-on-primary disabled:opacity-50 disabled:hover:bg-primary transition-all shadow-md">
-              <span className="material-symbols-outlined text-[20px]">send</span>
-            </button>
-          </form>
-          <div className="text-center mt-2 text-label-mono text-[10px] text-on-surface-variant tracking-widest uppercase">
-            MAEF Conversation Engine v2.0 • Workspace: {workspaceManager.activeWorkspaceId}
+            )}
+            <div ref={messagesEndRef} />
           </div>
-        </div>
 
-        {/* Atmospheric Background Glow */}
-        <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-primary/5 blur-[120px] rounded-full pointer-events-none z-0"></div>
-        <div className="absolute -top-32 -left-32 w-96 h-96 bg-secondary/5 blur-[120px] rounded-full pointer-events-none z-0"></div>
+          {/* Compact Input Area */}
+          <div className="px-3 pb-1 bg-transparent z-10 flex flex-col items-center w-full">
+            {workspaceManager?.activeWorkspaceId === 'ws-engineer' && (
+              <div className="w-full max-w-3xl mb-2">
+                <FolderSelector onSelect={(path) => setSelectedFolder(path)} currentPath={selectedFolder} showLabel={true} />
+              </div>
+            )}
+            <form onSubmit={handleSend} className="w-full max-w-3xl relative flex items-end gap-2 bg-surface-container-low border border-outline-variant rounded-2xl p-2 focus-within:border-primary transition-all shadow-lg pulse-focus">
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(e, null); } }}
+                placeholder="Ketik instruksi atau mulai percakapan dengan OS..."
+                className="flex-1 max-h-48 min-h-[44px] bg-transparent resize-none py-3 px-4 text-body-base text-on-surface placeholder-on-surface-variant focus:outline-none custom-scrollbar"
+                rows="1"
+              />
+              <button type="submit" disabled={!input.trim() || isLoading} className="p-3 mb-1 mr-1 rounded-xl bg-primary hover:bg-primary-fixed text-on-primary disabled:opacity-50 disabled:hover:bg-primary transition-all shadow-md">
+                <span className="material-symbols-outlined text-[20px]">send</span>
+              </button>
+            </form>
+            <div className="text-center mt-1 text-[9px] text-on-surface-variant tracking-widest uppercase opacity-50">
+              CE v2.0 • {workspaceManager.activeWorkspaceId}
+            </div>
+          </div>
+
+          {/* Atmospheric Background Glow */}
+          <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-primary/5 blur-[120px] rounded-full pointer-events-none z-0"></div>
+          <div className="absolute -top-32 -left-32 w-96 h-96 bg-secondary/5 blur-[120px] rounded-full pointer-events-none z-0"></div>
 
         </div>
       </div>

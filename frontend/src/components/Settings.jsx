@@ -45,7 +45,7 @@ export default function Settings() {
     const vaultService = kernel.serviceManager?.get('VaultService');
 
     if (brainService) {
-      brainService.setBrain(aiProvider, aiModel);
+      brainService.setBrain(aiProvider, aiModel); // sekarang menyimpan model juga
     }
     if (vaultService) {
       vaultService.setKey(aiProvider, aiKey);
@@ -54,6 +54,34 @@ export default function Settings() {
     setSaveStatus('Saved!');
     setTimeout(() => setSaveStatus(''), 2000);
   };
+
+  const [testStatus, setTestStatus] = useState('');
+  const handleTestConnection = async () => {
+    setTestStatus('testing');
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const response = await fetch(`${API_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: 'Halo, tes koneksi. Balas dengan "OK".',
+          provider: aiProvider,
+          model: aiModel,
+          apiKey: aiKey,
+          history: []
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      setTestStatus('success');
+      setTimeout(() => setTestStatus(''), 4000);
+    } catch (err) {
+      console.error('[Settings] Test connection failed:', err);
+      setTestStatus(`error:${err.message}`);
+      setTimeout(() => setTestStatus(''), 6000);
+    }
+  };
+
 
   const handleProviderChange = (newProvider) => {
     setAiProvider(newProvider);
@@ -180,17 +208,42 @@ export default function Settings() {
                 </div>
                 <button 
                   onClick={handleSaveAiConfig}
+                  title="Save configuration"
                   className="w-12 h-12 flex items-center justify-center bg-surface-container-highest border border-outline-variant hover:border-primary text-primary rounded-lg transition-all active:scale-90"
                 >
                   <span className="material-symbols-outlined">{saveStatus ? 'check' : 'save'}</span>
                 </button>
               </div>
+
+              {/* Test Connection Button */}
+              <button
+                onClick={handleTestConnection}
+                disabled={testStatus === 'testing' || !aiKey}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg border transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-sm
+                  border-primary/40 text-primary hover:bg-primary/10"
+              >
+                <span className="material-symbols-outlined text-[18px]">
+                  {testStatus === 'testing' ? 'hourglass_top' : testStatus === 'success' ? 'check_circle' : testStatus.startsWith('error') ? 'error' : 'wifi_tethering'}
+                </span>
+                {testStatus === 'testing' ? 'Menghubungkan...' 
+                  : testStatus === 'success' ? '✓ Koneksi Berhasil!' 
+                  : testStatus.startsWith('error') ? 'Koneksi Gagal' 
+                  : 'Test Connection'}
+              </button>
+
+              {/* Error detail */}
+              {testStatus.startsWith('error:') && (
+                <div className="p-3 rounded-lg bg-error/10 border border-error/30">
+                  <p className="text-[11px] text-error leading-relaxed break-words">{testStatus.replace('error:', '')}</p>
+                </div>
+              )}
             </div>
             
             <div className="mt-6 p-4 rounded-lg bg-primary-container/5 border border-primary/20">
-              <p className="text-body-sm text-primary/80 leading-relaxed italic">"Enabling multi-key support allows the system to intelligently load-balance requests across different quotas."</p>
+              <p className="text-body-sm text-primary/80 leading-relaxed italic">"Isi API Key lalu klik <strong>Save</strong>, kemudian klik <strong>Test Connection</strong> untuk memastikan koneksi AI berhasil sebelum mulai chat."</p>
             </div>
           </section>
+
 
           {/* Identity & Danger Zone */}
           <section className="col-span-12 glass-panel rim-light p-gutter rounded-xl border border-outline-variant">
