@@ -42,21 +42,24 @@ export default function Sidebar({
 
   return (
     <>
-      {/* Mobile Overlay */}
-      {isMobile && isOpen && (
-        <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden animate-in fade-in duration-200"
+      {/* Overlay backdrop — tampil saat sidebar terbuka, di semua ukuran */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden"
           onClick={onClose}
         />
       )}
 
+      {/* Sidebar panel — collapsible di semua ukuran layar */}
       <div className={`
-        fixed inset-y-0 left-0 z-50 w-[280px] md:w-[var(--left-width)] shrink-0 bg-[#0A0A0A] border-r border-white/5 flex flex-col overflow-hidden transition-transform duration-300 ease-in-out
-        md:relative md:translate-x-0 md:bg-[#0A0A0A] md:z-auto
-        ${isMobile && !isOpen ? '-translate-x-full' : 'translate-x-0'}
+        fixed inset-y-0 left-0 z-50 w-72 shrink-0
+        bg-[#0A0A0A] border-r border-white/5
+        flex flex-col overflow-hidden
+        transition-transform duration-300 ease-in-out
+        ${isOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         {/* Header */}
-        <div className="p-6 border-b border-purple-500/20 flex items-center justify-between">
+        <div className="p-4 border-b border-purple-500/20 flex items-center justify-between">
           <div>
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 bg-slate-800/80 border border-white/10 rounded-lg flex items-center justify-center text-purple-400">

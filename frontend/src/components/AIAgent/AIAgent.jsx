@@ -274,34 +274,24 @@ export default function AIAgent() {
       <div
         id="mamet-workspace-container"
         className="relative flex h-screen overflow-hidden"
-        style={{ '--left-width': '280px', '--right-width': '260px', '--input-height': '20px' }}
+        style={{ '--left-width': '288px', '--right-width': '260px' }}
       >
         <WorkspaceProvider>
 
           {/* ── SIDEBAR CHAT ── */}
-          {/* Desktop (md+): selalu tampil di kiri */}
-          {/* Mobile: drawer overlay, dikontrol via sidebarOpen */}
-          
-          {/* Backdrop gelap saat sidebar mobile terbuka */}
-          {isMobile && sidebarOpen && (
-            <div
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
-              onClick={() => setSidebarOpen(false)}
-            />
-          )}
-
+          {/* Collapsible di semua ukuran: toggle via tombol ☰ di ChatHeader */}
           <Sidebar
             user={user}
             conversations={filteredConversations}
             currentConversationId={currentConversationId}
             onNewChat={handleNewChat}
-            onSelectChat={(id) => { handleSelectChat(id); if (isMobile) setSidebarOpen(false); }}
+            onSelectChat={(id) => { handleSelectChat(id); setSidebarOpen(false); }}
             onDeleteChat={handleDeleteChat}
             onToggleDeveloperMode={() => setIsDeveloperMode(!isDeveloperMode)}
             isDeveloperMode={isDeveloperMode}
             onOpenSettings={() => {}}
             isMobile={isMobile}
-            isOpen={isMobile ? sidebarOpen : true}
+            isOpen={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
             onSwitchAgent={handleSwitchAgent}
             activeAgent={activeAgent}
@@ -311,10 +301,10 @@ export default function AIAgent() {
           {/* ── MAIN CHAT AREA ── */}
           <div className="flex-1 flex flex-col overflow-hidden w-full relative min-w-0">
 
-            {/* Header — tombol ☰ membuka sidebar di mobile */}
+            {/* Header — tombol ☰ membuka/menutup sidebar riwayat di semua perangkat */}
             <ChatHeader
               activeAgent={activeAgent}
-              onToggleHistory={isMobile ? () => setSidebarOpen(true) : toggleHistory}
+              onToggleHistory={() => setSidebarOpen(prev => !prev)}
               onNewChat={handleNewChat}
               workspaceId={activeAgent === 'engineer' ? 'ws-engineer' : 'ws-assistant'}
             />
