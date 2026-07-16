@@ -3,6 +3,9 @@ import ForceGraph2D from 'react-force-graph-2d';
 import { supabase } from '../../supabase';
 import { fetchExecutionTrace } from '../../services/ExecutionTraceService';
 
+const EXEC_TRACE_MAX = 40;
+
+
 export default function HomeDashboard() {
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
   const [stats, setStats] = useState({ memories: 0, documents: 0, chats: 0, orphans: 0, connected: 0 });
@@ -13,6 +16,13 @@ export default function HomeDashboard() {
   const [selectedNode, setSelectedNode] = useState(null);
   const [activePath, setActivePath] = useState(null);
   const [lastCheckTime, setLastCheckTime] = useState('...');
+
+  const [executionTrace, setExecutionTrace] = useState({
+    traceId: null,
+    timeline: [],
+    loading: false,
+    error: null
+  });
 
   const [observability, setObservability] = useState({
     memoryReads: 0,
@@ -384,6 +394,18 @@ export default function HomeDashboard() {
           connected: connectedCount
         });
 
+        // If we have a trace_id currently selected (from selectedNode), fetch its timeline
+        const activeTraceId = selectedNode?.data?.trace_id || selectedNode?.data?.metadata?.trace_id;
+        if (activeTraceId) {
+          setExecutionTrace({ traceId: null, timeline: [], loading: true, error: null });
+          try {
+            const res = await fetchExecutionTrace({ traceId: activeTraceId, limit: EXEC_TRACE_MAX });
+            setExecutionTrace({ traceId: res.traceId, timeline: res.timeline, loading: false, error: null });
+          } catch (e) {
+            setExecutionTrace({ traceId: activeTraceId, timeline: [], loading: false, error: e?.message || 'Failed to load execution trace' });
+          }
+        }
+
         setGraphData({ nodes, links });
       } catch (err) {
         console.error("Failed to load Knowledge Graph:", err);
@@ -580,6 +602,93 @@ Activity Cluster Visualization V4
             </h2>
 
             <div className="space-y-5">
+
+              {/* Feature: Execution Trace Timeline */}
+              <div className="group pt-2 border-t border-white/5">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider font-mono">
+                      Execution Trace Timeline
+                    </div>
+                  </div>
+                  <div className="text-[9px] text-slate-600 font-mono">
+                    {executionTrace?.traceId ? String(executionTrace.traceId).slice(0, 10) + '…' : '—'}
+                  </div>
+                </div>
+
+                {executionTrace.loading ? (
+                  <div className="text-[10px] text-slate-400 font-mono">Loading timeline…</div>
+                ) : executionTrace.error ? (
+                  <div className="text-[10px] text-red-400 font-mono">
+                    Timeline error: {executionTrace.error}
+                  </div>
+                ) : !executionTrace?.timeline || executionTrace.timeline.length === 0 ? (
+                  <div className="text-[10px] text-slate-500 font-mono">No execution events.</div>
+                ) : (
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {executionTrace.timeline
+                      // ensure ascending even if backend sorts
+                      .slice()
+                      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+                      .map((evt, idx) => {
+                        const status = evt.status || 'unknown';
+                        const statusColor =
+                          status === 'success'
+                            ? 'text-emerald-300'
+                            : status === 'failed'
+                              ? 'text-red-400'
+                              : status === 'timeout'
+                                ? 'text-amber-300'
+                                : status === 'running'
+                                  ? 'text-sky-300'
+                                  : status === 'pending'
+                                    ? 'text-slate-300'
+                                    : 'text-slate-300';
+
+                        const metadata = evt.metadata || {};
+                        const metaSummaryParts = [];
+                        if (metadata.provider) metaSummaryParts.push(`provider:${metadata.provider}`);
+                        if (metadata.decision) metaSummaryParts.push(`decision:${metadata.decision}`);
+                        if (metadata.failures) {
+                          const f = metadata.failures;
+                          if (typeof f === 'string') metaSummaryParts.push(`failures:${f.slice(0, 60)}`);
+                          else metaSummaryParts.push('failures:present');
+                        }
+
+                        const metaSummary = metaSummaryParts.length > 0 ? metaSummaryParts.join(' | ') : null;
+                        const ts = evt.timestamp ? new Date(evt.timestamp).toLocaleTimeString('id-ID', { hour12: false }) : '—';
+                        const label = evt.event || evt.type || 'Event';
+
+                        return (
+                          <div
+                            key={`${evt.timestamp || 't'}-${idx}`}
+                            className="flex gap-3 items-start bg-white/5 border border-white/5 rounded-lg px-3 py-2"
+                          >
+                            <div className="pt-0.5">
+                              <div className={`w-2.5 h-2.5 rounded-full ${statusColor.replace('text-', 'bg-')}`}></div>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="text-[10px] font-mono text-slate-200 truncate">
+                                  {label}
+                                </div>
+                                <div className="text-[9px] text-slate-500 font-mono whitespace-nowrap">{ts}</div>
+                              </div>
+                              <div className="text-[9px] font-mono mt-0.5">
+                                <span className={statusColor}>{status}</span>
+                                {metaSummary && (
+                                  <span className="text-slate-500"> • {metaSummary}</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+
+
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="group">
