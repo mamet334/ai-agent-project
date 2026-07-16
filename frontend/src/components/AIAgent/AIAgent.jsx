@@ -44,11 +44,23 @@ export default function AIAgent() {
   const [globalMemory, setGlobalMemory] = useState('');
   const [selectedTools, setSelectedTools] = useState([]);
   const [isDeveloperMode, setIsDeveloperMode] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
-  // --- PERBAIKAN BARU 1: TAMBAHKAN STATE AGEN & PANEL RIWAYAT ---
-  const [activeAgent, setActiveAgent] = useState('assistant'); // Untuk switch Asisten/Engineer
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);    // Untuk tombol ☰ (panel riwayat)
-  // ------------------------------------------------------------
+  // --- STATE AGEN & PANEL RIWAYAT ---
+  const [activeAgent, setActiveAgent] = useState('assistant');
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+
+  // Deteksi ukuran layar untuk responsivitas
+  useEffect(() => {
+    const check = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (!mobile) setSidebarOpen(false); // tutup drawer saat resize ke desktop
+    };
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   // --- LOGIN/AUTH CHECK ---
   useEffect(() => {
@@ -256,49 +268,55 @@ export default function AIAgent() {
     } catch (e) { console.log('Batal memilih workspace'); }
   };
 
-  // --- RENDER LAYOUT 3 KOLOM SEPERTI SEMULA ---
+  // --- RENDER LAYOUT RESPONSIVE ---
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-slate-200">
-      <div 
+      <div
         id="mamet-workspace-container"
         className="relative flex h-screen overflow-hidden"
         style={{ '--left-width': '280px', '--right-width': '260px', '--input-height': '20px' }}
       >
-        {/* --- PERBAIKAN: BUNGKUS SEMUA DENGAN WorkspaceProvider --- */}
         <WorkspaceProvider>
+
+          {/* ── SIDEBAR CHAT ── */}
+          {/* Desktop (md+): selalu tampil di kiri */}
+          {/* Mobile: drawer overlay, dikontrol via sidebarOpen */}
           
-          {/* Sidebar Global */}
+          {/* Backdrop gelap saat sidebar mobile terbuka */}
+          {isMobile && sidebarOpen && (
+            <div
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+              onClick={() => setSidebarOpen(false)}
+            />
+          )}
+
           <Sidebar
             user={user}
-            // --- PERBAIKAN BARU 6: GANTI conversations dengan filteredConversations ---
-            conversations={filteredConversations} 
-            // -----------------------------------------------------------------------
+            conversations={filteredConversations}
             currentConversationId={currentConversationId}
             onNewChat={handleNewChat}
-            onSelectChat={handleSelectChat}
+            onSelectChat={(id) => { handleSelectChat(id); if (isMobile) setSidebarOpen(false); }}
             onDeleteChat={handleDeleteChat}
             onToggleDeveloperMode={() => setIsDeveloperMode(!isDeveloperMode)}
             isDeveloperMode={isDeveloperMode}
             onOpenSettings={() => {}}
-            isMobile={false}
-            isOpen={true}
-            onClose={() => {}}
-            // --- PERBAIKAN BARU 7: OPERKAN FUNGSI SWITCH DAN TOGGLE KE SIDEBAR ---
+            isMobile={isMobile}
+            isOpen={isMobile ? sidebarOpen : true}
+            onClose={() => setSidebarOpen(false)}
             onSwitchAgent={handleSwitchAgent}
             activeAgent={activeAgent}
-            onToggleHistory={toggleHistory} // Hubungkan ke tombol ☰ di Sidebar Anda!
-            // ---------------------------------------------------------------
+            onToggleHistory={toggleHistory}
           />
 
-          {/* Main Chat Area */}
-          <div className="flex-1 flex flex-col overflow-hidden w-full relative">
-            
-            {/* Header Chat - PERBAIKAN FINAL DI SINI! */}
+          {/* ── MAIN CHAT AREA ── */}
+          <div className="flex-1 flex flex-col overflow-hidden w-full relative min-w-0">
+
+            {/* Header — tombol ☰ membuka sidebar di mobile */}
             <ChatHeader
               activeAgent={activeAgent}
-              onToggleHistory={toggleHistory} // <-- GANTI DARI onToggleSidebar menjadi ini!
+              onToggleHistory={isMobile ? () => setSidebarOpen(true) : toggleHistory}
               onNewChat={handleNewChat}
-              workspaceId={activeAgent === 'engineer' ? 'ws-engineer' : 'ws-assistant'} // <-- Auto ganti workspace ID
+              workspaceId={activeAgent === 'engineer' ? 'ws-engineer' : 'ws-assistant'}
             />
 
             {/* Messages */}
@@ -325,24 +343,23 @@ export default function AIAgent() {
               workspaceHandle={workspaceHandle}
               desktopWorkspacePath={desktopWorkspacePath}
               selectedTools={selectedTools}
-              onStartResize={startResizing}
-              onResetWidth={resetWidth}
+              onStartResize={isMobile ? null : startResizing}
+              onResetWidth={isMobile ? null : resetWidth}
               isDesktopMode={!!window.electronAPI}
             />
           </div>
 
-          {/* Right Panel (Inspector) */}
+          {/* ── RIGHT INSPECTOR PANEL ── hanya di layar xl+ (≥1280px) */}
           <div className="hidden xl:flex w-[260px] shrink-0 bg-[#0A0A0A] border-l border-white/5 flex-col overflow-hidden z-30 font-sans text-slate-300">
-            <div className="h-14 px-4 border-b border-white/5 flex items-center justify-between bg-[#0A0A0A] shrink-0">
-              <h2 className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-2">Inspector</h2>
+            <div className="h-14 px-4 border-b border-white/5 flex items-center bg-[#0A0A0A] shrink-0">
+              <h2 className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">Inspector</h2>
             </div>
-            <div className="flex-1 overflow-y-auto bg-[#0A0A0A] flex flex-col scrollbar-thin scrollbar-thumb-white/10 items-center justify-center text-slate-500">
-              <p className="text-[11px]">Refactoring UI selesai.<br/>Fungsi asli 100% utuh.</p>
+            <div className="flex-1 overflow-y-auto bg-[#0A0A0A] flex flex-col items-center justify-center text-slate-500">
+              <p className="text-[11px] text-center px-4">Panel Inspector<br/>tersedia di desktop.</p>
             </div>
           </div>
 
         </WorkspaceProvider>
-        {/* --- SELESAI PERBAIKAN --- */}
       </div>
     </div>
   );

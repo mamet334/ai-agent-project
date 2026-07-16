@@ -10,9 +10,15 @@
 
 html, body {
   height: 100%;
+  /* Di mobile: izinkan scroll hanya di dalam container, bukan seluruh body */
   overflow: hidden;
   margin: 0;
   padding: 0;
+  /* Smooth scrolling di seluruh halaman */
+  scroll-behavior: smooth;
+  /* Optimalkan rendering teks di mobile */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -23,6 +29,9 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background-color: #0a0a0c;
   color: #e5e1e4;
+  /* Touch-friendly tap highlight */
+  -webkit-tap-highlight-color: rgba(0, 82, 255, 0.15);
+  touch-action: manipulation;
 }
 
 #root {
@@ -31,29 +40,84 @@ body {
   overflow: hidden;
 }
 
+/* ── GLASS & RIM EFFECTS ── */
 .glass-panel {
-    background: rgba(22, 22, 26, 0.7);
-    backdrop-filter: blur(20px);
-    border: 1px solid #27272a;
-    box-shadow: 0px 20px 40px rgba(0, 82, 255, 0.05);
+  background: rgba(22, 22, 26, 0.7);
+  backdrop-filter: blur(20px);
+  border: 1px solid #27272a;
+  box-shadow: 0px 20px 40px rgba(0, 82, 255, 0.05);
 }
 .rim-light {
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
+
+/* ── INPUT STYLES ── */
 .input-etched {
-    background-color: #0e0e10;
-    border: 1px solid #27272a;
-    transition: all 0.2s ease-in-out;
+  background-color: #0e0e10;
+  border: 1px solid #27272a;
+  transition: all 0.2s ease-in-out;
 }
 .input-etched:focus {
-    border-color: #0052ff;
-    box-shadow: 0 0 0 2px rgba(0, 82, 255, 0.2);
-    outline: none;
+  border-color: #0052ff;
+  box-shadow: 0 0 0 2px rgba(0, 82, 255, 0.2);
+  outline: none;
 }
 .btn-glow:hover {
-    box-shadow: 0 0 15px rgba(0, 82, 255, 0.4);
+  box-shadow: 0 0 15px rgba(0, 82, 255, 0.4);
 }
+
+/* ── MATERIAL ICONS ── */
 .material-symbols-outlined {
-    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-    vertical-align: middle;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+}
+
+/* ── CUSTOM SCROLLBAR ── */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+@media (max-width: 767px) {
+  /* Lebih tebal di mobile agar mudah disentuh */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 2px;
+  }
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ── SAFE AREA — iPhone notch & Android cutout ── */
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.safe-area-pt {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* ── RESPONSIVE TEXT ── */
+@media (max-width: 767px) {
+  /* Kurangi ukuran font judul di mobile */
+  h1 { font-size: clamp(1.2rem, 5vw, 2rem); }
+  h2 { font-size: clamp(1rem, 4vw, 1.5rem); }
+}
+
+/* ── PREVENT HORIZONTAL OVERFLOW ── */
+html, body, #root {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* ── MOBILE-FRIENDLY TOUCH TARGETS ── */
+@media (max-width: 767px) {
+  button, a, [role="button"] {
+    min-height: 44px;  /* Apple HIG: minimum touch target 44×44px */
+    min-width: 44px;
+  }
 }
