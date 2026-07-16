@@ -82,8 +82,8 @@ export default function HomeDashboard() {
       }
     };
 
-    // Listen to real data insertions to highlight reasoning in realtime
-    const channel = supabase.channel('brain-activity')
+    // Listen to real data insertions to highlight subsystem activity in realtime
+    const channel = supabase.channel('activity-tracing')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'user_memories' }, payload => {
         triggerReasoningHighlight(`mem-${payload.new.id}`);
       })
@@ -447,10 +447,10 @@ export default function HomeDashboard() {
         {/* Title Overlay */}
         <div className="absolute top-8 left-8 z-20 pointer-events-none">
           <h1 className="font-display-lg text-[40px] text-white font-black tracking-widest leading-none drop-shadow-2xl">
-            MAMET BRAIN
+            MAMET ACTIVITY
           </h1>
           <p className="text-slate-400 text-sm mt-2 tracking-[0.2em] uppercase font-mono">
-            Brain Cluster Visualization V4
+Activity Cluster Visualization V4
           </p>
 
           <div className="mt-6 flex items-center gap-4 text-xs font-mono">
