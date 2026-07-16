@@ -125,11 +125,11 @@ export default function WorkbenchZone({
   }
 
   // Common wrapper styles
-  const baseClasses = "flex flex-col bg-slate-950 relative min-h-0 min-w-0 h-full";
+  const baseClasses = "flex flex-col bg-slate-950 relative min-h-0 min-w-0";
   const positionClasses = {
-    'left': 'border-r border-slate-800 h-full',
-    'right': 'border-l border-slate-800 h-full',
-    'bottom': 'border-t border-slate-800 w-full'
+    'left': 'border-b md:border-b-0 md:border-r border-slate-800 h-[350px] md:h-full flex-shrink-0',
+    'right': 'border-t md:border-t-0 md:border-l border-slate-800 h-[350px] md:h-full flex-shrink-0',
+    'bottom': 'border-t border-slate-800 w-full flex-shrink-0'
   };
 
   return (

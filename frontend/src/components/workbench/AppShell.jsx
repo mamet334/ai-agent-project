@@ -7,6 +7,13 @@ import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 
 export default function AppShell({ mainPanel: MainPanelComponent }) {
   const { osState: workspaceState, manager } = useWorkspace();
+  const [isMobile, setIsMobile] = React.useState(window.innerWidth < 768);
+
+  React.useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   console.log("[AppShell] Workspace state:", workspaceState);
 
@@ -83,12 +90,12 @@ export default function AppShell({ mainPanel: MainPanelComponent }) {
 
       {/* Main OS Layout */}
       <div 
-        className="flex-1 grid overflow-hidden relative transition-all duration-300"
-        style={{
+        className={`flex-1 ${isMobile ? 'flex flex-col overflow-y-auto' : 'grid overflow-hidden'} relative transition-all duration-300`}
+        style={!isMobile ? {
           gridTemplateRows: 'minmax(0, 1fr)',
           gridTemplateColumns: layout?.grid_columns || 
             `${leftWidgets.length > 0 ? (layout?.left_size || 300) + 'px' : '0px'} 1fr ${rightWidgets.length > 0 ? (layout?.right_size || 350) + 'px' : '0px'}`
-        }}
+        } : {}}
       >
         
         {/* Left Workbench */}
@@ -100,7 +107,7 @@ export default function AppShell({ mainPanel: MainPanelComponent }) {
         />
 
         {/* Center: The Main Panel */}
-        <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-surface-container-lowest relative z-0 h-full">
+        <div className={`flex-1 flex flex-col min-w-0 ${isMobile ? 'min-h-[500px]' : 'min-h-0'} bg-surface-container-lowest relative z-0 md:h-full`}>
           
           <div className="flex-1 overflow-hidden relative h-full w-full flex flex-col">
             {/* Phase 5: Window Manager Foundation */}

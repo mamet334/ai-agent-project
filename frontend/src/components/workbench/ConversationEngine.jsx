@@ -38,8 +38,17 @@ export default function ConversationEngine({ sessionId }) {
   const [copiedIndex, setCopiedIndex] = useState(null);
   const [currentChatId, setCurrentChatId] = useState(null);
   const messagesEndRef = useRef(null);
+  const textareaRef = useRef(null);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Auto-grow textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 192)}px`;
+    }
+  }, [input]);
 
   // Auto-scroll
   useEffect(() => {
@@ -477,7 +486,7 @@ export default function ConversationEngine({ sessionId }) {
   return (
     <div className="flex flex-1 min-w-0 min-h-0 h-full w-full bg-background font-body-base text-on-surface">
       {/* Sidebar Riwayat Chat (Toggleable) */}
-      <div className={`transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'w-0 overflow-hidden'}`}>
+      <div className={`transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'w-0 overflow-hidden'} shrink-0 z-50 md:relative absolute left-0 top-0 h-full bg-background border-r border-outline-variant`}>
         <ChatHistory
           onSelectChat={handleLoadChat}
           onNewChat={handleNewChat}
@@ -485,6 +494,14 @@ export default function ConversationEngine({ sessionId }) {
           collapsed={false}
         />
       </div>
+
+      {/* Overlay Backdrop for Mobile */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden" 
+          onClick={() => setIsSidebarOpen(false)} 
+        />
+      )}
 
       {/* Area Chat Utama (Outer Wrapper, No Overflow) */}
       <div className="flex-1 flex flex-col relative min-w-0 min-h-0">
@@ -609,11 +626,12 @@ export default function ConversationEngine({ sessionId }) {
             )}
             <form onSubmit={handleSend} className="w-full max-w-3xl relative flex items-end gap-2 bg-surface-container-low border border-outline-variant rounded-2xl p-2 focus-within:border-primary transition-all shadow-lg pulse-focus">
               <textarea
+                ref={textareaRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(e, null); } }}
                 placeholder="Ketik instruksi atau mulai percakapan dengan OS..."
-                className="flex-1 max-h-48 min-h-[44px] bg-transparent resize-none py-3 px-4 text-body-base text-on-surface placeholder-on-surface-variant focus:outline-none custom-scrollbar"
+                className="flex-1 max-h-48 min-h-[44px] bg-transparent resize-none py-3 px-4 text-body-base text-on-surface placeholder-on-surface-variant focus:outline-none custom-scrollbar overflow-y-auto"
                 rows="1"
               />
               <button type="submit" disabled={!input.trim() || isLoading} className="p-3 mb-1 mr-1 rounded-xl bg-primary hover:bg-primary-fixed text-on-primary disabled:opacity-50 disabled:hover:bg-primary transition-all shadow-md">
