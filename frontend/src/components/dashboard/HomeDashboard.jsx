@@ -401,6 +401,118 @@ export default function HomeDashboard() {
           return name;
         };
 
+        // ---- Tata Surya Mamet Ecosystem (visual-only; no telemetry/schema changes) ----
+        // Orbit layout (radius fixed):
+        // Orbit1: Memory/Knowledge/RAG, Orbit2: Agent/Tool/Verification, Orbit3: Provider/Database/Pipeline/Chat
+        const ORBIT1_R = 180;
+        const ORBIT2_R = 280;
+        const ORBIT3_R = 380;
+        const ORPHAN_R = 520;
+
+        // Deterministic angle per category/subcategory (so it's "solar-system" not generic).
+        const orbitAngleByGroup = {
+          memory: 200,
+          rag: 300,
+          chat: 20,
+          memory_system: 200,
+          knowledge: 250,
+          verification: 120,
+          agent: 160,
+          tool: 240,
+          provider: 340,
+          database: 60,
+          pipeline: 280,
+          category: 45,
+          subcategory: 45
+        };
+
+        const getOrbitRadiusForGroup = (group, id) => {
+          // Use existing node types/groups we already have:
+          // - memory group -> Orbit1
+          // - rag group -> Orbit1
+          // - chat group -> Orbit3
+          // - category/subcategory -> base on category id prefix
+          if (group === 'memory' || group === 'rag') return ORBIT1_R;
+          if (group === 'chat') return ORBIT3_R;
+
+          // Categories (cat-*)
+          if (id?.startsWith('cat-memory')) return ORBIT1_R;
+          if (id?.startsWith('cat-rag')) return ORBIT1_R;
+          if (id?.startsWith('cat-chat')) return ORBIT3_R;
+          if (id?.startsWith('cat-workspace')) return ORBIT2_R;
+          if (id?.startsWith('cat-auth')) return ORBIT3_R;
+          if (id?.startsWith('cat-storage')) return ORBIT3_R;
+          if (id?.startsWith('cat-edge')) return ORBIT2_R;
+          if (id?.startsWith('cat-realtime')) return ORBIT3_R;
+          if (id?.startsWith('subcat-mem-')) return ORBIT1_R;
+          if (id?.startsWith('subcat-rag-')) return ORBIT1_R;
+          if (id?.startsWith('subcat-chat-')) return ORBIT3_R;
+
+          // Default: outer orbit-ish
+          return ORBIT3_R;
+        };
+
+        // HEALTH/DEGRADED/DOWN/UNKNOWN colors:
+        const colorByStatus = {
+          HEALTHY: '#22c55e',
+          DEGRADED: '#eab308',
+          DOWN: '#ef4444',
+          UNKNOWN: '#94a3b8' // abu-abu
+        };
+
+        const getStatusFromTelemetry = (node) => {
+          // Visual-only mapping using telemetry/state already computed in this file:
+          // - vitals memory/rag/edge/realtime/storage/auth drive most domains.
+          const mapVitalsToNode = (nodeIdOrGroup) => {
+            if (nodeIdOrGroup === 'memory' || String(nodeIdOrGroup).startsWith('subcat-mem-')) return vitals.memory;
+            if (nodeIdOrGroup === 'rag' || String(nodeIdOrGroup).startsWith('subcat-rag-')) return vitals.rag;
+            if (nodeIdOrGroup === 'chat' || String(nodeIdOrGroup).startsWith('subcat-chat-') || String(nodeIdOrGroup).includes('cat-chat')) return vitals.auth;
+            if (nodeIdOrGroup === 'edge' || String(nodeIdOrGroup).startsWith('cat-edge')) return vitals.edge;
+            if (nodeIdOrGroup === 'realtime' || String(nodeIdOrGroup).startsWith('cat-realtime')) return vitals.realtime;
+            if (nodeIdOrGroup === 'storage' || String(nodeIdOrGroup).startsWith('cat-storage')) return vitals.storage;
+            // fallback
+            return null;
+          };
+
+          const key = node.group || node.id || '';
+          const vit = mapVitalsToNode(key) || mapVitalsToNode(node.id) || mapVitalsToNode(node.type);
+
+          // vitals values are emoji; also initial are ⚪. We map them to the required 4-state.
+          if (!vit) return 'UNKNOWN';
+          const v = String(vit);
+          if (v.includes('🔴')) return 'DOWN';
+          if (v.includes('🟡')) return 'DEGRADED';
+          if (v.includes('🟢')) return 'HEALTHY';
+          if (v.includes('⚪')) return 'UNKNOWN';
+          return 'UNKNOWN';
+        };
+
+        const getNodeBaseColor = (node) => {
+          const status = getStatusFromTelemetry(node);
+          return colorByStatus[status] || colorByStatus.UNKNOWN;
+        };
+
+        const getNodeFxFy = (node) => {
+          // Core: center
+          if (node.id === 'core-maef') return { fx: 0, fy: 0 };
+
+          // Orphan: nodes with no active relations (using node.data.relations if exists)
+          const relations = node?.data?.relations;
+          const isOrphanCandidate = typeof relations === 'number' && relations === 0;
+
+          const radius = isOrphanCandidate ? ORPHAN_R : getOrbitRadiusForGroup(node.group, node.id);
+          const orbitAngle =
+            (orbitAngleByGroup[node.group] ??
+              orbitAngleByGroup[node.id?.split('-')?.[1]] ??
+              (node.id?.startsWith('cat-chat') ? 20 : 45));
+
+          const angleRad = (orbitAngle * Math.PI) / 180;
+          const fx = Math.round(Math.cos(angleRad) * radius);
+          const fy = Math.round(Math.sin(angleRad) * radius);
+
+          return { fx, fy, orphan: isOrphanCandidate };
+        };
+
         // 3. Process Actual Data into Subclusters
         memories.forEach(m => {
           let type = m.metadata?.type || m.metadata?.category || 'General';
