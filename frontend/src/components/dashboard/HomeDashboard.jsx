@@ -76,45 +76,25 @@ export default function HomeDashboard() {
       if (targetNode) {
         activeNodes.add(nodeId);
 
-        // 1. Find direct connections
-        links.forEach(l => {
-          const sourceId = l.source.id || l.source;
-          const targetId = l.target.id || l.target;
-          if (sourceId === nodeId || targetId === nodeId) {
-            activeNodes.add(sourceId);
-            activeNodes.add(targetId);
-            activeLinks.add(`${sourceId}->${targetId}`);
-          }
-        });
-
-        // 2. Trace back to core
-        activeNodes.forEach(nId => {
-          links.forEach(l => {
-            const sId = l.source.id || l.source;
-            const tId = l.target.id || l.target;
-
-            if (activeNodes.has(tId) && (sId.startsWith('subcat-') || sId.startsWith('cat-'))) {
-              activeNodes.add(sId);
-              activeLinks.add(`${sId}->${tId}`);
-              // Trace subcat to cat
-              links.forEach(l2 => {
-                const s2Id = l2.source.id || l2.source;
-                const t2Id = l2.target.id || l2.target;
-                if (t2Id === sId && s2Id.startsWith('cat-')) {
-                  activeNodes.add(s2Id);
-                  activeLinks.add(`${s2Id}->${t2Id}`);
-                }
-              });
-            }
+        // Trace path inwards to the core
+        let currentNodes = new Set([nodeId]);
+        
+        // Max 3 steps: Node -> Subcat -> Cat -> Core
+        for (let i = 0; i < 3; i++) {
+          let nextNodes = new Set();
+          currentNodes.forEach(cId => {
+            links.forEach(l => {
+              const sId = l.source.id || l.source;
+              const tId = l.target.id || l.target;
+              if (sId === cId) {
+                activeNodes.add(tId);
+                activeLinks.add(`${sId}->${tId}`);
+                nextNodes.add(tId);
+              }
+            });
           });
-        });
-
-        // 3. Ensure categories link back to core
-        activeNodes.forEach(nId => {
-          if (nId.startsWith('cat-')) {
-            activeLinks.add(`core-maef->${nId}`);
-          }
-        });
+          currentNodes = nextNodes;
+        }
 
         setActivePath({ nodes: activeNodes, links: activeLinks });
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -371,7 +351,8 @@ export default function HomeDashboard() {
 
         primaryClusters.forEach(cluster => {
           nodes.push({ id: cluster.id, name: cluster.name, type: 'Category', group: 'category', val: 25, isCategory: true });
-          links.push({ source: 'core-maef', target: cluster.id });
+          // Flow: Cluster -> Core
+          links.push({ source: cluster.id, target: 'core-maef' });
         });
 
         // Helper to determine health color
@@ -496,21 +477,25 @@ export default function HomeDashboard() {
             }
           });
 
-          links.push({ source: subcatId, target: `mem-${m.id}` });
+          // Flow: Memory Node -> Subcluster
+          links.push({ source: `mem-${m.id}`, target: subcatId });
 
           causalLinks.forEach(targetId => {
-            links.push({ source: `mem-${m.id}`, target: `mem-${targetId}` });
+            // Causal flow: Source Memory -> Target Memory
+            links.push({ source: `mem-${targetId}`, target: `mem-${m.id}` });
           });
           if (sourceChatId && chats.some(c => c.id === sourceChatId)) {
+            // Flow: Chat -> Memory
             links.push({ source: `chat-${sourceChatId}`, target: `mem-${m.id}` });
           }
           if (sourceDocId && documents.some(d => d.id === sourceDocId)) {
+            // Flow: Document -> Memory
             links.push({ source: `doc-${sourceDocId}`, target: `mem-${m.id}` });
           }
         });
 
         documents.forEach(d => {
-          let type = d.metadata?.file_type || d.metadata?.type || 'Documents';
+          let type = d.metadata?.file_type || d.metadata?.type || 'Docs';
           type = mapLegacyName(type);
           const subcatId = `subcat-know-${type.toLowerCase()}`;
           if (!staticSubclusters.some(s => s.id === subcatId)) {
@@ -533,7 +518,8 @@ export default function HomeDashboard() {
             }
           });
 
-          links.push({ source: subcatId, target: `doc-${d.id}` });
+          // Flow: Document Node -> Subcluster
+          links.push({ source: `doc-${d.id}`, target: subcatId });
         });
 
         chats.forEach(c => {
@@ -559,13 +545,15 @@ export default function HomeDashboard() {
             }
           });
 
-          links.push({ source: subcatId, target: `chat-${c.id}` });
+          // Flow: Chat Node -> Subcluster
+          links.push({ source: `chat-${c.id}`, target: subcatId });
         });
 
         // Add dynamic subclusters to graph
         Object.values(dynamicSubclusters).forEach(sc => {
           nodes.push(sc);
-          links.push({ source: sc.parent, target: sc.id });
+          // Flow: Subcluster -> Primary Cluster
+          links.push({ source: sc.id, target: sc.parent });
         });
 
         const orphanCount = nodes.filter(n => !n.isCategory && n.data && n.data.relations === 0).length;
@@ -616,17 +604,18 @@ export default function HomeDashboard() {
               const hasFailed = timeline.some(e => (e.status || '').toLowerCase() === 'failed');
 
               if (hasTimeout || hasFailed) {
-                const edgeNodeId = 'cat-edge';
-                const chatNodeId = 'cat-chat';
+                const agentNodeId = 'cat-agent';
+                const execNodeId = 'cat-execution';
 
-                const nodesToActivate = new Set(['core-maef', edgeNodeId, chatNodeId]);
+                const nodesToActivate = new Set(['core-maef', agentNodeId, execNodeId]);
                 const linksToActivate = new Set();
 
-                // add direct links from core -> categories we care about
+                // add direct links from categories we care about -> core
                 links.forEach(l => {
                   const sId = l.source.id || l.source;
                   const tId = l.target.id || l.target;
-                  if (sId === 'core-maef' && (tId === edgeNodeId || tId === chatNodeId)) {
+                  // Flow is now Cluster -> Core (tId is core-maef)
+                  if (tId === 'core-maef' && (sId === agentNodeId || sId === execNodeId)) {
                     linksToActivate.add(`${sId}->${tId}`);
                   }
                 });
