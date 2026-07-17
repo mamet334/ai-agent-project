@@ -182,15 +182,14 @@ export class OpenRouterAdapter implements CapabilityAdapter {
     const { promptText, systemPromptText, chatHistory } = input;
     // --- PERBAIKAN: HAPUS HARCODE CLAUDE, GUNAKAN MODEL DARI UI ---
     // Stream model selection:
-    // - If rawModel contains "/" pass as-is to OpenRouter.
+    // - If rawModel contains "/" pass as-is to OpenRouter (no mapping/fallback).
+    // - If rawModel is legacy key like "gpt-4o-mini", map it to "openai/gpt-4o-mini".
     let orModel: string;
     const rawModel = this.rctx.model.model;
 
     if (!rawModel) {
       orModel = 'meta-llama/llama-3.1-8b-instruct:free';
     } else if (rawModel.includes('/')) {
-      // BUGFIX (per your report):
-      // If rawModel contains "/" (e.g. "openai/gpt-4o-mini"), DO NOT map to fallback.
       orModel = rawModel;
     } else if (rawModel.startsWith('openrouter/')) {
       orModel = rawModel.replace('openrouter/', '');
@@ -198,13 +197,12 @@ export class OpenRouterAdapter implements CapabilityAdapter {
       const modelMap: Record<string, string> = {
         'gpt-4o-mini': 'openai/gpt-4o-mini',
         'gpt-4o': 'openai/gpt-4o',
-        'openrouter-llama-3': 'meta-llama/llama-3-8b-instruct:free',
-        'openrouter-google-gemini-2.0-flash-exp': 'google/gemini-2.0-flash-exp:free',
-        'claude-3.5-sonnet': 'anthropic/claude-3.5-sonnet:beta',
       };
       orModel = modelMap[rawModel] || rawModel;
     }
-    
+
+    console.log('[DEBUG][OpenRouterAdapter.stream] rawModel=', rawModel, ' finalModel(orModel)=', orModel);
+
     const messages = [];
     if (systemPromptText) messages.push({ role: 'system', content: systemPromptText });
     if (chatHistory) {
