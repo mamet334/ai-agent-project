@@ -125,30 +125,35 @@ export class OpenRouterAdapter implements CapabilityAdapter {
     }
     messages.push({ role: 'user', content: promptText });
     
-    // --- PERBAIKAN: HAPUS HARCODE CLAUDE, GUNAKAN MODEL DARI UI ---
+    // OpenRouter model:
+    // - UI bisa mengirim model dalam format: "openai/gpt-4o-mini" (HARUS dikirim apa adanya ke OpenRouter)
+    // - Jika UI mengirim "openrouter/xxx", strip prefix "openrouter/" saja
+    // - Jika UI mengirim key legacy (mis. "gpt-4o-mini"), lakukan mapping minimal
+    const rawModel = this.rctx.model.model;
+
     let openRouterModel: string;
     if (forceDefaultModel) {
-      // Jika fallback darurat, pakai Llama 3.1 8B gratis
       openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
+    } else if (!rawModel) {
+      openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
+    } else if (rawModel.includes('/')) {
+      // BUGFIX (per your report):
+      // If rawModel contains "/" (e.g. "openai/gpt-4o-mini"), DO NOT map to fallback.
+      // Pass as-is to OpenRouter.
+      openRouterModel = rawModel;
+    } else if (rawModel.startsWith('openrouter/')) {
+      openRouterModel = rawModel.replace('openrouter/', '');
     } else {
-      const rawModel = this.rctx.model.model;
-      if (!rawModel) {
-        openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
-      } else if (rawModel.startsWith('openrouter/')) {
-        // Jika model sudah dalam format openrouter/xxx, langsung pakai
-        openRouterModel = rawModel.replace('openrouter/', '');
-      } else {
-        // Mapping untuk model yang dipilih dari dropdown UI
-        const modelMap: Record<string, string> = {
-          'openrouter-llama-3': 'meta-llama/llama-3-8b-instruct:free',
-          'openrouter-google-gemini-2.0-flash-exp': 'google/gemini-2.0-flash-exp:free',
-          'gpt-4o-mini': 'openai/gpt-4o-mini',
-          'gpt-4o': 'openai/gpt-4o',
-          'claude-3.5-sonnet': 'anthropic/claude-3.5-sonnet:beta',
-          // Tambahkan mapping lain sesuai kebutuhan
-        };
-        openRouterModel = modelMap[rawModel] || 'meta-llama/llama-3.1-8b-instruct:free';
-      }
+      const modelMap: Record<string, string> = {
+        // legacy keys (tanpa provider prefix)
+        'gpt-4o-mini': 'openai/gpt-4o-mini',
+        'gpt-4o': 'openai/gpt-4o',
+        'openrouter-llama-3': 'meta-llama/llama-3-8b-instruct:free',
+        'openrouter-google-gemini-2.0-flash-exp': 'google/gemini-2.0-flash-exp:free',
+        'claude-3.5-sonnet': 'anthropic/claude-3.5-sonnet:beta',
+      };
+
+      openRouterModel = modelMap[rawModel] || rawModel;
     }
 
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -176,21 +181,28 @@ export class OpenRouterAdapter implements CapabilityAdapter {
   async *stream(input: any, context: AdapterContext): AsyncGenerator<string, void, unknown> {
     const { promptText, systemPromptText, chatHistory } = input;
     // --- PERBAIKAN: HAPUS HARCODE CLAUDE, GUNAKAN MODEL DARI UI ---
+    // Stream model selection:
+    // - If rawModel contains "/" pass as-is to OpenRouter.
     let orModel: string;
     const rawModel = this.rctx.model.model;
+
     if (!rawModel) {
       orModel = 'meta-llama/llama-3.1-8b-instruct:free';
+    } else if (rawModel.includes('/')) {
+      // BUGFIX (per your report):
+      // If rawModel contains "/" (e.g. "openai/gpt-4o-mini"), DO NOT map to fallback.
+      orModel = rawModel;
     } else if (rawModel.startsWith('openrouter/')) {
       orModel = rawModel.replace('openrouter/', '');
     } else {
       const modelMap: Record<string, string> = {
-        'openrouter-llama-3': 'meta-llama/llama-3-8b-instruct:free',
-        'openrouter-google-gemini-2.0-flash-exp': 'google/gemini-2.0-flash-exp:free',
         'gpt-4o-mini': 'openai/gpt-4o-mini',
         'gpt-4o': 'openai/gpt-4o',
+        'openrouter-llama-3': 'meta-llama/llama-3-8b-instruct:free',
+        'openrouter-google-gemini-2.0-flash-exp': 'google/gemini-2.0-flash-exp:free',
         'claude-3.5-sonnet': 'anthropic/claude-3.5-sonnet:beta',
       };
-      orModel = modelMap[rawModel] || 'meta-llama/llama-3.1-8b-instruct:free';
+      orModel = modelMap[rawModel] || rawModel;
     }
     
     const messages = [];

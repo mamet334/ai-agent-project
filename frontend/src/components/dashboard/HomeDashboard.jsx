@@ -19,7 +19,8 @@ export default function HomeDashboard() {
     rag: 'UNKNOWN',
     embedding: 'UNKNOWN',
     verification: 'UNKNOWN',
-    provider: 'UNKNOWN'
+    provider: 'UNKNOWN',
+    agentProcess: 'UNKNOWN'
   });
   const [selectedNode, setSelectedNode] = useState(null);
   const [activePath, setActivePath] = useState(null);
@@ -286,6 +287,26 @@ export default function HomeDashboard() {
         const authRes = await supabase.auth.getSession();
         const storageRes = await supabase.storage.listBuckets();
 
+        const { data: heartbeatData } = await supabase
+          .from('service_heartbeat')
+          .select('status, last_heartbeat_at, last_seen')
+          .eq('service_name', 'agent-process')
+          .maybeSingle();
+
+        let agentProcessHealth = 'UNKNOWN';
+        if (heartbeatData) {
+          const now = new Date();
+          const heartbeatTs = heartbeatData.last_heartbeat_at || heartbeatData.last_seen;
+          const lastBeat = heartbeatTs ? new Date(heartbeatTs) : null;
+          const diffMinutes = lastBeat ? (now - lastBeat) / (1000 * 60) : Number.POSITIVE_INFINITY;
+
+          if (heartbeatData.status === 'DOWN' || diffMinutes > 5) {
+            agentProcessHealth = 'DOWN';
+          } else if (diffMinutes <= 5) {
+            agentProcessHealth = 'HEALTHY';
+          }
+        }
+
         let edgeStatus = '🟡';
         try {
           const edgeRes = await supabase.functions.invoke('ping');
@@ -330,7 +351,8 @@ export default function HomeDashboard() {
           rag: normalizeHealthStatus(docRes.error ? 'DOWN' : 'HEALTHY'),
           embedding: normalizeHealthStatus((chunks && chunks.length > 0) ? 'HEALTHY' : (chunkRes.error ? 'DOWN' : 'DEGRADED')),
           verification: normalizeHealthStatus(verificationHealthRaw),
-          provider: normalizeHealthStatus(providerHealthRaw)
+          provider: normalizeHealthStatus(providerHealthRaw),
+          agentProcess: agentProcessHealth
         }));
 
         setLastCheckTime(new Date().toLocaleTimeString('id-ID', { hour12: false }));
@@ -477,8 +499,11 @@ export default function HomeDashboard() {
             }
           });
 
-          // Flow: Memory Node -> Subcluster
-          links.push({ source: `mem-${m.id}`, target: subcatId });
+          // Only link to solar system if it has relations (not an orphan)
+          if (relationsCount > 0) {
+            // Flow: Memory Node -> Subcluster
+            links.push({ source: `mem-${m.id}`, target: subcatId });
+          }
 
           causalLinks.forEach(targetId => {
             // Causal flow: Source Memory -> Target Memory
@@ -518,8 +543,11 @@ export default function HomeDashboard() {
             }
           });
 
-          // Flow: Document Node -> Subcluster
-          links.push({ source: `doc-${d.id}`, target: subcatId });
+          // Only link to solar system if it has chunks (not an orphan)
+          if (chunkCount > 0) {
+            // Flow: Document Node -> Subcluster
+            links.push({ source: `doc-${d.id}`, target: subcatId });
+          }
         });
 
         chats.forEach(c => {
@@ -651,6 +679,12 @@ export default function HomeDashboard() {
 
   const getNodeColor = (node) => {
     let baseColor = node.color;
+
+    if (node.id === 'cat-agent' || node.id === 'core-maef') {
+      if (vitals.agentProcess === 'HEALTHY') baseColor = '#22c55e';
+      else if (vitals.agentProcess === 'DOWN') baseColor = '#ef4444';
+      else baseColor = '#94a3b8';
+    }
     if (!baseColor) {
       switch (node.group) {
         case 'core': baseColor = '#ffffff'; break;
@@ -1165,6 +1199,7 @@ Activity Cluster Visualization V4
                   <div className="flex items-center gap-2"><span className={vitals.embedding === 'DOWN' ? 'text-red-400' : vitals.embedding === 'DEGRADED' ? 'text-yellow-400' : vitals.embedding === 'HEALTHY' ? 'text-green-400' : 'text-slate-400'}>{vitals.embedding}</span> EMBEDDING</div>
                   <div className="flex items-center gap-2"><span className={vitals.verification === 'DOWN' ? 'text-red-400' : vitals.verification === 'DEGRADED' ? 'text-yellow-400' : vitals.verification === 'HEALTHY' ? 'text-green-400' : 'text-slate-400'}>{vitals.verification}</span> VERIFICATION</div>
                   <div className="flex items-center gap-2"><span className={vitals.provider === 'DOWN' ? 'text-red-400' : vitals.provider === 'DEGRADED' ? 'text-yellow-400' : vitals.provider === 'HEALTHY' ? 'text-green-400' : 'text-slate-400'}>{vitals.provider}</span> PROVIDER</div>
+                  <div className="flex items-center gap-2"><span className={vitals.agentProcess === 'DOWN' ? 'text-red-400' : vitals.agentProcess === 'DEGRADED' ? 'text-yellow-400' : vitals.agentProcess === 'HEALTHY' ? 'text-green-400' : 'text-slate-400'}>{vitals.agentProcess}</span> AGENT PROCESS</div>
                 </div>
               </div>
 

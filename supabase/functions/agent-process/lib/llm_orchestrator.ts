@@ -137,19 +137,43 @@ export const runLLM = async (promptText: string, systemPromptText = '', chatHist
      systemPromptText += `\n[STATUS: DESKTOP NATIVE AWARENESS ENABLED]\nAnda WAJIB mengeluarkan perintah Windows di dalam tag <terminal>. DILARANG menyebut sub-agent atau menolak. Contoh: <terminal>dir %USERPROFILE%\\Desktop</terminal>\n`;
   }
 
-  // === PRIORITAS USER-EXPLICIT MODEL SELECTION via Capability Registry ===
+  // === PRIORITAS USER-EXPLICIT MODEL SELECTION via UI provider (if provided) ===
   let preferredProvider = 'gemini';
-  
-  if (!rctx.stream.extractedImage && rctx.model.model) {
-    if (rctx.model.model.includes('gpt') && !rctx.model.model.includes('openrouter')) {
-       preferredProvider = 'openai';
-    } else if (rctx.model.model.includes('openrouter') || rctx.model.model.startsWith('openrouter/')) {
-       preferredProvider = 'openrouter';
-    } else if (rctx.model.model.startsWith('groq/')) {
-       preferredProvider = 'groq';
+
+  const uiProviderRaw =
+    (rctx as any)?.model?.provider ||
+    (rctx as any)?.model?.selectedProvider ||
+    (rctx as any)?.state?.provider ||
+    (rctx as any)?.state?.selectedProvider;
+
+  const uiProvider = typeof uiProviderRaw === 'string' ? uiProviderRaw.toLowerCase() : null;
+
+  // If UI explicitly chose provider, honor it first (prevents "openai" heuristic from hijacking OpenRouter).
+  if (uiProvider === 'openrouter') preferredProvider = 'openrouter';
+  else if (uiProvider === 'openai') preferredProvider = 'openai';
+  else if (uiProvider === 'groq') preferredProvider = 'groq';
+  else if (uiProvider === 'gemini') preferredProvider = 'gemini';
+  else {
+    // fallback logic
+    if (!rctx.stream.extractedImage && rctx.model.model) {
+      // CRITICAL FIX:
+      // If UI provider is null BUT model id looks like "openai/xxx" (contains '/'),
+      // force OpenRouter so we don't accidentally route to OpenAIAdapter.
+      if (typeof rctx.model.model === 'string' && rctx.model.model.includes('/')) {
+        preferredProvider = 'openrouter';
+      } else {
+        if (rctx.model.model.includes('gpt') && !rctx.model.model.includes('openrouter')) {
+          preferredProvider = 'openai';
+        } else if (rctx.model.model.includes('openrouter') || rctx.model.model.startsWith('openrouter/')) {
+          preferredProvider = 'openrouter';
+        } else if (rctx.model.model.startsWith('groq/')) {
+          preferredProvider = 'groq';
+        }
+      }
     }
   }
 
+  console.log('[DEBUG][runLLM] rctx.model=', (rctx as any)?.model, ' uiProvider=', uiProvider, ' preferredProvider=', preferredProvider);
   console.log(`🔄 runLLM delegated to Capability Registry with preferred provider: ${preferredProvider}`);
   return await callLLMWithCascade(promptText, systemPromptText, chatHistory, preferredProvider, rctx.stream.extractedImage, rctx);
 };
@@ -159,11 +183,36 @@ export const runStreamLLM = async function*(promptText: string, systemPromptText
   const input = { promptText, systemPromptText, chatHistory, image: rctx.stream.extractedImage };
 
   let preferredAdapters: string[] = [];
+
+  const uiProviderRaw =
+    (rctx as any)?.model?.provider ||
+    (rctx as any)?.model?.selectedProvider ||
+    (rctx as any)?.state?.provider ||
+    (rctx as any)?.state?.selectedProvider;
+
+  const uiProvider = typeof uiProviderRaw === 'string' ? uiProviderRaw.toLowerCase() : null;
+
   if (!input.image) {
-    if (rctx.model.model && rctx.model.model.includes('gpt') && !rctx.model.model.includes('openrouter')) preferredAdapters.push('openai');
-    if (rctx.model.model && (rctx.model.model.includes('openrouter') || rctx.model.model.startsWith('openrouter/'))) preferredAdapters.push('openrouter');
-    if (rctx.model.model && rctx.model.model.startsWith('groq/')) preferredAdapters.push('groq');
+    // honor UI provider first
+    if (uiProvider === 'openrouter') preferredAdapters.push('openrouter');
+    else if (uiProvider === 'openai') preferredAdapters.push('openai');
+    else if (uiProvider === 'groq') preferredAdapters.push('groq');
+
+    // fallback inference if uiProvider not provided
+    if (preferredAdapters.length === 0) {
+      // CRITICAL FIX (stream path):
+      // model like "openai/gpt-4o-mini" must route to openrouter adapter.
+      if (rctx.model.model && typeof rctx.model.model === 'string' && rctx.model.model.includes('/')) {
+        preferredAdapters.push('openrouter');
+      } else {
+        if (rctx.model.model && rctx.model.model.includes('gpt') && !rctx.model.model.includes('openrouter')) preferredAdapters.push('openai');
+        if (rctx.model.model && (rctx.model.model.includes('openrouter') || rctx.model.model.startsWith('openrouter/'))) preferredAdapters.push('openrouter');
+        if (rctx.model.model && rctx.model.model.startsWith('groq/')) preferredAdapters.push('groq');
+      }
+    }
   }
+
+  console.log('[DEBUG][runStreamLLM] rctx.model=', (rctx as any)?.model, ' uiProvider=', uiProvider, ' preferredAdapters=', preferredAdapters);
 
   // Append cascade
   for (const p of ['gemini', 'groq', 'openrouter']) {

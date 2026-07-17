@@ -3,6 +3,7 @@ import { executeRequestPipeline } from './lib/request/request_pipeline.ts';
 import { coreEngine } from './lib/orchestration/core_engine.ts';
 import { streamController } from './lib/streaming/stream_controller.ts';
 import { corsHeaders } from './lib/stream_handler.ts';
+import { pingHeartbeat } from './lib/adapters/heartbeat.ts';
 
 // PRIORITY 2: ENVIRONMENT VALIDATION (STARTUP)
 const REQUIRED_ENV_VARS = [
@@ -26,32 +27,37 @@ try {
 }
 
 serve(async (req) => {
-  // PRIORITY 2: DEEP HEALTH CHECK SYSTEM
-  const url = new URL(req.url);
-  if (req.method === 'GET' && url.pathname.endsWith('/health')) {
-    const healthReport = {
-       status: envValidationStatus === 'OK' ? 'HEALTHY' : envValidationStatus,
-       timestamp: new Date().toISOString(),
-       missing_env: missingEnvs,
-       services: {
-          backend: 'UP',
-          edge_function: 'UP',
-          database: Deno.env.get('SUPABASE_URL') ? 'CONFIGURED' : 'MISSING_URL',
-          llm_provider: Deno.env.get('GEMINI_API_KEY') ? 'CONFIGURED' : 'MISSING_KEY'
-       }
-    };
-    return new Response(JSON.stringify(healthReport), {
-      status: envValidationStatus === 'OK' ? 200 : 503,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-
-  // Handle CORS for OPTIONS
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
-
   try {
+    // PRIORITY 2: DEEP HEALTH CHECK SYSTEM
+    const url = new URL(req.url);
+    if (req.method === 'GET' && url.pathname.endsWith('/health')) {
+      const healthReport = {
+         status: envValidationStatus === 'OK' ? 'HEALTHY' : envValidationStatus,
+         timestamp: new Date().toISOString(),
+         missing_env: missingEnvs,
+         services: {
+            backend: 'UP',
+            edge_function: 'UP',
+            database: Deno.env.get('SUPABASE_URL') ? 'CONFIGURED' : 'MISSING_URL',
+            llm_provider: Deno.env.get('GEMINI_API_KEY') ? 'CONFIGURED' : 'MISSING_KEY'
+         }
+      };
+
+      if (healthReport.status === 'HEALTHY') {
+        await pingHeartbeat('agent-process', 'HEALTHY');
+      }
+
+      return new Response(JSON.stringify(healthReport), {
+        status: envValidationStatus === 'OK' ? 200 : 503,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Handle CORS for OPTIONS
+    if (req.method === 'OPTIONS') {
+      return new Response('ok', { headers: corsHeaders });
+    }
+
     const pipelineResult = await executeRequestPipeline({ request: req, corsHeaders });
     if (pipelineResult.response) return pipelineResult.response;
 
@@ -63,11 +69,15 @@ serve(async (req) => {
     // --- POST EXECUTION GUARANTEES ---
     await rctx.tasks.awaitAll();
 
+    // === TAMBAHAN: Update heartbeat HEALTHY setiap kali request sukses ===
+    await pingHeartbeat('agent-process', 'HEALTHY');
+
     // --- STREAMING OR RESPONSE LAYER ---
     return streamController.pipe(engineResult, rctx);
 
   } catch (error: any) {
     console.error('Edge Function Error:', error);
+    await pingHeartbeat('agent-process', 'DOWN');
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
