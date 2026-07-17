@@ -394,44 +394,60 @@ export default function HomeDashboard() {
           connected: connectedCount
         });
 
-        // If we have a trace_id currently selected (from selectedNode), fetch its timeline
+        // If we have a trace_id currently selected, fetch its timeline.
+        // Pipeline semantics: each trace_id == one pipeline execution.
         const activeTraceId = selectedNode?.data?.trace_id || selectedNode?.data?.metadata?.trace_id;
         if (activeTraceId) {
-          setExecutionTrace({ traceId: null, timeline: [], loading: true, error: null });
+          setExecutionTrace({ traceId: activeTraceId, timeline: [], loading: true, error: null });
           try {
             const res = await fetchExecutionTrace({ traceId: activeTraceId, limit: EXEC_TRACE_MAX });
-            setExecutionTrace({ traceId: res.traceId, timeline: res.timeline, loading: false, error: null });
+            const timeline = res.timeline || [];
 
-            // Minimal mapping untuk monitoring tata surya:
-            // - bila ada failed/timeout di timeline → highlight kategori komunikasi/pipeline
-            // KISS: highlight cat-edge + cat-chat saja agar terlihat "putus" secara cepat.
-            const hasTimeout = (res.timeline || []).some(e => (e.status || '').toLowerCase() === 'timeout');
-            const hasFailed = (res.timeline || []).some(e => (e.status || '').toLowerCase() === 'failed');
-
-            if (hasTimeout || hasFailed) {
-              const edgeNodeId = 'cat-edge';
-              const chatNodeId = 'cat-chat';
-
-              const nodesToActivate = new Set(['core-maef', edgeNodeId, chatNodeId]);
-              const linksToActivate = new Set();
-
-              // add direct links from core -> categories we care about
-              links.forEach(l => {
-                const sId = l.source.id || l.source;
-                const tId = l.target.id || l.target;
-                if (sId === 'core-maef' && (tId === edgeNodeId || tId === chatNodeId)) {
-                  linksToActivate.add(`${sId}->${tId}`);
-                }
+            // UNKNOWN rule: if no telemetry events for this trace_id, do NOT error.
+            if (timeline.length === 0) {
+              setExecutionTrace({
+                traceId: res.traceId,
+                timeline: [],
+                loading: false,
+                error: null,
+                unknown: true
               });
+            } else {
+              setExecutionTrace({ traceId: res.traceId, timeline, loading: false, error: null, unknown: false });
 
-              setActivePath({ nodes: nodesToActivate, links: linksToActivate });
-              if (timeoutRef.current) clearTimeout(timeoutRef.current);
-              timeoutRef.current = setTimeout(() => setActivePath(null), 4000);
+              // Minimal mapping untuk monitoring tata surya:
+              // - bila ada failed/timeout di timeline → highlight kategori komunikasi/pipeline
+              // KISS: highlight cat-edge + cat-chat saja agar terlihat "putus" secara cepat.
+              const hasTimeout = timeline.some(e => (e.status || '').toLowerCase() === 'timeout');
+              const hasFailed = timeline.some(e => (e.status || '').toLowerCase() === 'failed');
+
+              if (hasTimeout || hasFailed) {
+                const edgeNodeId = 'cat-edge';
+                const chatNodeId = 'cat-chat';
+
+                const nodesToActivate = new Set(['core-maef', edgeNodeId, chatNodeId]);
+                const linksToActivate = new Set();
+
+                // add direct links from core -> categories we care about
+                links.forEach(l => {
+                  const sId = l.source.id || l.source;
+                  const tId = l.target.id || l.target;
+                  if (sId === 'core-maef' && (tId === edgeNodeId || tId === chatNodeId)) {
+                    linksToActivate.add(`${sId}->${tId}`);
+                  }
+                });
+
+                setActivePath({ nodes: nodesToActivate, links: linksToActivate });
+                if (timeoutRef.current) clearTimeout(timeoutRef.current);
+                timeoutRef.current = setTimeout(() => setActivePath(null), 4000);
+              }
             }
           } catch (e) {
-            setExecutionTrace({ traceId: activeTraceId, timeline: [], loading: false, error: e?.message || 'Failed to load execution trace' });
+            // Do not block implementation due to trace imperfections.
+            setExecutionTrace({ traceId: activeTraceId, timeline: [], loading: false, error: e?.message || 'Failed to load execution trace', unknown: true });
           }
         }
+
 
 
         setGraphData({ nodes, links });
