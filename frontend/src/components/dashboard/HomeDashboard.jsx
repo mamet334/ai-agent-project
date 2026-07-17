@@ -369,55 +369,8 @@ export default function HomeDashboard() {
           { id: 'cat-telemetry', name: 'Activity / Telemetry Cluster' }
         ];
 
-        // Orbit layout (radius fixed):
-        const ORBIT1_R = 180;
-        const ORBIT2_R = 300;
-        const ORPHAN_R = 520;
-
-        const orbitAngleByGroup = {
-          'cat-memory': 225,
-          'cat-agent': 135,
-          'cat-execution': 45,
-          'cat-knowledge': 315,
-          'cat-telemetry': 90 // Observation orbit (bottom)
-        };
-
-        const getOrbitRadiusForGroup = (id) => {
-          if (id === 'cat-telemetry' || id?.startsWith('subcat-tel-')) return ORBIT2_R;
-          return ORBIT1_R;
-        };
-
-        const getNodeFxFy = (node) => {
-          if (node.id === 'core-maef') return { fx: 0, fy: 0 };
-          
-          let parentId = node.id;
-          if (node.group === 'subcategory') {
-            parentId = node.parent;
-          }
-          
-          let radius = getOrbitRadiusForGroup(parentId);
-          let orbitAngle = orbitAngleByGroup[parentId] || 0;
-          
-          // Spread subcategories around their parent cluster
-          if (node.group === 'subcategory') {
-             // We can just let physics handle subcategories, but giving them fx,fy makes it rigid.
-             // We will only give fx,fy to primary clusters to let subclusters float around them!
-             return {}; 
-          }
-
-          if (node.group === 'category') {
-            const angleRad = (orbitAngle * Math.PI) / 180;
-            const fx = Math.round(Math.cos(angleRad) * radius);
-            const fy = Math.round(Math.sin(angleRad) * radius);
-            return { fx, fy };
-          }
-          
-          return {}; // Let physics handle leaf nodes
-        };
-
         primaryClusters.forEach(cluster => {
-          const coords = getNodeFxFy({ id: cluster.id, group: 'category' });
-          nodes.push({ id: cluster.id, name: cluster.name, type: 'Category', group: 'category', val: 25, isCategory: true, ...coords });
+          nodes.push({ id: cluster.id, name: cluster.name, type: 'Category', group: 'category', val: 25, isCategory: true });
           links.push({ source: 'core-maef', target: cluster.id });
         });
 
@@ -433,6 +386,15 @@ export default function HomeDashboard() {
           if (!dynamicSubclusters[id]) {
             dynamicSubclusters[id] = { id, name: name.toUpperCase(), type: 'Subcluster', group: 'subcategory', val: 15, isCategory: true, parent };
           }
+        };
+
+        // Helper untuk mapping legacy name ke arsitektur baru
+        const mapLegacyName = (name) => {
+          if (!name) return 'General';
+          const n = name.toLowerCase();
+          if (n === 'owner' || n === 'ws-owner') return 'engineer';
+          if (n === 'ws-agent-forge') return 'assistant';
+          return name;
         };
 
         // Pre-register specific subclusters based on the architecture map
@@ -502,6 +464,14 @@ export default function HomeDashboard() {
 
         // 3. Process Actual Data into Subclusters
         memories.forEach(m => {
+          let type = m.metadata?.type || m.metadata?.category || 'User';
+          type = mapLegacyName(type);
+          const subcatId = `subcat-mem-${type.toLowerCase()}`;
+          // Fallback to static if exists, or register new dynamic one
+          if (!staticSubclusters.some(s => s.id === subcatId)) {
+            registerSubcluster(subcatId, `${type} Memory`, 'cat-memory');
+          }
+
           const hits = m.memory_hits || 0;
           const causalLinks = m.causal_links || [];
           let relationsCount = causalLinks.length;
@@ -526,8 +496,7 @@ export default function HomeDashboard() {
             }
           });
 
-          // Connect to User Memory subcategory by default
-          links.push({ source: 'subcat-mem-user', target: `mem-${m.id}` });
+          links.push({ source: subcatId, target: `mem-${m.id}` });
 
           causalLinks.forEach(targetId => {
             links.push({ source: `mem-${m.id}`, target: `mem-${targetId}` });
@@ -541,6 +510,13 @@ export default function HomeDashboard() {
         });
 
         documents.forEach(d => {
+          let type = d.metadata?.file_type || d.metadata?.type || 'Documents';
+          type = mapLegacyName(type);
+          const subcatId = `subcat-know-${type.toLowerCase()}`;
+          if (!staticSubclusters.some(s => s.id === subcatId)) {
+            registerSubcluster(subcatId, type, 'cat-knowledge');
+          }
+
           const chunkCount = docChunkCounts[d.id] || 0;
           nodes.push({
             id: `doc-${d.id}`,
@@ -557,11 +533,17 @@ export default function HomeDashboard() {
             }
           });
 
-          // Connect to Documents subcategory
-          links.push({ source: 'subcat-know-docs', target: `doc-${d.id}` });
+          links.push({ source: subcatId, target: `doc-${d.id}` });
         });
 
         chats.forEach(c => {
+          let type = c.workspace_type || 'Sub';
+          type = mapLegacyName(type);
+          const subcatId = `subcat-agent-${type.toLowerCase()}`;
+          if (!staticSubclusters.some(s => s.id === subcatId)) {
+            registerSubcluster(subcatId, `${type} Agents`, 'cat-agent');
+          }
+
           nodes.push({
             id: `chat-${c.id}`,
             name: c.title || 'Chat',
@@ -577,8 +559,7 @@ export default function HomeDashboard() {
             }
           });
 
-          // Connect to Sub Agents subcategory
-          links.push({ source: 'subcat-agent-sub', target: `chat-${c.id}` });
+          links.push({ source: subcatId, target: `chat-${c.id}` });
         });
 
         // Add dynamic subclusters to graph
