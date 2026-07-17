@@ -5,6 +5,12 @@ const google = require('googlethis');
 const cheerio = require('cheerio');
 const PDFParser = require('pdf2json');
 const mammoth = require('mammoth');
+const {
+  resolveTraceId,
+  emitTelemetryEvent,
+  persistAiSystemLog,
+  persistVerificationLog
+} = require('./telemetry');
 require('dotenv').config();
 
 const app = express();
@@ -28,6 +34,23 @@ app.get('/api/health', (req, res) => {
  * Sekarang koneksi AI berjalan end-to-end.
  */
 app.post('/api/chat', async (req, res) => {
+  const requestStartedAt = Date.now();
+  const traceId = resolveTraceId({
+    headers: req.headers,
+    body: req.body
+  });
+
+  await emitTelemetryEvent({
+    eventType: 'Pipeline.Start',
+    traceId,
+    provider: req.body?.provider || null,
+    message: '/api/chat request started',
+    metadata: {
+      endpoint: '/api/chat',
+      user_id: req.body?.userId || req.body?.user_id || null
+    }
+  });
+
   try {
     const { message, provider, model, apiKey, history = [], userId, userName, globalMemory } = req.body;
 
@@ -47,7 +70,19 @@ app.post('/api/chat', async (req, res) => {
       provider === 'gemini'     ? process.env.GEMINI_API_KEY : null
     );
 
-    console.log(`[/api/chat] provider=${provider}, model=${model}, userId=${userId}, key=${resolvedKey ? '***set***' : 'MISSING'}`);
+    console.log(`[/api/chat] provider=${provider}, model=${model}, userId=${userId}, traceId=${traceId}, key=${resolvedKey ? '***set***' : 'MISSING'}`);
+
+    await emitTelemetryEvent({
+      eventType: 'Provider.Request',
+      traceId,
+      provider: provider || null,
+      message: 'Provider request started',
+      metadata: {
+        model,
+        user_id: userId || null,
+        status: 'start'
+      }
+    });
 
     const agentIdentity = `Anda adalah "Mamet", asisten cerdas Mamet Ecosystem. Jangan katakan Anda buatan Google atau OpenAI. Selalu perkenalkan diri sebagai Mamet.`;
     const userContext = userName ? `\nUser: ${userName}` : '';
@@ -168,21 +203,127 @@ app.post('/api/chat', async (req, res) => {
       return res.status(400).json({ error: `Provider "${provider}" tidak didukung. Pilih: openrouter, openai, groq, anthropic, atau gemini.` });
     }
 
-    return res.json({ message: replyText, timestamp: new Date(), userId });
+    const latencyMs = Date.now() - requestStartedAt;
+
+    await emitTelemetryEvent({
+      eventType: 'Provider.Response',
+      traceId,
+      provider: provider || null,
+      message: 'Provider response completed',
+      metadata: {
+        model,
+        user_id: userId || null,
+        latency_ms: latencyMs,
+        status: 'success'
+      }
+    });
+
+    await persistAiSystemLog({
+      traceId,
+      provider: provider || null,
+      model: model || null,
+      latencyMs,
+      status: 'success',
+      errorFlag: false,
+      llmCallCount: 1,
+      metadata: {
+        endpoint: '/api/chat',
+        user_id: userId || null
+      }
+    });
+
+    await emitTelemetryEvent({
+      eventType: 'Pipeline.Completed',
+      traceId,
+      provider: provider || null,
+      message: '/api/chat request completed',
+      metadata: {
+        endpoint: '/api/chat',
+        user_id: userId || null,
+        latency_ms: latencyMs,
+        status: 'success'
+      }
+    });
+
+    return res.json({ message: replyText, timestamp: new Date(), userId, trace_id: traceId });
 
   } catch (error) {
     const errData = error.response?.data;
     const errMsg = errData?.error?.message || errData?.message || error.message;
+    const latencyMs = Date.now() - requestStartedAt;
+
     console.error('[/api/chat] Error:', errMsg, errData);
+
+    await emitTelemetryEvent({
+      eventType: 'Provider.Error',
+      traceId,
+      provider: req.body?.provider || null,
+      message: 'Provider request failed',
+      metadata: {
+        model: req.body?.model || null,
+        user_id: req.body?.userId || null,
+        latency_ms: latencyMs,
+        status: 'failed',
+        error: errMsg
+      }
+    });
+
+    await persistAiSystemLog({
+      traceId,
+      provider: req.body?.provider || null,
+      model: req.body?.model || null,
+      latencyMs,
+      status: 'failed',
+      errorFlag: true,
+      llmCallCount: 1,
+      metadata: {
+        endpoint: '/api/chat',
+        user_id: req.body?.userId || null,
+        error: errMsg
+      }
+    });
+
+    await emitTelemetryEvent({
+      eventType: 'Pipeline.Failed',
+      traceId,
+      provider: req.body?.provider || null,
+      message: '/api/chat request failed',
+      metadata: {
+        endpoint: '/api/chat',
+        user_id: req.body?.userId || null,
+        latency_ms: latencyMs,
+        status: 'failed',
+        error: errMsg
+      }
+    });
+
     return res.status(500).json({
       error: `Koneksi ke AI gagal: ${errMsg}`,
-      details: errData
+      details: errData,
+      trace_id: traceId
     });
   }
 });
 
 
 app.post('/api/agent/process', async (req, res) => {
+  const requestStartedAt = Date.now();
+  const traceId = resolveTraceId({
+    headers: req.headers,
+    body: req.body
+  });
+
+  await emitTelemetryEvent({
+    eventType: 'Pipeline.Start',
+    traceId,
+    provider: 'agent-process',
+    message: '/api/agent/process request started',
+    metadata: {
+      endpoint: '/api/agent/process',
+      user_id: req.body?.userId || req.body?.user_id || null
+    }
+  });
+
   try {
     const { message, tools, model, userId, userName, history, file, globalMemory } = req.body;
     
@@ -224,8 +365,21 @@ app.post('/api/agent/process', async (req, res) => {
     }
 
     // Log request
-    console.log(`[${new Date().toISOString()}] Processing message from user: ${userId}`);
+    console.log(`[${new Date().toISOString()}] Processing message from user: ${userId}, traceId=${traceId}`);
     console.log(`Tools requested: ${tools.join(', ')}`);
+
+    await emitTelemetryEvent({
+      eventType: 'Provider.Request',
+      traceId,
+      provider: model || 'gemini-2.5-flash',
+      message: 'Agent processing provider request started',
+      metadata: {
+        model,
+        user_id: userId || null,
+        status: 'start',
+        endpoint: '/api/agent/process'
+      }
+    });
 
     // Check if Gemini API key exists
     if (!process.env.GEMINI_API_KEY) {
@@ -447,11 +601,52 @@ Jika permintaan user hanyalah obrolan biasa, pertanyaan umum, atau tidak memerlu
 PENTING: Jangan berikan teks penjelasan lain, jangan gunakan markdown code block (\`\`\`json), berikan HANYA JSON array murni.`;
 
       let planText = '[]';
+      const plannerStartedAt = Date.now();
+
+      await emitTelemetryEvent({
+        eventType: 'Planner.Start',
+        traceId,
+        provider: provider || 'coordinator-agent',
+        message: 'Planner started',
+        metadata: {
+          model,
+          status: 'start',
+          user_id: userId || null
+        }
+      });
+
       try {
         planText = await runLLM(`Permintaan User: "${message}"`, coordinatorSystemPrompt);
         planText = planText.replace(/```json/g, '').replace(/```/g, '').trim();
+
+        await emitTelemetryEvent({
+          eventType: 'Planner.End',
+          traceId,
+          provider: provider || 'coordinator-agent',
+          message: 'Planner completed',
+          metadata: {
+            model,
+            status: 'success',
+            user_id: userId || null,
+            latency_ms: Date.now() - plannerStartedAt
+          }
+        });
       } catch (err) {
         console.error('Planner LLM call failed:', err.message);
+
+        await emitTelemetryEvent({
+          eventType: 'Planner.Failed',
+          traceId,
+          provider: provider || 'coordinator-agent',
+          message: 'Planner failed',
+          metadata: {
+            model,
+            status: 'failed',
+            user_id: userId || null,
+            latency_ms: Date.now() - plannerStartedAt,
+            error: err.message
+          }
+        });
       }
 
       let plan = [];
@@ -460,6 +655,29 @@ PENTING: Jangan berikan teks penjelasan lain, jangan gunakan markdown code block
       } catch (e) {
         console.error('Failed to parse coordinator plan:', planText, e);
         plan = [];
+
+        await persistVerificationLog({
+          traceId,
+          decision: 'FAIL',
+          status: 'FAIL',
+          failures: ['Planner output is not valid JSON array'],
+          metadata: {
+            model,
+            provider: provider || 'coordinator-agent',
+            stage: 'planner_parse'
+          }
+        });
+
+        await emitTelemetryEvent({
+          eventType: 'Verification.Fail',
+          traceId,
+          provider: provider || 'coordinator-agent',
+          message: 'Planner output failed verification',
+          metadata: {
+            status: 'failed',
+            stage: 'planner_parse'
+          }
+        });
       }
 
       let subagentRuns = [];
@@ -476,6 +694,15 @@ PENTING: Jangan berikan teks penjelasan lain, jangan gunakan markdown code block
           let subagentToolExec = null;
 
           if (subagent === 'researcher') {
+            const ragStartedAt = Date.now();
+            await emitTelemetryEvent({
+              eventType: 'RAG.Start',
+              traceId,
+              provider: model || 'coordinator-agent',
+              message: 'RAG step started (researcher)',
+              metadata: { subagent, task, status: 'start' }
+            });
+
             try {
               const subagentPayload = {
                 contents: [{ role: 'user', parts: [{ text: `Cari informasi web mengenai: ${task}\n\nKonteks:\n${accumulatedContext}` }] }],
@@ -484,6 +711,18 @@ PENTING: Jangan berikan teks penjelasan lain, jangan gunakan markdown code block
               let geminiRes = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, subagentPayload, {
                 headers: { 'content-type': 'application/json' }
               });
+              await emitTelemetryEvent({
+                eventType: 'RAG.Retrieval.End',
+                traceId,
+                provider: 'gemini-2.5-flash',
+                message: 'RAG retrieval completed',
+                metadata: {
+                  subagent,
+                  status: 'success',
+                  latency_ms: Date.now() - ragStartedAt
+                }
+              });
+
               let candidate = geminiRes.data.candidates?.[0];
               subagentResText = candidate?.content?.parts?.[0]?.text || '';
               if (candidate?.groundingMetadata?.groundingChunks) {
@@ -521,16 +760,62 @@ PENTING: Jangan berikan teks penjelasan lain, jangan gunakan markdown code block
                 subagentSources = sources.length > 0 ? sources : [{ title: 'Internal Knowledge (Llama)', uri: '#' }];
               } catch (fallbackErr) {
                 subagentResText = `Riset gagal: ${fallbackErr.message}`;
+                await emitTelemetryEvent({
+                  eventType: 'RAG.Error',
+                  traceId,
+                  provider: model || 'coordinator-agent',
+                  message: 'RAG fallback failed',
+                  metadata: {
+                    subagent,
+                    status: 'failed',
+                    latency_ms: Date.now() - ragStartedAt,
+                    error: fallbackErr.message
+                  }
+                });
+              }
+
+              if (!subagentSources || subagentSources.length === 0) {
+                await emitTelemetryEvent({
+                  eventType: 'RAG.NoResult',
+                  traceId,
+                  provider: model || 'coordinator-agent',
+                  message: 'RAG returned no result',
+                  metadata: {
+                    subagent,
+                    status: 'unknown',
+                    latency_ms: Date.now() - ragStartedAt
+                  }
+                });
               }
             }
 
           } else if (subagent === 'scraper') {
+            await emitTelemetryEvent({
+              eventType: 'Tool.Requested',
+              traceId,
+              provider: model || 'coordinator-agent',
+              message: 'Tool requested: web_scraper',
+              metadata: {
+                tool_name: 'web_scraper',
+                subagent,
+                status: 'pending'
+              }
+            });
+
             try {
               let urlToScrape = task.match(/(https?:\/\/[^\s]+)/g)?.[0];
               if (!urlToScrape && accumulatedContext.match(/(https?:\/\/[^\s]+)/g)) {
                 urlToScrape = accumulatedContext.match(/(https?:\/\/[^\s]+)/g)[0];
               }
               if (urlToScrape) {
+                await emitTelemetryEvent({
+                  eventType: 'Tool.Invoked',
+                  traceId,
+                  provider: model || 'coordinator-agent',
+                  message: 'Tool invoked: web_scraper',
+                  metadata: { tool_name: 'web_scraper', subagent, status: 'running' }
+                });
+
                 const scrapeRes = await axios.get(urlToScrape, {
                   headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -544,14 +829,48 @@ PENTING: Jangan berikan teks penjelasan lain, jangan gunakan markdown code block
                 subagentResText = `Isi konten dari ${urlToScrape}:\n\n${text.substring(0, 15000)}`;
                 subagentSources = [{ title: $('title').text() || 'Scraped Page', uri: urlToScrape }];
                 subagentToolExec = { name: 'web_scraper', args: { url: urlToScrape } };
+
+                await emitTelemetryEvent({
+                  eventType: 'Tool.Completed',
+                  traceId,
+                  provider: model || 'coordinator-agent',
+                  message: 'Tool completed: web_scraper',
+                  metadata: { tool_name: 'web_scraper', subagent, status: 'success' }
+                });
               } else {
                 subagentResText = "Gagal memproses URL: URL tidak ditemukan dalam instruksi atau input user.";
+                await emitTelemetryEvent({
+                  eventType: 'Tool.Failed',
+                  traceId,
+                  provider: model || 'coordinator-agent',
+                  message: 'Tool failed: web_scraper (missing URL)',
+                  metadata: { tool_name: 'web_scraper', subagent, status: 'failed' }
+                });
               }
             } catch (err) {
               subagentResText = `Gagal melakukan web scraping: ${err.message}`;
+              await emitTelemetryEvent({
+                eventType: 'Tool.Failed',
+                traceId,
+                provider: model || 'coordinator-agent',
+                message: 'Tool failed: web_scraper',
+                metadata: { tool_name: 'web_scraper', subagent, status: 'failed', error: err.message }
+              });
             }
 
           } else if (subagent === 'coder') {
+            await emitTelemetryEvent({
+              eventType: 'Tool.Requested',
+              traceId,
+              provider: model || 'coordinator-agent',
+              message: 'Tool requested: execute_javascript',
+              metadata: {
+                tool_name: 'execute_javascript',
+                subagent,
+                status: 'pending'
+              }
+            });
+
             try {
               const coderSystemPrompt = `Anda adalah Sub-Agent CODER. Tugas Anda: ${task}
 Tulis kode JavaScript untuk menyelesaikan tugas ini.
@@ -570,14 +889,45 @@ Pastikan kode Anda mencetak output menggunakan console.log atau mengembalikan ni
                 return { result, logs: sandboxLogs };
               };
 
+              await emitTelemetryEvent({
+                eventType: 'Tool.Invoked',
+                traceId,
+                provider: model || 'coordinator-agent',
+                message: 'Tool invoked: execute_javascript',
+                metadata: { tool_name: 'execute_javascript', subagent, status: 'running' }
+              });
+
               const execution = runSandbox(cleanCode);
               subagentResText = `Menjalankan Kode:\n\`\`\`javascript\n${cleanCode}\n\`\`\`\n\nOutput:\n${execution.result}\n${execution.logs.length > 0 ? 'Logs:\n' + execution.logs.join('\n') : ''}`;
               subagentToolExec = { name: 'execute_javascript', args: { code: cleanCode } };
+
+              await emitTelemetryEvent({
+                eventType: 'Tool.Completed',
+                traceId,
+                provider: model || 'coordinator-agent',
+                message: 'Tool completed: execute_javascript',
+                metadata: { tool_name: 'execute_javascript', subagent, status: 'success' }
+              });
             } catch (err) {
               subagentResText = `Eksekusi Coder gagal: ${err.message}`;
+              await emitTelemetryEvent({
+                eventType: 'Tool.Failed',
+                traceId,
+                provider: model || 'coordinator-agent',
+                message: 'Tool failed: execute_javascript',
+                metadata: { tool_name: 'execute_javascript', subagent, status: 'failed', error: err.message }
+              });
             }
 
           } else if (subagent === 'communicator') {
+            await emitTelemetryEvent({
+              eventType: 'Tool.Requested',
+              traceId,
+              provider: model || 'coordinator-agent',
+              message: 'Tool requested: communicator',
+              metadata: { subagent, status: 'pending' }
+            });
+
             try {
               const communicatorPrompt = `Anda adalah Sub-Agent COMMUNICATOR. Tugas Anda: ${task}
 Konteks:\n${accumulatedContext}
@@ -601,6 +951,15 @@ Kembalikan respon Anda HANYA dalam JSON format berikut:
               let functionResult = 'Tidak ada aksi.';
               if (decision.tool === 'post_to_slack') {
                 const messageToSend = decision.args.message || task;
+
+                await emitTelemetryEvent({
+                  eventType: 'Tool.Invoked',
+                  traceId,
+                  provider: model || 'coordinator-agent',
+                  message: 'Tool invoked: post_to_slack',
+                  metadata: { tool_name: 'post_to_slack', subagent, status: 'running' }
+                });
+
                 if (process.env.SLACK_WEBHOOK_URL) {
                   await axios.post(process.env.SLACK_WEBHOOK_URL, { text: messageToSend });
                   functionResult = 'Berhasil mengirim ke Slack Webhook.';
@@ -608,18 +967,57 @@ Kembalikan respon Anda HANYA dalam JSON format berikut:
                   functionResult = `[Simulasi] Mengirim ke Slack: "${messageToSend}"`;
                 }
                 subagentToolExec = { name: 'post_to_slack', args: { message: messageToSend } };
+
+                await emitTelemetryEvent({
+                  eventType: 'Tool.Completed',
+                  traceId,
+                  provider: model || 'coordinator-agent',
+                  message: 'Tool completed: post_to_slack',
+                  metadata: { tool_name: 'post_to_slack', subagent, status: process.env.SLACK_WEBHOOK_URL ? 'success' : 'unknown' }
+                });
               } else if (decision.tool === 'make_api_call') {
                 const { url, method } = decision.args;
                 if (url && method) {
+                  await emitTelemetryEvent({
+                    eventType: 'Tool.Invoked',
+                    traceId,
+                    provider: model || 'coordinator-agent',
+                    message: 'Tool invoked: make_api_call',
+                    metadata: { tool_name: 'make_api_call', subagent, status: 'running' }
+                  });
+
                   const apiRes = await axios({ method, url });
                   functionResult = `API Call Status: ${apiRes.status}\nData: ${JSON.stringify(apiRes.data).substring(0, 200)}`;
                   subagentToolExec = { name: 'make_api_call', args: { url, method } };
+
+                  await emitTelemetryEvent({
+                    eventType: 'Tool.Completed',
+                    traceId,
+                    provider: model || 'coordinator-agent',
+                    message: 'Tool completed: make_api_call',
+                    metadata: { tool_name: 'make_api_call', subagent, status: 'success' }
+                  });
+                } else {
+                  await emitTelemetryEvent({
+                    eventType: 'Tool.Failed',
+                    traceId,
+                    provider: model || 'coordinator-agent',
+                    message: 'Tool failed: make_api_call (missing args)',
+                    metadata: { tool_name: 'make_api_call', subagent, status: 'failed' }
+                  });
                 }
               }
 
               subagentResText = `Aksi Komunikasi:\n${functionResult}`;
             } catch (err) {
               subagentResText = `Aksi Komunikasi gagal: ${err.message}`;
+              await emitTelemetryEvent({
+                eventType: 'Tool.Failed',
+                traceId,
+                provider: model || 'coordinator-agent',
+                message: 'Tool failed: communicator',
+                metadata: { subagent, status: 'failed', error: err.message }
+              });
             }
           }
 
@@ -650,6 +1048,29 @@ JANGAN ragu menggunakan gambar/diagram jika itu mempermudah penjelasan!`;
 
         replyMessage = await runLLM(synthesisPromptText, '', history);
       } else {
+        await emitTelemetryEvent({
+          eventType: 'Verification.Pass',
+          traceId,
+          provider: provider || 'coordinator-agent',
+          message: 'Planner verification passed (no subagent plan required)',
+          metadata: {
+            status: 'success',
+            stage: 'planner_parse'
+          }
+        });
+
+        await persistVerificationLog({
+          traceId,
+          decision: 'PASS',
+          status: 'PASS',
+          failures: [],
+          metadata: {
+            model,
+            provider: provider || 'coordinator-agent',
+            stage: 'planner_parse'
+          }
+        });
+
         replyMessage = await runLLM(message, fullSystemContext, history);
       }
 
@@ -660,7 +1081,8 @@ JANGAN ragu menggunakan gambar/diagram jika itu mempermudah penjelasan!`;
         toolExecution: null,
         subagentRuns: subagentRuns,
         timestamp: new Date(),
-        userId: userId
+        userId: userId,
+        trace_id: traceId
       });
     } else if (model && model.startsWith('openrouter-')) {
       // Check if OpenRouter API Key exists
@@ -929,22 +1351,115 @@ JANGAN ragu menggunakan gambar/diagram jika itu mempermudah penjelasan!`;
       }
     }
 
+    const latencyMs = Date.now() - requestStartedAt;
+
+    await emitTelemetryEvent({
+      eventType: 'Provider.Response',
+      traceId,
+      provider: model || 'gemini',
+      message: 'Agent processing provider response completed',
+      metadata: {
+        model,
+        user_id: userId || null,
+        status: 'success',
+        latency_ms: latencyMs,
+        endpoint: '/api/agent/process'
+      }
+    });
+
+    await persistAiSystemLog({
+      traceId,
+      provider: model || 'gemini',
+      model: model || null,
+      latencyMs,
+      status: 'success',
+      errorFlag: false,
+      llmCallCount: 1,
+      metadata: {
+        endpoint: '/api/agent/process',
+        user_id: userId || null
+      }
+    });
+
+    await emitTelemetryEvent({
+      eventType: 'Pipeline.Completed',
+      traceId,
+      provider: model || 'agent-process',
+      message: '/api/agent/process request completed',
+      metadata: {
+        endpoint: '/api/agent/process',
+        user_id: userId || null,
+        status: 'success',
+        latency_ms: latencyMs
+      }
+    });
+
     const aiResponse = {
       message: replyMessage,
       toolsUsed: tools.filter(t => ['web_search', 'code_executor', 'api_caller', 'slack_integration'].includes(t)),
       groundingSources: groundingSources,
       toolExecution: toolExecution,
       timestamp: new Date(),
-      userId: userId
+      userId: userId,
+      trace_id: traceId
     };
 
     res.json(aiResponse);
 
   } catch (error) {
+    const latencyMs = Date.now() - requestStartedAt;
+    const errMessage = error.response ? JSON.stringify(error.response.data) : error.message;
+
     console.error('Error calling Gemini API:', error.response ? error.response.data : error.message);
+
+    await emitTelemetryEvent({
+      eventType: 'Provider.Error',
+      traceId,
+      provider: req.body?.model || 'agent-process',
+      message: 'Agent processing provider failed',
+      metadata: {
+        model: req.body?.model || null,
+        user_id: req.body?.userId || null,
+        status: 'failed',
+        latency_ms: latencyMs,
+        error: errMessage,
+        endpoint: '/api/agent/process'
+      }
+    });
+
+    await persistAiSystemLog({
+      traceId,
+      provider: req.body?.model || 'agent-process',
+      model: req.body?.model || null,
+      latencyMs,
+      status: 'failed',
+      errorFlag: true,
+      llmCallCount: 1,
+      metadata: {
+        endpoint: '/api/agent/process',
+        user_id: req.body?.userId || null,
+        error: errMessage
+      }
+    });
+
+    await emitTelemetryEvent({
+      eventType: 'Pipeline.Failed',
+      traceId,
+      provider: req.body?.model || 'agent-process',
+      message: '/api/agent/process request failed',
+      metadata: {
+        endpoint: '/api/agent/process',
+        user_id: req.body?.userId || null,
+        status: 'failed',
+        latency_ms: latencyMs,
+        error: errMessage
+      }
+    });
+
     res.status(500).json({ 
       error: 'Failed to process request with AI (Gemini)',
-      details: error.response ? error.response.data : error.message
+      details: error.response ? error.response.data : error.message,
+      trace_id: traceId
     });
   }
 });

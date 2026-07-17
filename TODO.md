@@ -1,51 +1,41 @@
-# TODO - MODE IMPLEMENTASI ACTIVITY CLUSTER V1
+# TODO - MAMET OBSERVABILITY INSTRUMENTATION MODE
 
-## Plan
-1. Audit current Activity Cluster (HomeDashboard.jsx) and execution trace service (ExecutionTraceService.js).
-2. Define “pipeline node” as `trace_id` and map it into the Activity Cluster with minimal frontend changes.
-3. Implement logic: when `fetchExecutionTrace(traceId)` returns empty timeline or missing telemetry => show node status `UNKNOWN` (NO TELEMETRY AVAILABLE) without failing.
-4. Ensure known failures (failed/timeout) render red.
-5. Keep existing graph behavior for nodes active/inactive and current right panel.
-6. Run frontend build; fix any compile errors.
-7. Commit changes and push to working branch.
-8. Open pull request.
+## Plan Steps
+1. Add backend telemetry producer utility (agent_logs, ai_system_logs, verification_audit_logs) without schema changes.
+2. Add trace_id propagation helper at runtime boundary.
+3. Instrument MEMORY endpoints + memory engine:
+   - Memory.Read.Start / Memory.Read.End
+   - Memory.Write.Start / Memory.Write.End / Memory.Write.Failed
+4. Instrument backend runtime flow:
+   - Pipeline.Start / Pipeline.Completed / Pipeline.Failed
+   - Planner.Start / Planner.End / Planner.Failed
+   - RAG.Start / RAG.Retrieval.Start / RAG.Retrieval.End / RAG.NoResult / RAG.Error
+   - Tool.Requested / Tool.Invoked / Tool.Completed / Tool.Timeout / Tool.Failed
+   - Provider.Request / Provider.Response / Provider.Error / Provider.Fallback
+   - Verification.Start / Verification.Pass / Verification.Fail
+5. Update frontend execution trace normalization for newly produced events.
+6. Run frontend build and fix compile issues if any.
+7. Add changelog entry for instrumentation rollout.
 
 ## Progress
-- [x] Step 1: Audit files
-- [x] Step 2: Implement pipeline nodes (trace_id based)
-- [x] Step 3: UNKNOWN handling for empty timelines
-- [x] Step 4: Failure coloring red
-- [x] Step 5: Validate UI doesn’t break node inspector/graph interaction
-- [x] Step 6: Build + fix compile errors
-- [x] Step 7: Commit + push
-- [x] Step 8: PR
+- [x] Step 1: Planning approved
+- [x] Step 2: Telemetry producer utility
+- [x] Step 3: Trace propagation
+- [x] Step 4: MEMORY instrumentation
+- [ ] Step 5: Runtime instrumentation (Planner/RAG/Tools/Provider/Pipeline/Verification)
+- [x] Step 6: Frontend trace normalization update
+- [ ] Step 7: Build verification
+- [ ] Step 8: Changelog update
 
-## Next Task (V2 Follow-up)
-- [ ] V2-A: Implement final execution pipeline mapping in `ExecutionTraceService.js`:
-  - Intent → Memory Retrieval → RAG Retrieval → Planner → Tool Execution → Verification → Provider → Response Generation → Memory Writeback → Final Delivery
-  - Default each missing step to `UNKNOWN` (no telemetry) without throwing UI error.
-- [ ] V2-B: Extend `HomeDashboard.jsx` right panel for final detail fields:
-  - Name, Type, Status, Latency, Provider, Cost, Timestamp, Trace ID, Dependencies, Related Events, Failures, Warnings, Evidence.
-- [ ] V2-C: Add Pipeline Panel (conversation trace lifecycle):
-  - Show step-by-step status and Failure Localization (root cause, failed step, latency).
-- [ ] V2-D: Add/upgrade System Health panel statuses:
-  - Supabase, Auth, Realtime, Storage, Edge Function, RAG, Embedding, Memory, Verification, Provider
-  - Status set: Healthy / Degraded / Down / Unknown.
-- [ ] V2-E: Add Bottleneck panel:
-  - Top slowest components + latency metrics (P50/P95/P99) from existing telemetry.
-- [ ] V2-F: Add Failure panel:
-  - Recent known failures (tool timeout, provider error, verification fail, rag unavailable, supabase disconnected) using available logs.
-- [ ] V2-G: Add Realtime panel:
-  - Live event feed (retrieval/tool/verification/provider/writeback events) from current telemetry streams.
-- [ ] V2-H: Add operation modes:
-  - Conversation View, System View, Incident View, Performance View.
-- [ ] V2-I: Testing plan (critical-path first, then thorough):
-  - Critical-path on HomeDashboard impacted sections and trace status correctness.
-  - Thorough testing across whole app flow when scope stabilized.
-
-## Active Iteration (Autonomous V2 Core: Phase 1)
-- [ ] P1-1: Update `ExecutionTraceService.js` (V2-A core mapping + UNKNOWN defaults).
-- [ ] P1-2: Update `HomeDashboard.jsx` right panel detail fields (V2-B core).
-- [ ] P1-3: Add pipeline/failure localization block (V2-C partial, core only).
-- [ ] P1-4: Run build and fix compile issues.
-- [ ] P1-5: Report progress, blockers, and next iteration scope.
+## Instrumentation Expansion Progress (Backend + Frontend)
+- [x] Add telemetry foundation (`backend/telemetry.js`)
+- [x] Instrument `/api/chat` pipeline + provider events with trace propagation
+- [x] Instrument `api/memory/read.ts` (Memory.Read.Start/End + trace_id)
+- [x] Instrument `api/memory/write.ts` (Memory.Write.Start/End/Failed + trace_id)
+- [x] Extend `frontend/src/services/ExecutionTraceService.js` event normalization for new telemetry taxonomy
+- [x] Instrument planner + verification signals in `backend/server.js` coordinator flow
+- [ ] Instrument RAG events in `backend/server.js`
+- [ ] Instrument Tool lifecycle events in `backend/server.js` subagent/tool execution branches
+- [ ] Final build + compile fix
+- [ ] Commit + push branch kerja
+- [ ] Create PR

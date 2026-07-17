@@ -203,6 +203,309 @@ export function normalizeAgentLogsEvent(row) {
     };
   }
 
+  // MEMORY domain
+  if (eventType === 'Memory.Read.Start') {
+    return {
+      type: 'memory',
+      event: 'Memory.Read.Start',
+      status: 'running',
+      timestamp: createdAt,
+      metadata: {
+        ...metadata,
+        provider: row.provider || metadata?.provider
+      }
+    };
+  }
+
+  if (eventType === 'Memory.Read.End') {
+    const s = normalizeStatus(metadata?.status || 'success');
+    return {
+      type: 'memory',
+      event: 'Memory.Read.End',
+      status: s,
+      timestamp: createdAt,
+      durationMs: metadata?.latency_ms ?? metadata?.latencyMs ?? undefined,
+      metadata: {
+        ...metadata,
+        provider: row.provider || metadata?.provider
+      }
+    };
+  }
+
+  if (eventType === 'Memory.Write.Start') {
+    return {
+      type: 'memory',
+      event: 'Memory.Write.Start',
+      status: 'running',
+      timestamp: createdAt,
+      metadata: {
+        ...metadata,
+        provider: row.provider || metadata?.provider
+      }
+    };
+  }
+
+  if (eventType === 'Memory.Write.End') {
+    const s = normalizeStatus(metadata?.status || 'success');
+    return {
+      type: 'memory',
+      event: 'Memory.Write.End',
+      status: s,
+      timestamp: createdAt,
+      durationMs: metadata?.latency_ms ?? metadata?.latencyMs ?? undefined,
+      metadata: {
+        ...metadata,
+        provider: row.provider || metadata?.provider
+      }
+    };
+  }
+
+  if (eventType === 'Memory.Write.Failed') {
+    return {
+      type: 'memory',
+      event: 'Memory.Write.Failed',
+      status: 'failed',
+      timestamp: createdAt,
+      durationMs: metadata?.latency_ms ?? metadata?.latencyMs ?? undefined,
+      metadata: {
+        ...metadata,
+        provider: row.provider || metadata?.provider
+      }
+    };
+  }
+
+  // PIPELINE domain
+  if (eventType === 'Pipeline.Start') {
+    return {
+      type: 'pipeline',
+      event: 'Pipeline.Start',
+      status: 'running',
+      timestamp: createdAt,
+      metadata: {
+        ...metadata,
+        provider: row.provider || metadata?.provider
+      }
+    };
+  }
+
+  if (eventType === 'Pipeline.Completed') {
+    return {
+      type: 'pipeline',
+      event: 'Pipeline.Completed',
+      status: 'success',
+      timestamp: createdAt,
+      durationMs: metadata?.latency_ms ?? metadata?.latencyMs ?? undefined,
+      metadata: {
+        ...metadata,
+        provider: row.provider || metadata?.provider
+      }
+    };
+  }
+
+  if (eventType === 'Pipeline.Failed') {
+    return {
+      type: 'pipeline',
+      event: 'Pipeline.Failed',
+      status: 'failed',
+      timestamp: createdAt,
+      durationMs: metadata?.latency_ms ?? metadata?.latencyMs ?? undefined,
+      metadata: {
+        ...metadata,
+        provider: row.provider || metadata?.provider
+      }
+    };
+  }
+
+  // PROVIDER domain
+  if (eventType === 'Provider.Request') {
+    return {
+      type: 'provider',
+      event: 'Provider.Request',
+      status: 'running',
+      timestamp: createdAt,
+      metadata: {
+        ...metadata,
+        provider: row.provider || metadata?.provider
+      }
+    };
+  }
+
+  if (eventType === 'Provider.Response') {
+    return {
+      type: 'provider',
+      event: 'Provider.Response',
+      status: 'success',
+      timestamp: createdAt,
+      durationMs: metadata?.latency_ms ?? metadata?.latencyMs ?? undefined,
+      metadata: {
+        ...metadata,
+        provider: row.provider || metadata?.provider
+      }
+    };
+  }
+
+  if (eventType === 'Provider.Error') {
+    return {
+      type: 'provider',
+      event: 'Provider.Error',
+      status: 'failed',
+      timestamp: createdAt,
+      durationMs: metadata?.latency_ms ?? metadata?.latencyMs ?? undefined,
+      metadata: {
+        ...metadata,
+        provider: row.provider || metadata?.provider
+      }
+    };
+  }
+
+  if (eventType === 'Provider.Fallback') {
+    return {
+      type: 'provider',
+      event: 'Provider.Fallback',
+      status: 'unknown',
+      timestamp: createdAt,
+      metadata: {
+        ...metadata,
+        provider: row.provider || metadata?.provider
+      }
+    };
+  }
+
+  // PLANNER / RAG / VERIFICATION domain
+  if (eventType === 'Planner.Start') {
+    return {
+      type: 'planner',
+      event: 'Planner.Start',
+      status: 'running',
+      timestamp: createdAt,
+      metadata: {
+        ...metadata,
+        provider: row.provider || metadata?.provider
+      }
+    };
+  }
+
+  if (eventType === 'Planner.End') {
+    return {
+      type: 'planner',
+      event: 'Planner.End',
+      status: 'success',
+      timestamp: createdAt,
+      durationMs: metadata?.latency_ms ?? metadata?.latencyMs ?? undefined,
+      metadata: {
+        ...metadata,
+        provider: row.provider || metadata?.provider
+      }
+    };
+  }
+
+  if (eventType === 'Planner.Failed') {
+    return {
+      type: 'planner',
+      event: 'Planner.Failed',
+      status: 'failed',
+      timestamp: createdAt,
+      durationMs: metadata?.latency_ms ?? metadata?.latencyMs ?? undefined,
+      metadata: {
+        ...metadata,
+        provider: row.provider || metadata?.provider
+      }
+    };
+  }
+
+  if (eventType === 'RAG.Start' || eventType === 'RAG.Retrieval.Start') {
+    return {
+      type: 'rag',
+      event: eventType,
+      status: 'running',
+      timestamp: createdAt,
+      metadata: {
+        ...metadata,
+        provider: row.provider || metadata?.provider
+      }
+    };
+  }
+
+  if (eventType === 'RAG.Retrieval.End') {
+    return {
+      type: 'rag',
+      event: 'RAG.Retrieval.End',
+      status: 'success',
+      timestamp: createdAt,
+      durationMs: metadata?.latency_ms ?? metadata?.latencyMs ?? undefined,
+      metadata: {
+        ...metadata,
+        provider: row.provider || metadata?.provider
+      }
+    };
+  }
+
+  if (eventType === 'RAG.NoResult') {
+    return {
+      type: 'rag',
+      event: 'RAG.NoResult',
+      status: 'unknown',
+      timestamp: createdAt,
+      metadata: {
+        ...metadata,
+        provider: row.provider || metadata?.provider
+      }
+    };
+  }
+
+  if (eventType === 'RAG.Error') {
+    return {
+      type: 'rag',
+      event: 'RAG.Error',
+      status: 'failed',
+      timestamp: createdAt,
+      durationMs: metadata?.latency_ms ?? metadata?.latencyMs ?? undefined,
+      metadata: {
+        ...metadata,
+        provider: row.provider || metadata?.provider
+      }
+    };
+  }
+
+  if (eventType === 'Verification.Start') {
+    return {
+      type: 'verification',
+      event: 'Verification.Start',
+      status: 'running',
+      timestamp: createdAt,
+      metadata: {
+        ...metadata,
+        provider: row.provider || metadata?.provider
+      }
+    };
+  }
+
+  if (eventType === 'Verification.Pass') {
+    return {
+      type: 'verification',
+      event: 'Verification.Pass',
+      status: 'success',
+      timestamp: createdAt,
+      metadata: {
+        ...metadata,
+        provider: row.provider || metadata?.provider
+      }
+    };
+  }
+
+  if (eventType === 'Verification.Fail') {
+    return {
+      type: 'verification',
+      event: 'Verification.Fail',
+      status: 'failed',
+      timestamp: createdAt,
+      metadata: {
+        ...metadata,
+        provider: row.provider || metadata?.provider
+      }
+    };
+  }
+
   if (eventType === 'Tool.Requested') {
     return {
       type: 'tool',
