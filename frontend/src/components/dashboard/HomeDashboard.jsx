@@ -10,8 +10,16 @@ export default function HomeDashboard() {
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
   const [stats, setStats] = useState({ memories: 0, documents: 0, chats: 0, orphans: 0, connected: 0 });
   const [vitals, setVitals] = useState({
-    supabase: '⚪', auth: '⚪', realtime: '⚪', storage: '⚪',
-    edge: '⚪', memory: '⚪', rag: '⚪', embedding: '⚪'
+    supabase: 'UNKNOWN',
+    auth: 'UNKNOWN',
+    realtime: 'UNKNOWN',
+    storage: 'UNKNOWN',
+    edge: 'UNKNOWN',
+    memory: 'UNKNOWN',
+    rag: 'UNKNOWN',
+    embedding: 'UNKNOWN',
+    verification: 'UNKNOWN',
+    provider: 'UNKNOWN'
   });
   const [selectedNode, setSelectedNode] = useState(null);
   const [activePath, setActivePath] = useState(null);
@@ -20,8 +28,10 @@ export default function HomeDashboard() {
   const [executionTrace, setExecutionTrace] = useState({
     traceId: null,
     timeline: [],
+    pipeline: null,
     loading: false,
-    error: null
+    error: null,
+    unknown: false
   });
 
   const [observability, setObservability] = useState({
@@ -34,7 +44,12 @@ export default function HomeDashboard() {
     pipelineIncidentsDown: 0,
     pipelineIncidentsTotal: 0,
     verificationFail: 0,
-    verificationWarn: 0
+    verificationWarn: 0,
+    latencyP50Ms: null,
+    latencyP95Ms: null,
+    latencyP99Ms: null,
+    topSlowComponents: [],
+    recentFailures: []
   });
 
 
@@ -119,7 +134,7 @@ export default function HomeDashboard() {
         triggerReasoningHighlight(`doc-${payload.new.id}`);
       })
       .subscribe((status) => {
-        setVitals(v => ({ ...v, realtime: status === 'SUBSCRIBED' ? '🟢' : '🔴' }));
+        setVitals(v => ({ ...v, realtime: status === 'SUBSCRIBED' ? 'HEALTHY' : 'DOWN' }));
         setLastCheckTime(new Date().toLocaleTimeString('id-ID', { hour12: false }));
       });
 
@@ -191,6 +206,85 @@ export default function HomeDashboard() {
         const verificationFail = verificationItems.filter(v => (v.decision || '').toUpperCase() === 'FAIL' || (v.status || '').toUpperCase() === 'FAIL').length;
         const verificationWarn = verificationItems.filter(v => (v.decision || '').toUpperCase() === 'WARNING' || (v.decision || '').toUpperCase() === 'WARN' || (v.status || '').toUpperCase() === 'WARN' || (v.status || '').toUpperCase() === 'WARNING').length;
 
+        const latencySamples = logs
+          .map(l => Number(l.latency_ms))
+          .filter(v => Number.isFinite(v))
+          .sort((a, b) => a - b);
+
+        const percentile = (arr, p) => {
+          if (!arr || arr.length === 0) return null;
+          const idx = Math.ceil((p / 100) * arr.length) - 1;
+          const safeIdx = Math.max(0, Math.min(arr.length - 1, idx));
+          return arr[safeIdx];
+        };
+
+        const latencyP50Ms = percentile(latencySamples, 50);
+        const latencyP95Ms = percentile(latencySamples, 95);
+        const latencyP99Ms = percentile(latencySamples, 99);
+
+        const componentLatencyMap = {};
+        logs.forEach(l => {
+          const key = l.component || l.module || l.event_type || l.provider || 'unknown-component';
+          const lat = Number(l.latency_ms);
+          if (!Number.isFinite(lat)) return;
+          if (!componentLatencyMap[key]) componentLatencyMap[key] = [];
+          componentLatencyMap[key].push(lat);
+        });
+
+        const topSlowComponents = Object.entries(componentLatencyMap)
+          .map(([component, arr]) => {
+            const sorted = arr.slice().sort((a, b) => a - b);
+            return {
+              component,
+              p95: percentile(sorted, 95),
+              p99: percentile(sorted, 99),
+              avg: Math.round(sorted.reduce((acc, v) => acc + v, 0) / sorted.length),
+              sampleCount: sorted.length
+            };
+          })
+          .sort((a, b) => (b.p95 || 0) - (a.p95 || 0))
+          .slice(0, 5);
+
+        const toolFailures = logs
+          .filter(l => l.error_flag || String(l.status || '').toLowerCase().includes('fail') || String(l.status || '').toLowerCase().includes('timeout'))
+          .map(l => ({
+            type: String(l.error_type || l.event_type || l.component || 'unknown').toLowerCase().includes('tool') ? 'tool-timeout-or-failure' : 'provider-or-runtime-error',
+            message: l.error_message || l.message || 'Unknown failure',
+            at: l.created_at || null
+          }));
+
+        const verificationFailures = verificationItems
+          .filter(v => {
+            const s = String(v.status || v.decision || '').toLowerCase();
+            return s.includes('fail') || s.includes('error');
+          })
+          .map(v => ({
+            type: 'verification-fail',
+            message: v.failures || v.decision || v.status || 'Verification failure',
+            at: v.created_at || null
+          }));
+
+        const ragUnavailableFailures = (docRes.error || chunkRes.error) ? [{
+          type: 'rag-unavailable',
+          message: docRes.error?.message || chunkRes.error?.message || 'RAG unavailable',
+          at: new Date().toISOString()
+        }] : [];
+
+        const supabaseDisconnectedFailures = (memRes.error || docRes.error) ? [{
+          type: 'supabase-disconnected',
+          message: memRes.error?.message || docRes.error?.message || 'Supabase disconnected',
+          at: new Date().toISOString()
+        }] : [];
+
+        const recentFailures = [
+          ...toolFailures,
+          ...verificationFailures,
+          ...ragUnavailableFailures,
+          ...supabaseDisconnectedFailures
+        ]
+          .sort((a, b) => new Date(b.at || 0).getTime() - new Date(a.at || 0).getTime())
+          .slice(0, 10);
+
         setObservability({
           memoryReads: logs.reduce((acc, l) => acc + (l.memory_fetch_count || 0), 0),
           memoryWrites: logs.reduce((acc, l) => acc + (l.memory_write_count || 0), 0),
@@ -201,7 +295,12 @@ export default function HomeDashboard() {
           pipelineIncidentsDown: pipelineIncidentsDown,
           pipelineIncidentsTotal: pipelineIncidentsTotal,
           verificationFail,
-          verificationWarn
+          verificationWarn,
+          latencyP50Ms,
+          latencyP95Ms,
+          latencyP99Ms,
+          topSlowComponents,
+          recentFailures
         });
 
         const authRes = await supabase.auth.getSession();
@@ -217,15 +316,41 @@ export default function HomeDashboard() {
           edgeStatus = '🔴';
         }
 
+        const normalizeHealthStatus = (raw) => {
+          if (!raw) return 'UNKNOWN';
+          const s = String(raw).toLowerCase();
+          if (s.includes('🟢') || s.includes('healthy') || s.includes('up') || s.includes('ok') || s.includes('success')) return 'HEALTHY';
+          if (s.includes('🔴') || s.includes('down') || s.includes('fail') || s.includes('error')) return 'DOWN';
+          if (s.includes('🟡') || s.includes('degraded') || s.includes('warn')) return 'DEGRADED';
+          if (s.includes('⚪') || s.includes('unknown')) return 'UNKNOWN';
+          return 'UNKNOWN';
+        };
+
+        const providerHealthRaw = logs.some(l => l.error_flag)
+          ? 'DOWN'
+          : logs.some(l => l.provider || l.model || l.provider_name)
+            ? 'HEALTHY'
+            : 'UNKNOWN';
+
+        const verificationHealthRaw = verificationFail > 0
+          ? 'DOWN'
+          : verificationWarn > 0
+            ? 'DEGRADED'
+            : verificationItems.length > 0
+              ? 'HEALTHY'
+              : 'UNKNOWN';
+
         setVitals(v => ({
           ...v,
-          supabase: (memRes.error || docRes.error) ? '🔴' : '🟢',
-          auth: authRes.error ? '🔴' : '🟢',
-          storage: storageRes.error ? '🔴' : '🟢',
-          edge: edgeStatus,
-          memory: memRes.error ? '🔴' : '🟢',
-          rag: docRes.error ? '🔴' : '🟢',
-          embedding: (chunks && chunks.length > 0) ? '🟢' : (chunkRes.error ? '🔴' : '🟡')
+          supabase: normalizeHealthStatus((memRes.error || docRes.error) ? 'DOWN' : 'HEALTHY'),
+          auth: normalizeHealthStatus(authRes.error ? 'DOWN' : 'HEALTHY'),
+          storage: normalizeHealthStatus(storageRes.error ? 'DOWN' : 'HEALTHY'),
+          edge: normalizeHealthStatus(edgeStatus),
+          memory: normalizeHealthStatus(memRes.error ? 'DOWN' : 'HEALTHY'),
+          rag: normalizeHealthStatus(docRes.error ? 'DOWN' : 'HEALTHY'),
+          embedding: normalizeHealthStatus((chunks && chunks.length > 0) ? 'HEALTHY' : (chunkRes.error ? 'DOWN' : 'DEGRADED')),
+          verification: normalizeHealthStatus(verificationHealthRaw),
+          provider: normalizeHealthStatus(providerHealthRaw)
         }));
 
         setLastCheckTime(new Date().toLocaleTimeString('id-ID', { hour12: false }));
@@ -398,7 +523,7 @@ export default function HomeDashboard() {
         // Pipeline semantics: each trace_id == one pipeline execution.
         const activeTraceId = selectedNode?.data?.trace_id || selectedNode?.data?.metadata?.trace_id;
         if (activeTraceId) {
-          setExecutionTrace({ traceId: activeTraceId, timeline: [], loading: true, error: null });
+          setExecutionTrace({ traceId: activeTraceId, timeline: [], pipeline: null, loading: true, error: null, unknown: false });
           try {
             const res = await fetchExecutionTrace({ traceId: activeTraceId, limit: EXEC_TRACE_MAX });
             const timeline = res.timeline || [];
@@ -408,12 +533,20 @@ export default function HomeDashboard() {
               setExecutionTrace({
                 traceId: res.traceId,
                 timeline: [],
+                pipeline: res.pipeline || null,
                 loading: false,
                 error: null,
                 unknown: true
               });
             } else {
-              setExecutionTrace({ traceId: res.traceId, timeline, loading: false, error: null, unknown: false });
+              setExecutionTrace({
+                traceId: res.traceId,
+                timeline,
+                pipeline: res.pipeline || null,
+                loading: false,
+                error: null,
+                unknown: false
+              });
 
               // Minimal mapping untuk monitoring tata surya:
               // - bila ada failed/timeout di timeline → highlight kategori komunikasi/pipeline
@@ -444,7 +577,14 @@ export default function HomeDashboard() {
             }
           } catch (e) {
             // Do not block implementation due to trace imperfections.
-            setExecutionTrace({ traceId: activeTraceId, timeline: [], loading: false, error: e?.message || 'Failed to load execution trace', unknown: true });
+            setExecutionTrace({
+              traceId: activeTraceId,
+              timeline: [],
+              pipeline: null,
+              loading: false,
+              error: e?.message || 'Failed to load execution trace',
+              unknown: true
+            });
           }
         }
 
@@ -598,15 +738,63 @@ Activity Cluster Visualization V4
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">Type</div>
-                  <div className="text-xs text-slate-300 bg-white/5 py-1 px-2 rounded inline-block">{selectedNode.type}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">Used</div>
-                  <div className="text-xs text-slate-300">{selectedNode.data?.used ?? '0'} times</div>
+              <div>
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">Type</div>
+                <div className="text-xs text-slate-300 bg-white/5 py-1 px-2 rounded inline-block">{selectedNode.type}</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">Status</div>
+                <div className="text-xs text-slate-300">
+                  {selectedNode.data?.status || (selectedNode.data?.relations === 0 ? 'FAILED' : 'SUCCESS')}
                 </div>
               </div>
+              <div>
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">Used</div>
+                <div className="text-xs text-slate-300">{selectedNode.data?.used ?? '0'} times</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">Latency</div>
+                <div className="text-xs text-slate-300">{selectedNode.data?.latencyMs ?? 'UNKNOWN'}</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">Provider</div>
+                <div className="text-xs text-slate-300">{selectedNode.data?.provider || selectedNode.data?.metadata?.provider || 'UNKNOWN'}</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">Cost</div>
+                <div className="text-xs text-slate-300">{selectedNode.data?.cost ?? selectedNode.data?.metadata?.cost ?? 'UNKNOWN'}</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">Trace ID</div>
+                <div className="text-xs text-slate-300 break-all">{selectedNode.data?.trace_id || selectedNode.data?.metadata?.trace_id || 'UNKNOWN'}</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">Dependencies</div>
+                <div className="text-xs text-slate-300">{Array.isArray(selectedNode.data?.dependencies) && selectedNode.data.dependencies.length > 0 ? selectedNode.data.dependencies.join(', ') : 'UNKNOWN'}</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3">
+              <div>
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">Related Events</div>
+                <div className="text-xs text-slate-300">{Array.isArray(selectedNode.data?.relatedEvents) && selectedNode.data.relatedEvents.length > 0 ? selectedNode.data.relatedEvents.join(' • ') : 'UNKNOWN'}</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">Failures</div>
+                <div className="text-xs text-red-300">{Array.isArray(selectedNode.data?.failures) && selectedNode.data.failures.length > 0 ? selectedNode.data.failures.join(' | ') : 'UNKNOWN'}</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">Warnings</div>
+                <div className="text-xs text-amber-300">{Array.isArray(selectedNode.data?.warnings) && selectedNode.data.warnings.length > 0 ? selectedNode.data.warnings.join(' | ') : 'UNKNOWN'}</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">Evidence</div>
+                <div className="text-xs text-slate-300">{Array.isArray(selectedNode.data?.evidence) && selectedNode.data.evidence.length > 0 ? `${selectedNode.data.evidence.length} item(s)` : 'UNKNOWN'}</div>
+              </div>
+            </div>
 
               <div>
                 <div className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider font-mono">Relations</div>
@@ -695,8 +883,8 @@ Activity Cluster Visualization V4
                   <div className="text-[10px] text-red-400 font-mono">
                     Timeline error: {executionTrace.error}
                   </div>
-                ) : !executionTrace?.timeline || executionTrace.timeline.length === 0 ? (
-                  <div className="text-[10px] text-slate-500 font-mono">No execution events.</div>
+                ) : executionTrace?.unknown || !executionTrace?.timeline || executionTrace.timeline.length === 0 ? (
+                  <div className="text-[10px] text-slate-500 font-mono">NO TELEMETRY AVAILABLE (UNKNOWN)</div>
                 ) : (
                   <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                     {executionTrace.timeline
@@ -761,6 +949,55 @@ Activity Cluster Visualization V4
                 )}
               </div>
 
+              {/* V2-B Core: Pipeline + Failure Localization */}
+              {executionTrace?.pipeline?.steps && executionTrace.pipeline.steps.length > 0 && (
+                <div className="group pt-4 border-t border-white/5">
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wider font-mono mb-3">
+                    Pipeline Execution (V2 Core)
+                  </div>
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {executionTrace.pipeline.steps.map((step) => {
+                      const status = step.status || 'UNKNOWN';
+                      const statusClass =
+                        status === 'SUCCESS'
+                          ? 'text-emerald-300'
+                          : status === 'FAILED'
+                            ? 'text-red-400'
+                            : status === 'RUNNING'
+                              ? 'text-sky-300'
+                              : 'text-slate-300';
+
+                      return (
+                        <div key={step.key} className="bg-white/5 border border-white/5 rounded-lg px-3 py-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-[10px] text-slate-200 font-mono">{step.order}. {step.label}</div>
+                            <div className={`text-[9px] font-mono ${statusClass}`}>{status}</div>
+                          </div>
+                          <div className="text-[9px] text-slate-500 font-mono mt-1">
+                            latency: {typeof step.latencyMs === 'number' ? `${step.latencyMs}ms` : 'UNKNOWN'} • provider: {step.provider || 'UNKNOWN'}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-3 space-y-1 text-[10px] font-mono border-t border-white/5 pt-3">
+                    <div className="text-slate-400">
+                      ROOT CAUSE: <span className="text-red-300">{executionTrace.pipeline.summary?.rootCause || 'UNKNOWN'}</span>
+                    </div>
+                    <div className="text-slate-400">
+                      FAILED STEP: <span className="text-red-300">{executionTrace.pipeline.summary?.failedStep || 'UNKNOWN'}</span>
+                    </div>
+                    <div className="text-slate-400">
+                      BOTTLENECK: <span className="text-amber-300">
+                        {executionTrace.pipeline.summary?.bottleneck
+                          ? `${executionTrace.pipeline.summary.bottleneck.step} (${executionTrace.pipeline.summary.bottleneck.latencyMs}ms)`
+                          : 'UNKNOWN'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
 
               <div className="grid grid-cols-2 gap-4">
@@ -835,22 +1072,26 @@ Activity Cluster Visualization V4
 
                 {(() => {
                   const vitalsValues = Object.values(vitals);
-                  const hasRed = vitalsValues.includes('🔴');
-                  const hasYellow = vitalsValues.includes('🟡');
-                  const hasPending = vitalsValues.includes('⚪');
+                  const hasDown = vitalsValues.includes('DOWN');
+                  const hasDegraded = vitalsValues.includes('DEGRADED');
+                  const hasUnknown = vitalsValues.includes('UNKNOWN');
 
-                  let overallStatus = '🟢 HEALTHY';
+                  let overallStatus = 'HEALTHY';
                   let overallColor = 'text-green-400';
                   let overallGlow = 'drop-shadow-[0_0_15px_rgba(34,197,94,0.4)]';
 
-                  if (hasRed) {
-                    overallStatus = '🔴 CRITICAL';
+                  if (hasDown) {
+                    overallStatus = 'DOWN';
                     overallColor = 'text-red-400';
                     overallGlow = 'drop-shadow-[0_0_15px_rgba(239,68,68,0.4)]';
-                  } else if (hasYellow || hasPending) {
-                    overallStatus = '🟡 DEGRADED';
+                  } else if (hasDegraded) {
+                    overallStatus = 'DEGRADED';
                     overallColor = 'text-yellow-400';
                     overallGlow = 'drop-shadow-[0_0_15px_rgba(234,179,8,0.4)]';
+                  } else if (hasUnknown) {
+                    overallStatus = 'UNKNOWN';
+                    overallColor = 'text-slate-300';
+                    overallGlow = 'drop-shadow-[0_0_12px_rgba(148,163,184,0.35)]';
                   }
 
                   return (
@@ -864,15 +1105,83 @@ Activity Cluster Visualization V4
                 })()}
 
                 <div className="space-y-2 text-[10px] font-mono tracking-widest text-slate-300 border-t border-white/5 pt-4">
-                  <div className="flex items-center gap-2"><span>{vitals.supabase}</span> SUPABASE CONNECTION</div>
-                  <div className="flex items-center gap-2"><span>{vitals.auth}</span> AUTH SERVICE</div>
-                  <div className="flex items-center gap-2"><span>{vitals.realtime}</span> REALTIME SERVICE</div>
-                  <div className="flex items-center gap-2"><span>{vitals.storage}</span> STORAGE SERVICE</div>
-                  <div className="flex items-center gap-2"><span>{vitals.edge}</span> EDGE FUNCTIONS</div>
-                  <div className="flex items-center gap-2"><span>{vitals.memory}</span> MEMORY SYSTEM</div>
-                  <div className="flex items-center gap-2"><span>{vitals.rag}</span> RAG SYSTEM</div>
-                  <div className="flex items-center gap-2"><span>{vitals.embedding}</span> EMBEDDING SYSTEM</div>
+                  <div className="flex items-center gap-2"><span className={vitals.supabase === 'DOWN' ? 'text-red-400' : vitals.supabase === 'DEGRADED' ? 'text-yellow-400' : vitals.supabase === 'HEALTHY' ? 'text-green-400' : 'text-slate-400'}>{vitals.supabase}</span> SUPABASE</div>
+                  <div className="flex items-center gap-2"><span className={vitals.auth === 'DOWN' ? 'text-red-400' : vitals.auth === 'DEGRADED' ? 'text-yellow-400' : vitals.auth === 'HEALTHY' ? 'text-green-400' : 'text-slate-400'}>{vitals.auth}</span> AUTH</div>
+                  <div className="flex items-center gap-2"><span className={vitals.realtime === 'DOWN' ? 'text-red-400' : vitals.realtime === 'DEGRADED' ? 'text-yellow-400' : vitals.realtime === 'HEALTHY' ? 'text-green-400' : 'text-slate-400'}>{vitals.realtime}</span> REALTIME</div>
+                  <div className="flex items-center gap-2"><span className={vitals.storage === 'DOWN' ? 'text-red-400' : vitals.storage === 'DEGRADED' ? 'text-yellow-400' : vitals.storage === 'HEALTHY' ? 'text-green-400' : 'text-slate-400'}>{vitals.storage}</span> STORAGE</div>
+                  <div className="flex items-center gap-2"><span className={vitals.edge === 'DOWN' ? 'text-red-400' : vitals.edge === 'DEGRADED' ? 'text-yellow-400' : vitals.edge === 'HEALTHY' ? 'text-green-400' : 'text-slate-400'}>{vitals.edge}</span> EDGE FUNCTIONS</div>
+                  <div className="flex items-center gap-2"><span className={vitals.memory === 'DOWN' ? 'text-red-400' : vitals.memory === 'DEGRADED' ? 'text-yellow-400' : vitals.memory === 'HEALTHY' ? 'text-green-400' : 'text-slate-400'}>{vitals.memory}</span> MEMORY</div>
+                  <div className="flex items-center gap-2"><span className={vitals.rag === 'DOWN' ? 'text-red-400' : vitals.rag === 'DEGRADED' ? 'text-yellow-400' : vitals.rag === 'HEALTHY' ? 'text-green-400' : 'text-slate-400'}>{vitals.rag}</span> RAG</div>
+                  <div className="flex items-center gap-2"><span className={vitals.embedding === 'DOWN' ? 'text-red-400' : vitals.embedding === 'DEGRADED' ? 'text-yellow-400' : vitals.embedding === 'HEALTHY' ? 'text-green-400' : 'text-slate-400'}>{vitals.embedding}</span> EMBEDDING</div>
+                  <div className="flex items-center gap-2"><span className={vitals.verification === 'DOWN' ? 'text-red-400' : vitals.verification === 'DEGRADED' ? 'text-yellow-400' : vitals.verification === 'HEALTHY' ? 'text-green-400' : 'text-slate-400'}>{vitals.verification}</span> VERIFICATION</div>
+                  <div className="flex items-center gap-2"><span className={vitals.provider === 'DOWN' ? 'text-red-400' : vitals.provider === 'DEGRADED' ? 'text-yellow-400' : vitals.provider === 'HEALTHY' ? 'text-green-400' : 'text-slate-400'}>{vitals.provider}</span> PROVIDER</div>
                 </div>
+              </div>
+
+              {/* V2-E: Bottleneck Panel */}
+              <div className="group pt-4 border-t border-white/5">
+                <div className="text-[10px] text-slate-500 mb-2 uppercase tracking-wider font-mono">
+                  Bottleneck (P50 / P95 / P99)
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  <div className="bg-white/5 rounded p-2">
+                    <div className="text-[9px] text-slate-500 font-mono">P50</div>
+                    <div className="text-xs text-emerald-300 font-mono">
+                      {typeof observability.latencyP50Ms === 'number' ? `${observability.latencyP50Ms}ms` : 'UNKNOWN'}
+                    </div>
+                  </div>
+                  <div className="bg-white/5 rounded p-2">
+                    <div className="text-[9px] text-slate-500 font-mono">P95</div>
+                    <div className="text-xs text-amber-300 font-mono">
+                      {typeof observability.latencyP95Ms === 'number' ? `${observability.latencyP95Ms}ms` : 'UNKNOWN'}
+                    </div>
+                  </div>
+                  <div className="bg-white/5 rounded p-2">
+                    <div className="text-[9px] text-slate-500 font-mono">P99</div>
+                    <div className="text-xs text-red-300 font-mono">
+                      {typeof observability.latencyP99Ms === 'number' ? `${observability.latencyP99Ms}ms` : 'UNKNOWN'}
+                    </div>
+                  </div>
+                </div>
+
+                {observability.topSlowComponents.length === 0 ? (
+                  <div className="text-[10px] text-slate-500 font-mono">No component latency telemetry.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {observability.topSlowComponents.map((c, idx) => (
+                      <div key={`${c.component}-${idx}`} className="bg-white/5 border border-white/5 rounded px-3 py-2">
+                        <div className="text-[10px] text-slate-200 font-mono truncate">{c.component}</div>
+                        <div className="text-[9px] text-slate-400 font-mono">
+                          p95:{typeof c.p95 === 'number' ? `${c.p95}ms` : 'UNKNOWN'} • p99:{typeof c.p99 === 'number' ? `${c.p99}ms` : 'UNKNOWN'} • avg:{typeof c.avg === 'number' ? `${c.avg}ms` : 'UNKNOWN'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* V2-F: Recent Failure Panel */}
+              <div className="group pt-4 border-t border-white/5">
+                <div className="text-[10px] text-slate-500 mb-2 uppercase tracking-wider font-mono">
+                  Recent Known Failures
+                </div>
+
+                {observability.recentFailures.length === 0 ? (
+                  <div className="text-[10px] text-slate-500 font-mono">No known failures in current telemetry.</div>
+                ) : (
+                  <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                    {observability.recentFailures.map((f, idx) => (
+                      <div key={`${f.type}-${idx}`} className="bg-red-500/10 border border-red-500/20 rounded px-3 py-2">
+                        <div className="text-[10px] text-red-300 font-mono uppercase">{f.type}</div>
+                        <div className="text-[10px] text-slate-300 mt-0.5">{String(f.message || 'Unknown').slice(0, 140)}</div>
+                        <div className="text-[9px] text-slate-500 font-mono mt-1">
+                          {f.at ? new Date(f.at).toLocaleString('id-ID', { hour12: false }) : 'UNKNOWN'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="group pt-4 border-t border-white/5" title="Nodes that exist but are not connected to the Mamet knowledge graph.">

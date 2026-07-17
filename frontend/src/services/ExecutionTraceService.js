@@ -11,13 +11,169 @@
 
 import { supabase } from '../supabase';
 
-const TIMELINE_EVENT_ORDER = [
-  'User.Request',
-  'capability',
-  'tool',
-  'response',
-  'verification'
+const PIPELINE_STEPS = [
+  { key: 'intent', label: 'Intent' },
+  { key: 'memory', label: 'Memory Retrieval' },
+  { key: 'rag', label: 'RAG Retrieval' },
+  { key: 'planner', label: 'Planner' },
+  { key: 'tool', label: 'Tool Execution' },
+  { key: 'verification', label: 'Verification' },
+  { key: 'provider', label: 'Provider' },
+  { key: 'response', label: 'Response Generation' },
+  { key: 'memory_writeback', label: 'Memory Writeback' },
+  { key: 'delivery', label: 'Delivery' }
 ];
+
+const STEP_ALIASES = {
+  intent: ['intent', 'user.request', 'request.received', 'request'],
+  memory: ['memory', 'memory retrieval', 'memory.read', 'memory.fetch', 'memory.retrieval'],
+  rag: ['rag', 'rag retrieval', 'retrieval', 'kb.retrieval', 'knowledge.retrieval'],
+  planner: ['planner', 'plan', 'planning', 'task.plan'],
+  tool: ['tool', 'tool execution', 'tool.requested', 'tool.invoked', 'tool.completed'],
+  verification: ['verification', 'verify', 'policy check', 'verification.completed'],
+  provider: ['provider', 'llm', 'model', 'provider.call'],
+  response: ['response', 'response generation', 'response.generated'],
+  memory_writeback: ['memory writeback', 'writeback', 'memory.write', 'memory.persist'],
+  delivery: ['delivery', 'final delivery', 'send', 'delivered']
+};
+
+function normalizeStatus(status) {
+  if (!status || typeof status !== 'string') return 'unknown';
+  const s = status.toLowerCase();
+  if (s.includes('timeout')) return 'failed';
+  if (s.includes('fail') || s.includes('error') || s.includes('down')) return 'failed';
+  if (s.includes('run') || s.includes('pend') || s.includes('progress')) return 'running';
+  if (s.includes('success') || s.includes('ok') || s.includes('done') || s.includes('pass')) return 'success';
+  return 'unknown';
+}
+
+function inferStepFromEvent(row, normalizedEvent) {
+  const eventType = String(row?.event_type || row?.eventType || normalizedEvent?.event || '').toLowerCase();
+  const eventName = String(normalizedEvent?.event || '').toLowerCase();
+  const message = String(row?.message || normalizedEvent?.metadata?.message || '').toLowerCase();
+  const provider = String(row?.provider || normalizedEvent?.metadata?.provider || '').toLowerCase();
+
+  const haystack = `${eventType} ${eventName} ${message} ${provider}`.trim();
+
+  for (const step of PIPELINE_STEPS) {
+    const aliases = STEP_ALIASES[step.key] || [];
+    if (aliases.some(a => haystack.includes(a))) return step.key;
+  }
+
+  return 'provider';
+}
+
+function enrichEventWithStep(row, normalizedEvent) {
+  const stepKey = inferStepFromEvent(row, normalizedEvent);
+  const step = PIPELINE_STEPS.find(s => s.key === stepKey);
+
+  return {
+    ...normalizedEvent,
+    step: stepKey,
+    stepLabel: step?.label || stepKey
+  };
+}
+
+function buildPipeline({ traceId, timeline }) {
+  const byStep = {};
+  timeline.forEach(evt => {
+    const stepKey = evt.step;
+    if (!stepKey) return;
+    if (!byStep[stepKey]) byStep[stepKey] = [];
+    byStep[stepKey].push(evt);
+  });
+
+  const steps = PIPELINE_STEPS.map((s, idx) => {
+    const events = byStep[s.key] || [];
+    if (events.length === 0) {
+      return {
+        order: idx + 1,
+        key: s.key,
+        label: s.label,
+        status: 'UNKNOWN',
+        telemetryAvailable: false,
+        latencyMs: null,
+        provider: null,
+        timestamp: null,
+        dependencies: idx > 0 ? [PIPELINE_STEPS[idx - 1].key] : [],
+        relatedEvents: [],
+        failures: [],
+        warnings: [],
+        evidence: []
+      };
+    }
+
+    const statuses = events.map(e => normalizeStatus(e.status));
+    let status = 'SUCCESS';
+    if (statuses.includes('failed')) status = 'FAILED';
+    else if (statuses.includes('running')) status = 'RUNNING';
+    else if (statuses.includes('unknown')) status = 'UNKNOWN';
+    else status = 'SUCCESS';
+
+    const durationCandidates = events
+      .map(e => e.durationMs ?? e.metadata?.duration_ms ?? e.metadata?.latency_ms ?? e.metadata?.latencyMs)
+      .filter(v => typeof v === 'number' && Number.isFinite(v));
+    const latencyMs = durationCandidates.length > 0 ? Math.max(...durationCandidates) : null;
+
+    const provider = events.find(e => e?.metadata?.provider)?.metadata?.provider || null;
+    const latestTs = events
+      .map(e => e.timestamp)
+      .filter(Boolean)
+      .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
+      .pop() || null;
+
+    const failures = events
+      .filter(e => normalizeStatus(e.status) === 'failed')
+      .map(e => e.metadata?.failures || e.metadata?.error || e.metadata?.message || e.event)
+      .filter(Boolean);
+
+    const warnings = events
+      .filter(e => normalizeStatus(e.status) === 'unknown' || normalizeStatus(e.status) === 'running')
+      .map(e => e.metadata?.warning || e.metadata?.message || null)
+      .filter(Boolean);
+
+    return {
+      order: idx + 1,
+      key: s.key,
+      label: s.label,
+      status,
+      telemetryAvailable: true,
+      latencyMs,
+      provider,
+      timestamp: latestTs,
+      dependencies: idx > 0 ? [PIPELINE_STEPS[idx - 1].key] : [],
+      relatedEvents: events.map(e => e.event || e.type).filter(Boolean),
+      failures,
+      warnings,
+      evidence: events.slice(0, 5).map(e => ({
+        event: e.event || e.type,
+        status: e.status,
+        timestamp: e.timestamp
+      }))
+    };
+  });
+
+  const failedStep = steps.find(s => s.status === 'FAILED') || null;
+  const rootCause = failedStep ? failedStep.label : null;
+  const bottleneck = steps
+    .filter(s => typeof s.latencyMs === 'number')
+    .sort((a, b) => b.latencyMs - a.latencyMs)[0] || null;
+
+  return {
+    traceId,
+    steps,
+    summary: {
+      active: steps.filter(s => s.status === 'RUNNING').map(s => s.label),
+      failed: steps.filter(s => s.status === 'FAILED').map(s => s.label),
+      unknown: steps.filter(s => s.status === 'UNKNOWN').map(s => s.label),
+      rootCause,
+      failedStep: failedStep?.label || null,
+      bottleneck: bottleneck
+        ? { step: bottleneck.label, latencyMs: bottleneck.latencyMs }
+        : null
+    }
+  };
+}
 
 export function normalizeAgentLogsEvent(row) {
   // Expected shape from persistTelemetryLog (runtime_context.ts + subscribers)
@@ -143,7 +299,8 @@ export async function fetchExecutionTrace({ traceId, limit = 200 }) {
     throw agentLogsError;
   }
 
-  const normalizedAgentEvents = (agentLogsRows || []).map(normalizeAgentLogsEvent);
+  const normalizedAgentEvents = (agentLogsRows || [])
+    .map(row => enrichEventWithStep(row, normalizeAgentLogsEvent(row)));
 
   // 2) verification_audit_logs (failure visualization)
   // We only include rows that match trace_id inside metadata (if it exists).
@@ -177,6 +334,8 @@ export async function fetchExecutionTrace({ traceId, limit = 200 }) {
       type: 'verification',
       event: 'Verification.Completed',
       status: uiStatus,
+      step: 'verification',
+      stepLabel: 'Verification',
       timestamp: createdAt,
       metadata: {
         ...(r.metadata || {}),
@@ -191,9 +350,12 @@ export async function fetchExecutionTrace({ traceId, limit = 200 }) {
     .filter(e => e && e.timestamp)
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
+  const pipeline = buildPipeline({ traceId, timeline });
+
   return {
     traceId,
     timeline,
+    pipeline,
     sources: {
       agent_logs: agentLogsRows?.length || 0,
       verification_audit_logs: verifRows?.length || 0
