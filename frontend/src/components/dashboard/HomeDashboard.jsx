@@ -362,19 +362,62 @@ export default function HomeDashboard() {
         nodes.push({ id: 'core-maef', name: 'MAEF KERNEL', type: 'Core', group: 'core', val: 50, isCategory: true, fx: 0, fy: 0 });
 
         const primaryClusters = [
-          { id: 'cat-memory', name: 'MEMORY SYSTEM' },
-          { id: 'cat-rag', name: 'KNOWLEDGE BASE' },
-          { id: 'cat-chat', name: 'SESSION CONTEXT' },
-          { id: 'cat-workspace', name: 'WORKSPACE ENV' },
-          { id: 'cat-auth', name: 'IDENTITY (AUTH)' },
-          { id: 'cat-storage', name: 'VAULT STORAGE' },
-          { id: 'cat-edge', name: 'CAPABILITY PORTS' },
-          { id: 'cat-realtime', name: 'EVENT BUS' }
+          { id: 'cat-memory', name: 'Memory Cluster' },
+          { id: 'cat-agent', name: 'Agent Cluster' },
+          { id: 'cat-execution', name: 'Execution Cluster' },
+          { id: 'cat-knowledge', name: 'Knowledge Cluster' },
+          { id: 'cat-telemetry', name: 'Activity / Telemetry Cluster' }
         ];
 
+        // Orbit layout (radius fixed):
+        const ORBIT1_R = 180;
+        const ORBIT2_R = 300;
+        const ORPHAN_R = 520;
+
+        const orbitAngleByGroup = {
+          'cat-memory': 225,
+          'cat-agent': 135,
+          'cat-execution': 45,
+          'cat-knowledge': 315,
+          'cat-telemetry': 90 // Observation orbit (bottom)
+        };
+
+        const getOrbitRadiusForGroup = (id) => {
+          if (id === 'cat-telemetry' || id?.startsWith('subcat-tel-')) return ORBIT2_R;
+          return ORBIT1_R;
+        };
+
+        const getNodeFxFy = (node) => {
+          if (node.id === 'core-maef') return { fx: 0, fy: 0 };
+          
+          let parentId = node.id;
+          if (node.group === 'subcategory') {
+            parentId = node.parent;
+          }
+          
+          let radius = getOrbitRadiusForGroup(parentId);
+          let orbitAngle = orbitAngleByGroup[parentId] || 0;
+          
+          // Spread subcategories around their parent cluster
+          if (node.group === 'subcategory') {
+             // We can just let physics handle subcategories, but giving them fx,fy makes it rigid.
+             // We will only give fx,fy to primary clusters to let subclusters float around them!
+             return {}; 
+          }
+
+          if (node.group === 'category') {
+            const angleRad = (orbitAngle * Math.PI) / 180;
+            const fx = Math.round(Math.cos(angleRad) * radius);
+            const fy = Math.round(Math.sin(angleRad) * radius);
+            return { fx, fy };
+          }
+          
+          return {}; // Let physics handle leaf nodes
+        };
+
         primaryClusters.forEach(cluster => {
-          nodes.push({ id: cluster.id, name: cluster.name, type: 'Category', group: 'category', val: 20, isCategory: true });
-          // Link planets to the sun
+          const coords = getNodeFxFy({ id: cluster.id, group: 'category' });
+          nodes.push({ id: cluster.id, name: cluster.name, type: 'Category', group: 'category', val: 25, isCategory: true, ...coords });
           links.push({ source: 'core-maef', target: cluster.id });
         });
 
@@ -388,69 +431,32 @@ export default function HomeDashboard() {
         const dynamicSubclusters = {};
         const registerSubcluster = (id, name, parent) => {
           if (!dynamicSubclusters[id]) {
-            dynamicSubclusters[id] = { id, name: name.toUpperCase(), type: 'Subcluster', group: 'subcategory', val: 12, isCategory: true, parent };
+            dynamicSubclusters[id] = { id, name: name.toUpperCase(), type: 'Subcluster', group: 'subcategory', val: 15, isCategory: true, parent };
           }
         };
 
-        // Helper untuk mapping legacy name ke arsitektur baru
-        const mapLegacyName = (name) => {
-          if (!name) return 'General';
-          const n = name.toLowerCase();
-          if (n === 'owner' || n === 'ws-owner') return 'engineer';
-          if (n === 'ws-agent-forge') return 'assistant';
-          return name;
-        };
+        // Pre-register specific subclusters based on the architecture map
+        const staticSubclusters = [
+          { id: 'subcat-mem-rag', name: 'RAG Memory', parent: 'cat-memory' },
+          { id: 'subcat-mem-user', name: 'User Memory', parent: 'cat-memory' },
+          { id: 'subcat-mem-vector', name: 'Vector DB', parent: 'cat-memory' },
+          
+          { id: 'subcat-agent-sub', name: 'Sub Agents', parent: 'cat-agent' },
+          { id: 'subcat-agent-tools', name: 'Tools', parent: 'cat-agent' },
+          { id: 'subcat-agent-skills', name: 'Skills', parent: 'cat-agent' },
+          
+          { id: 'subcat-exec-trace', name: 'Trace Pipeline', parent: 'cat-execution' },
+          { id: 'subcat-exec-verify', name: 'Verification', parent: 'cat-execution' },
+          { id: 'subcat-exec-audit', name: 'Audit', parent: 'cat-execution' },
+          
+          { id: 'subcat-know-docs', name: 'Documents', parent: 'cat-knowledge' },
+          { id: 'subcat-know-embed', name: 'Embedding', parent: 'cat-knowledge' },
+          { id: 'subcat-know-pgvector', name: 'pgvector', parent: 'cat-knowledge' },
+          
+          { id: 'subcat-tel-dash', name: 'Dashboard + Metrics + Logs', parent: 'cat-telemetry' }
+        ];
 
-        // ---- Tata Surya Mamet Ecosystem (visual-only; no telemetry/schema changes) ----
-        // Orbit layout (radius fixed):
-        // Orbit1: Memory/Knowledge/RAG, Orbit2: Agent/Tool/Verification, Orbit3: Provider/Database/Pipeline/Chat
-        const ORBIT1_R = 180;
-        const ORBIT2_R = 280;
-        const ORBIT3_R = 380;
-        const ORPHAN_R = 520;
-
-        // Deterministic angle per category/subcategory (so it's "solar-system" not generic).
-        const orbitAngleByGroup = {
-          memory: 200,
-          rag: 300,
-          chat: 20,
-          memory_system: 200,
-          knowledge: 250,
-          verification: 120,
-          agent: 160,
-          tool: 240,
-          provider: 340,
-          database: 60,
-          pipeline: 280,
-          category: 45,
-          subcategory: 45
-        };
-
-        const getOrbitRadiusForGroup = (group, id) => {
-          // Use existing node types/groups we already have:
-          // - memory group -> Orbit1
-          // - rag group -> Orbit1
-          // - chat group -> Orbit3
-          // - category/subcategory -> base on category id prefix
-          if (group === 'memory' || group === 'rag') return ORBIT1_R;
-          if (group === 'chat') return ORBIT3_R;
-
-          // Categories (cat-*)
-          if (id?.startsWith('cat-memory')) return ORBIT1_R;
-          if (id?.startsWith('cat-rag')) return ORBIT1_R;
-          if (id?.startsWith('cat-chat')) return ORBIT3_R;
-          if (id?.startsWith('cat-workspace')) return ORBIT2_R;
-          if (id?.startsWith('cat-auth')) return ORBIT3_R;
-          if (id?.startsWith('cat-storage')) return ORBIT3_R;
-          if (id?.startsWith('cat-edge')) return ORBIT2_R;
-          if (id?.startsWith('cat-realtime')) return ORBIT3_R;
-          if (id?.startsWith('subcat-mem-')) return ORBIT1_R;
-          if (id?.startsWith('subcat-rag-')) return ORBIT1_R;
-          if (id?.startsWith('subcat-chat-')) return ORBIT3_R;
-
-          // Default: outer orbit-ish
-          return ORBIT3_R;
-        };
+        staticSubclusters.forEach(sc => registerSubcluster(sc.id, sc.name, sc.parent));
 
         // HEALTH/DEGRADED/DOWN/UNKNOWN colors:
         const colorByStatus = {
@@ -492,42 +498,16 @@ export default function HomeDashboard() {
           return colorByStatus[status] || colorByStatus.UNKNOWN;
         };
 
-        const getNodeFxFy = (node) => {
-          // Core: center
-          if (node.id === 'core-maef') return { fx: 0, fy: 0 };
 
-          // Orphan: nodes with no active relations (using node.data.relations if exists)
-          const relations = node?.data?.relations;
-          const isOrphanCandidate = typeof relations === 'number' && relations === 0;
-
-          const radius = isOrphanCandidate ? ORPHAN_R : getOrbitRadiusForGroup(node.group, node.id);
-          const orbitAngle =
-            (orbitAngleByGroup[node.group] ??
-              orbitAngleByGroup[node.id?.split('-')?.[1]] ??
-              (node.id?.startsWith('cat-chat') ? 20 : 45));
-
-          const angleRad = (orbitAngle * Math.PI) / 180;
-          const fx = Math.round(Math.cos(angleRad) * radius);
-          const fy = Math.round(Math.sin(angleRad) * radius);
-
-          return { fx, fy, orphan: isOrphanCandidate };
-        };
 
         // 3. Process Actual Data into Subclusters
         memories.forEach(m => {
-          let type = m.metadata?.type || m.metadata?.category || 'General';
-          type = mapLegacyName(type);
-          const subcatId = `subcat-mem-${type.toLowerCase()}`;
-          registerSubcluster(subcatId, type, 'cat-memory');
-
           const hits = m.memory_hits || 0;
           const causalLinks = m.causal_links || [];
-
           let relationsCount = causalLinks.length;
-          // Feature 4: Detect cross-relations to chat or document
+          
           const sourceChatId = m.metadata?.chat_id || m.metadata?.source_id;
           const sourceDocId = m.metadata?.document_id;
-
           if (sourceChatId) relationsCount++;
           if (sourceDocId) relationsCount++;
 
@@ -546,15 +526,12 @@ export default function HomeDashboard() {
             }
           });
 
-          // Connect to its subcluster instead of main category
-          links.push({ source: subcatId, target: `mem-${m.id}` });
+          // Connect to User Memory subcategory by default
+          links.push({ source: 'subcat-mem-user', target: `mem-${m.id}` });
 
-          // Connect causal links
           causalLinks.forEach(targetId => {
             links.push({ source: `mem-${m.id}`, target: `mem-${targetId}` });
           });
-
-          // Connect cross-cluster relations if they exist
           if (sourceChatId && chats.some(c => c.id === sourceChatId)) {
             links.push({ source: `chat-${sourceChatId}`, target: `mem-${m.id}` });
           }
@@ -564,13 +541,7 @@ export default function HomeDashboard() {
         });
 
         documents.forEach(d => {
-          let type = d.metadata?.file_type || d.metadata?.type || 'Document';
-          type = mapLegacyName(type);
-          const subcatId = `subcat-rag-${type.toLowerCase()}`;
-          registerSubcluster(subcatId, type, 'cat-rag');
-
           const chunkCount = docChunkCounts[d.id] || 0;
-
           nodes.push({
             id: `doc-${d.id}`,
             name: d.title || 'Document',
@@ -586,15 +557,11 @@ export default function HomeDashboard() {
             }
           });
 
-          links.push({ source: subcatId, target: `doc-${d.id}` });
+          // Connect to Documents subcategory
+          links.push({ source: 'subcat-know-docs', target: `doc-${d.id}` });
         });
 
         chats.forEach(c => {
-          let type = c.workspace_type || 'Unknown';
-          type = mapLegacyName(type);
-          const subcatId = `subcat-chat-${type.toLowerCase()}`;
-          registerSubcluster(subcatId, type, 'cat-chat');
-
           nodes.push({
             id: `chat-${c.id}`,
             name: c.title || 'Chat',
@@ -610,7 +577,8 @@ export default function HomeDashboard() {
             }
           });
 
-          links.push({ source: subcatId, target: `chat-${c.id}` });
+          // Connect to Sub Agents subcategory
+          links.push({ source: 'subcat-agent-sub', target: `chat-${c.id}` });
         });
 
         // Add dynamic subclusters to graph
