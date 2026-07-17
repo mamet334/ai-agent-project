@@ -39,3 +39,6 @@ Thumbs.db
 frontend/release/
 token github.txt
 .vercel
+
+.vercel
+.env*

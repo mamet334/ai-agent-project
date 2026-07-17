@@ -22,10 +22,10 @@
 - [x] Step 2: Telemetry producer utility
 - [x] Step 3: Trace propagation
 - [x] Step 4: MEMORY instrumentation
-- [ ] Step 5: Runtime instrumentation (Planner/RAG/Tools/Provider/Pipeline/Verification)
+- [x] Step 5: Runtime instrumentation (Planner/RAG/Tools/Provider/Pipeline/Verification)
 - [x] Step 6: Frontend trace normalization update
-- [ ] Step 7: Build verification
-- [ ] Step 8: Changelog update
+- [x] Step 7: Build verification
+- [x] Step 8: Changelog update
 
 ## Instrumentation Expansion Progress (Backend + Frontend)
 - [x] Add telemetry foundation (`backend/telemetry.js`)
@@ -34,8 +34,8 @@
 - [x] Instrument `api/memory/write.ts` (Memory.Write.Start/End/Failed + trace_id)
 - [x] Extend `frontend/src/services/ExecutionTraceService.js` event normalization for new telemetry taxonomy
 - [x] Instrument planner + verification signals in `backend/server.js` coordinator flow
-- [ ] Instrument RAG events in `backend/server.js`
-- [ ] Instrument Tool lifecycle events in `backend/server.js` subagent/tool execution branches
-- [ ] Final build + compile fix
-- [ ] Commit + push branch kerja
-- [ ] Create PR
+- [x] Instrument RAG events in `backend/server.js`
+- [x] Instrument Tool lifecycle events in `backend/server.js` subagent/tool execution branches
+- [x] Final build + compile fix
+- [x] Commit + push branch kerja
+- [x] Create PR

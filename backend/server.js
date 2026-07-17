@@ -708,6 +708,18 @@ PENTING: Jangan berikan teks penjelasan lain, jangan gunakan markdown code block
                 contents: [{ role: 'user', parts: [{ text: `Cari informasi web mengenai: ${task}\n\nKonteks:\n${accumulatedContext}` }] }],
                 tools: [{ googleSearch: {} }]
               };
+              
+              await emitTelemetryEvent({
+                eventType: 'RAG.Retrieval.Start',
+                traceId,
+                provider: 'gemini-2.5-flash',
+                message: 'RAG retrieval started',
+                metadata: {
+                  subagent,
+                  status: 'running'
+                }
+              });
+
               let geminiRes = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, subagentPayload, {
                 headers: { 'content-type': 'application/json' }
               });
