@@ -518,6 +518,13 @@ pipelineServices.forEach(service => {
 
 
 
+// Add dynamic subclusters to graph
+        Object.values(dynamicSubclusters).forEach(sc => {
+          nodes.push(sc);
+          // Flow: Subcluster -> Primary Cluster
+          links.push({ source: sc.id, target: sc.parent });
+        });
+
         // 3. Process Actual Data into Subclusters
         memories.forEach(m => {
           let type = m.metadata?.type || m.metadata?.category || 'User';
@@ -630,14 +637,7 @@ pipelineServices.forEach(service => {
           links.push({ source: `chat-${c.id}`, target: subcatId });
         });
 
-        // Add dynamic subclusters to graph
-        Object.values(dynamicSubclusters).forEach(sc => {
-          nodes.push(sc);
-          // Flow: Subcluster -> Primary Cluster
-          links.push({ source: sc.id, target: sc.parent });
-        });
-
-        const orphanCount = nodes.filter(n => !n.isCategory && n.data && n.data.relations === 0).length;
+const orphanCount = nodes.filter(n => !n.isCategory && n.data && n.data.relations === 0).length;
         const totalDataNodes = nodes.filter(n => !n.isCategory && n.data).length;
         const connectedCount = totalDataNodes - orphanCount;
 
