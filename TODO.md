@@ -1,21 +1,17 @@
-# TODO - AGENT PROCESS HEARTBEAT INTEGRATION
+# TODO: Fix Embedding di Request Pipeline
 
-## Plan Steps
-1. Add heartbeat adapter at `supabase/functions/agent-process/lib/adapters/heartbeat.ts`.
-2. Integrate heartbeat import into `supabase/functions/agent-process/index.ts`.
-3. Trigger `pingHeartbeat('agent-process', 'HEALTHY')` in `GET /health`.
-4. Trigger `pingHeartbeat('agent-process', 'DOWN')` in global catch block.
-5. Add deployment notes for secrets and redeploy.
+## Steps
+- [x] 1. Analisis kode yang ada (CapabilityRegistry, embedding_adapter, runtime_context)
+- [x] 2. Dapatkan persetujuan plan dari user
+- [x] 3. Edit request_pipeline.ts:
+  - [x] 3a. Baca environment keys (GEMINI_API_KEY, OPENAI_API_KEY) di awal
+  - [x] 3b. Hapus blok RAG lama dari posisi awal (sebelum rctx)
+  - [x] 3c. Pindahkan blok RAG ke SETELAH rctx dibuat
+  - [x] 3d. Lengkapi rctx.keys dengan allGemini, gemini, openAI, groq
+  - [x] 3e. Tambah helper function `generateEmbeddingThroughAdapter()` yang menggunakan CapabilityRegistry
+  - [x] 3f. Panggil helper function sebelum match_memories RPC
+- [x] 4. Validasi hasil edit
 
-## Progress
-- [x] Step 1: Plan approved
-- [x] Step 2: Create heartbeat adapter (`heartbeat.ts`) with `upsert(..., { onConflict: 'service_name' })`
-- [x] Step 3: Update `index.ts` imports and `/health` heartbeat call
-- [x] Step 4: Update global catch block with DOWN heartbeat
-- [x] Step 5: Add operational notes in TODO
+## Result
+✅ Semua langkah selesai. File request_pipeline.ts sudah diperbaiki.
 
-## Operational Notes
-- [ ] Ensure secret exists: `supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your_service_role_key`
-- [ ] (Recommended) also ensure: `supabase secrets set SUPABASE_URL=your_project_url`
-- [ ] Redeploy function: `supabase functions deploy agent-process`
-- [ ] Verify endpoint: `GET https://[project].supabase.co/functions/v1/agent-process/health`

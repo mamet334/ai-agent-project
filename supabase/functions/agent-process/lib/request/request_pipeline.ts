@@ -9,12 +9,57 @@ import { RuntimeContext, createBackgroundTaskTracker, createRuntimeLogger } from
 import { getPluginPromptList } from '../../plugins/registry.ts';
 import { CapabilityRegistry } from '../adapters/adapter_registry.ts';
 import { compressChatHistory } from './history_compressor.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const getAllKeys = (envVarName: string): string[] => {
   const keysString = Deno.env.get(envVarName) || '';
   if (!keysString) return [];
   return keysString.split(',').map(k => k.trim()).filter(k => k);
 };
+
+/**
+ * Generate vector embedding from text using CapabilityRegistry adapters.
+ * Tries GeminiEmbeddingAdapter first, then falls back to OpenAIEmbeddingAdapter.
+ */
+async function generateEmbeddingThroughAdapter(text: string, rctx: RuntimeContext): Promise<number[]> {
+  // Initialize embedding adapters via CapabilityRegistry
+  await CapabilityRegistry.initializeAdapters(rctx);
+
+  // Preferred order: gemini_embedding -> openai_embedding
+  const embeddingAdapters = CapabilityRegistry.getAvailableEmbeddingAdapters([
+    'gemini_embedding',
+    'openai_embedding'
+  ]);
+
+  if (embeddingAdapters.length === 0) {
+    throw new Error('No embedding adapters available. Check GEMINI_API_KEY or OPENAI_API_KEY.');
+  }
+
+  let lastError = '';
+
+  for (const adapter of embeddingAdapters) {
+    try {
+      console.log(`🔍 Generating embedding via ${adapter.name}...`);
+      const result = await adapter.execute(
+        { text },
+        { trace_id: 'pipeline-rag', userId: rctx.keys.gemini || 'unknown' }
+      );
+
+      if (result && result.result && Array.isArray(result.result) && result.result.length > 0) {
+        console.log(`✅ Embedding generated via ${adapter.name} (${result.result.length} dimensions)`);
+        return result.result as number[];
+      }
+
+      lastError += ` [${adapter.name}]: returned empty embedding;`;
+    } catch (err: any) {
+      const msg = err.message || String(err);
+      lastError += ` [${adapter.name}]: ${msg};`;
+      console.warn(`⚠️ Embedding adapter ${adapter.name} failed: ${msg}`);
+    }
+  }
+
+  throw new Error(`All embedding adapters failed.${lastError}`);
+}
 
 export async function executeRequestPipeline(
   params: RequestPipelineParams,
@@ -32,6 +77,12 @@ export async function executeRequestPipeline(
     apifyApiToken: Deno.env.get('APIFY_API_TOKEN') || '',
     enableAsyncMemoryWrite: Deno.env.get('ENABLE_ASYNC_MEMORY_WRITE') !== 'false'
   };
+
+  // Read all provider API keys for embedding & LLM adapters
+  const allGeminiKeys = getAllKeys('GEMINI_API_KEY');
+  const primaryGeminiKey = allGeminiKeys.length > 0 ? allGeminiKeys[0] : '';
+  const openAIKey = Deno.env.get('OPENAI_API_KEY') || '';
+  const groqKey = Deno.env.get('GROQ_API_KEY') || '';
 
   const bypassCooldown = request.headers.get('x-bypass-cooldown') === 'true';
   if (bypassCooldown) {
@@ -53,7 +104,7 @@ export async function executeRequestPipeline(
   }
 
   const parsed = await parseRequestParams(request, user);
-  
+
   if (!parsed.finalMessage || !Array.isArray(parsed.tools)) {
       return { ctx: {} as any, rctx: {} as any, response: new Response(JSON.stringify({ error: 'Invalid request' }), {
         status: 400,
@@ -61,6 +112,7 @@ export async function executeRequestPipeline(
       }) };
   }
 
+  // Hapus duplikasi ctx yang error!
   const ctx = buildUnifiedExecutionContext({
       message: parsed.message,
       desktopOSMode: parsed.desktopOSMode,
@@ -82,36 +134,19 @@ export async function executeRequestPipeline(
   const quotaResponse = await checkQuota(ctx.auth.userId, runtimeEnv.supabaseUrl, runtimeEnv.supabaseServiceKey, !!parsed.stream, corsHeaders);
   if (quotaResponse) return { ctx: {} as any, rctx: {} as any, response: quotaResponse };
 
-  const byokGemini = request.headers.get('x-byok-gemini');
-  const byokGroq = request.headers.get('x-byok-groq');
-  const byokOpenAI = request.headers.get('x-byok-openai');
   const byokOpenRouter = request.headers.get('x-byok-openrouter');
-
-  const allGeminiKeys = getAllKeys('GEMINI_API_KEY');
-  const GEMINI_API_KEY = (byokGemini || (allGeminiKeys.length > 0 ? allGeminiKeys[0] : '')).trim();
-  
-  const allGroqKeys = getAllKeys('GROQ_API_KEY');
-  const GROQ_API_KEY = (byokGroq || (allGroqKeys.length > 0 ? allGroqKeys[0] : '')).trim();
-  
-  const allOpenAIKeys = getAllKeys('OPENAI_API_KEY');
-  const OPENAI_API_KEY = (byokOpenAI || (allOpenAIKeys.length > 0 ? allOpenAIKeys[0] : '')).trim();
-  
   const allOpenRouterKeys = getAllKeys('OPENROUTER_API_KEY');
   const OPENROUTER_API_KEY = (byokOpenRouter || (allOpenRouterKeys.length > 0 ? allOpenRouterKeys[0] : '')).trim();
-
-  if (!GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is not set');
-  }
 
   const backgroundTasks = createBackgroundTaskTracker();
   
   const rctx: RuntimeContext = {
     keys: {
-      gemini: GEMINI_API_KEY,
-      allGemini: getAllKeys('GEMINI_API_KEY'),
-      groq: GROQ_API_KEY,
+      gemini: primaryGeminiKey,
+      allGemini: allGeminiKeys,
+      groq: groqKey,
       openRouter: OPENROUTER_API_KEY,
-      openAI: OPENAI_API_KEY,
+      openAI: openAIKey,
     },
     model: { model: parsed.model },
     policy: { canUseDesktopTools: ctx.policy.canUseDesktopTools },
@@ -121,10 +156,48 @@ export async function executeRequestPipeline(
     state: { explicitModelErrors: '' },
     tasks: backgroundTasks
   };
-  
-  if (rctx.keys.allGemini.length === 0 && rctx.keys.gemini) {
-    rctx.keys.allGemini.push(rctx.keys.gemini);
+
+  // =============================================
+  // [BACKEND RAG: Generate Embedding + Vector Search]
+  // =============================================
+  try {
+    // Only run RAG if the message is non-empty and RAG is enabled
+    if (parsed.finalMessage && parsed.finalMessage.trim().length > 0 && parsed.ragEnabled !== false) {
+      console.log('🔍 [RAG] Generating embedding for vector search...');
+      
+      // 1. Generate vector embedding using CapabilityRegistry adapters
+      const userEmbedding = await generateEmbeddingThroughAdapter(parsed.finalMessage, rctx);
+
+      // 2. Query vector database via Supabase RPC
+      const supabase = createClient(runtimeEnv.supabaseUrl, runtimeEnv.supabaseServiceKey);
+      const { data: memories, error } = await supabase
+        .rpc('match_memories', {
+          query_embedding: userEmbedding,
+          match_threshold: 0.8,
+          match_count: 5
+        });
+
+      if (error) {
+        console.error('[RAG] Vector search error:', error);
+      }
+
+      // 3. Build RAG context from matched memories
+      const ragContext = memories?.map((m: any) => m.content).join('\n') || '';
+      if (ragContext) {
+        console.log(`✅ [RAG] Found ${memories?.length || 0} relevant memories`);
+        parsed.globalMemory = ragContext;
+      } else {
+        console.log('ℹ️ [RAG] No relevant memories found');
+        parsed.globalMemory = 'Tidak ada memori yang relevan.';
+      }
+    }
+  } catch (ragError: any) {
+    // Don't crash the pipeline if RAG fails — just log and continue
+    console.error('[RAG] Error during vector search:', ragError.message || ragError);
+    parsed.globalMemory = 'Tidak ada memori yang relevan.';
   }
+  // =============================================
+  // [SELESAI] LOGIKA RAG
 
   // --- PROMPT INITIALIZATION ---
   const currentDateStr = new Date().toISOString().split('T')[0];
@@ -155,69 +228,19 @@ JIKA USER MEMINTA CEK DESKTOP, CARI FILE, CARI FOLDER, ATAU JALANKAN PERINTAH DI
 INGAT: Ini adalah Windows OS. Gunakan perintah Windows (dir, cd, type, copy) BUKAN Linux (ls, cat, cp)!\n`;
   }
 
-  agentIdentityPrompt += `\nPANDUAN PENALARAN & CHAIN-OF-THOUGHT (DEEPSEEK STYLE - WAJIB):
+  agentIdentityPrompt += `\nPANDUAN PENALARAN & STATUS KEPASTIAN (MAEF COMPLIANT):
 Sebelum memberikan jawaban akhir, Anda WAJIB menuliskan proses berpikir Anda secara transparan di dalam tag <think>...</think>.
-Isi tag think harus sangat detail, kritis, dan jujur, mencakup:
+Isi tag think harus mencakup:
 1. Apa yang Anda pahami dari pertanyaan/permintaan user.
 2. APAKAH DATA TERSEDIA DI BLOK <RAG> ATAU <MEMORY>?
-3. JIKA ADA: Gunakan HANYA data dari <RAG> dan <MEMORY> untuk menjawab.
-4. JIKA TIDAK ADA: Katakan dengan jelas bahwa "Data tidak ditemukan di database internal".
-5. JANGAN PERNAH MENGGUNAKAN PENGETAHUAN INTERNAL ANDA SENDIRI!
+3. JIKA ADA DATA: Gunakan HANYA data dari <RAG> dan <MEMORY> untuk menjawab. Beri label status: [STATUS: VERIFIED] pada jawaban Anda.
+4. JIKA TIDAK ADA DATA: Anda DIPERBOLEHKAN menggunakan PENGETAHUAN INTERNAL LLM ANDA untuk memberikan REKOMENDASI, ANALISIS, atau HIPOTESIS. Beri label status: [STATUS: HYPOTHESIS - Rekomendasi AI] pada jawaban Anda.
+5. JIKA KEDUANYA KOSONG ATAU TIDAK TAHU: Katakan dengan jelas "Data tidak ditemukan di database, dan saya tidak memiliki informasi internal yang cukup". Beri label status: [STATUS: INSUFFICIENT].
 
-PENTING SEKALI - PRINSIP KNOWLEDGE FIRST:
-- ANDA HANYA BOLEH MENJAWAB BERDASARKAN DATA DARI BLOK <RAG> DAN <MEMORY> SAJA!
-- JANGAN PERNAH MENGGUNAKAN PENGETAHUAN INTERNAL LLM ANDA!
-- JIKA <RAG> DAN <MEMORY> KOSONG ATAU TIDAK MEMILIKI DATA YANG RELEVAN, ANDA WAJIB MENGATAKAN "Data tidak ditemukan di database internal".
-- JANGAN PERNAH MENGARANG FAKTA, NAMA, ATAU INFORMASI APAPUN YANG TIDAK ADA DI <RAG> ATAU <MEMORY>!
-
-Contoh format jawaban yang BENAR:
-<think>
-User menanyakan tentang produk X. Saya periksa blok <RAG> dan <MEMORY>, tidak ada data yang relevan tentang produk X. Jadi saya harus mengatakan bahwa data tidak ditemukan di database.
-</think>
-Maaf, data tidak ditemukan di database internal.
-
-Contoh format jawaban yang BENAR (jika data ada):
-<think>
-User menanyakan tentang produk Y. Saya menemukan data di blok <RAG> tentang produk Y: [isi data RAG]. Saya akan jawab hanya berdasarkan data itu saja.
-</think>
-Berdasarkan database, produk Y adalah [isi jawaban dari RAG/Memory].
-
-FITUR GRAFIK INTERAKTIF: Jika user meminta untuk membuat grafik (bar/pie/line chart) berdasarkan data, outputkan data tersebut DALAM BENTUK BLOK KODE seperti ini:
-<EXAMPLES>
-\`\`\`json_chart
-{ "title": "Judul Grafik", "type": "bar", "data": [{"name": "A", "value": 10}], "xKey": "name", "yKey": "value" }
-\`\`\`
-</EXAMPLES>
-Pilih type "bar", "pie", atau "line" sesuai kebutuhan.
-FITUR ZIP GENERATOR: Jika user meminta Anda membuat file zip (project kodingan), outputkan data DALAM BENTUK BLOK KODE seperti ini (wajib persis):
-<EXAMPLES>
-\`\`\`xml_zip
-<filename>nama_bebas.zip</filename>
-<file name="index.html">
-<h1>Halo</h1>
-</file>
-<file name="app.js">
-console.log('hi');
-</file>
-\`\`\`
-</EXAMPLES>
-DILARANG KERAS MENGGUNAKAN PYTHON ATAU "TOOL_CODE". JANGAN PERNAH MENULISKAN KODE PYTHON UNTUK MENGEKSEKUSI TOOL. JAWABLAH DENGAN TEKS BIASA.
-
-[ANTI-HALLUCINATION CONTRACT]
-Jika blok <RAG> dan <MEMORY> kosong, ANDA DILARANG KERAS mengarang fakta, nama file, histori, atau contoh kodingan. Jawab saja bahwa data tidak ditemukan di database internal. Semua yang ada di dalam tag <EXAMPLES> hanyalah panduan format, BUKAN FAKTA RUNTIME!
-
-ATURAN MEMORI (SANGAT PENTING): 
-Semua proses penyimpanan memori/fakta dilakukan SECARA OTOMATIS di latar belakang (background) oleh sistem sebelum Anda menjawab. 
-DILARANG KERAS memanggil tool memori secara manual. Anda dilarang memberikan konfirmasi teknis penyimpanan memori.
-Do not extract memory from messages that are incomplete sentences, iterative corrections, or confirmations like "ya benar", "di sana", "betul". Only store memory after a stable, single-turn final statement.
-You are NOT allowed to claim memory is stored.
-You must only rely on [MEMORY_SYSTEM_ACK] from system.
-If [MEMORY_SYSTEM_ACK] is missing or memory_state is NOT "committed" → treat memory as NOT stored.
-Never generate or simulate tool calls.
-Only system backend performs memory persistence.
-If [MEMORY_SYSTEM_ACK] is MISSING, you MUST NOT state that memory is saved. Instead, just acknowledge the user's message conversationally (e.g., "Baik, saya mengerti", "Terima kasih informasinya"). NEVER OUTPUT AN EMPTY RESPONSE.
-
-Anda memiliki tim Sub-Agent nyata berikut ini:\n${getPluginPromptList(ctx.request.tools)}\nJika user menanyakan jumlah atau nama sub-agent Anda, sebutkan nama-nama di atas.`;
+PENTING - PRINSIP KNOWLEDGE FIRST + FALLBACK:
+- ANDA TETAP PRIORITASKAN DATA DARI <RAG> DAN <MEMORY>.
+- JIKA <RAG> DAN <MEMORY> KOSONG, ANDA BOLEH MEMAKAI PENGETAHUAN INTERNAL ANDA (sesuai Konstitusi AI boleh berpikir), TAPI WAJIB DIBERI LABEL HYPOTHESIS.
+- JANGAN PERNAH MENGARANG FAKTA. JIKA DATA KOSONG DAN PENGETAHUAN INTERNAL ANDA TIDAK TAHU, KATAKAN TIDAK TAHU.\n`;
 
   let userContextPrompt = ctx.auth.userName ? `\nInformasi Akun: User login dengan email/nama "${ctx.auth.userName}". Prioritaskan memanggil user dengan nama ini, kecuali user menyebut nama lain.` : '';
 
@@ -246,3 +269,4 @@ Wajib ikuti struktur persis seperti contoh di atas!`;
 
   return { ctx, rctx };
 }
+
