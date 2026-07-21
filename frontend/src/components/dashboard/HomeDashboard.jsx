@@ -296,7 +296,7 @@ export default function HomeDashboard() {
         let agentProcessHealth = 'UNKNOWN';
         if (heartbeatData) {
           const now = new Date();
-          const heartbeatTs = heartbeatData.last_heartbeat_at || heartbeatData.last_seen;
+          const heartbeatTs = heartbeatData.last_heartbeat_at;
           const lastBeat = heartbeatTs ? new Date(heartbeatTs) : null;
           const diffMinutes = lastBeat ? (now - lastBeat) / (1000 * 60) : Number.POSITIVE_INFINITY;
 
