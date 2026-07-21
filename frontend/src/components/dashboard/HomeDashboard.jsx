@@ -418,10 +418,63 @@ export default function HomeDashboard() {
           { id: 'subcat-know-embed', name: 'Embedding', parent: 'cat-knowledge' },
           { id: 'subcat-know-pgvector', name: 'pgvector', parent: 'cat-knowledge' },
           
-          { id: 'subcat-tel-dash', name: 'Dashboard + Metrics + Logs', parent: 'cat-telemetry' }
+          // subcat-tel-dash dihapus — digantikan oleh pipeline nodes dinamis di bawah
         ];
 
         staticSubclusters.forEach(sc => registerSubcluster(sc.id, sc.name, sc.parent));
+
+// =============================================
+// [PERBAIKAN] PIPELINE NODES UNTUK ACTIVITY CLUSTER (11 node dinamis)
+// =============================================
+const pipelineServices = [
+  { id: 'pipe-supabase',     name: 'Supabase (DB/Auth)',   statusKey: 'supabase' },
+  { id: 'pipe-auth',         name: 'Auth',                 statusKey: 'auth' },
+  { id: 'pipe-realtime',     name: 'Realtime',             statusKey: 'realtime' },
+  { id: 'pipe-storage',      name: 'Storage',              statusKey: 'storage' },
+  { id: 'pipe-edge',         name: 'Edge Function',        statusKey: 'edge' },
+  { id: 'pipe-memory',       name: 'Memory Service',       statusKey: 'memory' },
+  { id: 'pipe-rag',          name: 'RAG Service',          statusKey: 'rag' },
+  { id: 'pipe-embedding',    name: 'Embedding',            statusKey: 'embedding' },
+  { id: 'pipe-verification', name: 'Verification Engine',  statusKey: 'verification' },
+  { id: 'pipe-provider',     name: 'LLM Provider',         statusKey: 'provider' },
+  { id: 'pipe-agent',        name: 'Agent Process',        statusKey: 'agentProcess' },
+];
+
+pipelineServices.forEach(service => {
+  const status = vitals[service.statusKey] || 'UNKNOWN';
+  // Tentukan warna berdasarkan status
+  let color = '#94a3b8'; // UNKNOWN (abu-abu)
+  if (status === 'HEALTHY') color = '#22c55e';   // Hijau
+  else if (status === 'DEGRADED') color = '#eab308'; // Kuning
+  else if (status === 'DOWN') color = '#ef4444'; // Merah
+
+  // Tambahkan node pipeline ke grafik
+  nodes.push({
+    id: service.id,
+    name: service.name,
+    type: 'Pipeline Service',
+    group: 'pipeline',
+    val: 12,
+    isCategory: false,
+    status: status,
+    color: color,
+    data: { status }
+  });
+
+  // Hubungkan node pipeline langsung ke core-maef
+  const linkColor = (status === 'HEALTHY') ? '#22c55e' : (status === 'DEGRADED' ? '#eab308' : '#ef4444');
+  const linkWidth = (status === 'HEALTHY') ? 2 : 0.8;
+  links.push({
+    source: service.id,
+    target: 'core-maef',
+    color: linkColor,
+    width: linkWidth,
+    isPipelineLink: true
+  });
+
+  // Tetap hubungkan ke cat-telemetry (untuk struktur cluster)
+  links.push({ source: service.id, target: 'cat-telemetry' });
+});
 
         // HEALTH/DEGRADED/DOWN/UNKNOWN colors:
         const colorByStatus = {
