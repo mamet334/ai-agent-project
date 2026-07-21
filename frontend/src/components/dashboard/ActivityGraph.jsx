@@ -25,9 +25,11 @@ export default function ActivityGraph({
           nodeLabel="name"
           nodeColor={getNodeColor}
           nodeRelSize={1}
-          linkColor={(link) => {
-            const sourceId = link.source?.id || link.source;
-            const targetId = link.target?.id || link.target;
+linkColor={(link) => {
+            if (!link || !link.source || !link.target) return 'rgba(255,255,255,0.15)';
+            const sourceId = (link.source && (link.source.id || link.source)) || '';
+            const targetId = (link.target && (link.target.id || link.target)) || '';
+            if (!sourceId || !targetId) return 'rgba(255,255,255,0.15)';
             if (activePath) {
               if (activePath.links.has(`${sourceId}->${targetId}`)) return '#00ffcc';
               return 'rgba(255,255,255,0.02)';
@@ -35,30 +37,44 @@ export default function ActivityGraph({
             return 'rgba(255,255,255,0.15)';
           }}
           linkWidth={(link) => {
-            const sourceId = link.source?.id || link.source;
-            const targetId = link.target?.id || link.target;
+            if (!link || !link.source || !link.target) return 1;
+            const sourceId = (link.source && (link.source.id || link.source)) || '';
+            const targetId = (link.target && (link.target.id || link.target)) || '';
+            if (!sourceId || !targetId) return 1;
             return activePath && activePath.links.has(`${sourceId}->${targetId}`) ? 3 : 1;
           }}
           linkDirectionalParticles={(link) => {
-            const sourceId = link.source?.id || link.source;
-            const targetId = link.target?.id || link.target;
+            if (!link || !link.source || !link.target) return 3;
+            const sourceId = (link.source && (link.source.id || link.source)) || '';
+            const targetId = (link.target && (link.target.id || link.target)) || '';
+            if (!sourceId || !targetId) return 3;
             return activePath && activePath.links.has(`${sourceId}->${targetId}`) ? 6 : 3;
           }}
           linkDirectionalParticleWidth={(link) => {
-            const sourceId = link.source?.id || link.source;
-            const targetId = link.target?.id || link.target;
+            if (!link || !link.source || !link.target) return 2;
+            const sourceId = (link.source && (link.source.id || link.source)) || '';
+            const targetId = (link.target && (link.target.id || link.target)) || '';
+            if (!sourceId || !targetId) return 2;
             return activePath && activePath.links.has(`${sourceId}->${targetId}`) ? 4 : 2;
           }}
           linkDirectionalParticleSpeed={(link) => {
-            const sourceId = link.source?.id || link.source;
-            const targetId = link.target?.id || link.target;
+            if (!link || !link.source || !link.target) return 0.006;
+            const sourceId = (link.source && (link.source.id || link.source)) || '';
+            const targetId = (link.target && (link.target.id || link.target)) || '';
+            if (!sourceId || !targetId) return 0.006;
             return activePath && activePath.links.has(`${sourceId}->${targetId}`) ? 0.02 : 0.006;
           }}
           linkDirectionalParticleColor={(link) => {
-            const sourceId = link.source?.id || link.source;
-            const targetId = link.target?.id || link.target;
+            if (!link || !link.source || !link.target) return 'rgba(255,255,255,0.5)';
+            const sourceId = (link.source && (link.source.id || link.source)) || '';
+            const targetId = (link.target && (link.target.id || link.target)) || '';
+            if (!sourceId || !targetId) return 'rgba(255,255,255,0.5)';
             if (activePath && activePath.links.has(`${sourceId}->${targetId}`)) return '#ffffff';
-            return typeof link.source === 'object' ? getNodeColor(link.source) : 'rgba(255,255,255,0.5)';
+            try {
+              return typeof link.source === 'object' ? getNodeColor(link.source) : 'rgba(255,255,255,0.5)';
+            } catch (e) {
+              return 'rgba(255,255,255,0.5)';
+            }
           }}
           backgroundColor="#00000000"
           d3AlphaDecay={0.02}

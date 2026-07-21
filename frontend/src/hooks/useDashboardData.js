@@ -281,7 +281,7 @@ export default function useDashboardData() {
 
         setLastCheckTime(new Date().toLocaleTimeString('id-ID', { hour12: false }));
 
-        // =============== BUILD GRAPH NODES & LINKS ===============
+// =============== BUILD GRAPH NODES & LINKS ===============
         const nodes = [];
         const links = [];
 
@@ -301,33 +301,17 @@ export default function useDashboardData() {
           return name;
         };
 
-        // 1. Central Node
-        nodes.push({ id: 'core-maef', name: 'MAEF KERNEL', type: 'Core', group: 'core', val: 50, isCategory: true, fx: 0, fy: 0 });
+        // ====================================================================
+        // PHASE 1: Register ALL possible subcluster IDs upfront
+        // This prevents "node not found: subcat-agent-engineer" because we
+        // pre-compute all possible workspace_type mappings from chats data.
+        // ====================================================================
 
-        // 2. Primary Clusters
-        const primaryClusters = [
-          { id: 'cat-memory', name: 'Memory Cluster' },
-          { id: 'cat-agent', name: 'Agent Cluster' },
-          { id: 'cat-execution', name: 'Execution Cluster' },
-          { id: 'cat-knowledge', name: 'Knowledge Cluster' },
-          { id: 'cat-telemetry', name: 'Activity / Telemetry Cluster' }
-        ];
+        // Collect ALL possible subcluster IDs from data before building graph
+        const allPossibleSubclusterIds = new Set();
 
-        primaryClusters.forEach(cluster => {
-          nodes.push({ id: cluster.id, name: cluster.name, type: 'Category', group: 'category', val: 25, isCategory: true });
-          safeLink(links, nodes, cluster.id, 'core-maef');
-        });
-
-        // Dynamic subclusters registry
-        const dynamicSubclusters = {};
-        const registerSubcluster = (id, name, parent) => {
-          if (!dynamicSubclusters[id]) {
-            dynamicSubclusters[id] = { id, name: name.toUpperCase(), type: 'Subcluster', group: 'subcategory', val: 15, isCategory: true, parent };
-          }
-        };
-
-        // Pre-register static subclusters
-        const staticSubclusters = [
+        // Static subclusters
+        const staticSubclusterDefs = [
           { id: 'subcat-mem-rag', name: 'RAG Memory', parent: 'cat-memory' },
           { id: 'subcat-mem-user', name: 'User Memory', parent: 'cat-memory' },
           { id: 'subcat-mem-vector', name: 'Vector DB', parent: 'cat-memory' },
@@ -342,9 +326,82 @@ export default function useDashboardData() {
           { id: 'subcat-know-pgvector', name: 'pgvector', parent: 'cat-knowledge' },
         ];
 
-        staticSubclusters.forEach(sc => registerSubcluster(sc.id, sc.name, sc.parent));
+        staticSubclusterDefs.forEach(sc => allPossibleSubclusterIds.add(sc.id));
 
-        // 3. Pipeline Services
+        // Pre-compute all possible memory subcluster IDs from actual memory data
+        memories.forEach(m => {
+          const type = mapLegacyName(m.metadata?.type || m.metadata?.category || 'User');
+          allPossibleSubclusterIds.add(`subcat-mem-${type.toLowerCase()}`);
+        });
+
+        // Pre-compute all possible document subcluster IDs from actual doc data
+        documents.forEach(d => {
+          const type = mapLegacyName(d.metadata?.file_type || d.metadata?.type || 'Docs');
+          allPossibleSubclusterIds.add(`subcat-know-${type.toLowerCase()}`);
+        });
+
+        // Pre-compute all possible chat subcluster IDs from actual chat data
+        // THIS PREVENTS the "subcat-agent-engineer" error!
+        chats.forEach(c => {
+          const type = mapLegacyName(c.workspace_type || 'Sub');
+          allPossibleSubclusterIds.add(`subcat-agent-${type.toLowerCase()}`);
+        });
+
+        // Build a lookup of all subcluster definitions
+        const allSubclusterDefs = new Map();
+
+        // Add static ones first
+        staticSubclusterDefs.forEach(sc => {
+          allSubclusterDefs.set(sc.id, sc);
+        });
+
+        // Helper to register (with definition)
+        const ensureSubclusterDef = (id, name, parent) => {
+          if (!allSubclusterDefs.has(id)) {
+            allSubclusterDefs.set(id, { id, name: name.toUpperCase(), type: 'Subcluster', group: 'subcategory', val: 15, isCategory: true, parent });
+          }
+        };
+
+        // Add definitions for all pre-computed IDs
+        allPossibleSubclusterIds.forEach(id => {
+          if (!allSubclusterDefs.has(id)) {
+            // Infer parent from ID pattern
+            let parent = 'cat-memory';
+            let label = id;
+            if (id.startsWith('subcat-mem-')) { parent = 'cat-memory'; label = id.replace('subcat-mem-', '') + ' Memory'; }
+            else if (id.startsWith('subcat-agent-')) { parent = 'cat-agent'; label = id.replace('subcat-agent-', '') + ' Agents'; }
+            else if (id.startsWith('subcat-exec-')) { parent = 'cat-execution'; label = id.replace('subcat-exec-', '') + ' Pipeline'; }
+            else if (id.startsWith('subcat-know-')) { parent = 'cat-knowledge'; label = id.replace('subcat-know-', '') + ' Knowledge'; }
+            ensureSubclusterDef(id, label, parent);
+          }
+        });
+
+        // ====================================================================
+        // PHASE 2: Build nodes — ALL nodes are created BEFORE any links
+        // ====================================================================
+
+        // 2a. Central Node
+        nodes.push({ id: 'core-maef', name: 'MAEF KERNEL', type: 'Core', group: 'core', val: 50, isCategory: true, fx: 0, fy: 0 });
+
+        // 2b. Primary Clusters
+        const primaryClusters = [
+          { id: 'cat-memory', name: 'Memory Cluster' },
+          { id: 'cat-agent', name: 'Agent Cluster' },
+          { id: 'cat-execution', name: 'Execution Cluster' },
+          { id: 'cat-knowledge', name: 'Knowledge Cluster' },
+          { id: 'cat-telemetry', name: 'Activity / Telemetry Cluster' }
+        ];
+
+        primaryClusters.forEach(cluster => {
+          nodes.push({ id: cluster.id, name: cluster.name, type: 'Category', group: 'category', val: 25, isCategory: true });
+        });
+
+        // 2c. All Subclusters (static + dynamic pre-computed)
+        allSubclusterDefs.forEach(def => {
+          nodes.push({ ...def });
+        });
+
+        // 2d. Pipeline Services
         const pipelineServices = [
           { id: 'pipe-supabase',     name: 'Supabase (DB/Auth)',   statusKey: 'supabase' },
           { id: 'pipe-auth',         name: 'Auth',                 statusKey: 'auth' },
@@ -377,32 +434,15 @@ export default function useDashboardData() {
             color,
             data: { status }
           });
-
-          const linkColor = (status === 'HEALTHY') ? '#22c55e' : (status === 'DEGRADED' ? '#eab308' : '#ef4444');
-          const linkWidth = (status === 'HEALTHY') ? 2 : 0.8;
-          safeLink(links, nodes, service.id, 'core-maef', { color: linkColor, width: linkWidth, isPipelineLink: true });
-          safeLink(links, nodes, service.id, 'cat-telemetry');
         });
 
-        // 4. Push all dynamic subclusters to nodes (before data nodes reference them)
-        Object.values(dynamicSubclusters).forEach(sc => {
-          nodes.push(sc);
-          safeLink(links, nodes, sc.id, sc.parent);
-        });
-
-        // 5. Process Memories
+        // 2e. Data Nodes — memories
         memories.forEach(m => {
-          let type = m.metadata?.type || m.metadata?.category || 'User';
-          type = mapLegacyName(type);
+          const type = mapLegacyName(m.metadata?.type || m.metadata?.category || 'User');
           const subcatId = `subcat-mem-${type.toLowerCase()}`;
-          if (!staticSubclusters.some(s => s.id === subcatId)) {
-            registerSubcluster(subcatId, `${type} Memory`, 'cat-memory');
-          }
-
           const hits = m.memory_hits || 0;
           const causalLinks = m.causal_links || [];
           let relationsCount = causalLinks.length;
-
           const sourceChatId = m.metadata?.chat_id || m.metadata?.source_id;
           const sourceDocId = m.metadata?.document_id;
           if (sourceChatId) relationsCount++;
@@ -415,13 +455,75 @@ export default function useDashboardData() {
             group: 'memory',
             val: Math.max(3, Math.min(25, 3 + hits * 2)),
             color: getHealthColor(relationsCount),
-            data: {
-              created: m.created_at,
-              used: hits,
-              relations: relationsCount,
-              metadata: m.metadata || {}
-            }
+            data: { created: m.created_at, used: hits, relations: relationsCount, metadata: m.metadata || {} }
           });
+        });
+
+        // 2f. Data Nodes — documents
+        documents.forEach(d => {
+          const type = mapLegacyName(d.metadata?.file_type || d.metadata?.type || 'Docs');
+          const subcatId = `subcat-know-${type.toLowerCase()}`;
+          const chunkCount = docChunkCounts[d.id] || 0;
+          nodes.push({
+            id: `doc-${d.id}`,
+            name: d.title || 'Document',
+            type: 'Document',
+            group: 'rag',
+            val: Math.max(3, Math.min(25, 3 + chunkCount * 0.5)),
+            color: getHealthColor(chunkCount),
+            data: { created: d.created_at, used: 'N/A', relations: chunkCount, metadata: d.metadata || {} }
+          });
+        });
+
+        // 2g. Data Nodes — chats
+        chats.forEach(c => {
+          const type = mapLegacyName(c.workspace_type || 'Sub');
+          const subcatId = `subcat-agent-${type.toLowerCase()}`;
+          nodes.push({
+            id: `chat-${c.id}`,
+            name: c.title || 'Chat',
+            type: 'Conversation',
+            group: 'chat',
+            val: 8,
+            color: '#22c55e',
+            data: { created: c.created_at, used: 1, source: c.workspace_type, relations: 1 }
+          });
+        });
+
+        // ====================================================================
+        // PHASE 3: Build links — ALL nodes exist, so safeLink will never skip
+        // ====================================================================
+
+        // 3a. Primary Cluster → Core
+        primaryClusters.forEach(cluster => {
+          safeLink(links, nodes, cluster.id, 'core-maef');
+        });
+
+        // 3b. Subcluster → Parent
+        allSubclusterDefs.forEach(def => {
+          safeLink(links, nodes, def.id, def.parent);
+        });
+
+        // 3c. Pipeline Services → Core + Telemetry
+        pipelineServices.forEach(service => {
+          const status = vitals[service.statusKey] || 'UNKNOWN';
+          const linkColor = (status === 'HEALTHY') ? '#22c55e' : (status === 'DEGRADED' ? '#eab308' : '#ef4444');
+          const linkWidth = (status === 'HEALTHY') ? 2 : 0.8;
+          safeLink(links, nodes, service.id, 'core-maef', { color: linkColor, width: linkWidth, isPipelineLink: true });
+          safeLink(links, nodes, service.id, 'cat-telemetry');
+        });
+
+        // 3d. Memory → Subcluster + causal links
+        memories.forEach(m => {
+          const type = mapLegacyName(m.metadata?.type || m.metadata?.category || 'User');
+          const subcatId = `subcat-mem-${type.toLowerCase()}`;
+          const hits = m.memory_hits || 0;
+          const causalLinks = m.causal_links || [];
+          let relationsCount = causalLinks.length;
+          const sourceChatId = m.metadata?.chat_id || m.metadata?.source_id;
+          const sourceDocId = m.metadata?.document_id;
+          if (sourceChatId) relationsCount++;
+          if (sourceDocId) relationsCount++;
 
           if (relationsCount > 0) {
             safeLink(links, nodes, `mem-${m.id}`, subcatId);
@@ -438,77 +540,21 @@ export default function useDashboardData() {
           }
         });
 
-        // 6. Process Documents
+        // 3e. Document → Subcluster
         documents.forEach(d => {
-          let type = d.metadata?.file_type || d.metadata?.type || 'Docs';
-          type = mapLegacyName(type);
+          const type = mapLegacyName(d.metadata?.file_type || d.metadata?.type || 'Docs');
           const subcatId = `subcat-know-${type.toLowerCase()}`;
-          if (!staticSubclusters.some(s => s.id === subcatId)) {
-            registerSubcluster(subcatId, type, 'cat-knowledge');
-          }
-
           const chunkCount = docChunkCounts[d.id] || 0;
-          nodes.push({
-            id: `doc-${d.id}`,
-            name: d.title || 'Document',
-            type: 'Document',
-            group: 'rag',
-            val: Math.max(3, Math.min(25, 3 + chunkCount * 0.5)),
-            color: getHealthColor(chunkCount),
-            data: {
-              created: d.created_at,
-              used: 'N/A',
-              relations: chunkCount,
-              metadata: d.metadata || {}
-            }
-          });
-
           if (chunkCount > 0) {
             safeLink(links, nodes, `doc-${d.id}`, subcatId);
           }
         });
 
-        // 7. Process Chats
-        // IMPORTANT: Also push any newly registered dynamic subclusters from steps 5-6 before chat links reference them
-        Object.values(dynamicSubclusters).forEach(sc => {
-          if (!nodes.some(n => n.id === sc.id)) {
-            nodes.push(sc);
-            safeLink(links, nodes, sc.id, sc.parent);
-          }
-        });
-
+        // 3f. Chat → Subcluster
         chats.forEach(c => {
-          let type = c.workspace_type || 'Sub';
-          type = mapLegacyName(type);
+          const type = mapLegacyName(c.workspace_type || 'Sub');
           const subcatId = `subcat-agent-${type.toLowerCase()}`;
-          if (!staticSubclusters.some(s => s.id === subcatId)) {
-            registerSubcluster(subcatId, `${type} Agents`, 'cat-agent');
-          }
-
-          nodes.push({
-            id: `chat-${c.id}`,
-            name: c.title || 'Chat',
-            type: 'Conversation',
-            group: 'chat',
-            val: 8,
-            color: '#22c55e',
-            data: {
-              created: c.created_at,
-              used: 1,
-              source: c.workspace_type,
-              relations: 1
-            }
-          });
-
           safeLink(links, nodes, `chat-${c.id}`, subcatId);
-        });
-
-        // 8. Final push any remaining dynamic subclusters registered during chat processing
-        Object.values(dynamicSubclusters).forEach(sc => {
-          if (!nodes.some(n => n.id === sc.id)) {
-            nodes.push(sc);
-            safeLink(links, nodes, sc.id, sc.parent);
-          }
         });
 
         // ---- STATS ----
