@@ -148,7 +148,7 @@ export default function HomeDashboard() {
       try {
         const [memRes, docRes, chatRes, chunkRes] = await Promise.all([
           // Hanya minta kolom yang benar-benar ada di tabel
-          supabase.from('user_memories').select('id, summary, created_at, memory_hits').limit(500),
+          supabase.from('user_memories').select('id, summary, created_at, memory_hits, metadata').limit(500),
           supabase.from('documents').select('id, title, created_at').limit(500),
           supabase.from('chats').select('id, title, workspace_type, created_at').limit(500),
           supabase.from('document_chunks').select('id, document_id').limit(5000)
