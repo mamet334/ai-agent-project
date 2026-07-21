@@ -748,7 +748,12 @@ const orphanCount = nodes.filter(n => !n.isCategory && n.data && n.data.relation
     fetchData();
   }, []);
 
+const FALLBACK_COLOR = '#475569';
+
   const getNodeColor = (node) => {
+    // Safety: if node is null/undefined, return fallback
+    if (!node) return FALLBACK_COLOR;
+
     let baseColor = node.color;
 
     if (node.id === 'cat-agent' || node.id === 'core-maef') {
@@ -761,9 +766,15 @@ const orphanCount = nodes.filter(n => !n.isCategory && n.data && n.data.relation
         case 'core': baseColor = '#ffffff'; break;
         case 'category': baseColor = '#94a3b8'; break;
         case 'subcategory': baseColor = '#64748b'; break;
-        default: baseColor = '#475569'; break;
+        default: baseColor = FALLBACK_COLOR; break;
       }
     }
+
+    // Safety: if baseColor somehow still undefined, use fallback
+    if (!baseColor) baseColor = FALLBACK_COLOR;
+
+    // ⚠️ DEBUG: Uncomment baris di bawah untuk menonaktifkan activePath 100%
+    // return baseColor;
 
     if (activePath && !activePath.nodes.has(node.id)) {
       return baseColor + '20'; // Extreme fade out (hex alpha ~12%)
