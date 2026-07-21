@@ -22,8 +22,9 @@ export default function HomeDashboard() {
     provider: 'UNKNOWN',
     agentProcess: 'UNKNOWN'
   });
-  const [selectedNode, setSelectedNode] = useState(null);
+const [selectedNode, setSelectedNode] = useState(null);
   const [activePath, setActivePath] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [lastCheckTime, setLastCheckTime] = useState('...');
 
   const [executionTrace, setExecutionTrace] = useState({
@@ -54,17 +55,29 @@ export default function HomeDashboard() {
   });
 
 
-  const fgRef = useRef();
+const fgRef = useRef();
   const containerRef = useRef();
   const graphDataRef = useRef(graphData);
   const timeoutRef = useRef(null);
+  const isDraggingRef = useRef(false);
+  const activePathRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
   useEffect(() => {
     graphDataRef.current = graphData;
   }, [graphData]);
 
-  // Realtime Reasoning Path Listener
+  // Sync isDragging state to ref so closures always have latest value
+  useEffect(() => {
+    isDraggingRef.current = isDragging;
+  }, [isDragging]);
+
+  // Sync activePath state to ref for drag-end restart
+  useEffect(() => {
+    activePathRef.current = activePath;
+  }, [activePath]);
+
+// Realtime Reasoning Path Listener
   useEffect(() => {
     const triggerReasoningHighlight = (nodeId) => {
       if (!graphDataRef.current) return;
@@ -98,7 +111,14 @@ export default function HomeDashboard() {
         }
 
 setActivePath({ nodes: activeNodes, links: activeLinks });
-        // Auto-reset dihapus agar highlight tidak hilang saat user sedang drag node
+
+        // Hanya set timeout auto-reset jika sedang tidak drag
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        if (!isDraggingRef.current) {
+          timeoutRef.current = setTimeout(() => {
+            setActivePath(null);
+          }, 3000);
+        }
       }
     };
 
@@ -824,6 +844,21 @@ const orphanCount = nodes.filter(n => !n.isCategory && n.data && n.data.relation
               }
             }}
             onNodeClick={handleNodeClick}
+            onNodeDrag={() => {
+              // Batalkan timeout highlight saat mulai drag
+              if (timeoutRef.current) clearTimeout(timeoutRef.current);
+              setIsDragging(true);
+            }}
+            onNodeDragEnd={(node) => {
+              setIsDragging(false);
+              // Restart timeout highlight jika masih ada activePath setelah drag selesai
+              if (activePathRef.current) {
+                if (timeoutRef.current) clearTimeout(timeoutRef.current);
+                timeoutRef.current = setTimeout(() => {
+                  setActivePath(null);
+                }, 3000);
+              }
+            }}
           />
         ) : (
           <div className="flex items-center justify-center h-full w-full">
