@@ -97,9 +97,8 @@ export default function HomeDashboard() {
           currentNodes = nextNodes;
         }
 
-        setActivePath({ nodes: activeNodes, links: activeLinks });
-        if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        timeoutRef.current = setTimeout(() => setActivePath(null), 3000);
+setActivePath({ nodes: activeNodes, links: activeLinks });
+        // Auto-reset dihapus agar highlight tidak hilang saat user sedang drag node
       }
     };
 
@@ -702,8 +701,7 @@ const orphanCount = nodes.filter(n => !n.isCategory && n.data && n.data.relation
                 });
 
                 setActivePath({ nodes: nodesToActivate, links: linksToActivate });
-                if (timeoutRef.current) clearTimeout(timeoutRef.current);
-                timeoutRef.current = setTimeout(() => setActivePath(null), 4000);
+                // Auto-reset dihapus agar tidak mengganggu drag node
               }
             }
           } catch (e) {
