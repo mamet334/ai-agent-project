@@ -148,7 +148,7 @@ export default function HomeDashboard() {
       try {
         const [memRes, docRes, chatRes, chunkRes] = await Promise.all([
           // Try to fetch causal_links and memory_hits, ignore errors if missing using graceful fallback in map
-          supabase.from('user_memories').select('id, summary, created_at, memory_hits, causal_links, metadata').limit(500),
+          supabase.from('user_memories').select('id, summary, created_at, memory_hits, metadata').limit(500)
           supabase.from('documents').select('id, title, created_at, metadata').limit(500),
           supabase.from('chats').select('id, title, workspace_type, created_at').limit(500),
           supabase.from('document_chunks').select('id, document_id').limit(5000)
@@ -289,7 +289,7 @@ export default function HomeDashboard() {
 
         const { data: heartbeatData } = await supabase
           .from('service_heartbeat')
-          .select('status, last_heartbeat_at, last_seen')
+          .select('status, last_heartbeat_at')
           .eq('service_name', 'agent-process')
           .maybeSingle();
 
