@@ -1,17 +1,13 @@
-# TODO: Fix Embedding di Request Pipeline
+# TODO: Fix PostgREST 42703 di Dashboard
 
 ## Steps
-- [x] 1. Analisis kode yang ada (CapabilityRegistry, embedding_adapter, runtime_context)
-- [x] 2. Dapatkan persetujuan plan dari user
-- [x] 3. Edit request_pipeline.ts:
-  - [x] 3a. Baca environment keys (GEMINI_API_KEY, OPENAI_API_KEY) di awal
-  - [x] 3b. Hapus blok RAG lama dari posisi awal (sebelum rctx)
-  - [x] 3c. Pindahkan blok RAG ke SETELAH rctx dibuat
-  - [x] 3d. Lengkapi rctx.keys dengan allGemini, gemini, openAI, groq
-  - [x] 3e. Tambah helper function `generateEmbeddingThroughAdapter()` yang menggunakan CapabilityRegistry
-  - [x] 3f. Panggil helper function sebelum match_memories RPC
-- [x] 4. Validasi hasil edit
-
-## Result
-✅ Semua langkah selesai. File request_pipeline.ts sudah diperbaiki.
+- [x] 1. Analisis error dari network log user (3 query gagal)
+- [x] 2. Scan seluruh `frontend/src/` untuk kolom bermasalah
+- [x] 3. Edit HomeDashboard.jsx:
+  - [x] 3a. `user_memories`: hapus `causal_links`, `metadata` → pakai `id, summary, created_at, memory_hits`
+  - [x] 3b. `documents`: hapus `metadata` → pakai `id, title, created_at`
+  - [x] 3c. `service_heartbeat`: sudah benar (pakai `status, last_heartbeat_at`)
+  - [x] 3d. Fix missing comma setelah `.limit(500)` (syntax error)
+- [x] 4. Cek file lain di frontend — tidak ada yang pakai kolom bermasalah
+- [ ] 5. **User action**: git add, commit, push, hard refresh browser
 
