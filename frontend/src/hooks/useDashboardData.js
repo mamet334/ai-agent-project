@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../supabase';
-import { fetchExecutionTrace } from '../../services/ExecutionTraceService';
+import { supabase } from '../supabase';
+import { fetchExecutionTrace } from '../services/ExecutionTraceService';
 
 const EXEC_TRACE_MAX = 40;
 
