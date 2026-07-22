@@ -112,6 +112,19 @@ export async function executeRequestPipeline(
       }) };
   }
 
+  // Dynamic provider handling
+  const provider = parsed.provider || 'openrouter';
+  const providerHeaderKey = `x-byok-${provider}`;
+  const byokProviderKey = request.headers.get(providerHeaderKey);
+  const envVarKey = `${provider.toUpperCase()}_API_KEY`;
+  const providerApiKey = (byokProviderKey || Deno.env.get(envVarKey) || '').trim();
+
+  // Fallback to OpenRouter if provider key is empty
+  const finalProvider = providerApiKey ? provider : 'openrouter';
+  const finalApiKey = providerApiKey || (request.headers.get('x-byok-openrouter') || (getAllKeys('OPENROUTER_API_KEY').length > 0 ? getAllKeys('OPENROUTER_API_KEY')[0] : '')).trim();
+
+  console.log(`[RequestPipeline] Provider: ${finalProvider}, Key source: ${byokProviderKey ? 'BYOK header' : Deno.env.get(envVarKey) ? 'Environment' : 'Fallback'}`);
+
   // Hapus duplikasi ctx yang error!
   const ctx = buildUnifiedExecutionContext({
       message: parsed.message,
@@ -134,21 +147,18 @@ export async function executeRequestPipeline(
   const quotaResponse = await checkQuota(ctx.auth.userId, runtimeEnv.supabaseUrl, runtimeEnv.supabaseServiceKey, !!parsed.stream, corsHeaders);
   if (quotaResponse) return { ctx: {} as any, rctx: {} as any, response: quotaResponse };
 
-  const byokOpenRouter = request.headers.get('x-byok-openrouter');
-  const allOpenRouterKeys = getAllKeys('OPENROUTER_API_KEY');
-  const OPENROUTER_API_KEY = (byokOpenRouter || (allOpenRouterKeys.length > 0 ? allOpenRouterKeys[0] : '')).trim();
-
   const backgroundTasks = createBackgroundTaskTracker();
   
   const rctx: RuntimeContext = {
     keys: {
+      [finalProvider]: finalApiKey,
+      // Keep existing keys for embedding adapters
       gemini: primaryGeminiKey,
       allGemini: allGeminiKeys,
       groq: groqKey,
-      openRouter: OPENROUTER_API_KEY,
       openAI: openAIKey,
     },
-    model: { model: parsed.model },
+    model: { model: parsed.model, provider: finalProvider },
     policy: { canUseDesktopTools: ctx.policy.canUseDesktopTools },
     stream: { isStream: !!parsed.stream, extractedImage: parsed.extractedImage, desktopOSMode: !!parsed.desktopOSMode, auditMode: parsed.auditMode || 'OFF' },
     env: runtimeEnv,

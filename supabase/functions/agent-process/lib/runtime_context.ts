@@ -23,12 +23,14 @@ export interface EnvironmentConfig {
 }
 
 export interface ProviderKeys {
+  /** Dynamic provider key (e.g., 'openrouter', 'openai', 'custom-provider') */
+  [key: string]: string | string[] | undefined;
   /** Primary Gemini API key (selected via round-robin) */
   gemini: string;
   /** All Gemini API keys for retry/rotation */
   allGemini: string[];
   groq: string;
-  openRouter: string;
+  openRouter?: string;
   openAI: string;
 }
 
@@ -82,6 +84,12 @@ export interface ModelConfig {
    * Undefined = gunakan default cascade.
    */
   model: string | undefined;
+  /**
+   * Provider string dari request client.
+   * Contoh: 'openrouter', 'openai', 'anthropic', 'custom-provider'
+   * Undefined = gunakan default cascade.
+   */
+  provider?: string;
 }
 
 // ─────────────────────────────────────────────

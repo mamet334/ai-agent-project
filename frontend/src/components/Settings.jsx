@@ -132,23 +132,22 @@ export default function Settings() {
             <div className="space-y-6">
               <div className="flex flex-col gap-2">
                 <label className="text-label-mono text-on-surface-variant uppercase tracking-widest pl-1">Provider</label>
-                <div className="relative">
-                  <select 
-                    value={aiProvider}
-                    onChange={(e) => handleProviderChange(e.target.value)}
-                    className="w-full appearance-none bg-surface-container-lowest border border-outline-variant px-5 py-4 rounded-lg text-on-surface font-body-base focus:border-primary focus:ring-0 pulse-focus transition-all"
-                  >
-                    <option value="openrouter">OpenRouter (Recommended)</option>
-                    <option value="openai">OpenAI</option>
-                    <option value="anthropic">Anthropic</option>
-                    <option value="groq">Groq</option>
-                    <option value="gemini">Google Gemini</option>
-                    <option value="local">Local (Ollama/LMStudio)</option>
-                  </select>
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant">
-                    <span className="material-symbols-outlined">expand_more</span>
-                  </div>
-                </div>
+                <input
+                  type="text"
+                  list="provider-suggestions"
+                  value={aiProvider}
+                  onChange={(e) => handleProviderChange(e.target.value)}
+                  placeholder="e.g. openrouter, openai, custom-provider"
+                  className="w-full bg-surface-container-lowest border border-outline-variant px-5 py-4 rounded-lg text-on-surface font-body-base focus:border-primary focus:ring-0 pulse-focus transition-all"
+                />
+                <datalist id="provider-suggestions">
+                  <option value="openrouter" />
+                  <option value="openai" />
+                  <option value="anthropic" />
+                  <option value="groq" />
+                  <option value="gemini" />
+                  <option value="local" />
+                </datalist>
               </div>
               
               <div className="flex flex-col gap-2">
@@ -240,7 +239,7 @@ export default function Settings() {
             </div>
             
             <div className="mt-6 p-4 rounded-lg bg-primary-container/5 border border-primary/20">
-              <p className="text-body-sm text-primary/80 leading-relaxed italic">"Isi API Key lalu klik <strong>Save</strong>, kemudian klik <strong>Test Connection</strong> untuk memastikan koneksi AI berhasil sebelum mulai chat."</p>
+              <p className="text-body-sm text-primary/80 leading-relaxed italic">"Masukkan API Key yang sesuai dengan provider pilihan Anda. Jika menggunakan OpenRouter, gunakan OpenRouter API Key. Klik <strong>Save</strong>, kemudian <strong>Test Connection</strong> untuk memastikan koneksi AI berhasil."</p>
             </div>
           </section>
 
