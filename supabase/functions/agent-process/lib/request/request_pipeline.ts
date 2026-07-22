@@ -152,12 +152,14 @@ export async function executeRequestPipeline(
   const rctx: RuntimeContext = {
     keys: {
       [finalProvider]: finalApiKey,
+      openRouter: finalProvider === 'openrouter' ? finalApiKey : (Deno.env.get('OPENROUTER_API_KEY') || ''),
       // Keep existing keys for embedding adapters
       gemini: primaryGeminiKey,
       allGemini: allGeminiKeys,
       groq: groqKey,
-      openAI: openAIKey,
+      openAI: finalProvider === 'openai' ? finalApiKey : openAIKey,
     },
+
     model: { model: parsed.model, provider: finalProvider },
     policy: { canUseDesktopTools: ctx.policy.canUseDesktopTools },
     stream: { isStream: !!parsed.stream, extractedImage: parsed.extractedImage, desktopOSMode: !!parsed.desktopOSMode, auditMode: parsed.auditMode || 'OFF' },

@@ -1142,7 +1142,7 @@ JANGAN ragu menggunakan gambar/diagram jika itu mempermudah penjelasan!`;
         });
       }
 
-      let openRouterModel = 'meta-llama/llama-3-8b-instruct:free';
+      let openRouterModel = 'meta-llama/llama-3.1-8b-instruct';
       if (model === 'openrouter-google-gemini-2.0-flash-exp') {
         openRouterModel = 'google/gemini-2.0-flash-exp:free';
       }

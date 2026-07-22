@@ -133,9 +133,9 @@ export class OpenRouterAdapter implements CapabilityAdapter {
 
     let openRouterModel: string;
     if (forceDefaultModel) {
-      openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
+      openRouterModel = 'meta-llama/llama-3.1-8b-instruct';
     } else if (!rawModel) {
-      openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free';
+      openRouterModel = 'meta-llama/llama-3.1-8b-instruct';
     } else if (rawModel.includes('/')) {
       // BUGFIX (per your report):
       // If rawModel contains "/" (e.g. "openai/gpt-4o-mini"), DO NOT map to fallback.
@@ -148,7 +148,7 @@ export class OpenRouterAdapter implements CapabilityAdapter {
         // legacy keys (tanpa provider prefix)
         'gpt-4o-mini': 'openai/gpt-4o-mini',
         'gpt-4o': 'openai/gpt-4o',
-        'openrouter-llama-3': 'meta-llama/llama-3-8b-instruct:free',
+        'openrouter-llama-3': 'meta-llama/llama-3.1-8b-instruct',
         'openrouter-google-gemini-2.0-flash-exp': 'google/gemini-2.0-flash-exp:free',
         'claude-3.5-sonnet': 'anthropic/claude-3.5-sonnet:beta',
       };
@@ -188,7 +188,7 @@ export class OpenRouterAdapter implements CapabilityAdapter {
     const rawModel = this.rctx.model.model;
 
     if (!rawModel) {
-      orModel = 'meta-llama/llama-3.1-8b-instruct:free';
+      orModel = 'meta-llama/llama-3.1-8b-instruct';
     } else if (rawModel.includes('/')) {
       orModel = rawModel;
     } else if (rawModel.startsWith('openrouter/')) {
