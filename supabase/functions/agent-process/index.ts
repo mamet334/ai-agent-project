@@ -78,8 +78,21 @@ serve(async (req) => {
   } catch (error: any) {
     console.error('Edge Function Error:', error);
     await pingHeartbeat('agent-process', 'DOWN');
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
+    
+    // Determine appropriate status code
+    const errorMessage = String(error.message || '');
+    let statusCode = 500;
+    
+    // Provider/LLM errors should return 400 (client error) rather than 500 (server error)
+    if (errorMessage.includes('Provider') || errorMessage.includes('failed') || errorMessage.includes('not available')) {
+      statusCode = 400;
+    }
+    
+    return new Response(JSON.stringify({ 
+      success: false,
+      error: errorMessage 
+    }), {
+      status: statusCode,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }

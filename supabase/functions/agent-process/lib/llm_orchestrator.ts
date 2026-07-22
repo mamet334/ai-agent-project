@@ -53,23 +53,26 @@ export const callLLMWithMetadata = async (
     return payload;
   };
 
-  let cascadeOrder: Array<string> = ['gemini', 'groq', 'openrouter', 'openai'];
+  // Disable cascade - only use the provider selected by user
+  let cascadeOrder: Array<string> = [];
   
-  if (preferredProvider && cascadeOrder.includes(preferredProvider)) {
-     // Pindahkan preferredProvider ke urutan teratas
-     cascadeOrder = [preferredProvider, ...cascadeOrder.filter(p => p !== preferredProvider)];
+  if (preferredProvider) {
+    cascadeOrder = [preferredProvider];
+  } else {
+    // Fallback to default only if no provider specified
+    cascadeOrder = ['gemini'];
   }
 
   // Filter available via cooldown check in Registry
   const availableAdapters = CapabilityRegistry.getAvailableAIAdapters(cascadeOrder);
 
-  console.log(`🎯 Cascade order: ${availableAdapters.map(a => a.name).join(' -> ')}`);
+  console.log(`🎯 Using provider: ${availableAdapters.map(a => a.name).join(' -> ')}`);
 
   const payload = buildPayload(tools);
   let lastError = '';
 
   if (availableAdapters.length === 0) {
-    lastError = `No available AI adapters. Locked: ${cascadeOrder.filter(p => CapabilityRegistry.isProviderLocked(p)).join(', ')}`;
+    lastError = `Provider '${preferredProvider}' not available or not configured.`;
   }
 
   for (const adapter of availableAdapters) {
@@ -96,12 +99,12 @@ export const callLLMWithMetadata = async (
         return { result: result.result, metadata: result.metadata };
       }
 
-      console.log(`⚠️  ${adapter.name} returned empty, falling back...`);
-      lastError += ` [${adapter.name}]: returned empty;`;
+      console.log(`⚠️  ${adapter.name} returned empty.`);
+      lastError = `Provider '${adapter.name}' returned empty response.`;
       
     } catch (err: any) {
       const message = String(err.message || err);
-      lastError += ` [${adapter.name}]: ${message};`;
+      lastError = `Provider '${adapter.name}' failed: ${message}`;
       const isRateLimit = message.includes('429') || message.includes('rate limit') || message.includes('RATE_LIMIT') || message.includes('quota');
       
       const providerKey = adapter.name.toLowerCase().replace('adapter', '');
@@ -111,13 +114,13 @@ export const callLLMWithMetadata = async (
         CapabilityRegistry.lockProvider(providerKey, PROVIDER_COOLDOWN_DURATIONS[providerKey] || 60000);
         await rctx.logger.logAgentEvent('RATE_LIMIT_HIT', providerKey, `429 Error: ${message.substring(0, 200)}`);
       } else {
-        await rctx.logger.logAgentEvent('FALLBACK_TRIGGERED', providerKey, `Error: ${message.substring(0, 200)}`);
+        await rctx.logger.logAgentEvent('PROVIDER_ERROR', providerKey, `Error: ${message.substring(0, 200)}`);
       }
       console.warn(`❌ Adapter ${adapter.name} failed: ${message}`);
     }
   }
 
-  throw new Error('Semua AI Adapter gagal (limit/gangguan). Detail error:' + rctx.state.explicitModelErrors + lastError);
+  throw new Error(lastError || `Provider '${preferredProvider}' failed to respond.`);
 };
 
 export const callLLMWithCascade = async (
