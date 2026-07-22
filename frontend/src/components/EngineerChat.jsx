@@ -2,8 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Send, Terminal, RefreshCw, Trash2 } from 'lucide-react';
 import { supabase } from '../supabase';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-
 export default function EngineerChat({ userId }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
