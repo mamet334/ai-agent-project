@@ -59,10 +59,22 @@ export default function Settings() {
   const handleTestConnection = async () => {
     setTestStatus('testing');
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      
+      if (!token) {
+        alert('Silakan login terlebih dahulu untuk tes koneksi.');
+        setTestStatus('');
+        return;
+      }
+
       const endpoint = 'https://uuyzdjifhdfyyvpxsofu.supabase.co/functions/v1/agent-process';
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           message: 'Halo, tes koneksi. Balas dengan "OK".',
           provider: aiProvider,
