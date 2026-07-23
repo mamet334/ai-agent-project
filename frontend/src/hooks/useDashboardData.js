@@ -292,13 +292,19 @@ export default function useDashboardData() {
           return '#22c55e';
         };
 
-        // Helper untuk mapping legacy name ke arsitektur baru
         const mapLegacyName = (name) => {
           if (!name) return 'General';
-          const n = name.toLowerCase();
-          if (n === 'owner' || n === 'ws-owner') return 'engineer';
-          if (n === 'ws-agent-forge') return 'assistant';
-          return name;
+          let n = name.toLowerCase();
+          
+          // Remove legacy 'ws-' prefix
+          if (n.startsWith('ws-')) n = n.substring(3);
+          
+          // Map to the 3 canonical roles
+          if (n === 'owner') return 'engineer';
+          if (n === 'agent-forge' || n === 'asisten' || n === 'assistant') return 'assistant';
+          if (n === 'lite') return 'lite';
+          
+          return n;
         };
 
         // ====================================================================
