@@ -1,4 +1,3 @@
-import { Buffer } from 'node:buffer';
 import { WorkspaceGuardian } from '../workspace_guardian.ts';
 
 export async function parseRequestParams(req: Request, user: any) {
@@ -53,12 +52,16 @@ export async function parseRequestParams(req: Request, user: any) {
 
   if (file && file.data) {
     const filename = file.name.toLowerCase();
-    const buffer = Buffer.from(file.data, 'base64');
     
-    if (file.mimeType.startsWith('image/')) {
+    if (file.mimeType && file.mimeType.startsWith('image/')) {
       extractedImage = { mimeType: file.mimeType, data: file.data };
     } else if (filename.endsWith('.txt') || filename.endsWith('.csv') || filename.endsWith('.md')) {
-      finalMessage = `Permintaan User: ${message}\n\n[DOKUMEN TERLAMPIR: ${file.name}]\nIsi Dokumen:\n${new TextDecoder().decode(buffer).substring(0, 50000)}`;
+      // Deno-native base64 decode (no Node.js Buffer needed)
+      const binaryStr = atob(file.data);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+      const textContent = new TextDecoder().decode(bytes).substring(0, 50000);
+      finalMessage = `Permintaan User: ${message}\n\n[DOKUMEN TERLAMPIR: ${file.name}]\nIsi Dokumen:\n${textContent}`;
     } else {
       finalMessage = `Permintaan User: ${message}\n\n[DOKUMEN TERLAMPIR: ${file.name}]\n(Catatan: Edge Function saat ini memprioritaskan teks/gambar. PDF akan dibaca secara ringkas jika memungkinkan)`;
     }
