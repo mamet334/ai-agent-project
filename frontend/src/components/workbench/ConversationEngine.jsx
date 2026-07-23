@@ -290,7 +290,7 @@ export default function ConversationEngine({ sessionId }) {
         globalMemory: localContext,
         semanticContext: semanticContext,
         stream: false, // Stream false
-        ragEnabled: isLiteMode ? false : true, // LITE: ragEnabled false by default
+        ragEnabled: true, // AKTIFKAN RAG untuk semua mode, termasuk LITE
         tools: isLiteMode ? ['rag_search', 'web_search', 'deep_research'] : undefined, // LITE: tools terbatas
         model: formattedModel || undefined,
       };
