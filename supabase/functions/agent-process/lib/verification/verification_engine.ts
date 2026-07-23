@@ -97,19 +97,27 @@ export class VerificationEngine {
       message: "Source trace string is present."
     };
 
+    const hasEvidence = context.evidenceReport && context.evidenceReport.totalEvidence > 0;
+
     if (!context.sourceTrace || typeof context.sourceTrace !== "string" || context.sourceTrace.trim().length === 0) {
-      check002.status = "FAIL";
-      check002.message = "Source trace is missing, empty, or not a valid string.";
-      overallStatus = "FAIL";
-      overallScore = 0; // Gagal CHECK menyebabkan skor anjlok
+      if (hasEvidence) {
+        check002.status = "FAIL";
+        check002.message = "Source trace is missing but evidence was provided. Engineer mode requires trace.";
+        overallStatus = "FAIL";
+        overallScore = 0;
+      } else {
+        check002.status = "WARN";
+        check002.severity = "WARNING";
+        check002.message = "Source trace is missing, but no evidence was provided (e.g. casual chat).";
+      }
     }
 
     checks.push(check002);
     if (check002.status === "FAIL") {
       failures.push(check002);
+    } else if (check002.status === "WARN") {
+      warnings.push(check002);
     }
-    
-    console.log(`[VERIFICATION]\n${check002.id}\n${check002.status}`);
 
     // ---------------------------------------------------------
     // CHECK 003: SOURCE_TRACE_FORMAT
@@ -122,22 +130,25 @@ export class VerificationEngine {
       message: "Source trace matches expected ID format."
     };
 
-    // Deteksi setidaknya satu entitas dengan pola 3 Huruf Kapital - 4 Angka (misal: ADR-0001, MEM-0005)
     const traceFormatRegex = /[A-Z]{3}-\d{4}/;
 
-    if (!context.sourceTrace || !traceFormatRegex.test(context.sourceTrace)) {
+    if (check002.status === "PASS" && (!context.sourceTrace || !traceFormatRegex.test(context.sourceTrace))) {
       check003.status = "FAIL";
       check003.message = "Source trace does not contain any valid ID format (e.g., ADR-0001).";
       overallStatus = "FAIL";
       overallScore = 0;
+    } else if (check002.status === "WARN") {
+      check003.status = "WARN";
+      check003.severity = "WARNING";
+      check003.message = "Format check skipped due to missing trace (no evidence context).";
     }
 
     checks.push(check003);
     if (check003.status === "FAIL") {
       failures.push(check003);
+    } else if (check003.status === "WARN") {
+      warnings.push(check003);
     }
-    
-    console.log(`[VERIFICATION]\n${check003.id}\n${check003.status}`);
 
     // ---------------------------------------------------------
     // CHECK 004: CONFIDENCE_REPORT_EXISTS
