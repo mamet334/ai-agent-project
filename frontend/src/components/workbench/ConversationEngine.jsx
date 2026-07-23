@@ -38,6 +38,7 @@ export default function ConversationEngine({ sessionId }) {
   const [copiedIndex, setCopiedIndex] = useState(null);
   const [currentChatId, setCurrentChatId] = useState(null);
   const messagesEndRef = useRef(null);
+  const scrollContainerRef = useRef(null);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
   const [attachedFile, setAttachedFile] = useState(null);
@@ -54,8 +55,8 @@ export default function ConversationEngine({ sessionId }) {
 
   // Auto-scroll
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
     }
   }, [messages]);
 
@@ -549,7 +550,7 @@ export default function ConversationEngine({ sessionId }) {
 
         {/* Inner Wrapper (Holds overflow-hidden and glows) */}
         <div className="flex-1 flex flex-col relative overflow-hidden pt-4 min-h-0">
-          <div className="flex-1 min-h-0 overflow-y-auto p-3 md:p-4 space-y-3 custom-scrollbar relative z-10">
+          <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto p-3 md:p-4 space-y-3 custom-scrollbar relative z-10">
             {messages.length === 0 && (
               <div className="absolute inset-0 flex flex-col items-center justify-center opacity-20 pointer-events-none gap-1">
                 <span className="material-symbols-outlined text-[28px] text-primary">chat_bubble</span>
