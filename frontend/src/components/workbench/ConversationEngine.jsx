@@ -96,11 +96,14 @@ export default function ConversationEngine({ sessionId }) {
     }
   }, [currentChatId, osState]);
 
-  // Auto-save setiap kali messages berubah
+  // Auto-save setiap kali messages berubah (Debounced untuk mencegah race condition)
   useEffect(() => {
-    if (currentChatId || messages.length > 0) {
-      saveChatToDB(messages);
-    }
+    const timer = setTimeout(() => {
+      if (currentChatId || messages.length > 0) {
+        saveChatToDB(messages);
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
   }, [messages, currentChatId, saveChatToDB]);
 
   const handleNewChat = () => {
@@ -641,10 +644,10 @@ export default function ConversationEngine({ sessionId }) {
           </div>
 
           {/* Compact Input Area */}
-          <div className="px-3 pb-1 bg-transparent z-10 flex flex-col items-center w-full">
+          <div className="px-3 pt-3 pb-2 bg-gradient-to-t from-background via-background to-transparent z-10 flex flex-col items-center w-full">
             {(workspaceManager?.activeWorkspaceId === 'ws-engineer' || workspaceManager?.activeWorkspaceId === 'ws-assistant') && (
-              <div className="w-full max-w-3xl mb-2">
-                <FolderSelector onSelect={(path) => setSelectedFolder(path)} currentPath={selectedFolder} showLabel={true} />
+              <div className="w-full max-w-3xl mb-2 flex justify-start">
+                <FolderSelector onSelect={(path) => setSelectedFolder(path)} currentPath={selectedFolder} showLabel={true} className="scale-90 origin-left" />
               </div>
             )}
             
