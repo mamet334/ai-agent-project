@@ -84,7 +84,7 @@ export const callLLMWithMetadata = async (
         systemPromptText,
         chatHistory,
         payload,
-        forceDefaultModel: adapter.name === 'OpenRouterAdapter' ? true : false,
+        forceDefaultModel: (adapter.name === 'OpenRouterAdapter' && preferredProvider !== 'openrouter') ? true : false,
         model: rctx.model.model
       };
 
