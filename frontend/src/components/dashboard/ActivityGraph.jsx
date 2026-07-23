@@ -30,17 +30,20 @@ export default function ActivityGraph({
             return isOrphan ? 'after' : undefined;
           }}
           nodeCanvasObject={(node, ctx, globalScale) => {
-            const size = node.val || 5;
+            // Keep the visual size small so it doesn't exceed the interaction hit area
+            const size = Math.min(node.val || 5, 8); 
             const time = Date.now();
             const pulse = Math.abs(Math.sin(time / 200));
             
+            // Outer glow - much smaller multiplier
             ctx.beginPath();
-            ctx.arc(node.x, node.y, size * (1.2 + pulse * 0.8), 0, 2 * Math.PI, false);
-            ctx.fillStyle = `rgba(255, 255, 255, ${0.3 + pulse * 0.5})`;
+            ctx.arc(node.x, node.y, size * (1.0 + pulse * 0.4), 0, 2 * Math.PI, false);
+            ctx.fillStyle = `rgba(255, 255, 255, ${0.2 + pulse * 0.3})`;
             ctx.fill();
 
+            // Core - smaller
             ctx.beginPath();
-            ctx.arc(node.x, node.y, size * 0.8, 0, 2 * Math.PI, false);
+            ctx.arc(node.x, node.y, size * 0.6, 0, 2 * Math.PI, false);
             ctx.fillStyle = '#ffffff';
             ctx.fill();
           }}
