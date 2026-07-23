@@ -1,6 +1,7 @@
 import { runLLM } from '../../llm_orchestrator.ts';
 import { executeResponsePipeline } from '../../coordinator/parser_pipeline.ts';
 import { VerificationEngine } from '../../verification/verification_engine.ts';
+import { persistTelemetryLog } from '../../verification/verification_service.ts';
 import { eventBus } from '../../event/event_bus.ts';
 
 export const SynthesisHandler = {
@@ -41,12 +42,55 @@ export const SynthesisHandler = {
           evidenceReport,
           runtimeContext: ctx.state
         };
+
+        // [DIAGNOSTIC] Single instrumentation point — AUDIT-03 recommendation (ADR-0012, 2026-07-23)
+        // Persist diagnostic snapshot ke agent_logs sebelum keputusan verifikasi dibuat.
+        // Fire-and-forget: tidak memblokir jalur verifikasi utama.
+        if (ctx.request.mode === 'ENGINEER') {
+          rctx.tasks.fire('SynthesisDiag', persistTelemetryLog(rctx, {
+            userId: ctx.auth.userId ?? null,
+            eventType: 'VERIFICATION_DIAG',
+            provider: 'system',
+            message: 'Engineer verification input snapshot',
+            metadata: {
+              reply_length: replyMessage?.length ?? 0,
+              parser_trace: sourceTrace ?? null,
+              parser_trace_found: sourceTrace !== undefined,
+              backend_trace_items: confidenceReport?.sourceTrace?.length ?? 0,
+              total_evidence: evidenceReport?.totalEvidence ?? 0,
+              brain1_count: evidenceReport?.brain1Count ?? 0,
+              brain2_count: evidenceReport?.brain2Count ?? 0,
+              confidence_score: confidenceReport?.score ?? 0,
+              confidence_grade: confidenceReport?.grade ?? null,
+            },
+          }));
+        }
         
         // Mode-Aware Verification (MAEF 4.5 + Mamet AI Constitution Capability Separation)
         let vReport;
         if (ctx.request.mode === 'ENGINEER') {
             // Jalur Insinyur: verifikasi ketat (ADR, source trace, evidence, format)
             vReport = VerificationEngine.verifyEngineering(vContext);
+
+            // Persist CHECK_002_FORMAT_COMPLIANCE_FAIL ke agent_logs jika terjadi.
+            // Dilakukan di sini (bukan di dalam VerificationEngine) karena engine adalah
+            // pure computation class tanpa akses rctx/DB — sesuai separation of concerns.
+            const check002Fail = vReport.failures.find(c => c.id === 'CHECK_002_SOURCE_TRACE_EXISTS');
+            if (check002Fail) {
+              rctx.tasks.fire('Check002FormatLog', persistTelemetryLog(rctx, {
+                userId: ctx.auth.userId ?? null,
+                eventType: 'CHECK_002_FORMAT_COMPLIANCE_FAIL',
+                provider: 'system',
+                message: check002Fail.message,
+                metadata: {
+                  backend_trace_items: confidenceReport?.sourceTrace?.length ?? 0,
+                  parser_trace: sourceTrace ?? null,
+                  total_evidence: evidenceReport?.totalEvidence ?? 0,
+                  strict_mode: (Deno.env.get('ENGINEER_STRICT_MODE') ?? 'true') !== 'false',
+                  check_status: check002Fail.status,
+                },
+              }));
+            }
         } else {
             // Jalur Personal: verifikasi relevan (response, forbidden phrases, confidence)
             vReport = VerificationEngine.verifyPersonal(vContext);

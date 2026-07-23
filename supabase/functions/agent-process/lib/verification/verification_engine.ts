@@ -51,8 +51,19 @@ export class VerificationEngine {
   /**
    * Verifies the LLM output against deterministic rules.
    * Strict verification for ENGINEER mode.
+   *
+   * Feature Toggle:
+   *   ENGINEER_STRICT_MODE=true  → Block response on CHECK 002 format failure (default, Opsi A)
+   *   ENGINEER_STRICT_MODE=false → Warn only on format failure, allow response through
+   *
+   * Root Cause Fix (ADR-0012, 2026-07-23):
+   *   CHECK 002 sekarang membedakan dua jenis kegagalan:
+   *   - FORMAT_COMPLIANCE_FAIL: LLM tidak mengikuti format instruksi (parser undefined, backend punya data)
+   *   - EVIDENCE_MISSING_FAIL:  Sistem benar-benar tidak punya evidence (parser undefined, backend juga kosong)
    */
   static verifyEngineering(context: VerificationContext): VerificationReport {
+    // Feature toggle: baca dari env var, default ke strict mode (true)
+    const isStrictMode = (Deno.env.get('ENGINEER_STRICT_MODE') ?? 'true') !== 'false';
     const startTime = performance.now();
     let overallStatus: VerificationStatus = "PASS";
     let overallScore = 100;
@@ -99,17 +110,46 @@ export class VerificationEngine {
 
     const hasEvidence = context.evidenceReport && context.evidenceReport.totalEvidence > 0;
 
-    if (!context.sourceTrace || typeof context.sourceTrace !== "string" || context.sourceTrace.trim().length === 0) {
-      if (hasEvidence) {
-        check002.status = "FAIL";
-        check002.message = "Source trace is missing but evidence was provided. Engineer mode requires trace.";
-        overallStatus = "FAIL";
-        overallScore = 0;
-      } else {
+    // Periksa kedua sumber: parser output dan backend confidence report (ADR-0012)
+    const hasParserTrace = !!(context.sourceTrace && typeof context.sourceTrace === "string" && context.sourceTrace.trim().length > 0);
+    const backendTraceItems = context.confidenceReport?.sourceTrace;
+    const hasBackendTrace = Array.isArray(backendTraceItems) && backendTraceItems.length > 0;
+
+    if (!hasParserTrace) {
+      if (!hasEvidence && !hasBackendTrace) {
+        // Tidak ada source trace sama sekali — true evidence missing failure
         check002.status = "WARN";
         check002.severity = "WARNING";
         check002.message = "Source trace is missing, but no evidence was provided (e.g. casual chat).";
+      } else if (hasEvidence && !hasBackendTrace) {
+        // Evidence ada tapi backend trace tidak ter-build — pipeline issue
+        check002.status = "FAIL";
+        check002.message = "Source trace is missing and backend confidence trace is empty despite evidence. Pipeline integrity issue.";
+        overallStatus = "FAIL";
+        overallScore = 0;
+      } else if (hasBackendTrace) {
+        // LLM tidak mengikuti format instruksi — format compliance failure
+        // Backend punya data (deterministic), tapi parser tidak bisa ekstrak dari LLM output
+        const failMessage = `LLM response did not include SOURCE TRACE in parseable format (regex /[A-Z]{2,3}-\\d{4}/ not found in last 30 lines). Backend has ${backendTraceItems.length} evidence item(s) but parser returned undefined. Check prompt instruction compliance.`;
+
+        if (isStrictMode) {
+          // Opsi A: Tetap blokir (strict) — default
+          check002.status = "FAIL";
+          check002.message = failMessage;
+          overallStatus = "FAIL";
+          overallScore = 0;
+        } else {
+          // Opsi B: Warning saja (diaktifkan saat ENGINEER_STRICT_MODE=false)
+          check002.status = "WARN";
+          check002.severity = "WARNING";
+          check002.message = `[STRICT_MODE=OFF] ${failMessage}`;
+        }
+        // Logging CHECK_002_FORMAT_COMPLIANCE_FAIL ke agent_logs dilakukan oleh
+        // synthesis_handler.ts setelah verifyEngineering() return — karena engine
+        // adalah pure computation class tanpa akses ke rctx/DB (ADR-0012, 2026-07-23).
       }
+    } else {
+      check002.message = `Source trace found via parser (${context.sourceTrace!.length} chars).`;
     }
 
     checks.push(check002);

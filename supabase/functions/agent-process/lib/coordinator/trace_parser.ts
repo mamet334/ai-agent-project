@@ -5,7 +5,10 @@ export function extractSourceTrace(msg: string): TraceParseResult {
   const formatRegex = /[A-Z]{2,3}-\d{4}/;
   const keywordRegex = /^(?:\W|_)*(?:source\s*trace|sources?|referensi)\b/i;
   
-  const scanLimit = Math.max(0, lines.length - 15);
+  // Scan 30 baris terakhir (diperluas dari 15 — ADR-0012, 2026-07-23)
+  // Instruksi prompt baru menaruh SOURCE TRACE di akhir, tapi jawaban panjang
+  // memerlukan window yang lebih besar untuk memastikan parser bisa menemukan format ID.
+  const scanLimit = Math.max(0, lines.length - 30);
   let headerIndex = -1;
   let firstIdIndex = -1;
   

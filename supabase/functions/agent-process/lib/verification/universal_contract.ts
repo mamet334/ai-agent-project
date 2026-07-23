@@ -229,7 +229,17 @@ function renderContractAsText(
   // ── OUTPUT CONTRACT ──
   text += `[BLOK 6: OUTPUT CONTRACT]\n`;
   if (outputContract.requireSourceTrace) {
-    text += `WAJIB: Sertakan SOURCE TRACE di akhir jawaban — sebutkan evidence apa yang Anda gunakan.\n`;
+    text += `WAJIB: Sertakan SOURCE TRACE di bagian AKHIR jawaban Anda menggunakan format berikut PERSIS:\n`;
+    text += `\n`;
+    text += `SOURCE TRACE:\n`;
+    text += `- [ID-XXXX] Nama atau deskripsi singkat evidence\n`;
+    text += `\n`;
+    text += `Contoh yang BENAR:\n`;
+    text += `SOURCE TRACE:\n`;
+    text += `- [ADR-0006] Decision record arsitektur two-brain context\n`;
+    text += `- [GAP-0012] Gap analisis verifikasi engine\n`;
+    text += `\n`;
+    text += `PENTING: Gunakan ID yang PERSIS sama dengan evidence di BLOK 4 KNOWLEDGE di atas. Jangan mengarang ID.\n`;
   }
   if (outputContract.requireConfidenceStatement) {
     text += `WAJIB: Sampaikan keterbatasan confidence di awal jawaban karena confidence score < 70%.\n`;
