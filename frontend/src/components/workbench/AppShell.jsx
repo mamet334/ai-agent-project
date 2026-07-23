@@ -108,6 +108,7 @@ export default function AppShell({ mainPanel: MainPanelComponent }) {
             widgets={leftWidgets} 
             width={layout?.left_size || 300}
             onResize={handleResize}
+            onClose={(id) => manager.closeWidget(id)}
           />
         )}
 
@@ -138,6 +139,7 @@ export default function AppShell({ mainPanel: MainPanelComponent }) {
               widgets={bottomWidgets} 
               height={layout?.bottom_size || 250}
               onResize={handleResize}
+              onClose={(id) => manager.closeWidget(id)}
             />
           )}
         </div>
@@ -149,6 +151,7 @@ export default function AppShell({ mainPanel: MainPanelComponent }) {
             widgets={rightWidgets} 
             width={layout?.right_size || 350}
             onResize={handleResize}
+            onClose={(id) => manager.closeWidget(id)}
           />
         )}
         

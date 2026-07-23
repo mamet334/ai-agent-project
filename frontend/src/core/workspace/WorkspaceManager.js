@@ -285,6 +285,27 @@ export class WorkspaceManager {
   }
 
   /**
+   * Widget Control: Closes a widget by removing it from all workbenches
+   */
+  closeWidget(widgetId) {
+    const layout = { ...this.state.layout };
+    let changed = false;
+
+    ['left_workbench', 'right_workbench', 'bottom_workbench'].forEach(key => {
+      if (layout[key] && layout[key].includes(widgetId)) {
+        layout[key] = layout[key].filter(id => id !== widgetId);
+        changed = true;
+      }
+    });
+
+    if (changed) {
+      this._updateState({ layout });
+      localStorage.setItem(`mamet_v4_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(layout));
+      this._debouncedSyncLayoutToSupabase(this.activeWorkspaceId, layout, this.state.widgets);
+    }
+  }
+
+  /**
    * Widget Control: Used by UI Events (like Conversation Engine) to pop open a widget
    */
   openWidgetInWorkbench(workbenchPosition, widgetId, widgetData) {
