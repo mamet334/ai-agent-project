@@ -7,10 +7,9 @@ import { pingHeartbeat } from './lib/adapters/heartbeat.ts';
 
 // PRIORITY 2: ENVIRONMENT VALIDATION (STARTUP)
 const REQUIRED_ENV_VARS = [
-  'SUPABASE_URL', 
-  'SUPABASE_SERVICE_ROLE_KEY', 
-  'SUPABASE_ANON_KEY',
-  'GEMINI_API_KEY'
+  'SUPABASE_URL',
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'SUPABASE_ANON_KEY'
 ];
 
 let envValidationStatus = 'OK';
@@ -39,7 +38,7 @@ serve(async (req) => {
             backend: 'UP',
             edge_function: 'UP',
             database: Deno.env.get('SUPABASE_URL') ? 'CONFIGURED' : 'MISSING_URL',
-            llm_provider: Deno.env.get('GEMINI_API_KEY') ? 'CONFIGURED' : 'MISSING_KEY'
+            llm_provider: (Deno.env.get('GEMINI_API_KEY') || Deno.env.get('OPENROUTER_API_KEY') || Deno.env.get('GROQ_API_KEY')) ? 'CONFIGURED' : 'MISSING',
          }
       };
 
