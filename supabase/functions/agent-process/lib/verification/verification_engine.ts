@@ -279,9 +279,9 @@ export class VerificationEngine {
     const foundRefusal = refusalPhrases.find(phrase => responseLower.includes(phrase));
 
     // Refusal is allowed if we genuinely have 0 confidence/evidence, but if evidence exists, LLM shouldn't refuse blindly.
-    const hasEvidence = (context.evidenceReport?.totalEvidence || 0) > 0;
+    const hasEvidenceForRefusal = (context.evidenceReport?.totalEvidence || 0) > 0;
 
-    if (foundRefusal && hasEvidence) {
+    if (foundRefusal && hasEvidenceForRefusal) {
       check008.status = "WARN";
       check008.message = `LLM refused to answer despite evidence being present: "${foundRefusal}"`;
       // Warn doesn't fail the overall status, but drops score

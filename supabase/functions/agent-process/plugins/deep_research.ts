@@ -1,4 +1,4 @@
-import * as cheerio from 'npm:cheerio';
+import * as cheerio from 'https://esm.sh/cheerio@1.0.0-rc.12';
 
 async function searchDuckDuckGo(query: string) {
   try {
