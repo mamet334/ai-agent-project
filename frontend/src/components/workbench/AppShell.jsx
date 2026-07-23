@@ -93,18 +93,19 @@ export default function AppShell({ mainPanel: MainPanelComponent }) {
         className={`flex-1 ${isMobile ? 'flex flex-col overflow-y-auto' : 'grid overflow-hidden'} relative transition-all duration-300`}
         style={!isMobile ? {
           gridTemplateRows: 'minmax(0, 1fr)',
-          gridTemplateColumns: layout?.grid_columns || 
-            `${leftWidgets.length > 0 ? (layout?.left_size || 300) + 'px' : '0px'} 1fr ${rightWidgets.length > 0 ? (layout?.right_size || 350) + 'px' : '0px'}`
+          gridTemplateColumns: `${leftWidgets.length > 0 ? (layout?.left_size || 300) + 'px' : '0px'} 1fr ${rightWidgets.length > 0 ? (layout?.right_size || 350) + 'px' : '0px'}`
         } : {}}
       >
         
         {/* Left Workbench */}
-        <WorkbenchZone 
-          position="left" 
-          widgets={leftWidgets} 
-          width={layout?.left_size || 300}
-          onResize={handleResize}
-        />
+        {leftWidgets.length > 0 && (
+          <WorkbenchZone 
+            position="left" 
+            widgets={leftWidgets} 
+            width={layout?.left_size || 300}
+            onResize={handleResize}
+          />
+        )}
 
         {/* Center: The Main Panel */}
         <div className={`flex-1 flex flex-col min-w-0 ${isMobile ? 'min-h-[500px]' : 'min-h-0'} bg-surface-container-lowest relative z-0 md:h-full`}>
@@ -138,12 +139,14 @@ export default function AppShell({ mainPanel: MainPanelComponent }) {
         </div>
 
         {/* Right Workbench */}
-        <WorkbenchZone 
-          position="right" 
-          widgets={rightWidgets} 
-          width={layout?.right_size || 350}
-          onResize={handleResize}
-        />
+        {rightWidgets.length > 0 && (
+          <WorkbenchZone 
+            position="right" 
+            widgets={rightWidgets} 
+            width={layout?.right_size || 350}
+            onResize={handleResize}
+          />
+        )}
         
       </div>
     </div>
