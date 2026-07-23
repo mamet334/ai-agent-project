@@ -39,6 +39,8 @@ export default function ConversationEngine({ sessionId }) {
   const [currentChatId, setCurrentChatId] = useState(null);
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const [attachedFile, setAttachedFile] = useState(null);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -279,8 +281,24 @@ export default function ConversationEngine({ sessionId }) {
         }
       }
 
-      // Bangun payload — LITE menggunakan konfigurasi ringan
       const isLiteMode = resolvedMode === 'LITE';
+      
+      // Proses file attachment jika ada
+      let fileData = null;
+      if (attachedFile) {
+        // Konversi file ke format base64
+        const buffer = await attachedFile.arrayBuffer();
+        const base64String = btoa(
+          new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+        );
+        fileData = {
+          name: attachedFile.name,
+          type: attachedFile.type,
+          size: attachedFile.size,
+          data: base64String
+        };
+      }
+
       const payload = {
         message: userMsg,
         mode: resolvedMode,
@@ -293,7 +311,11 @@ export default function ConversationEngine({ sessionId }) {
         ragEnabled: true, // AKTIFKAN RAG untuk semua mode, termasuk LITE
         tools: isLiteMode ? ['rag_search', 'web_search', 'deep_research'] : undefined, // LITE: tools terbatas
         model: formattedModel || undefined,
+        file: fileData // Sertakan file attachment jika ada
       };
+
+      // Reset file attachment setelah dikirim
+      setAttachedFile(null);
 
       // Hapus key undefined agar payload bersih
       if (payload.tools === undefined) delete payload.tools;
@@ -619,9 +641,21 @@ export default function ConversationEngine({ sessionId }) {
 
           {/* Compact Input Area */}
           <div className="px-3 pb-1 bg-transparent z-10 flex flex-col items-center w-full">
-            {workspaceManager?.activeWorkspaceId === 'ws-engineer' && (
+            {(workspaceManager?.activeWorkspaceId === 'ws-engineer' || workspaceManager?.activeWorkspaceId === 'ws-assistant') && (
               <div className="w-full max-w-3xl mb-2">
                 <FolderSelector onSelect={(path) => setSelectedFolder(path)} currentPath={selectedFolder} showLabel={true} />
+              </div>
+            )}
+            
+            {attachedFile && (
+              <div className="w-full max-w-3xl mb-2 flex items-center justify-between bg-surface-container border border-outline-variant rounded-lg px-3 py-2 animate-in fade-in slide-in-from-bottom-2">
+                <div className="flex items-center gap-2 text-body-sm text-on-surface">
+                  <span className="material-symbols-outlined text-[16px] text-primary">attach_file</span>
+                  <span className="truncate max-w-[200px]">{attachedFile.name}</span>
+                </div>
+                <button type="button" onClick={() => setAttachedFile(null)} className="text-on-surface-variant hover:text-error transition-colors">
+                  <span className="material-symbols-outlined text-[16px]">close</span>
+                </button>
               </div>
             )}
             <form onSubmit={handleSend} className="w-full max-w-3xl relative flex items-end gap-2 bg-surface-container-low border border-outline-variant rounded-2xl p-2 focus-within:border-primary transition-all shadow-lg pulse-focus">
@@ -634,7 +668,25 @@ export default function ConversationEngine({ sessionId }) {
                 className="flex-1 max-h-48 min-h-[44px] bg-transparent resize-none py-3 px-4 text-body-base text-on-surface placeholder-on-surface-variant focus:outline-none custom-scrollbar overflow-y-auto"
                 rows="1"
               />
-              <button type="submit" disabled={!input.trim() || isLoading} className="p-3 mb-1 mr-1 rounded-xl bg-primary hover:bg-primary-fixed text-on-primary disabled:opacity-50 disabled:hover:bg-primary transition-all shadow-md">
+              {workspaceManager?.activeWorkspaceId === 'ws-lite' && (
+                <>
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    className="hidden" 
+                    onChange={(e) => { if (e.target.files && e.target.files[0]) setAttachedFile(e.target.files[0]); }} 
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => fileInputRef.current?.click()} 
+                    className="p-3 mb-1 mr-1 rounded-xl bg-surface-container-high hover:bg-surface-variant text-on-surface-variant transition-all"
+                    title="Upload Dokumen RAG"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">attach_file</span>
+                  </button>
+                </>
+              )}
+              <button type="submit" disabled={(!input.trim() && !attachedFile) || isLoading} className="p-3 mb-1 mr-1 rounded-xl bg-primary hover:bg-primary-fixed text-on-primary disabled:opacity-50 disabled:hover:bg-primary transition-all shadow-md">
                 <span className="material-symbols-outlined text-[20px]">send</span>
               </button>
             </form>
