@@ -93,7 +93,11 @@ export default function AppShell({ mainPanel: MainPanelComponent }) {
         className={`flex-1 ${isMobile ? 'flex flex-col overflow-y-auto' : 'grid overflow-hidden'} relative transition-all duration-300`}
         style={!isMobile ? {
           gridTemplateRows: 'minmax(0, 1fr)',
-          gridTemplateColumns: `${leftWidgets.length > 0 ? (layout?.left_size || 300) + 'px' : '0px'} 1fr ${rightWidgets.length > 0 ? (layout?.right_size || 350) + 'px' : '0px'}`
+          gridTemplateColumns: [
+            leftWidgets.length > 0 ? `${layout?.left_size || 300}px` : null,
+            '1fr',
+            rightWidgets.length > 0 ? `${layout?.right_size || 350}px` : null
+          ].filter(Boolean).join(' ')
         } : {}}
       >
         
