@@ -25,23 +25,43 @@ export default function ActivityGraph({
           nodeLabel="name"
           nodeColor={getNodeColor}
           nodeRelSize={1}
-linkColor={(link) => {
-            if (!link || !link.source || !link.target) return 'rgba(255,255,255,0.15)';
+          nodeCanvasObjectMode={(node) => {
+            const isOrphan = node.data && node.data.relations === 0 && !node.isCategory;
+            return isOrphan ? 'after' : undefined;
+          }}
+          nodeCanvasObject={(node, ctx, globalScale) => {
+            const size = node.val || 5;
+            const time = Date.now();
+            const pulse = Math.abs(Math.sin(time / 200));
+            
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, size * (1.2 + pulse * 0.8), 0, 2 * Math.PI, false);
+            ctx.fillStyle = `rgba(255, 255, 255, ${0.3 + pulse * 0.5})`;
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, size * 0.8, 0, 2 * Math.PI, false);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+          }}
+          linkColor={(link) => {
+            if (!link || !link.source || !link.target) return 'rgba(255,255,255,0.35)';
             const sourceId = (link.source && (link.source.id || link.source)) || '';
             const targetId = (link.target && (link.target.id || link.target)) || '';
-            if (!sourceId || !targetId) return 'rgba(255,255,255,0.15)';
+            if (!sourceId || !targetId) return 'rgba(255,255,255,0.35)';
             if (activePath) {
               if (activePath.links.has(`${sourceId}->${targetId}`)) return '#00ffcc';
               return 'rgba(255,255,255,0.02)';
             }
-            return 'rgba(255,255,255,0.15)';
+            return link.color || 'rgba(255,255,255,0.35)';
           }}
           linkWidth={(link) => {
-            if (!link || !link.source || !link.target) return 1;
+            if (!link || !link.source || !link.target) return 1.5;
             const sourceId = (link.source && (link.source.id || link.source)) || '';
             const targetId = (link.target && (link.target.id || link.target)) || '';
-            if (!sourceId || !targetId) return 1;
-            return activePath && activePath.links.has(`${sourceId}->${targetId}`) ? 3 : 1;
+            if (!sourceId || !targetId) return 1.5;
+            if (activePath && activePath.links.has(`${sourceId}->${targetId}`)) return 3;
+            return link.width || 1.5;
           }}
           linkDirectionalParticles={(link) => {
             if (!link || !link.source || !link.target) return 3;
@@ -103,7 +123,7 @@ linkColor={(link) => {
         <div className="mt-6 flex items-center gap-4 text-xs font-mono">
           <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#22c55e]"></div> Healthy</div>
           <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#eab308]"></div> Low Relations</div>
-          <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#ef4444]"></div> Orphan</div>
+          <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]"></div> Orphan</div>
         </div>
       </div>
     </div>
