@@ -97,9 +97,10 @@ export class MemoryService {
         .insert([
           { 
             user_id: userId, 
-            summary: summary,
-            content: `${key}: ${content}`, 
-            metadata: { key, type: typeof value } 
+            summary: `${key}: ${content}`, 
+            memory_type: 'fact', 
+            confidence: 1.0, 
+            source: 'MemoryService' 
           }
         ]);
         
