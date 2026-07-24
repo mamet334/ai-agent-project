@@ -97,7 +97,7 @@ export class MemoryService {
         .insert([
           { 
             user_id: userId, 
-            summary: `${key}: ${content}`, 
+            summary: content, 
             memory_type: 'fact', 
             confidence: 1.0, 
             source: 'MemoryService' 
