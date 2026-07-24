@@ -12,7 +12,7 @@ import { MessageSquare, PlusCircle, Trash2, Loader2 } from 'lucide-react';
  * @param {string} props.activeChatId - ID chat yang sedang aktif (untuk highlight)
  * @param {boolean} props.collapsed - Apakah sidebar dalam mode collapsed (hanya ikon)
  */
-export default function ChatHistory({ onSelectChat, onNewChat, activeChatId, collapsed = false }) {
+export default function ChatHistory({ onSelectChat, onNewChat, activeChatId,  activeWorkspace, collapsed = false }) {
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -32,6 +32,7 @@ export default function ChatHistory({ onSelectChat, onNewChat, activeChatId, col
       const { data, error } = await supabase
         .from('chats')
         .select('id, title, created_at, updated_at, workspace_type')
+        .eq('workspace_type', activeWorkspace)
         .order('updated_at', { ascending: false })
         .limit(50);
 
@@ -56,7 +57,7 @@ export default function ChatHistory({ onSelectChat, onNewChat, activeChatId, col
     };
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+  }, [activeWorkspace]);
 
   // Refresh saat activeChatId berubah — hanya update judul chat di list tanpa fetch ulang penuh
   useEffect(() => {

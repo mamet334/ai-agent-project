@@ -578,6 +578,7 @@ export default function ConversationEngine({ sessionId }) {
           onSelectChat={handleLoadChat}
           onNewChat={handleNewChat}
           activeChatId={currentChatId}
+          activeWorkspace={osState?.workspaceId || 'ws-assistant'}
           collapsed={false}
         />
       </div>
