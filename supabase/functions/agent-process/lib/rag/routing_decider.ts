@@ -19,11 +19,20 @@ export const executeRoutingDecision = async (query: string, userId: string, rctx
     // Use explicit workspace ID from UI if provided
     if (explicitWorkspaceId && explicitWorkspaceId.trim() !== '' && explicitWorkspaceId !== 'global') {
         const allowedWorkspaces = ['ws-lite', 'ws-assistant', 'ws-engineer'];
-        const safeWorkspaceId = allowedWorkspaces.includes(explicitWorkspaceId) ? explicitWorkspaceId : 'ws-assistant';
         
+        // Jika UI mengirimkan string environment (bukan UUID), abaikan filter workspace_id
+        if (allowedWorkspaces.includes(explicitWorkspaceId)) {
+            return {
+                scope: "CORE",
+                workspace_id: null,
+                reason_code: `EXPLICIT_UI_ENVIRONMENT_${explicitWorkspaceId.toUpperCase().replace('-', '_')}`
+            };
+        }
+        
+        // Jika bukan environment string, asumsikan itu adalah UUID workspace sungguhan
         return {
             scope: "WORKSPACE",
-            workspace_id: safeWorkspaceId,
+            workspace_id: explicitWorkspaceId,
             reason_code: "EXPLICIT_UI_WORKSPACE_SELECTION"
         };
     }

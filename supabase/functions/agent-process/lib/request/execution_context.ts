@@ -34,8 +34,8 @@ export function buildUnifiedExecutionContext(input: { message: string, desktopOS
         ragTopK: mode === "LITE" ? 10 : 5, ragThreshold: dynamicThreshold, webHint,
         canReadRAG: engineerPolicy?.canReadRAG ?? true,
         canReadMemory: engineerPolicy?.canReadMemory ?? true,
-        canWriteMemory: engineerPolicy?.canWriteMemory ?? (mode === "AI" && !isMametLite),
-        canWriteKnowledge: engineerPolicy?.canWriteKnowledge ?? (mode === "AI" && !isMametLite),
+        canWriteMemory: engineerPolicy?.canWriteMemory ?? ((mode === "ENGINEER" || mode === "ASSISTANT" || mode === "AI") && !isMametLite),
+        canWriteKnowledge: engineerPolicy?.canWriteKnowledge ?? ((mode === "ENGINEER" || mode === "ASSISTANT" || mode === "AI") && !isMametLite),
         canUseWorkspace: engineerPolicy?.canUseWorkspace ?? !isMametLite,
         canUseAutomation: engineerPolicy?.canUseAutomation ?? (mode === "AI" && !isMametLite),
         canUseDesktopTools: engineerPolicy?.canUseDesktopTools ?? (mode === "AI")

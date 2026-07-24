@@ -36,7 +36,12 @@ export default function ConversationEngine({ sessionId }) {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState('');
   const [copiedIndex, setCopiedIndex] = useState(null);
-  const [currentChatId, setCurrentChatId] = useState(null);
+  const [currentChatId, setCurrentChatId] = useState(() => {
+    // Restore currentChatId dari localStorage saat mount
+    const saved = localStorage.getItem('mamet_v4_current_chat_id');
+    return saved || null;
+  });
+  const [initialRestoreDone, setInitialRestoreDone] = useState(false);
   const messagesEndRef = useRef(null);
   const scrollContainerRef = useRef(null);
   const textareaRef = useRef(null);
@@ -44,6 +49,11 @@ export default function ConversationEngine({ sessionId }) {
   const [attachedFile, setAttachedFile] = useState(null);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Guard untuk handleNewChat: prevent auto-trigger dari lifecycle
+  const isNewChatInitiatedByUser = useRef(false);
+  const isInitialMount = useRef(true);
+  const prevSessionIdRef = useRef(sessionId);
 
   // Auto-grow textarea
   useEffect(() => {
@@ -66,7 +76,7 @@ export default function ConversationEngine({ sessionId }) {
   }, [isSidebarOpen]);
 
   // =============================================
-  // PERSISTENSI CHAT KE SUPABASE
+  // PERSISTENSI CHAT KE SUPABASE + LOCALSTORAGE
   // =============================================
   const saveChatToDB = useCallback(async (msgs, chatId = currentChatId) => {
     if (!msgs || msgs.length === 0) return;
@@ -88,7 +98,11 @@ export default function ConversationEngine({ sessionId }) {
       result = await supabase.from('chats').update(payload).eq('id', chatId);
     } else {
       result = await supabase.from('chats').insert(payload).select('id').single();
-      if (result.data?.id) setCurrentChatId(result.data.id);
+      if (result.data?.id) {
+        setCurrentChatId(result.data.id);
+        // Simpan ke localStorage setelah INSERT sukses
+        localStorage.setItem('mamet_v4_current_chat_id', result.data.id);
+      }
     }
 
     if (result.error) {
@@ -106,9 +120,56 @@ export default function ConversationEngine({ sessionId }) {
     return () => clearTimeout(timer);
   }, [messages, currentChatId, saveChatToDB]);
 
+  // Persist currentChatId ke localStorage setiap kali berubah
+  useEffect(() => {
+    if (currentChatId) {
+      localStorage.setItem('mamet_v4_current_chat_id', currentChatId);
+    } else {
+      localStorage.removeItem('mamet_v4_current_chat_id');
+    }
+  }, [currentChatId]);
+
+  // Restore chat dari localStorage saat mount
+  useEffect(() => {
+    if (!initialRestoreDone && currentChatId) {
+      const loadSavedChat = async () => {
+        const { data, error } = await supabase
+          .from('chats')
+          .select('*')
+          .eq('id', currentChatId)
+          .single();
+        if (!error && data) {
+          setMessages(data.messages || []);
+        } else {
+          // Chat ID tidak valid di DB, reset
+          console.warn('[ConversationEngine] Saved chatId not found in DB, resetting');
+          setCurrentChatId(null);
+          localStorage.removeItem('mamet_v4_current_chat_id');
+        }
+        setInitialRestoreDone(true);
+      };
+      loadSavedChat();
+    } else if (!currentChatId) {
+      setInitialRestoreDone(true);
+    }
+  }, []); // Hanya sekali saat mount
+
+  // Sinkronasi sessionId: jika sessionId berubah, jangan reset chat
+  // tapi pastikan kita tidak membuat chat baru otomatis
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    prevSessionIdRef.current = sessionId;
+  }, [sessionId]);
+
   const handleNewChat = () => {
+    // Hanya user action yang bisa memicu ini
+    isNewChatInitiatedByUser.current = true;
     setMessages([]);
     setCurrentChatId(null);
+    localStorage.removeItem('mamet_v4_current_chat_id');
   };
 
   const handleLoadChat = async (chatId) => {

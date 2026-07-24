@@ -194,7 +194,7 @@ export async function executeRequestPipeline(
       }
 
       // 3. Build RAG context from matched memories
-      const ragContext = memories?.map((m: any) => m.content).join('\n') || '';
+      const ragContext = memories?.map((m: any) => (m.summary || m.content || '')).join('\n') || '';
       if (ragContext) {
         console.log(`✅ [RAG] Found ${memories?.length || 0} relevant memories`);
         parsed.globalMemory = ragContext;

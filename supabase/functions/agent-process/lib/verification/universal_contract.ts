@@ -226,9 +226,7 @@ function renderContractAsText(
   }
   text += '\n';
 
-  // ── OUTPUT CONTRACT ──
-  text += `[BLOK 6: OUTPUT CONTRACT]\n`;
-  if (outputContract.requireSourceTrace) {
+    if (outputContract.requireSourceTrace) {
     text += `WAJIB: Sertakan SOURCE TRACE di bagian AKHIR jawaban Anda menggunakan format berikut PERSIS:\n`;
     text += `\n`;
     text += `SOURCE TRACE:\n`;
@@ -240,16 +238,11 @@ function renderContractAsText(
     text += `- [GAP-0012] Gap analisis verifikasi engine\n`;
     text += `\n`;
     text += `PENTING: Gunakan ID yang PERSIS sama dengan evidence di BLOK 4 KNOWLEDGE di atas. Jangan mengarang ID.\n`;
+    text += `\n`;
+    text += `ATURAN TAMBAHAN:\n`;
+    text += `- SOURCE TRACE HARUS menjadi baris terakhir dari jawaban Anda. Jangan tambahkan kalimat penutup, kesimpulan, atau teks apapun setelahnya.\n`;
+    text += `- Jika tidak ada evidence yang relevan dari daftar KNOWLEDGE, tulis: "SOURCE TRACE: - [NONE]".\n`;
   }
-  if (outputContract.requireConfidenceStatement) {
-    text += `WAJIB: Sampaikan keterbatasan confidence di awal jawaban karena confidence score < 70%.\n`;
-  }
-  text += `Format: ${outputContract.expectedFormat}\n`;
-  if (outputContract.forbiddenPatterns.length > 0) {
-    text += `Pola yang dilarang: ${outputContract.forbiddenPatterns.join(' | ')}\n`;
-  }
-  text += `${'═'.repeat(60)}\n\n`;
-
   // Tambahkan Source Trace jika ada
   if (confidenceReport.sourceTrace.length > 0 && outputContract.requireSourceTrace) {
     text += buildSourceTraceText(confidenceReport.sourceTrace);

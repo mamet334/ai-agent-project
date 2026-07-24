@@ -58,10 +58,14 @@ export default function ChatHistory({ onSelectChat, onNewChat, activeChatId, col
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  // Refresh saat activeChatId berubah (untuk update judul)
+  // Refresh saat activeChatId berubah — hanya update judul chat di list tanpa fetch ulang penuh
   useEffect(() => {
     if (activeChatId) {
-      fetchChats();
+      // Update judul chat di state lokal tanpa fetch ulang dari DB
+      setChats(prev => prev.map(c => ({
+        ...c,
+        isActive: c.id === activeChatId
+      })));
     }
   }, [activeChatId]);
 

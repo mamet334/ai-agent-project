@@ -6,7 +6,7 @@ export async function checkQuota(userId: string, supabaseUrl: string, supabaseSe
     const { data: currentCost, error: quotaError } = await supClient.rpc('check_daily_quota', { target_user_id: userId });
     
     if (!quotaError && currentCost !== null) {
-      const DAILY_LIMIT = 0.50; // $0.50 per hari (setara ~Rp8.000)
+      const DAILY_LIMIT = 1; // $1 per hari (setara ~Rp16.000)
       if (Number(currentCost) >= DAILY_LIMIT) {
          console.warn(`[CIRCUIT BREAKER] User ${userId} exceeded daily quota: $${currentCost}`);
          
