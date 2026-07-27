@@ -42,3 +42,6 @@ token github.txt
 
 .vercel
 .env*
+# Mamet Runtime File System (Cache/Sandbox)
+frontend/mamet_fs/
+mamet_fs/
