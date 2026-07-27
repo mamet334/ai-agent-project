@@ -1,17 +1,19 @@
 /**
- * Engineer.js — Engineering Brain Mamet AI
+ * Engineer.js — Engineering Brain Mamet AI (Real Analysis Engine + Core Protection)
  * 
  * Peran:
  * - Membaca static knowledge (constitution, ADR)
  * - Menerima tugas via event bus
  * - Menganalisis, memberi rekomendasi
  * - Tidak pernah mengeksekusi perubahan tanpa persetujuan User
+ * - TIDAK BOLEH mengubah file core (Kernel, EventBus, dll)
  * 
  * Two-Brain Model:
  * - Brain 1: Static Engineering Knowledge (dimuat sekali)
  * - Brain 2: Dynamic Engineering Context (dibangun per tugas)
  * 
  * Status: IMPLEMENTER — siap menghasilkan dan menerapkan patch
+ * Upgrade: Real Analysis Engine (MAEF 4.5) + Core Protection Layer
  */
 
 class Engineer {
@@ -30,6 +32,7 @@ class Engineer {
 
     this.capability = 'IMPLEMENTER';
     this.pendingPatches = new Map();
+    this.suspiciousAttempts = 0; // Circuit breaker counter
 
     this.metrics = {
       tasksAnalyzed: 0,
@@ -37,7 +40,8 @@ class Engineer {
       patchesGenerated: 0,
       patchesApproved: 0,
       patchesRejected: 0,
-      patchesFailedVerification: 0
+      patchesFailedVerification: 0,
+      coreModificationsBlocked: 0
     };
   }
 
@@ -46,6 +50,44 @@ class Engineer {
     this._registerListeners();
     console.log(`[Engineer] Initialized as ${this.capability}`);
     this.eventBus.emit('Engineer:Ready', { capability: this.capability });
+  }
+
+  // =============================================
+  // CORE PROTECTION LAYER (MAEF 4.2 Compliant)
+  // =============================================
+
+  /**
+   * Cek apakah file termasuk IMMUTABLE (tidak boleh diubah oleh Engineer)
+   */
+  _isImmutableFile(filePath) {
+    const IMMUTABLE_PATTERNS = [
+      '/core/runtime/Kernel.js',
+      '/core/runtime/EventBus.js',
+      '/core/runtime/ServiceManager.js',
+      '/core/runtime/ProcessManager.js',
+      '/core/runtime/StorageManager.js',
+      '/core/runtime/ModuleLoader.js',
+      '/core/runtime/DiscoveryManager.js',
+      '/electron/main.js',
+      '/electron/preload.cjs',
+      '/constitution/00_CONSTITUTION.md',
+      '/constitution/01_VISION.md',
+      '/constitution/09_DNA.md'
+    ];
+    return IMMUTABLE_PATTERNS.some(pattern => filePath.includes(pattern));
+  }
+
+  /**
+   * Cek apakah file termasuk PROTECTED (butuh approval ketat)
+   */
+  _isProtectedFile(filePath) {
+    const PROTECTED_PATTERNS = [
+      '/core/runtime/services/',
+      '/supabase/functions/agent-process/index.ts',
+      '/supabase/functions/agent-process/lib/',
+      '/frontend/src/core/runtime/services/engineer.js'
+    ];
+    return PROTECTED_PATTERNS.some(pattern => filePath.includes(pattern));
   }
 
   // =============================================
@@ -209,7 +251,6 @@ class Engineer {
         });
       }
     } else {
-      // Patch tidak siap (verifikasi gagal atau error lain)
       if (!patch.verification) {
         this._emitRecommendation({
           type: 'PATCH_FAILED',
@@ -235,11 +276,6 @@ class Engineer {
   // FILE OPERATIONS
   // =============================================
 
-  /**
-   * Membaca file dari repository
-   * @param {string} filePath - Path relatif ke file
-   * @returns {Promise<string|null>} - Konten file atau null jika gagal
-   */
   async readFile(filePath) {
     try {
       const content = await this.storageManager.read(filePath);
@@ -255,12 +291,6 @@ class Engineer {
     }
   }
 
-  /**
-   * Mencari file di repository berdasarkan pola
-   * @param {string} pattern - Pola pencarian (contoh: "*.js", "IntentParser*")
-   * @param {string} dir - Direktori untuk mencari
-   * @returns {Promise<string[]>} - Daftar path file yang cocok
-   */
   async findFiles(pattern, dir = '/') {
     try {
       const allFiles = await this.storageManager.list(dir);
@@ -281,46 +311,201 @@ class Engineer {
   }
 
   // =============================================
-  // PERSETUJUAN (APPROVAL)
+  // REAL ANALYSIS ENGINE (MAEF 4.5 Compliant)
   // =============================================
-  async _requestApproval(patch) {
-    return new Promise((resolve) => {
-      this.pendingPatches.set(patch.id, { patch, resolver: resolve });
 
-      this.eventBus.emit('Engineer:RequestApproval', {
-        patchId: patch.id,
-        summary: patch.description || 'Patch generated',
-        files: patch.files.map(f => ({
-          path: f.path,
-          status: f.status,
-          size: f.size || 0
-        })),
-        diff: patch.diff || '',
-        verification: patch.verification || null,
-        timestamp: new Date().toISOString()
-      });
+  _extractFileNamesFromTask(task) {
+    const filePatterns = [];
+    const text = `${task.title || ''} ${task.description || ''} ${task.errorLog || ''}`;
+    
+    const pathRegex = /([a-zA-Z0-9_\-\/]+\.(js|jsx|ts|tsx|md|json|cjs|mjs))/g;
+    const pathMatches = text.match(pathRegex) || [];
+    filePatterns.push(...pathMatches);
+    
+    const stackRegex = /at\s+([A-Za-z]+\.js)/g;
+    const stackMatches = [...text.matchAll(stackRegex)].map(m => m[1]);
+    filePatterns.push(...stackMatches);
+    
+    const importRegex = /from\s+['"]([^'"]+)['"]/g;
+    const importMatches = [...text.matchAll(importRegex)].map(m => m[1]);
+    filePatterns.push(...importMatches);
+    
+    const unique = [...new Set(filePatterns)];
+    return unique.filter(f => {
+      return f.length > 3 && !f.includes('node_modules') && !f.startsWith('.');
     });
   }
 
+  _findRelevantADR(task) {
+    const text = `${task.title || ''} ${task.description || ''}`.toLowerCase();
+    
+    const adrMapping = [
+      { keywords: ['event', 'bus', 'emit', 'listener'], file: '/constitution/11_MAEF_EVENT_SYSTEM.md' },
+      { keywords: ['kernel', 'boot', 'phase', 'service'], file: '/constitution/02_MAEF_KERNEL.md' },
+      { keywords: ['adapter', 'vendor', 'openrouter', 'gemini'], file: '/constitution/12_CAPABILITY_ADAPTER_SPEC.md' },
+      { keywords: ['verification', 'confidence', 'evidence'], file: '/constitution/13_VERIFICATION_ENGINE_SPEC.md' },
+      { keywords: ['memory', 'user_memory', 'project_memory'], file: '/constitution/06_MEMORY_SYSTEM.md' },
+      { keywords: ['rag', 'embedding', 'vector', 'chunk'], file: '/constitution/05_KNOWLEDGE_SYSTEM.md' },
+      { keywords: ['engineer', 'patch', 'self-maintenance'], file: '/constitution/07_ENGINEERING_SYSTEM.md' },
+      { keywords: ['logging', 'telemetry', 'observability'], file: '/constitution/15_LOGGING_OBSERVABILITY_SYSTEM.md' },
+      { keywords: ['metric', 'health', 'shi'], file: '/constitution/16_ENGINEERING_METRICS_SYSTEM.md' }
+    ];
+    
+    for (const mapping of adrMapping) {
+      if (mapping.keywords.some(kw => text.includes(kw))) {
+        return { title: mapping.file, path: mapping.file };
+      }
+    }
+    
+    return null;
+  }
+
+  _checkCompliance(fileContents) {
+    const violations = [];
+    const warnings = [];
+    
+    for (const [filePath, content] of Object.entries(fileContents)) {
+      const lines = content.split('\n');
+      
+      const eventEmitRegex = /eventBus\.emit\(['"]([^'"]+)['"]/g;
+      const eventMatches = [...content.matchAll(eventEmitRegex)];
+      for (const match of eventMatches) {
+        const eventName = match[1];
+        if (!eventName.includes(':')) {
+          violations.push({
+            file: filePath,
+            line: content.substring(0, match.index).split('\n').length,
+            rule: 'MAEF 4.6 (Event-Driven)',
+            severity: 'HIGH',
+            message: `Event "${eventName}" tidak menggunakan format namespace (Kategori:Nama)`
+          });
+        }
+      }
+      
+      if (content.includes('eval(') || content.includes('new Function(')) {
+        violations.push({
+          file: filePath,
+          line: null,
+          rule: 'MAEF 4.1 (Security)',
+          severity: 'CRITICAL',
+          message: 'Terdeteksi penggunaan eval() atau new Function() yang dilarang'
+        });
+      }
+      
+      const directVendorCalls = [
+        /fetch\(['"]https:\/\/api\.openai\.com/,
+        /fetch\(['"]https:\/\/generativelanguage\.googleapis\.com/,
+        /require\(['"]@anthropic-ai/
+      ];
+      for (const pattern of directVendorCalls) {
+        if (pattern.test(content)) {
+          violations.push({
+            file: filePath,
+            line: null,
+            rule: 'MAEF 4.7 (Adapter Isolation)',
+            severity: 'HIGH',
+            message: 'Terdeteksi pemanggilan vendor API langsung tanpa Adapter Layer'
+          });
+        }
+      }
+      
+      if (lines.length > 200) {
+        const jsdocCount = (content.match(/\/\*\*[\s\S]*?\*\//g) || []).length;
+        if (jsdocCount < 3) {
+          warnings.push({
+            file: filePath,
+            rule: 'MAEF 4.8 (Documentation)',
+            severity: 'LOW',
+            message: `File besar (${lines.length} baris) dengan dokumentasi minimal (${jsdocCount} JSDoc)`
+          });
+        }
+      }
+    }
+    
+    return { violations, warnings };
+  }
+
   // =============================================
-  // CORE METHODS
+  // CORE METHODS (UPGRADED WITH REAL ANALYSIS)
   // =============================================
   async _analyze(task) {
+    console.log(`[Engineer] Memulai Real Analysis untuk: ${task.title || task.id}`);
+    
+    const targetFiles = this._extractFileNamesFromTask(task);
+    console.log(`[Engineer] File terdeteksi: ${targetFiles.join(', ')}`);
+    
+    const fileContents = {};
+    const readResults = [];
+    
+    for (const filePath of targetFiles.slice(0, 10)) {
+      try {
+        const content = await this.readFile(filePath);
+        if (content) {
+          fileContents[filePath] = content;
+          readResults.push({ file: filePath, status: 'SUCCESS', size: content.length });
+        } else {
+          readResults.push({ file: filePath, status: 'NOT_FOUND' });
+        }
+      } catch (e) {
+        readResults.push({ file: filePath, status: 'ERROR', error: e.message });
+      }
+    }
+    
+    const relevantADR = this._findRelevantADR(task);
+    let adrContent = null;
+    if (relevantADR) {
+      adrContent = await this.readFile(relevantADR.path);
+    }
+    
+    const compliance = this._checkCompliance(fileContents);
+    
+    const findings = [];
+    
+    if (compliance.violations.length > 0) {
+      findings.push(`🔴 Ditemukan ${compliance.violations.length} pelanggaran MAEF:`);
+      compliance.violations.forEach(v => {
+        findings.push(`   - [${v.severity}] ${v.file}:${v.line || '?'} - ${v.message} (${v.rule})`);
+      });
+    }
+    
+    if (compliance.warnings.length > 0) {
+      findings.push(`🟡 Ditemukan ${compliance.warnings.length} peringatan:`);
+      compliance.warnings.forEach(w => {
+        findings.push(`   - [${w.severity}] ${w.file} - ${w.message}`);
+      });
+    }
+    
+    if (compliance.violations.length === 0 && compliance.warnings.length === 0) {
+      findings.push('✅ Tidak ada pelanggaran MAEF yang terdeteksi pada file yang dianalisis.');
+    }
+    
+    const metrics = {
+      filesAnalyzed: Object.keys(fileContents).length,
+      totalCodeLines: Object.values(fileContents).reduce((sum, c) => sum + c.split('\n').length, 0),
+      violationsFound: compliance.violations.length,
+      warningsFound: compliance.warnings.length,
+      adrReferenced: relevantADR ? relevantADR.path : 'None'
+    };
+    
     return {
-      summary: `Analisis untuk tugas: ${task.title || task.id}`,
-      findings: [
-        'Belum ada aturan yang dilanggar (static analysis belum mendalam)',
-        'Dibutuhkan pembacaan repository lebih lanjut untuk analisis dampak'
-      ],
-      recommendation: 'Lanjutkan dengan hati-hati, pastikan tidak melanggar ADR.'
+      summary: `Analisis selesai: ${metrics.filesAnalyzed} file, ${metrics.totalCodeLines} baris kode, ${metrics.violationsFound} pelanggaran`,
+      findings: findings,
+      rawContext: fileContents,
+      compliance: compliance,
+      metrics: metrics,
+      recommendation: metrics.violationsFound > 0 
+        ? 'Perlu perbaikan untuk mematuhi MAEF' 
+        : 'Kode aman, lanjutkan dengan implementasi fitur'
     };
   }
 
   async _review(task) {
+    const analysis = await this._analyze(task);
     return {
-      verdict: 'NEUTRAL',
-      issues: [],
-      notes: 'Engineer versi dasar belum bisa melakukan review mendalam.'
+      verdict: analysis.compliance.violations.length > 0 ? 'REJECT' : 'APPROVE',
+      issues: analysis.compliance.violations,
+      notes: `Review selesai: ${analysis.metrics.filesAnalyzed} file diperiksa.`,
+      analysis: analysis
     };
   }
 
@@ -427,11 +612,45 @@ class Engineer {
       console.log(`[Engineer] 🔧 Menerapkan patch: ${patch.id}`);
       console.log(`[Engineer] 📋 Jumlah file yang akan diubah: ${patch.files.length}`);
 
+      // =============================================
+      // CORE PROTECTION: BLOCK IMMUTABLE FILES
+      // =============================================
+      for (const file of patch.files) {
+        if (this._isImmutableFile(file.path)) {
+          console.error(`[Engineer] 🚫 BLOCKED: Attempt to modify IMMUTABLE core file: ${file.path}`);
+          this.metrics.coreModificationsBlocked++;
+          this.suspiciousAttempts++;
+          
+          // Circuit breaker: jika 3x mencoba ubah core, turunkan capability
+          if (this.suspiciousAttempts >= 3) {
+            this.capability = 'OBSERVER';
+            this.eventBus.emit('Engineer:EmergencyLockdown', {
+              reason: 'Suspicious core modification attempts detected',
+              attempts: this.suspiciousAttempts
+            });
+          }
+          
+          this._emitRecommendation({
+            type: 'CORE_MODIFICATION_BLOCKED',
+            taskId: patch.taskId,
+            message: `🚫 BLOKIR: File "${file.path}" adalah bagian dari CORE IMMUTABLE dan TIDAK BOLEH diubah oleh Engineer. Silakan laporkan ke Owner untuk intervensi manual.`,
+            severity: 'CRITICAL'
+          });
+          
+          return { success: false, error: 'Core file modification blocked' };
+        }
+      }
+
       let successCount = 0;
       let failCount = 0;
 
       for (const file of patch.files) {
         try {
+          // Warning untuk PROTECTED files
+          if (this._isProtectedFile(file.path)) {
+            console.warn(`[Engineer] ⚠️ WARNING: Modifying PROTECTED file: ${file.path}`);
+          }
+          
           console.log(`[Engineer] ✍️ Menulis file: ${file.path} (${file.newContent.length} karakter)`);
           const writeResult = await this.storageManager.write(file.path, file.newContent);
 
@@ -453,7 +672,6 @@ class Engineer {
         }
       }
 
-      // Simpan ke Project Memory
       try {
         const memoryService = this.serviceManager.get('MemoryService');
         if (memoryService) {
@@ -485,10 +703,62 @@ class Engineer {
   }
 
   // =============================================
-  // CONFIDENCE CALCULATION
+  // DYNAMIC CONFIDENCE CALCULATION (UPGRADED)
   // =============================================
   _calculateConfidence(result) {
-    return { coverage: 30, evidence: 20, level: 'LOW' };
+    let coverage = 0;
+    let evidence = 0;
+    
+    if (result.rawContext) {
+      const filesAttempted = result.metrics?.filesAnalyzed || 0;
+      const filesRead = Object.keys(result.rawContext).length;
+      coverage = filesAttempted > 0 ? Math.round((filesRead / filesAttempted) * 100) : 0;
+    }
+    
+    if (result.compliance) {
+      const violations = result.compliance.violations?.length || 0;
+      const warnings = result.compliance.warnings?.length || 0;
+      
+      if (violations === 0 && warnings === 0) {
+        evidence = 90;
+      } else if (violations === 0) {
+        evidence = 70;
+      } else if (violations <= 2) {
+        evidence = 50;
+      } else {
+        evidence = 20;
+      }
+    }
+    
+    let level = 'LOW';
+    if (coverage >= 80 && evidence >= 70) level = 'HIGH';
+    else if (coverage >= 50 && evidence >= 50) level = 'MEDIUM';
+    
+    return { coverage, evidence, level };
+  }
+
+  // =============================================
+  // PERSETUJUAN (APPROVAL)
+  // =============================================
+  async _requestApproval(patch) {
+    return new Promise((resolve) => {
+      this.pendingPatches.set(patch.id, { patch, resolver: resolve });
+
+      this.eventBus.emit('Engineer:RequestApproval', {
+        patchId: patch.id,
+        summary: patch.description || 'Patch generated',
+        files: patch.files.map(f => ({
+          path: f.path,
+          status: f.status,
+          size: f.size || 0,
+          isImmutable: this._isImmutableFile(f.path),
+          isProtected: this._isProtectedFile(f.path)
+        })),
+        diff: patch.diff || '',
+        verification: patch.verification || null,
+        timestamp: new Date().toISOString()
+      });
+    });
   }
 
   // =============================================
@@ -514,6 +784,7 @@ class Engineer {
     ];
     if (validCapabilities.includes(newCapability)) {
       this.capability = newCapability;
+      this.suspiciousAttempts = 0; // Reset circuit breaker
       console.log(`[Engineer] Capability upgraded to ${newCapability}`);
       this.eventBus.emit('Engineer:CapabilityUpdated', { capability: this.capability });
     } else {
@@ -525,7 +796,11 @@ class Engineer {
   // METRICS
   // =============================================
   getMetrics() {
-    return { ...this.metrics, capability: this.capability };
+    return { 
+      ...this.metrics, 
+      capability: this.capability,
+      suspiciousAttempts: this.suspiciousAttempts
+    };
   }
 }
 
