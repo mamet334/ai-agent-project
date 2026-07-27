@@ -50,17 +50,21 @@ export class DiscoveryManager {
 
   // Detect platform: web, electron, mobile, unknown
   detectPlatform() {
-    // Check for Electron
-    if (typeof process !== 'undefined' && process.versions && process.versions.electron) {
-      return 'electron';
+    // ✅ Cek Electron environment DULU
+    if (typeof window !== 'undefined' && window.electronAPI) {
+      return 'desktop'; // Electron app
     }
     
-    // Check for mobile (basic detection)
-    if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+    // Cek Node.js environment (Electron main process)
+    if (typeof process !== 'undefined' && process.versions?.electron) {
+      return 'desktop';
+    }
+    
+    // Fallback ke web detection
+    const userAgent = navigator.userAgent.toLowerCase();
+    if (userAgent.includes('mobile') || userAgent.includes('android') || userAgent.includes('iphone')) {
       return 'mobile';
     }
-    
-    // Default to web
     return 'web';
   }
 

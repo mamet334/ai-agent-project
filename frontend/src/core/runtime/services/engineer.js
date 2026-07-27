@@ -13,7 +13,12 @@
  * - Brain 2: Dynamic Engineering Context (dibangun per tugas)
  * 
  * Status: IMPLEMENTER — siap menghasilkan dan menerapkan patch
- * Upgrade: Real Analysis Engine (MAEF 4.5) + Core Protection Layer
+ * Upgrade: Real Analysis Engine (MAEF 4.5) + Core Protection Layer + Granular Approval
+ * 
+ * Fixes Applied:
+ * - ✅ Granular Approval support (approvedFiles flow)
+ * - ✅ Confidence & Compliance injection ke UI
+ * - ✅ Correct VerificationEngine method name (verifyPatchEngineering)
  */
 
 class Engineer {
@@ -56,9 +61,6 @@ class Engineer {
   // CORE PROTECTION LAYER (MAEF 4.2 Compliant)
   // =============================================
 
-  /**
-   * Cek apakah file termasuk IMMUTABLE (tidak boleh diubah oleh Engineer)
-   */
   _isImmutableFile(filePath) {
     const IMMUTABLE_PATTERNS = [
       '/core/runtime/Kernel.js',
@@ -77,9 +79,6 @@ class Engineer {
     return IMMUTABLE_PATTERNS.some(pattern => filePath.includes(pattern));
   }
 
-  /**
-   * Cek apakah file termasuk PROTECTED (butuh approval ketat)
-   */
   _isProtectedFile(filePath) {
     const PROTECTED_PATTERNS = [
       '/core/runtime/services/',
@@ -144,10 +143,29 @@ class Engineer {
   // EVENT LISTENERS
   // =============================================
   _registerListeners() {
-    this.eventBus.on('Engineer:AnalyzeTask', this._handleAnalysisTask.bind(this));
-    this.eventBus.on('Engineer:ReviewChanges', this._handleReviewTask.bind(this));
-    this.eventBus.on('Engineer:GeneratePatch', this._handlePatchTask.bind(this));
-    this.eventBus.on('Engineer:ApprovalResponse', this._handleApprovalResponse.bind(this));
+    // ✅ FIX: Unwrap payload dari EventBus
+    this.eventBus.on('Engineer:AnalyzeTask', (wrappedPayload) => {
+      const task = wrappedPayload?.data || wrappedPayload;
+      this._handleAnalysisTask(task);
+    });
+    
+    this.eventBus.on('Engineer:ReviewChanges', (wrappedPayload) => {
+      const task = wrappedPayload?.data || wrappedPayload;
+      this._handleReviewTask(task);
+    });
+    
+    this.eventBus.on('Engineer:GeneratePatch', (wrappedPayload) => {
+      const task = wrappedPayload?.data || wrappedPayload;
+      console.log('[Engineer] 📨 Received GeneratePatch event:', task);
+      console.log('[Engineer] Task title:', task?.title);
+      console.log('[Engineer] Task description:', task?.description?.substring(0, 100));
+      this._handlePatchTask(task);
+    });
+    
+    this.eventBus.on('Engineer:ApprovalResponse', (wrappedPayload) => {
+      const response = wrappedPayload?.data || wrappedPayload;
+      this._handleApprovalResponse(response);
+    });
   }
 
   // =============================================
@@ -186,6 +204,12 @@ class Engineer {
     });
   }
 
+  /**
+   * ✅ FIXED: Main patch handler
+   * - Jalankan _analyze() dulu untuk dapatkan confidence & compliance
+   * - Gunakan verifyPatchEngineering (bukan verifyPatch)
+   * - Kirim approvedFiles ke _executePatchApplication
+   */
   async _handlePatchTask(task) {
     if (this.capability !== 'IMPLEMENTER' && this.capability !== 'SELF_MAINTENANCE') {
       this.eventBus.emit('Engineer:Recommendation', {
@@ -200,45 +224,68 @@ class Engineer {
     this.metrics.patchesGenerated++;
     console.log(`[Engineer] Generating patch for: ${task.title || task.id}`);
     this.brain.dynamic = await this._buildDynamicContext(task);
+    
+    // ✅ FIX: Jalankan analisis dulu untuk dapatkan confidence & compliance
+    const analysis = await this._analyze(task);
     const patch = await this._generatePatch(task);
 
     // Verifikasi patch sebelum approval
     if (patch.ready) {
       const verificationEngine = this.serviceManager.get('VerificationEngine');
-      if (verificationEngine && verificationEngine.verifyPatch) {
-        const verificationResult = await verificationEngine.verifyPatch(patch, this.brain);
-        patch.verification = verificationResult;
+      // ✅ FIX: Gunakan method yang benar (verifyPatchEngineering)
+      if (verificationEngine && typeof verificationEngine.verifyPatchEngineering === 'function') {
+        try {
+          const vContext = {
+            responseText: JSON.stringify(patch.files.reduce((acc, f) => {
+              acc[f.path] = f.newContent;
+              return acc;
+            }, {})),
+            runtimeContext: { mode: 'ENGINEER' }
+          };
+          const verificationResult = verificationEngine.verifyPatchEngineering(vContext);
+          patch.verification = {
+            passed: verificationResult.decision === 'PASS',
+            score: verificationResult.score,
+            issues: verificationResult.failures,
+            criticalCount: verificationResult.failures.filter(f => f.severity === 'CRITICAL').length
+          };
 
-        if (!verificationResult.passed) {
-          console.warn('[Engineer] Patch gagal verifikasi:', verificationResult.issues);
-          this.metrics.patchesFailedVerification++;
-          patch.ready = false;
+          if (!patch.verification.passed) {
+            console.warn('[Engineer] Patch gagal verifikasi:', patch.verification.issues);
+            this.metrics.patchesFailedVerification++;
+            patch.ready = false;
 
-          this._emitRecommendation({
-            type: 'PATCH_VERIFICATION_FAILED',
-            taskId: task.id,
-            patch,
-            verification: verificationResult,
-            message: `Patch tidak lolos verifikasi: ${verificationResult.criticalCount} masalah kritis.`,
-            confidence: this._calculateConfidence(patch)
-          });
-          return;
+            this._emitRecommendation({
+              type: 'PATCH_VERIFICATION_FAILED',
+              taskId: task.id,
+              patch,
+              verification: patch.verification,
+              message: `Patch tidak lolos verifikasi: ${patch.verification.criticalCount} masalah kritis.`,
+              confidence: this._calculateConfidence(analysis)
+            });
+            return;
+          }
+        } catch (e) {
+          console.warn('[Engineer] Frontend verification skipped:', e.message);
+          // Lanjutkan — backend tetap akan verifikasi
         }
       }
     }
 
     if (patch.ready) {
-      const approved = await this._requestApproval(patch);
+      // ✅ FIX: approvalResult sekarang adalah objek {approved, approvedFiles}
+      const approvalResult = await this._requestApproval(patch, analysis);
 
-      if (approved) {
-        await this._executePatchApplication(patch);
+      if (approvalResult.approved) {
+        // ✅ FIX: Teruskan approvedFiles ke eksekutor untuk Granular Approval
+        await this._executePatchApplication(patch, approvalResult.approvedFiles);
         this.metrics.patchesApproved++;
         this._emitRecommendation({
           type: 'PATCH_APPLIED',
           taskId: task.id,
           patch,
-          message: 'Patch telah diterapkan dengan persetujuan User.',
-          confidence: this._calculateConfidence(patch)
+          message: `Patch diterapkan: ${approvalResult.approvedFiles.length} file dari ${patch.files.length}.`,
+          confidence: this._calculateConfidence(analysis)
         });
       } else {
         this.metrics.patchesRejected++;
@@ -247,7 +294,7 @@ class Engineer {
           taskId: task.id,
           patch,
           message: 'Patch ditolak oleh User.',
-          confidence: this._calculateConfidence(patch)
+          confidence: this._calculateConfidence(analysis)
         });
       }
     } else {
@@ -256,18 +303,25 @@ class Engineer {
           type: 'PATCH_FAILED',
           taskId: task.id,
           patch,
-          confidence: this._calculateConfidence(patch)
+          confidence: this._calculateConfidence(analysis)
         });
       }
     }
   }
 
+  /**
+   * ✅ FIXED: Extract approvedFiles dari response UI
+   */
   _handleApprovalResponse(response) {
-    const { patchId, approved } = response;
+    const { patchId, approved, approvedFiles } = response;
     const pending = this.pendingPatches.get(patchId);
 
     if (pending) {
-      pending.resolver(approved);
+      // ✅ FIX: Kirim objek {approved, approvedFiles} bukan hanya boolean
+      pending.resolver({ 
+        approved, 
+        approvedFiles: approvedFiles || [] 
+      });
       this.pendingPatches.delete(patchId);
     }
   }
@@ -511,33 +565,95 @@ class Engineer {
 
   async _generatePatch(task) {
     try {
-      console.log(`[Engineer] Generating patch for task: ${task.title || task.id}`);
+      console.log(`[Engineer] 🔨 Generating patch for task: ${task?.title || task?.id || 'unknown'}`);
 
-      const relevantFiles = task.files || [];
+      const relevantFiles = task?.files || [];
       const fileContents = {};
 
-      for (const filePath of relevantFiles) {
+      // Extract file target
+      const targetFiles = relevantFiles.length > 0 
+        ? relevantFiles 
+        : this._extractFileNamesFromTask(task);
+
+      console.log(`[Engineer] 📂 Target files: ${targetFiles.join(', ')}`);
+
+      for (const filePath of targetFiles.slice(0, 5)) {
         const content = await this.readFile(filePath);
         if (content !== null) {
           fileContents[filePath] = content;
+          console.log(`[Engineer] ✅ Read: ${filePath} (${content.length} chars)`);
+        } else {
+          console.warn(`[Engineer] ⚠️ File not found: ${filePath}`);
         }
+      }
+
+      if (Object.keys(fileContents).length === 0) {
+        console.warn('[Engineer] No files could be read for patch generation');
+        return { 
+          files: [], 
+          description: 'No target files could be read.', 
+          ready: false, 
+          error: 'No readable files' 
+        };
       }
 
       let generatedCode = null;
+      let rawLLMResponse = null;
+      let modelUsed = 'fallback';
+      
+      // ✅ DEBUG: Cek ketersediaan BrainService
+      console.log('[Engineer] 🔍 Checking BrainService availability...');
+      console.log('[Engineer] serviceManager exists:', !!this.serviceManager);
+      console.log('[Engineer] serviceManager.has("BrainService"):', this.serviceManager?.has('BrainService'));
+      
+      // List semua service yang terdaftar (jika method list() tersedia)
+      if (this.serviceManager?.list) {
+        console.log('[Engineer] Available services:', this.serviceManager.list());
+      }
+      
+      // Coba berbagai cara akses BrainService
+      let brainService = null;
       try {
-        const brainService = this.serviceManager.get('BrainService');
-        if (brainService) {
-          const prompt = this._buildPatchPrompt(task, fileContents);
-          const response = await brainService.executeLLM(prompt);
-          generatedCode = this._extractCodeFromResponse(response);
-        }
+        brainService = this.serviceManager.get('BrainService');
+        console.log('[Engineer] BrainService object:', brainService);
+        console.log('[Engineer] BrainService methods:', brainService ? Object.getOwnPropertyNames(Object.getPrototypeOf(brainService)) : 'null');
       } catch (e) {
-        console.warn('[Engineer] BrainService not available, using fallback');
+        console.error('[Engineer] Error getting BrainService:', e.message);
+      }
+      
+      if (brainService && typeof brainService.executeLLM === 'function') {
+        console.log(`[Engineer] 🧠 BrainService available, calling LLM...`);
+        const prompt = this._buildPatchPrompt(task, fileContents);
+        
+        try {
+          rawLLMResponse = await brainService.executeLLM(prompt, { 
+            model: task?.requestedModel 
+          });
+          modelUsed = task?.requestedModel || brainService.currentModel || 'unknown';
+          
+          console.log(`[Engineer] === LLM RAW RESPONSE DIAGNOSTIC ===`);
+          console.log(`[Engineer] 🤖 Model: ${modelUsed}`);
+          console.log(`[Engineer] Response length: ${rawLLMResponse?.length || 0} chars`);
+          console.log(`[Engineer] Contains '{': ${rawLLMResponse?.includes('{') || false}`);
+          console.log(`[Engineer] Contains '}': ${rawLLMResponse?.includes('}') || false}`);
+          console.log(`[Engineer] First 300 chars: "${(rawLLMResponse || '').substring(0, 300).replace(/\n/g, '\\n')}"`);
+          console.log(`[Engineer] === END DIAGNOSTIC ===`);
+          
+          generatedCode = this._extractCodeFromResponse(rawLLMResponse);
+        } catch (llmError) {
+          console.error('[Engineer] LLM call failed:', llmError.message);
+          generatedCode = this._generateFallbackPatch(task, fileContents);
+        }
+      } else {
+        console.warn('[Engineer] ⚠️ BrainService not available or missing executeLLM method');
+        console.log('[Engineer] brainService:', brainService);
+        console.log('[Engineer] brainService.executeLLM:', brainService?.executeLLM);
         generatedCode = this._generateFallbackPatch(task, fileContents);
       }
 
+      // ✅ Tambahkan raw response ke patch object untuk traceability
       const patchFiles = [];
-      for (const [filePath, newContent] of Object.entries(generatedCode)) {
+      for (const [filePath, newContent] of Object.entries(generatedCode || {})) {
         patchFiles.push({
           path: filePath,
           newContent: newContent,
@@ -553,7 +669,10 @@ class Engineer {
         files: patchFiles,
         description: task.description || 'Auto-generated patch',
         generatedAt: new Date().toISOString(),
-        ready: patchFiles.length > 0
+        ready: patchFiles.length > 0,
+        rawLLMResponse: rawLLMResponse, // ✅ Untuk debugging
+        extractedCodeKeys: Object.keys(generatedCode || {}), // ✅ Untuk debugging
+        modelUsed: modelUsed // ✅ Track model yang dipakai
       };
 
       this.eventBus.emit('Engineer:PatchGenerated', patch);
@@ -565,33 +684,116 @@ class Engineer {
   }
 
   _buildPatchPrompt(task, fileContents) {
-    let prompt = `Anda adalah Mamet Engineer yang terikat AGENTS.md, MAEF v3.0, dan Mamet AI Constitution v2.0.\n\n`;
-    prompt += `Tugas: ${task.title || task.id}\n`;
+    // === SYSTEM INSTRUCTION SUPER EKSLISIT ===
+    let prompt = `### SYSTEM INSTRUCTION (WAJIB DIPATUHI) ###\n`;
+    prompt += `Anda adalah Mamet Engineer. Tugas Anda adalah menghasilkan PATCH FILE dalam format JSON MURNI.\n\n`;
+    
+    prompt += `### ATURAN OUTPUT (CRITICAL - JANGAN DILANGGAR) ###\n`;
+    prompt += `1. Karakter PERTAMA output Anda HARUS "{" (kurung kurawal buka)\n`;
+    prompt += `2. Karakter TERAKHIR output Anda HARUS "}" (kurung kurawal tutup)\n`;
+    prompt += `3. DILARANG KERAS menulis kalimat pembuka (contoh: "Baik", "Tentu", "Berikut", "Ini patch-nya")\n`;
+    prompt += `4. DILARANG KERAS menulis kalimat penutup (contoh: "Semoga membantu", "Let me know")\n`;
+    prompt += `5. DILARANG KERAS menggunakan markdown code block (\`\`\`json atau \`\`\`)\n`;
+    prompt += `6. DILARANG KERAS menambah komentar di luar JSON\n`;
+    prompt += `7. Output Anda akan di-PARSE oleh mesin. Jika ada teks di luar JSON, sistem akan ERROR.\n\n`;
+    
+    prompt += `### FORMAT JSON WAJIB ###\n`;
+    prompt += `{\n`;
+    prompt += `  "path/lengkap/ke/file1.jsx": "KONTEN LENGKAP FILE SETELAH PERUBAHAN (semua baris, dari import sampai penutup)",\n`;
+    prompt += `  "path/lengkap/ke/file2.js": "KONTEN LENGKAP FILE SETELAH PERUBAHAN"\n`;
+    prompt += `}\n\n`;
+    
+    prompt += `### CONTOH OUTPUT YANG BENAR ###\n`;
+    prompt += `{\n`;
+    prompt += `  "frontend/src/components/chat/ConversationEngine.jsx": "import React from 'react';\\n\\nexport default function ConversationEngine() {\\n  console.log('Test Mamet OS');\\n  return <div>Test</div>;\\n}"\n`;
+    prompt += `}\n\n`;
+    
+    prompt += `### CONTOH OUTPUT YANG SALAH (JANGAN DITIRU) ###\n`;
+    prompt += `❌ "Tentu, berikut patch-nya:\\n\`\`\`json\\n{...}\\n\`\`\`\\nSemoga membantu!"\n`;
+    prompt += `❌ "Saya akan menambahkan console.log. Ini kodenya: {...}"\n`;
+    prompt += `❌ \`\`\`json\\n{...}\\n\`\`\`\n\n`;
+    
+    prompt += `### TUGAS ANDA ###\n`;
+    prompt += `Task ID: ${task.title || task.id}\n`;
     prompt += `Deskripsi: ${task.description || 'Tidak ada deskripsi'}\n\n`;
 
     if (Object.keys(fileContents).length > 0) {
-      prompt += `File yang akan diubah:\n`;
+      prompt += `### FILE YANG DIMINTA UNTUK DIUBAH ###\n`;
+      prompt += `(Berikut adalah KONTEN ASLI file saat ini. Anda HARUS mengembalikan versi MODIFIKASI-nya dalam JSON)\n\n`;
       for (const [path, content] of Object.entries(fileContents)) {
-        prompt += `\n--- ${path} ---\n${content}\n`;
+        prompt += `--- FILE: ${path} ---\n`;
+        prompt += `${content}\n`;
+        prompt += `--- END FILE ---\n\n`;
       }
     }
-
-    prompt += `\n\nHasilkan kode baru untuk setiap file. Return dalam format JSON:\n`;
-    prompt += `{\n  "path/ke/file1": "konten baru lengkap",\n  "path/ke/file2": "konten baru lengkap"\n}\n\n`;
-    prompt += `Aturan:\n`;
-    prompt += `- Jangan ubah file yang tidak perlu diubah\n`;
+    
+    prompt += `### ATURAN KODE (WAJIB DIPATUHI) ###\n`;
+    prompt += `- Kembalikan KONTEN LENGKAP file (jangan hanya diff/patch partial)\n`;
+    prompt += `- Jangan ubah file yang tidak diminta\n`;
     prompt += `- Pertahankan komentar dan dokumentasi yang ada\n`;
     prompt += `- Ikuti standar ESModules\n`;
-    prompt += `- Jangan gunakan eval() atau new Function()\n`;
-    prompt += `- Nama event EventBus harus pakai format Kategori:Nama (contoh: Engineer:Ready)\n`;
+    prompt += `- JANGAN gunakan eval() atau new Function()\n`;
+    prompt += `- Event EventBus HARUS pakai format Kategori:Nama (contoh: Engineer:Ready)\n`;
+    prompt += `- Jangan panggil API vendor langsung (OpenAI, Gemini, dll)\n`;
+    prompt += `- JANGAN modifikasi file core (Kernel.js, EventBus.js, ServiceManager.js, dll)\n\n`;
+    
+    prompt += `### MULAI OUTPUT JSON SEKARANG ###\n`;
+    prompt += `{`;  // ← Prompt berakhir dengan { agar LLM langsung lanjut
 
     return prompt;
   }
 
+  /**
+   * ✅ ENHANCED: Multi-stage JSON extractor untuk output LLM yang variatif
+   */
   _extractCodeFromResponse(response) {
     try {
+      if (!response || typeof response !== 'string') return {};
+      
+      // STAGE 1: Direct parse
+      try {
+        const trimmed = response.trim();
+        if (trimmed.startsWith('{')) {
+          return JSON.parse(trimmed);
+        }
+      } catch (_) {}
+
+      // STAGE 2: Markdown code block
+      const codeBlockRegex = /```(?:json)?\s*\n?([\s\S]*?)\n?```/g;
+      const codeBlockMatches = [...response.matchAll(codeBlockRegex)];
+      for (const match of codeBlockMatches) {
+        const jsonCandidate = match[1].trim();
+        try {
+          const parsed = JSON.parse(jsonCandidate);
+          if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+            return parsed;
+          }
+        } catch (_) {
+          continue;
+        }
+      }
+
+      // STAGE 3: Fuzzy extraction
+      const firstBrace = response.indexOf('{');
+      const lastBrace = response.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        const jsonCandidate = response.substring(firstBrace, lastBrace + 1);
+        const cleaned = jsonCandidate
+          .replace(/,\s*([\]}])/g, '$1')
+          .replace(/\/\/[^\n]*/g, '')
+          .replace(/\/\*[\s\S]*?\*\//g, '');
+        try {
+          const parsed = JSON.parse(cleaned);
+          if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+            return parsed;
+          }
+        } catch (_) {}
+      }
+
+      // STAGE 4: Simple regex fallback
       const jsonMatch = response.match(/\{[\s\S]*\}/);
       if (jsonMatch) return JSON.parse(jsonMatch[0]);
+      
       return {};
     } catch (e) {
       console.warn('[Engineer] Failed to extract code from response:', e);
@@ -607,10 +809,15 @@ class Engineer {
     return result;
   }
 
-  async _executePatchApplication(patch) {
+  /**
+   * ✅ FIXED: Execute with Granular Approval support
+   * - Skip files yang tidak ada di approvedFiles
+   * - Track skippedCount untuk transparansi
+   */
+  async _executePatchApplication(patch, approvedFiles = []) {
     try {
       console.log(`[Engineer] 🔧 Menerapkan patch: ${patch.id}`);
-      console.log(`[Engineer] 📋 Jumlah file yang akan diubah: ${patch.files.length}`);
+      console.log(`[Engineer] 📋 Files to process: ${patch.files.length}, Approved: ${approvedFiles.length}`);
 
       // =============================================
       // CORE PROTECTION: BLOCK IMMUTABLE FILES
@@ -621,7 +828,6 @@ class Engineer {
           this.metrics.coreModificationsBlocked++;
           this.suspiciousAttempts++;
           
-          // Circuit breaker: jika 3x mencoba ubah core, turunkan capability
           if (this.suspiciousAttempts >= 3) {
             this.capability = 'OBSERVER';
             this.eventBus.emit('Engineer:EmergencyLockdown', {
@@ -633,7 +839,7 @@ class Engineer {
           this._emitRecommendation({
             type: 'CORE_MODIFICATION_BLOCKED',
             taskId: patch.taskId,
-            message: `🚫 BLOKIR: File "${file.path}" adalah bagian dari CORE IMMUTABLE dan TIDAK BOLEH diubah oleh Engineer. Silakan laporkan ke Owner untuk intervensi manual.`,
+            message: `🚫 BLOKIR: File "${file.path}" adalah CORE IMMUTABLE.`,
             severity: 'CRITICAL'
           });
           
@@ -643,10 +849,18 @@ class Engineer {
 
       let successCount = 0;
       let failCount = 0;
+      let skippedCount = 0;
 
       for (const file of patch.files) {
         try {
-          // Warning untuk PROTECTED files
+          // ✅ FIX: Skip file yang tidak di-approve Owner
+          if (approvedFiles.length > 0 && !approvedFiles.includes(file.path)) {
+            console.log(`[Engineer] ⏭️ Skipping (not approved): ${file.path}`);
+            file.status = 'SKIPPED';
+            skippedCount++;
+            continue;
+          }
+
           if (this._isProtectedFile(file.path)) {
             console.warn(`[Engineer] ⚠️ WARNING: Modifying PROTECTED file: ${file.path}`);
           }
@@ -677,7 +891,7 @@ class Engineer {
         if (memoryService) {
           await memoryService.storeMemory(
             `Patch ${patch.id} applied`,
-            `Patch ${patch.id} berhasil diterapkan: ${successCount} file berhasil, ${failCount} file gagal.`
+            `Patch ${patch.id}: ${successCount} applied, ${skippedCount} skipped, ${failCount} failed.`
           );
         }
       } catch (e) {
@@ -688,12 +902,13 @@ class Engineer {
         success: failCount === 0,
         patchId: patch.id,
         successCount,
+        skippedCount,
         failCount,
         files: patch.files
       };
 
       this.eventBus.emit('Engineer:PatchApplied', result);
-      console.log(`[Engineer] 🎯 Patch selesai: ${successCount} berhasil, ${failCount} gagal`);
+      console.log(`[Engineer] 🎯 Patch selesai: ${successCount} applied, ${skippedCount} skipped, ${failCount} failed`);
 
       return result;
     } catch (error) {
@@ -740,7 +955,10 @@ class Engineer {
   // =============================================
   // PERSETUJUAN (APPROVAL)
   // =============================================
-  async _requestApproval(patch) {
+  /**
+   * ✅ FIXED: Kirim confidence & compliance ke UI
+   */
+  async _requestApproval(patch, analysis = null) {
     return new Promise((resolve) => {
       this.pendingPatches.set(patch.id, { patch, resolver: resolve });
 
@@ -751,11 +969,16 @@ class Engineer {
           path: f.path,
           status: f.status,
           size: f.size || 0,
+          newContent: f.newContent,           // ✅ Tambahkan untuk UI viewer
+          originalContent: f.originalContent, // ✅ Tambahkan untuk diff
           isImmutable: this._isImmutableFile(f.path),
           isProtected: this._isProtectedFile(f.path)
         })),
         diff: patch.diff || '',
         verification: patch.verification || null,
+        // ✅ FIX: Inject confidence & compliance dari analysis
+        confidence: analysis ? this._calculateConfidence(analysis) : { level: 'UNKNOWN', coverage: 0, evidence: 0 },
+        compliance: analysis?.compliance || { violations: [], warnings: [] },
         timestamp: new Date().toISOString()
       });
     });

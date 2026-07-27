@@ -186,6 +186,30 @@ export default function ConversationEngine({ sessionId }) {
     }
   };
 
+  /**
+   * Extract file path dari pesan user untuk Engineer mode
+   * Contoh: "Tambahkan console.log di file ConversationEngine.jsx" → "ConversationEngine.jsx"
+   */
+  const _extractFilePathFromMessage = (message) => {
+    if (!message) return null;
+    
+    // Pattern 1: "di file [path]"
+    const pattern1 = /(?:di\s+)?(?:file|berkas)\s+([a-zA-Z0-9_\-\/\.]+\.(jsx?|tsx?|ts|js))/i;
+    const match1 = message.match(pattern1);
+    if (match1) return match1[1];
+    
+    // Pattern 2: "[filename]" langsung
+    const pattern2 = /([a-zA-Z0-9_\-\/]+\.(jsx?|tsx?))/g;
+    const match2 = message.match(pattern2);
+    if (match2 && match2.length > 0) {
+      // Ambil yang paling spesifik (mengandung /)
+      const withSlash = match2.find(m => m.includes('/'));
+      return withSlash || match2[0];
+    }
+    
+    return null;
+  };
+
   // Handle Event Flow (Integrasi UI Event ke Right Workbench)
   const openLifecycleInspector = (stepName, logs) => {
     workspaceManager.openWidgetInWorkbench('right', 'widget:maef-monitor', {
@@ -215,6 +239,66 @@ export default function ConversationEngine({ sessionId }) {
     console.log("[LIFECYCLE] Chat request sent");
     setIsLoading(true);
 
+    // ✅ DEKLARASI formattedModel DULU (sebelum delegasi)
+    let formattedModel = '';
+    try {
+      const brainService = kernel.serviceManager.get('BrainService');
+      if (brainService) {
+        const context = await brainService.getActiveBrainContext();
+        formattedModel = context.model || '';
+      }
+    } catch (e) {
+      console.warn('[ConversationEngine] BrainService not available:', e);
+    }
+
+    // =============================================
+    // ✅ ENGINEER MODE DELEGATION (UPGRADE 1)
+    // =============================================
+    const activeWorkspace = workspaceManager?.activeWorkspaceId || 'ws-assistant';
+    const isEngineerMode = activeWorkspace === 'ws-engineer' || activeWorkspace === 'ENGINEER';
+    
+    console.log(`[ConversationEngine] Mode check: workspace=${activeWorkspace}, isEngineerMode=${isEngineerMode}, kernelStatus=${kernel.status}`);
+    
+    if (isEngineerMode && kernel.status === 'RUNNING') {
+      try {
+        const engineer = kernel.serviceManager.get('Engineer');
+        const eventBus = kernel.serviceManager.get('EventBus');
+        
+        console.log(`[ConversationEngine] Services check: engineer=${!!engineer}, eventBus=${!!eventBus}`);
+        
+        if (engineer && eventBus) {
+          console.log('[ConversationEngine] 🎯 Delegating to Engineer frontend...');
+          console.log('[ConversationEngine] 📌 Model yang akan digunakan:', formattedModel || 'default');
+          
+          // Emit event untuk trigger Engineer
+          eventBus.emit('Engineer:GeneratePatch', {
+            id: `TASK-${Date.now()}`,
+            title: userMsg.substring(0, 100),
+            description: userMsg,
+            files: [],
+            requestedModel: formattedModel,
+            requestedFilePath: _extractFilePathFromMessage(userMsg)
+          });
+          
+          setMessages(prev => [...prev, {
+            role: 'model',
+            content: `🔧 **Engineer sedang menyiapkan patch menggunakan model ${formattedModel || 'default'}...**\n\nMohon tunggu, approval dialog akan muncul setelah patch siap.`
+          }]);
+          
+          setIsLoading(false);
+          return; // ⛔ JANGAN lanjut ke fetch backend
+        } else {
+          console.warn('[ConversationEngine] Engineer or EventBus not available, falling back to backend');
+        }
+      } catch (err) {
+        console.error('[ConversationEngine] Engineer delegation failed:', err);
+      }
+    }
+
+    // =============================================
+    // FALLBACK: Normal backend flow (untuk ASSISTANT & LITE)
+    // =============================================
+    
     // --- Natural Language Memory Trigger ---
     const memoryKeywords = ['ingat', 'simpan', 'catat', 'remember', 'save', 'store'];
     const lowerMsg = userMsg.toLowerCase();
@@ -252,7 +336,7 @@ export default function ConversationEngine({ sessionId }) {
       const endpoint = 'https://uuyzdjifhdfyyvpxsofu.supabase.co/functions/v1/agent-process';
 
       let aiProvider = 'gemini';
-      let formattedModel = '';
+      // let formattedModel = '';  // SUDAH dideklarasikan di atas (ENGINEER DELEGATION)
       let aiKey = '';
       let localContext = '';
       let semanticContext = '';
@@ -376,7 +460,9 @@ export default function ConversationEngine({ sessionId }) {
         ragEnabled: true, // AKTIFKAN RAG untuk semua mode, termasuk LITE
         tools: isLiteMode ? ['rag_search', 'web_search', 'deep_research'] : undefined, // LITE: tools terbatas
         model: formattedModel || undefined,
-        file: fileData // Sertakan file attachment jika ada
+        file: fileData, // Sertakan file attachment jika ada
+        // ✅ TAMBAHKAN: Target file untuk Engineer mode
+        requestedFilePath: resolvedMode === 'ENGINEER' ? _extractFilePathFromMessage(userMsg) : undefined
       };
 
       // Reset file attachment setelah dikirim

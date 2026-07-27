@@ -56,9 +56,23 @@ export class StorageManager {
   // PUBLIC API
   // =============================================
 
-  async read(path) {
+  async read(filePath) {
+    // ✅ ELECTRON: Gunakan IPC ke main process terlebih dahulu
+    if (typeof window !== 'undefined' && window.electronAPI?.readFile) {
+      try {
+        const content = await window.electronAPI.readFile(filePath);
+        if (content !== null) {
+          console.log(`[StorageManager] Read via Electron IPC: ${filePath}`);
+          return content;
+        }
+      } catch (e) {
+        console.warn(`[StorageManager] Electron IPC read failed: ${e.message}`);
+      }
+    }
+    
+    // FALLBACK: Gunakan backend yang sedang aktif
     const backend = this.backends.get(this.currentBackend);
-    return backend.read(path);
+    return backend.read(filePath);
   }
 
   async write(path, content) {
