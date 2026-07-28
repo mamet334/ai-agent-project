@@ -172,6 +172,56 @@ export default function ConversationEngine({ sessionId }) {
     localStorage.removeItem('mamet_v4_current_chat_id');
   };
 
+  // Listen for Engineer patch completion to update UI
+  useEffect(() => {
+    const eventBus = kernel.serviceManager?.get('EventBus');
+    if (!eventBus) return;
+
+    const handler = (rec) => {
+      if (rec.type === 'PATCH_APPLIED') {
+        setMessages(prev => {
+          // Ganti pesan "sedang menyiapkan..." yang terakhir dengan hasil ini
+          const newMsgs = [...prev];
+          const lastIndex = newMsgs.length - 1;
+          if (lastIndex >= 0 && newMsgs[lastIndex].content.includes('Engineer sedang menyiapkan patch')) {
+            newMsgs[lastIndex] = {
+              role: 'model',
+              content: `✅ **Patch Berhasil Diterapkan!**\n\n${rec.message}\n\n_File telah dimodifikasi sesuai instruksi Anda._`
+            };
+            return newMsgs;
+          }
+          return [...prev, {
+            role: 'model',
+            content: `✅ **Patch Berhasil Diterapkan!**\n\n${rec.message}\n\n_File telah dimodifikasi sesuai instruksi Anda._`
+          }];
+        });
+      } else if (rec.type === 'PATCH_REJECTED') {
+        setMessages(prev => {
+          const newMsgs = [...prev];
+          const lastIndex = newMsgs.length - 1;
+          if (lastIndex >= 0 && newMsgs[lastIndex].content.includes('Engineer sedang menyiapkan patch')) {
+            newMsgs[lastIndex] = { role: 'model', content: `❌ **Patch Ditolak**\n\n${rec.message}` };
+            return newMsgs;
+          }
+          return [...prev, { role: 'model', content: `❌ **Patch Ditolak**\n\n${rec.message}` }];
+        });
+      } else if (rec.type === 'PATCH_VERIFICATION_FAILED' || rec.type === 'ERROR') {
+        setMessages(prev => {
+          const newMsgs = [...prev];
+          const lastIndex = newMsgs.length - 1;
+          if (lastIndex >= 0 && newMsgs[lastIndex].content.includes('Engineer sedang menyiapkan patch')) {
+            newMsgs[lastIndex] = { role: 'model', content: `⚠️ **Patch Gagal**\n\n${rec.message || 'Terjadi kesalahan saat menerapkan patch.'}` };
+            return newMsgs;
+          }
+          return [...prev, { role: 'model', content: `⚠️ **Patch Gagal**\n\n${rec.message || 'Terjadi kesalahan.'}` }];
+        });
+      }
+    };
+
+    const unsubscribe = eventBus.on('Engineer:Recommendation', handler);
+    return () => eventBus.off('Engineer:Recommendation', unsubscribe);
+  }, []);
+
   const handleLoadChat = async (chatId) => {
     const { data, error } = await supabase
       .from('chats')
