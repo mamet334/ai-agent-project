@@ -55,18 +55,15 @@ class Engineer {
 
   async initialize() {
     await this._loadStaticKnowledge();
-    
-    // ✅ Inisialisasi FileIndexService untuk resolusi path cepat
-    try {
-      this.fileIndexService = new FileIndexService(this.storageManager);
-      await this.fileIndexService.buildIndex();
-      console.log(`[Engineer] FileIndexService siap: ${this.fileIndexService.getStats().totalFiles} files diindeks`);
-    } catch (e) {
-      console.warn('[Engineer] Gagal inisialisasi FileIndexService:', e.message);
-      this.fileIndexService = null;
-    }
-    
-    this._registerListeners();
+  
+    // ✅ Inisialisasi FileIndexService dan tunggu selesai
+    const FileIndexService = (await import('./FileIndexService.js')).FileIndexService;
+    this.fileIndexService = new FileIndexService(this.storageManager);
+    console.log('[Engineer] 🔨 Membangun FileIndexService...');
+    await this.fileIndexService.buildIndex();
+    console.log('[Engineer] ✅ FileIndexService siap digunakan');
+  
+    this._registerListeners(); // Pastikan terjadi SETELAH indeks siap!
     console.log(`[Engineer] Initialized as ${this.capability}`);
     this.eventBus.emit('Engineer:Ready', { capability: this.capability });
   }
@@ -157,7 +154,6 @@ class Engineer {
   // EVENT LISTENERS
   // =============================================
   _registerListeners() {
-    // ✅ FIX: Unwrap payload dari EventBus
     this.eventBus.on('Engineer:AnalyzeTask', (wrappedPayload) => {
       const task = wrappedPayload?.data || wrappedPayload;
       this._handleAnalysisTask(task);
@@ -218,12 +214,6 @@ class Engineer {
     });
   }
 
-  /**
-   * ✅ FIXED: Main patch handler
-   * - Jalankan _analyze() dulu untuk dapatkan confidence & compliance
-   * - Gunakan verifyPatchEngineering (bukan verifyPatch)
-   * - Kirim approvedFiles ke _executePatchApplication
-   */
   async _handlePatchTask(task) {
     if (this.capability !== 'IMPLEMENTER' && this.capability !== 'SELF_MAINTENANCE') {
       this.eventBus.emit('Engineer:Recommendation', {
@@ -239,14 +229,11 @@ class Engineer {
     console.log(`[Engineer] Generating patch for: ${task.title || task.id}`);
     this.brain.dynamic = await this._buildDynamicContext(task);
     
-    // ✅ FIX: Jalankan analisis dulu untuk dapatkan confidence & compliance
     const analysis = await this._analyze(task);
     const patch = await this._generatePatch(task);
 
-    // Verifikasi patch sebelum approval
     if (patch.ready) {
       const verificationEngine = this.serviceManager.get('VerificationEngine');
-      // ✅ FIX: Gunakan method yang benar (verifyPatchEngineering)
       if (verificationEngine && typeof verificationEngine.verifyPatchEngineering === 'function') {
         try {
           const vContext = {
@@ -281,17 +268,14 @@ class Engineer {
           }
         } catch (e) {
           console.warn('[Engineer] Frontend verification skipped:', e.message);
-          // Lanjutkan — backend tetap akan verifikasi
         }
       }
     }
 
     if (patch.ready) {
-      // ✅ FIX: approvalResult sekarang adalah objek {approved, approvedFiles}
       const approvalResult = await this._requestApproval(patch, analysis);
 
       if (approvalResult.approved) {
-        // ✅ FIX: Teruskan approvedFiles ke eksekutor untuk Granular Approval
         await this._executePatchApplication(patch, approvalResult.approvedFiles);
         this.metrics.patchesApproved++;
         this._emitRecommendation({
@@ -323,15 +307,11 @@ class Engineer {
     }
   }
 
-  /**
-   * ✅ FIXED: Extract approvedFiles dari response UI
-   */
   _handleApprovalResponse(response) {
     const { patchId, approved, approvedFiles } = response;
     const pending = this.pendingPatches.get(patchId);
 
     if (pending) {
-      // ✅ FIX: Kirim objek {approved, approvedFiles} bukan hanya boolean
       pending.resolver({ 
         approved, 
         approvedFiles: approvedFiles || [] 
@@ -382,16 +362,10 @@ class Engineer {
   // REAL ANALYSIS ENGINE (MAEF 4.5 Compliant)
   // =============================================
 
-  /**
-   * Mengekstrak nama file dari task yang berupa objek.
-   * Menggabungkan title dan description menjadi string, lalu mengekstrak path file.
-   */
   _extractFileNamesFromTask(task) {
-    // Gabungkan title dan description menjadi satu string untuk pencarian
     const text = `${task.title || ''} ${task.description || ''}`;
     console.log('[Engineer] Task text for extraction:', text);
 
-    // PRIORITAS 1: Coba tangkap path lengkap yang diawali dengan 'frontend/' atau 'src/' atau '/'
     const fullPathRegex = /(frontend\/[a-zA-Z0-9_\-./]+\.(jsx?|tsx?|ts|json|md))/gi;
     const fullPathMatches = [...text.matchAll(fullPathRegex)];
     if (fullPathMatches.length > 0) {
@@ -400,7 +374,6 @@ class Engineer {
       return extracted;
     }
 
-    // PRIORITAS 2: Coba tangkap path yang diawali dengan 'src/'
     const srcPathRegex = /(src\/[a-zA-Z0-9_\-./]+\.(jsx?|tsx?|ts|json|md))/gi;
     const srcPathMatches = [...text.matchAll(srcPathRegex)];
     if (srcPathMatches.length > 0) {
@@ -409,7 +382,6 @@ class Engineer {
       return extracted;
     }
 
-    // PRIORITAS 3: Jika tidak ada path lengkap, ekstrak nama file saja
     const nameRegex = /([a-zA-Z0-9_\-]+\.(jsx?|tsx?|ts|json|md))/gi;
     const nameMatches = [...text.matchAll(nameRegex)];
     const extracted = [...new Set(nameMatches.map(m => m[1]))];
@@ -506,9 +478,6 @@ class Engineer {
     return { violations, warnings };
   }
 
-  // =============================================
-  // CORE METHODS (UPGRADED WITH REAL ANALYSIS)
-  // =============================================
   async _analyze(task) {
     console.log(`[Engineer] Memulai Real Analysis untuk: ${task.title || task.id}`);
     
@@ -593,7 +562,6 @@ class Engineer {
       const relevantFiles = task?.files || [];
       const fileContents = {};
 
-      // Extract file target
       const targetFiles = relevantFiles.length > 0 
         ? relevantFiles 
         : this._extractFileNamesFromTask(task);
@@ -624,17 +592,14 @@ class Engineer {
       let rawLLMResponse = null;
       let modelUsed = 'fallback';
       
-      // ✅ DEBUG: Cek ketersediaan BrainService
       console.log('[Engineer] 🔍 Checking BrainService availability...');
       console.log('[Engineer] serviceManager exists:', !!this.serviceManager);
       console.log('[Engineer] serviceManager.has("BrainService"):', this.serviceManager?.has('BrainService'));
       
-      // List semua service yang terdaftar (jika method list() tersedia)
       if (this.serviceManager?.list) {
         console.log('[Engineer] Available services:', this.serviceManager.list());
       }
       
-      // Coba berbagai cara akses BrainService
       let brainService = null;
       try {
         brainService = this.serviceManager.get('BrainService');
@@ -674,7 +639,6 @@ class Engineer {
         generatedCode = this._generateFallbackPatch(task, fileContents);
       }
 
-      // ✅ Tambahkan raw response ke patch object untuk traceability
       const patchFiles = [];
       for (const [filePath, newContent] of Object.entries(generatedCode || {})) {
         patchFiles.push({
@@ -693,9 +657,9 @@ class Engineer {
         description: task.description || 'Auto-generated patch',
         generatedAt: new Date().toISOString(),
         ready: patchFiles.length > 0,
-        rawLLMResponse: rawLLMResponse, // ✅ Untuk debugging
-        extractedCodeKeys: Object.keys(generatedCode || {}), // ✅ Untuk debugging
-        modelUsed: modelUsed // ✅ Track model yang dipakai
+        rawLLMResponse: rawLLMResponse,
+        extractedCodeKeys: Object.keys(generatedCode || {}),
+        modelUsed: modelUsed
       };
 
       this.eventBus.emit('Engineer:PatchGenerated', patch);
@@ -707,7 +671,6 @@ class Engineer {
   }
 
   _buildPatchPrompt(task, fileContents) {
-    // === SYSTEM INSTRUCTION SUPER EKSLISIT ===
     let prompt = `### SYSTEM INSTRUCTION (WAJIB DIPATUHI) ###\n`;
     prompt += `Anda adalah Mamet Engineer. Tugas Anda adalah menghasilkan PATCH FILE dalam format JSON MURNI.\n\n`;
     
@@ -761,19 +724,15 @@ class Engineer {
     prompt += `- JANGAN modifikasi file core (Kernel.js, EventBus.js, ServiceManager.js, dll)\n\n`;
     
     prompt += `### MULAI OUTPUT JSON SEKARANG ###\n`;
-    prompt += `{`;  // ← Prompt berakhir dengan { agar LLM langsung lanjut
+    prompt += `{`;
 
     return prompt;
   }
 
-  /**
-   * ✅ ENHANCED: Multi-stage JSON extractor untuk output LLM yang variatif
-   */
   _extractCodeFromResponse(response) {
     try {
       if (!response || typeof response !== 'string') return {};
       
-      // STAGE 1: Direct parse
       try {
         const trimmed = response.trim();
         if (trimmed.startsWith('{')) {
@@ -781,7 +740,6 @@ class Engineer {
         }
       } catch (_) {}
 
-      // STAGE 2: Markdown code block
       const codeBlockRegex = /```(?:json)?\s*\n?([\s\S]*?)\n?```/g;
       const codeBlockMatches = [...response.matchAll(codeBlockRegex)];
       for (const match of codeBlockMatches) {
@@ -796,7 +754,6 @@ class Engineer {
         }
       }
 
-      // STAGE 3: Fuzzy extraction
       const firstBrace = response.indexOf('{');
       const lastBrace = response.lastIndexOf('}');
       if (firstBrace !== -1 && lastBrace > firstBrace) {
@@ -813,7 +770,6 @@ class Engineer {
         } catch (_) {}
       }
 
-      // STAGE 4: Simple regex fallback
       const jsonMatch = response.match(/\{[\s\S]*\}/);
       if (jsonMatch) return JSON.parse(jsonMatch[0]);
       
@@ -832,19 +788,11 @@ class Engineer {
     return result;
   }
 
-  /**
-   * ✅ FIXED: Execute with Granular Approval support
-   * - Skip files yang tidak ada di approvedFiles
-   * - Track skippedCount untuk transparansi
-   */
   async _executePatchApplication(patch, approvedFiles = []) {
     try {
       console.log(`[Engineer] 🔧 Menerapkan patch: ${patch.id}`);
       console.log(`[Engineer] 📋 Files to process: ${patch.files.length}, Approved: ${approvedFiles.length}`);
 
-      // =============================================
-      // CORE PROTECTION: BLOCK IMMUTABLE FILES
-      // =============================================
       for (const file of patch.files) {
         if (this._isImmutableFile(file.path)) {
           console.error(`[Engineer] 🚫 BLOCKED: Attempt to modify IMMUTABLE core file: ${file.path}`);
@@ -876,7 +824,6 @@ class Engineer {
 
       for (const file of patch.files) {
         try {
-          // ✅ FIX: Skip file yang tidak di-approve Owner
           if (approvedFiles.length > 0 && !approvedFiles.includes(file.path)) {
             console.log(`[Engineer] ⏭️ Skipping (not approved): ${file.path}`);
             file.status = 'SKIPPED';
@@ -940,9 +887,6 @@ class Engineer {
     }
   }
 
-  // =============================================
-  // DYNAMIC CONFIDENCE CALCULATION (UPGRADED)
-  // =============================================
   _calculateConfidence(result) {
     let coverage = 0;
     let evidence = 0;
@@ -975,33 +919,25 @@ class Engineer {
     return { coverage, evidence, level };
   }
 
-  /**
-   * Mencoba membaca file dengan berbagai kemungkinan ekstensi.
-   * @param {string} basePath - Path file yang diberikan (bisa tanpa ekstensi atau dengan ekstensi salah).
-   * @returns {Promise<{content: string, path: string} | null>}
-   */
   async _tryReadFile(basePath) {
-    console.log(`[Engineer:_tryReadFile] 🔍 Mencoba membaca: "${basePath}"`);
-    console.log(`[Engineer:_tryReadFile]   storageManager tersedia:`, !!this.storageManager);
-    console.log(`[Engineer:_tryReadFile]   storageManager.read adalah function:`, typeof this.storageManager?.read);
+    const normalizedBase = basePath.replace(/\\/g, '/');
 
-    // STAGE 1: Coba langsung dengan path yang diberikan
-    if (basePath.match(/\.[a-zA-Z0-9]+$/)) {
-      console.log(`[Engineer:_tryReadFile] 📄 Mencoba path asli (dengan ekstensi): "${basePath}"`);
-      try {
-        const content = await this.storageManager.read(basePath);
-        if (content !== null && content !== undefined) {
-          console.log(`[Engineer:_tryReadFile] ✅ BERHASIL membaca: "${basePath}" (${content.length} chars)`);
-          return { content, path: basePath };
-        }
-      } catch (err) {
-        console.log(`[Engineer:_tryReadFile] ❌ Error membaca "${basePath}": ${err.message}`);
+    if (this.fileIndexService && !this.fileIndexService.isReady) {
+      console.log('[Engineer] Menunggu FileIndexService selesai membangun indeks...');
+      let attempts = 0;
+      while (!this.fileIndexService.isReady && attempts < 100) {
+        await new Promise(r => setTimeout(r, 100));
+        attempts++;
       }
     }
 
-    // STAGE 2: Coba dengan berbagai ekstensi
+    let content = await this.storageManager.read(normalizedBase);
+    if (content !== null && content !== undefined) {
+      return { content, path: normalizedBase };
+    }
+
     const extensions = ['.js', '.jsx', '.ts', '.tsx', '.json', '.md'];
-    const baseName = basePath.replace(/\.[^.]+$/, '');
+    const baseName = normalizedBase.replace(/\.[^.]+$/, '');
     console.log(`[Engineer:_tryReadFile] 🔄 Fallback ekstensi: baseName="${baseName}"`);
 
     for (const ext of extensions) {
@@ -1009,29 +945,24 @@ class Engineer {
       try {
         const content = await this.storageManager.read(candidate);
         if (content !== null && content !== undefined) {
-          console.log(`[Engineer:_tryReadFile] ✅ BERHASIL membaca: "${candidate}" (${content.length} chars)`);
+          console.log(`[Engineer:_tryReadFile] ✅ BERHASIL membaca: "${candidate}"`);
           return { content, path: candidate };
         }
-      } catch (err) {
+      } catch (_) {
         // Lanjut ke ekstensi berikutnya
       }
     }
 
-    // STAGE 3: Gunakan FileIndexService untuk mencari berdasarkan nama file
     if (this.fileIndexService && this.fileIndexService.isReady) {
-      const fileName = basePath.split('/').pop(); // Ambil nama file dari path
+      const fileName = normalizedBase.split('/').pop();
       console.log(`[Engineer:_tryReadFile] 🔍 Mencari "${fileName}" via FileIndexService...`);
       const resolvedPath = this.fileIndexService.resolvePath(fileName);
       if (resolvedPath) {
         console.log(`[Engineer:_tryReadFile] 📍 FileIndexService meresolve ke: "${resolvedPath}"`);
-        try {
-          const content = await this.storageManager.read(resolvedPath);
-          if (content !== null && content !== undefined) {
-            console.log(`[Engineer:_tryReadFile] ✅ BERHASIL membaca via indeks: "${resolvedPath}" (${content.length} chars)`);
-            return { content, path: resolvedPath };
-          }
-        } catch (err) {
-          console.warn(`[Engineer:_tryReadFile] ❌ Gagal baca via indeks "${resolvedPath}": ${err.message}`);
+        const content = await this.storageManager.read(resolvedPath);
+        if (content !== null && content !== undefined) {
+          console.log(`[Engineer:_tryReadFile] ✅ BERHASIL membaca via indeks: "${resolvedPath}"`);
+          return { content, path: resolvedPath };
         }
       } else {
         console.log(`[Engineer:_tryReadFile] ⚠️ FileIndexService tidak menemukan "${fileName}"`);
@@ -1040,16 +971,10 @@ class Engineer {
       console.log(`[Engineer:_tryReadFile] ⚠️ FileIndexService tidak tersedia atau belum siap`);
     }
 
-    console.log(`[Engineer:_tryReadFile] ❌ GAGAL: Semua metode gagal untuk "${basePath}"`);
+    console.log(`[Engineer:_tryReadFile] ❌ GAGAL: Semua metode gagal untuk "${normalizedBase}"`);
     return null;
   }
 
-  // =============================================
-  // PERSETUJUAN (APPROVAL)
-  // =============================================
-  /**
-   * ✅ FIXED: Kirim confidence & compliance ke UI
-   */
   async _requestApproval(patch, analysis = null) {
     return new Promise((resolve) => {
       this.pendingPatches.set(patch.id, { patch, resolver: resolve });
@@ -1061,14 +986,13 @@ class Engineer {
           path: f.path,
           status: f.status,
           size: f.size || 0,
-          newContent: f.newContent,           // ✅ Tambahkan untuk UI viewer
-          originalContent: f.originalContent, // ✅ Tambahkan untuk diff
+          newContent: f.newContent,
+          originalContent: f.originalContent,
           isImmutable: this._isImmutableFile(f.path),
           isProtected: this._isProtectedFile(f.path)
         })),
         diff: patch.diff || '',
         verification: patch.verification || null,
-        // ✅ FIX: Inject confidence & compliance dari analysis
         confidence: analysis ? this._calculateConfidence(analysis) : { level: 'UNKNOWN', coverage: 0, evidence: 0 },
         compliance: analysis?.compliance || { violations: [], warnings: [] },
         timestamp: new Date().toISOString()
@@ -1076,9 +1000,6 @@ class Engineer {
     });
   }
 
-  // =============================================
-  // OUTPUT: REKOMENDASI KE USER
-  // =============================================
   _emitRecommendation(recommendation) {
     this.eventBus.emit('Engineer:Recommendation', {
       ...recommendation,
@@ -1089,9 +1010,6 @@ class Engineer {
     });
   }
 
-  // =============================================
-  // CAPABILITY UPGRADE
-  // =============================================
   upgradeCapability(newCapability) {
     const validCapabilities = [
       'OBSERVER', 'REVIEWER', 'ARCHITECT', 'PLANNER',
@@ -1099,7 +1017,7 @@ class Engineer {
     ];
     if (validCapabilities.includes(newCapability)) {
       this.capability = newCapability;
-      this.suspiciousAttempts = 0; // Reset circuit breaker
+      this.suspiciousAttempts = 0;
       console.log(`[Engineer] Capability upgraded to ${newCapability}`);
       this.eventBus.emit('Engineer:CapabilityUpdated', { capability: this.capability });
     } else {
@@ -1107,9 +1025,6 @@ class Engineer {
     }
   }
 
-  // =============================================
-  // METRICS
-  // =============================================
   getMetrics() {
     return { 
       ...this.metrics, 

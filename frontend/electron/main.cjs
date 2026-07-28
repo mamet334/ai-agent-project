@@ -24,7 +24,6 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // Daftarkan skema protokol kusto
-// m sebagai hak istimewa
 protocol.registerSchemesAsPrivileged([
   { scheme: 'mamet', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }
 ]);
@@ -213,6 +212,11 @@ app.on('window-all-closed', function () {
 
 const { runAirdropTask } = require('./airdropEngine.cjs');
 
+// ✅ Tentukan root proyek secara absolut (folder induk dari 'frontend/electron/')
+// Karena main.cjs berada di frontend/electron/, maka __dirname = .../frontend/electron
+// PROJECT_ROOT = .../mamet os ecosystem/
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
+
 // 0. Airdrop Stealth Engine
 ipcMain.handle('run-airdrop-stealth', async (event, { taskName, params }) => {
   try {
@@ -335,7 +339,7 @@ ipcMain.handle('check-for-updates', async () => {
   }
 });
 
-// 5. Dapatkan versi aplikasi saat ini (untuk ditampilkan di UI)
+// 5. Dapatkan versi aplikasi saat ini
 ipcMain.handle('get-app-version', () => {
   return app.getVersion();
 });
@@ -415,14 +419,14 @@ ipcMain.handle('run-docker-sandbox', async (event, { code, language }) => {
 // =============================================
 // 8. FILE SYSTEM HANDLERS (StorageManager Backend)
 // =============================================
+// ✅ Semua handler menggunakan PROJECT_ROOT untuk resolusi path relatif
 
 ipcMain.handle('fs:readFile', async (event, filePath) => {
   try {
-    // Jika path sudah absolut, gunakan langsung. Jika relatif, resolve ke root proyek
     const isAbsolute = path.isAbsolute(filePath);
     const normalizedPath = isAbsolute 
       ? path.resolve(filePath) 
-      : path.resolve(app.getAppPath(), filePath);
+      : path.resolve(PROJECT_ROOT, filePath);
     
     console.log(`[FS] readFile: "${filePath}" → normalized: "${normalizedPath}"`);
     
@@ -442,7 +446,7 @@ ipcMain.handle('fs:writeFile', async (event, { filePath, content }) => {
     const isAbsolute = path.isAbsolute(filePath);
     const normalizedPath = isAbsolute 
       ? path.resolve(filePath) 
-      : path.resolve(app.getAppPath(), filePath);
+      : path.resolve(PROJECT_ROOT, filePath);
     
     console.log(`[FS] writeFile: "${filePath}" → normalized: "${normalizedPath}"`);
     
@@ -463,7 +467,7 @@ ipcMain.handle('fs:deleteFile', async (event, filePath) => {
     const isAbsolute = path.isAbsolute(filePath);
     const normalizedPath = isAbsolute 
       ? path.resolve(filePath) 
-      : path.resolve(app.getAppPath(), filePath);
+      : path.resolve(PROJECT_ROOT, filePath);
     
     if (!fs.existsSync(normalizedPath)) {
       return false;
@@ -481,7 +485,7 @@ ipcMain.handle('fs:listFiles', async (event, dirPath) => {
     const isAbsolute = path.isAbsolute(dirPath);
     const normalizedPath = isAbsolute 
       ? path.resolve(dirPath) 
-      : path.resolve(app.getAppPath(), dirPath);
+      : path.resolve(PROJECT_ROOT, dirPath);
     
     if (!fs.existsSync(normalizedPath) || !fs.statSync(normalizedPath).isDirectory()) {
       return [];
@@ -499,7 +503,7 @@ ipcMain.handle('fs:getFileInfo', async (event, filePath) => {
     const isAbsolute = path.isAbsolute(filePath);
     const normalizedPath = isAbsolute 
       ? path.resolve(filePath) 
-      : path.resolve(app.getAppPath(), filePath);
+      : path.resolve(PROJECT_ROOT, filePath);
     
     if (!fs.existsSync(normalizedPath)) {
       return null;
@@ -535,7 +539,7 @@ ipcMain.handle('fs:fileExists', async (event, filePath) => {
     const isAbsolute = path.isAbsolute(filePath);
     const normalizedPath = isAbsolute 
       ? path.resolve(filePath) 
-      : path.resolve(app.getAppPath(), filePath);
+      : path.resolve(PROJECT_ROOT, filePath);
     
     return fs.existsSync(normalizedPath);
   } catch (error) {
@@ -552,7 +556,7 @@ ipcMain.handle('fs:listFilesRecursive', async (event, dirPath) => {
     const isAbsolute = path.isAbsolute(dirPath);
     const normalizedPath = isAbsolute 
       ? path.resolve(dirPath) 
-      : path.resolve(app.getAppPath(), dirPath);
+      : path.resolve(PROJECT_ROOT, dirPath);
     
     console.log(`[FS] listFilesRecursive: "${dirPath}" → normalized: "${normalizedPath}"`);
     
