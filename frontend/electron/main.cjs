@@ -23,7 +23,8 @@ process.on('unhandledRejection', (reason, promise) => {
   } catch (e) {}
 });
 
-// Daftarkan skema protokol kustom sebagai hak istimewa
+// Daftarkan skema protokol kusto
+// m sebagai hak istimewa
 protocol.registerSchemesAsPrivileged([
   { scheme: 'mamet', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }
 ]);
@@ -417,8 +418,16 @@ ipcMain.handle('run-docker-sandbox', async (event, { code, language }) => {
 
 ipcMain.handle('fs:readFile', async (event, filePath) => {
   try {
-    const normalizedPath = path.resolve(filePath);
+    // Jika path sudah absolut, gunakan langsung. Jika relatif, resolve ke root proyek
+    const isAbsolute = path.isAbsolute(filePath);
+    const normalizedPath = isAbsolute 
+      ? path.resolve(filePath) 
+      : path.resolve(app.getAppPath(), filePath);
+    
+    console.log(`[FS] readFile: "${filePath}" → normalized: "${normalizedPath}"`);
+    
     if (!fs.existsSync(normalizedPath)) {
+      console.warn(`[FS] File tidak ditemukan: ${normalizedPath}`);
       return null;
     }
     return fs.readFileSync(normalizedPath, 'utf-8');
@@ -430,7 +439,13 @@ ipcMain.handle('fs:readFile', async (event, filePath) => {
 
 ipcMain.handle('fs:writeFile', async (event, { filePath, content }) => {
   try {
-    const normalizedPath = path.resolve(filePath);
+    const isAbsolute = path.isAbsolute(filePath);
+    const normalizedPath = isAbsolute 
+      ? path.resolve(filePath) 
+      : path.resolve(app.getAppPath(), filePath);
+    
+    console.log(`[FS] writeFile: "${filePath}" → normalized: "${normalizedPath}"`);
+    
     const dir = path.dirname(normalizedPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -445,7 +460,11 @@ ipcMain.handle('fs:writeFile', async (event, { filePath, content }) => {
 
 ipcMain.handle('fs:deleteFile', async (event, filePath) => {
   try {
-    const normalizedPath = path.resolve(filePath);
+    const isAbsolute = path.isAbsolute(filePath);
+    const normalizedPath = isAbsolute 
+      ? path.resolve(filePath) 
+      : path.resolve(app.getAppPath(), filePath);
+    
     if (!fs.existsSync(normalizedPath)) {
       return false;
     }
@@ -459,7 +478,11 @@ ipcMain.handle('fs:deleteFile', async (event, filePath) => {
 
 ipcMain.handle('fs:listFiles', async (event, dirPath) => {
   try {
-    const normalizedPath = path.resolve(dirPath);
+    const isAbsolute = path.isAbsolute(dirPath);
+    const normalizedPath = isAbsolute 
+      ? path.resolve(dirPath) 
+      : path.resolve(app.getAppPath(), dirPath);
+    
     if (!fs.existsSync(normalizedPath) || !fs.statSync(normalizedPath).isDirectory()) {
       return [];
     }
@@ -473,7 +496,11 @@ ipcMain.handle('fs:listFiles', async (event, dirPath) => {
 
 ipcMain.handle('fs:getFileInfo', async (event, filePath) => {
   try {
-    const normalizedPath = path.resolve(filePath);
+    const isAbsolute = path.isAbsolute(filePath);
+    const normalizedPath = isAbsolute 
+      ? path.resolve(filePath) 
+      : path.resolve(app.getAppPath(), filePath);
+    
     if (!fs.existsSync(normalizedPath)) {
       return null;
     }
@@ -505,9 +532,64 @@ ipcMain.handle('fs:getFileInfo', async (event, filePath) => {
 
 ipcMain.handle('fs:fileExists', async (event, filePath) => {
   try {
-    const normalizedPath = path.resolve(filePath);
+    const isAbsolute = path.isAbsolute(filePath);
+    const normalizedPath = isAbsolute 
+      ? path.resolve(filePath) 
+      : path.resolve(app.getAppPath(), filePath);
+    
     return fs.existsSync(normalizedPath);
   } catch (error) {
     return false;
+  }
+});
+
+// =============================================
+// 9. RECURSIVE FILE LISTING (untuk FileIndexService)
+// =============================================
+
+ipcMain.handle('fs:listFilesRecursive', async (event, dirPath) => {
+  try {
+    const isAbsolute = path.isAbsolute(dirPath);
+    const normalizedPath = isAbsolute 
+      ? path.resolve(dirPath) 
+      : path.resolve(app.getAppPath(), dirPath);
+    
+    console.log(`[FS] listFilesRecursive: "${dirPath}" → normalized: "${normalizedPath}"`);
+    
+    if (!fs.existsSync(normalizedPath) || !fs.statSync(normalizedPath).isDirectory()) {
+      console.warn(`[FS] Direktori tidak ditemukan atau bukan folder: ${normalizedPath}`);
+      return [];
+    }
+
+    const results = [];
+
+    function walkDir(currentPath, relativePath) {
+      let entries;
+      try {
+        entries = fs.readdirSync(currentPath, { withFileTypes: true });
+      } catch (e) {
+        console.warn(`[FS] Gagal membaca direktori: ${currentPath}`, e.message);
+        return;
+      }
+
+      for (const entry of entries) {
+        const fullPath = path.join(currentPath, entry.name);
+        const relativeEntry = path.join(relativePath, entry.name).replace(/\\/g, '/');
+
+        if (entry.isDirectory()) {
+          walkDir(fullPath, relativeEntry);
+        } else if (entry.isFile()) {
+          results.push(relativeEntry);
+        }
+      }
+    }
+
+    walkDir(normalizedPath, '');
+    
+    console.log(`[FS] listFilesRecursive selesai: ${results.length} files ditemukan`);
+    return results;
+  } catch (error) {
+    console.error('[FS] Gagal listFilesRecursive:', dirPath, error);
+    return [];
   }
 });

@@ -57,22 +57,43 @@ export class StorageManager {
   // =============================================
 
   async read(filePath) {
+    console.log(`[StorageManager:read] 🔍 Memulai read("${filePath}")`);
+    console.log(`[StorageManager:read]   window tersedia:`, typeof window !== 'undefined');
+    console.log(`[StorageManager:read]   window.electronAPI tersedia:`, typeof window !== 'undefined' && !!window.electronAPI);
+    console.log(`[StorageManager:read]   window.electronAPI.readFile adalah function:`, typeof window?.electronAPI?.readFile);
+    console.log(`[StorageManager:read]   currentBackend: "${this.currentBackend}"`);
+    console.log(`[StorageManager:read]   backends available:`, Array.from(this.backends.keys()));
+
     // ✅ ELECTRON: Gunakan IPC ke main process terlebih dahulu
     if (typeof window !== 'undefined' && window.electronAPI?.readFile) {
+      console.log(`[StorageManager:read] 📡 Mencoba Electron IPC readFile("${filePath}")...`);
       try {
         const content = await window.electronAPI.readFile(filePath);
+        console.log(`[StorageManager:read]   Hasil Electron IPC:`, 
+          content === null ? 'null' : content === undefined ? 'undefined' : `${content.length} chars`);
         if (content !== null) {
-          console.log(`[StorageManager] Read via Electron IPC: ${filePath}`);
+          console.log(`[StorageManager:read] ✅ Read via Electron IPC: ${filePath}`);
           return content;
+        } else {
+          console.log(`[StorageManager:read] ⚠️ Electron IPC mengembalikan null, lanjut fallback`);
         }
       } catch (e) {
-        console.warn(`[StorageManager] Electron IPC read failed: ${e.message}`);
+        console.warn(`[StorageManager:read] ❌ Electron IPC read failed: ${e.message}`);
       }
+    } else {
+      console.log(`[StorageManager:read] ⚠️ Electron IPC tidak tersedia, langsung fallback ke backend`);
     }
     
     // FALLBACK: Gunakan backend yang sedang aktif
+    console.log(`[StorageManager:read] 🔄 Fallback ke backend "${this.currentBackend}"`);
     const backend = this.backends.get(this.currentBackend);
-    return backend.read(filePath);
+    console.log(`[StorageManager:read]   backend object tersedia:`, !!backend);
+    console.log(`[StorageManager:read]   backend.read adalah function:`, typeof backend?.read);
+    
+    const result = await backend.read(filePath);
+    console.log(`[StorageManager:read]   Hasil backend.read("${filePath}"):`, 
+      result === null ? 'null' : result === undefined ? 'undefined' : `${result.length} chars`);
+    return result;
   }
 
   async write(path, content) {
@@ -103,6 +124,56 @@ export class StorageManager {
   async clear() {
     const backend = this.backends.get(this.currentBackend);
     return backend.clear();
+  }
+
+  /**
+   * List semua file secara rekursif dari direktori tertentu.
+   * @param {string} dir - Direktori awal (default: '/')
+   * @returns {Promise<string[]>} Array path file (bukan folder)
+   */
+  async listRecursive(dir = '/') {
+    console.log(`[StorageManager:listRecursive] 🔍 Memulai listRecursive("${dir}")`);
+
+    // ✅ ELECTRON: Gunakan IPC listFilesRecursive terlebih dahulu
+    if (typeof window !== 'undefined' && window.electronAPI?.listFilesRecursive) {
+      console.log(`[StorageManager:listRecursive] 📡 Mencoba Electron IPC listFilesRecursive("${dir}")...`);
+      try {
+        const files = await window.electronAPI.listFilesRecursive(dir);
+        console.log(`[StorageManager:listRecursive] ✅ Electron IPC: ${files.length} files ditemukan`);
+        return files;
+      } catch (e) {
+        console.warn(`[StorageManager:listRecursive] ❌ Electron IPC gagal: ${e.message}, lanjut fallback`);
+      }
+    } else {
+      console.log(`[StorageManager:listRecursive] ⚠️ Electron IPC tidak tersedia, fallback ke backend "${this.currentBackend}"`);
+    }
+
+    // FALLBACK: Implementasi manual untuk backend lain (localStorage / memory)
+    const results = [];
+
+    async function walk(currentDir) {
+      try {
+        const entries = await this.list(currentDir);
+        for (const entry of entries) {
+          const fullPath = currentDir === '/' ? `/${entry}` : `${currentDir}/${entry}`;
+          // Coba list sub-entry untuk deteksi folder
+          const subEntries = await this.list(fullPath).catch(() => []);
+          if (subEntries.length > 0 && subEntries.some(e => e !== entry)) {
+            // Ini folder, rekursif
+            await walk.call(this, fullPath);
+          } else {
+            // Ini file
+            results.push(fullPath);
+          }
+        }
+      } catch (e) {
+        // Skip folder yang tidak bisa diakses
+        console.warn(`[StorageManager:listRecursive] ⚠️ Gagal list "${currentDir}": ${e.message}`);
+      }
+    }
+
+    await walk.call(this, dir);
+    return results;
   }
 
   // =============================================

@@ -43,12 +43,3 @@ token github.txt
 .vercel
 .env*
 
-
-frontend/mamet_fs/
-mamet_fs/
-frontend/mamet_fs/
-mamet_fs/
-
-# Mamet FS (runtime cache)
-frontend/mamet_fs/
-mamet_fs/

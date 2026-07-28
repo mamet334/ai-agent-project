@@ -1,3 +1,5 @@
+import { FileIndexService } from './FileIndexService.js';
+
 /**
  * Engineer.js — Engineering Brain Mamet AI (Real Analysis Engine + Core Protection)
  * 
@@ -28,6 +30,7 @@ class Engineer {
     this.storageManager = serviceManager.get('StorageManager');
     this.process = serviceManager.get('ProcessManager');
     this.moduleLoader = serviceManager.get('ModuleLoader');
+    this.fileIndexService = null; // Akan diinisialisasi setelah StorageManager siap
 
     // Two‑Brain Model
     this.brain = {
@@ -52,6 +55,17 @@ class Engineer {
 
   async initialize() {
     await this._loadStaticKnowledge();
+    
+    // ✅ Inisialisasi FileIndexService untuk resolusi path cepat
+    try {
+      this.fileIndexService = new FileIndexService(this.storageManager);
+      await this.fileIndexService.buildIndex();
+      console.log(`[Engineer] FileIndexService siap: ${this.fileIndexService.getStats().totalFiles} files diindeks`);
+    } catch (e) {
+      console.warn('[Engineer] Gagal inisialisasi FileIndexService:', e.message);
+      this.fileIndexService = null;
+    }
+    
     this._registerListeners();
     console.log(`[Engineer] Initialized as ${this.capability}`);
     this.eventBus.emit('Engineer:Ready', { capability: this.capability });
@@ -368,26 +382,39 @@ class Engineer {
   // REAL ANALYSIS ENGINE (MAEF 4.5 Compliant)
   // =============================================
 
+  /**
+   * Mengekstrak nama file dari task yang berupa objek.
+   * Menggabungkan title dan description menjadi string, lalu mengekstrak path file.
+   */
   _extractFileNamesFromTask(task) {
-    const filePatterns = [];
-    const text = `${task.title || ''} ${task.description || ''} ${task.errorLog || ''}`;
-    
-    const pathRegex = /([a-zA-Z0-9_\-\/]+\.(js|jsx|ts|tsx|md|json|cjs|mjs))/g;
-    const pathMatches = text.match(pathRegex) || [];
-    filePatterns.push(...pathMatches);
-    
-    const stackRegex = /at\s+([A-Za-z]+\.js)/g;
-    const stackMatches = [...text.matchAll(stackRegex)].map(m => m[1]);
-    filePatterns.push(...stackMatches);
-    
-    const importRegex = /from\s+['"]([^'"]+)['"]/g;
-    const importMatches = [...text.matchAll(importRegex)].map(m => m[1]);
-    filePatterns.push(...importMatches);
-    
-    const unique = [...new Set(filePatterns)];
-    return unique.filter(f => {
-      return f.length > 3 && !f.includes('node_modules') && !f.startsWith('.');
-    });
+    // Gabungkan title dan description menjadi satu string untuk pencarian
+    const text = `${task.title || ''} ${task.description || ''}`;
+    console.log('[Engineer] Task text for extraction:', text);
+
+    // PRIORITAS 1: Coba tangkap path lengkap yang diawali dengan 'frontend/' atau 'src/' atau '/'
+    const fullPathRegex = /(frontend\/[a-zA-Z0-9_\-./]+\.(jsx?|tsx?|ts|json|md))/gi;
+    const fullPathMatches = [...text.matchAll(fullPathRegex)];
+    if (fullPathMatches.length > 0) {
+      const extracted = [...new Set(fullPathMatches.map(m => m[0]))];
+      console.log('[Engineer] Extracted full paths:', extracted);
+      return extracted;
+    }
+
+    // PRIORITAS 2: Coba tangkap path yang diawali dengan 'src/'
+    const srcPathRegex = /(src\/[a-zA-Z0-9_\-./]+\.(jsx?|tsx?|ts|json|md))/gi;
+    const srcPathMatches = [...text.matchAll(srcPathRegex)];
+    if (srcPathMatches.length > 0) {
+      const extracted = [...new Set(srcPathMatches.map(m => m[0]))];
+      console.log('[Engineer] Extracted src paths:', extracted);
+      return extracted;
+    }
+
+    // PRIORITAS 3: Jika tidak ada path lengkap, ekstrak nama file saja
+    const nameRegex = /([a-zA-Z0-9_\-]+\.(jsx?|tsx?|ts|json|md))/gi;
+    const nameMatches = [...text.matchAll(nameRegex)];
+    const extracted = [...new Set(nameMatches.map(m => m[1]))];
+    console.log('[Engineer] Extracted filenames (fallback):', extracted);
+    return extracted;
   }
 
   _findRelevantADR(task) {
@@ -492,16 +519,12 @@ class Engineer {
     const readResults = [];
     
     for (const filePath of targetFiles.slice(0, 10)) {
-      try {
-        const content = await this.readFile(filePath);
-        if (content) {
-          fileContents[filePath] = content;
-          readResults.push({ file: filePath, status: 'SUCCESS', size: content.length });
-        } else {
-          readResults.push({ file: filePath, status: 'NOT_FOUND' });
-        }
-      } catch (e) {
-        readResults.push({ file: filePath, status: 'ERROR', error: e.message });
+      const result = await this._tryReadFile(filePath);
+      if (result) {
+        fileContents[result.path] = result.content;
+        readResults.push({ file: result.path, status: 'SUCCESS', size: result.content.length });
+      } else {
+        readResults.push({ file: filePath, status: 'NOT_FOUND' });
       }
     }
     
@@ -578,10 +601,10 @@ class Engineer {
       console.log(`[Engineer] 📂 Target files: ${targetFiles.join(', ')}`);
 
       for (const filePath of targetFiles.slice(0, 5)) {
-        const content = await this.readFile(filePath);
-        if (content !== null) {
-          fileContents[filePath] = content;
-          console.log(`[Engineer] ✅ Read: ${filePath} (${content.length} chars)`);
+        const result = await this._tryReadFile(filePath);
+        if (result) {
+          fileContents[result.path] = result.content;
+          console.log(`[Engineer] ✅ Read: ${result.path} (${result.content.length} chars)`);
         } else {
           console.warn(`[Engineer] ⚠️ File not found: ${filePath}`);
         }
@@ -950,6 +973,75 @@ class Engineer {
     else if (coverage >= 50 && evidence >= 50) level = 'MEDIUM';
     
     return { coverage, evidence, level };
+  }
+
+  /**
+   * Mencoba membaca file dengan berbagai kemungkinan ekstensi.
+   * @param {string} basePath - Path file yang diberikan (bisa tanpa ekstensi atau dengan ekstensi salah).
+   * @returns {Promise<{content: string, path: string} | null>}
+   */
+  async _tryReadFile(basePath) {
+    console.log(`[Engineer:_tryReadFile] 🔍 Mencoba membaca: "${basePath}"`);
+    console.log(`[Engineer:_tryReadFile]   storageManager tersedia:`, !!this.storageManager);
+    console.log(`[Engineer:_tryReadFile]   storageManager.read adalah function:`, typeof this.storageManager?.read);
+
+    // STAGE 1: Coba langsung dengan path yang diberikan
+    if (basePath.match(/\.[a-zA-Z0-9]+$/)) {
+      console.log(`[Engineer:_tryReadFile] 📄 Mencoba path asli (dengan ekstensi): "${basePath}"`);
+      try {
+        const content = await this.storageManager.read(basePath);
+        if (content !== null && content !== undefined) {
+          console.log(`[Engineer:_tryReadFile] ✅ BERHASIL membaca: "${basePath}" (${content.length} chars)`);
+          return { content, path: basePath };
+        }
+      } catch (err) {
+        console.log(`[Engineer:_tryReadFile] ❌ Error membaca "${basePath}": ${err.message}`);
+      }
+    }
+
+    // STAGE 2: Coba dengan berbagai ekstensi
+    const extensions = ['.js', '.jsx', '.ts', '.tsx', '.json', '.md'];
+    const baseName = basePath.replace(/\.[^.]+$/, '');
+    console.log(`[Engineer:_tryReadFile] 🔄 Fallback ekstensi: baseName="${baseName}"`);
+
+    for (const ext of extensions) {
+      const candidate = baseName + ext;
+      try {
+        const content = await this.storageManager.read(candidate);
+        if (content !== null && content !== undefined) {
+          console.log(`[Engineer:_tryReadFile] ✅ BERHASIL membaca: "${candidate}" (${content.length} chars)`);
+          return { content, path: candidate };
+        }
+      } catch (err) {
+        // Lanjut ke ekstensi berikutnya
+      }
+    }
+
+    // STAGE 3: Gunakan FileIndexService untuk mencari berdasarkan nama file
+    if (this.fileIndexService && this.fileIndexService.isReady) {
+      const fileName = basePath.split('/').pop(); // Ambil nama file dari path
+      console.log(`[Engineer:_tryReadFile] 🔍 Mencari "${fileName}" via FileIndexService...`);
+      const resolvedPath = this.fileIndexService.resolvePath(fileName);
+      if (resolvedPath) {
+        console.log(`[Engineer:_tryReadFile] 📍 FileIndexService meresolve ke: "${resolvedPath}"`);
+        try {
+          const content = await this.storageManager.read(resolvedPath);
+          if (content !== null && content !== undefined) {
+            console.log(`[Engineer:_tryReadFile] ✅ BERHASIL membaca via indeks: "${resolvedPath}" (${content.length} chars)`);
+            return { content, path: resolvedPath };
+          }
+        } catch (err) {
+          console.warn(`[Engineer:_tryReadFile] ❌ Gagal baca via indeks "${resolvedPath}": ${err.message}`);
+        }
+      } else {
+        console.log(`[Engineer:_tryReadFile] ⚠️ FileIndexService tidak menemukan "${fileName}"`);
+      }
+    } else {
+      console.log(`[Engineer:_tryReadFile] ⚠️ FileIndexService tidak tersedia atau belum siap`);
+    }
+
+    console.log(`[Engineer:_tryReadFile] ❌ GAGAL: Semua metode gagal untuk "${basePath}"`);
+    return null;
   }
 
   // =============================================

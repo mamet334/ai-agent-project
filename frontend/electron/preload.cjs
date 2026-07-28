@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   writeFile: (filePath, content) => ipcRenderer.invoke('fs:writeFile', { filePath, content }),
   deleteFile: (filePath) => ipcRenderer.invoke('fs:deleteFile', filePath),
   listFiles: (dirPath) => ipcRenderer.invoke('fs:listFiles', dirPath),
+  listFilesRecursive: (dirPath) => ipcRenderer.invoke('fs:listFilesRecursive', dirPath),
   getFileInfo: (filePath) => ipcRenderer.invoke('fs:getFileInfo', filePath),
   fileExists: (filePath) => ipcRenderer.invoke('fs:fileExists', filePath),
 
