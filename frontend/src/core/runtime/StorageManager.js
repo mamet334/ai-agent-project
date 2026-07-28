@@ -128,11 +128,12 @@ export class StorageManager {
 
   /**
    * List semua file secara rekursif dari direktori tertentu.
-   * @param {string} dir - Direktori awal (default: '/')
+   * @param {string} dir - Direktori awal (default: '.')
    * @returns {Promise<string[]>} Array path file (bukan folder)
    */
-  async listRecursive(dir = '/') {
+  async listRecursive(dir = '.') {
     console.log(`[StorageManager:listRecursive] 🔍 Memulai listRecursive("${dir}")`);
+    console.log(`[StorageManager:listRecursive]   currentBackend: "${this.currentBackend}"`);
 
     // ✅ ELECTRON: Gunakan IPC listFilesRecursive terlebih dahulu
     if (typeof window !== 'undefined' && window.electronAPI?.listFilesRecursive) {

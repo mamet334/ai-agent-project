@@ -339,7 +339,7 @@ class Engineer {
     }
   }
 
-  async findFiles(pattern, dir = '/') {
+  async findFiles(pattern, dir = '.') {
     try {
       const allFiles = await this.storageManager.list(dir);
       if (pattern === '*') return allFiles;
@@ -641,12 +641,65 @@ class Engineer {
 
       const patchFiles = [];
       for (const [filePath, newContent] of Object.entries(generatedCode || {})) {
+        // Skip key "message" yang merupakan field wrapper dari backend, bukan file path
+        if (filePath === 'message' || filePath === 'reply' || filePath === 'content') continue;
+        
+        let finalContent = null;
+        
+        // === HANDLE FORMAT SEARCH-REPLACE ===
+        if (newContent && typeof newContent === 'object' && newContent.__mode === 'search_replace') {
+          const originalContent = fileContents[filePath] || '';
+          let workingContent = originalContent;
+          let changeCount = 0;
+          
+          if (Array.isArray(newContent.changes)) {
+            for (const change of newContent.changes) {
+              if (!change.search || typeof change.search !== 'string') continue;
+              if (typeof change.replace !== 'string') continue;
+              
+              // Coba exact match dulu
+              if (workingContent.includes(change.search)) {
+                workingContent = workingContent.replace(change.search, change.replace);
+                changeCount++;
+                console.log(`[Engineer] ✅ Search-replace applied: "${change.search.substring(0, 50)}..."`);
+              } else {
+                // Coba trimmed match
+                const trimmedSearch = change.search.trim();
+                if (workingContent.includes(trimmedSearch)) {
+                  workingContent = workingContent.replace(trimmedSearch, change.replace);
+                  changeCount++;
+                  console.log(`[Engineer] ✅ Search-replace (trimmed) applied`);
+                } else {
+                  console.warn(`[Engineer] ⚠️ Search pattern not found: "${change.search.substring(0, 80)}"`);
+                }
+              }
+            }
+          }
+          
+          if (changeCount > 0) {
+            finalContent = workingContent;
+            console.log(`[Engineer] 🔄 Search-replace mode: ${changeCount} perubahan diterapkan ke ${filePath}`);
+          } else {
+            console.error(`[Engineer] ❌ Search-replace mode: tidak ada perubahan berhasil diterapkan ke ${filePath}`);
+            continue;
+          }
+        }
+        // === HANDLE FORMAT STRING BIASA ===
+        else if (newContent !== null && newContent !== undefined && typeof newContent === 'string') {
+          finalContent = newContent;
+        }
+        // === SKIP TIPE LAIN ===
+        else {
+          console.warn(`[Engineer] ⚠️ Skipping file "${filePath}": format tidak dikenal (${typeof newContent})`);
+          continue;
+        }
+        
         patchFiles.push({
           path: filePath,
-          newContent: newContent,
+          newContent: finalContent,
           originalContent: fileContents[filePath] || '',
           status: 'PENDING_APPROVAL',
-          size: newContent.length
+          size: finalContent.length
         });
       }
 
@@ -704,14 +757,66 @@ class Engineer {
     prompt += `Deskripsi: ${task.description || 'Tidak ada deskripsi'}\n\n`;
 
     if (Object.keys(fileContents).length > 0) {
-      prompt += `### FILE YANG DIMINTA UNTUK DIUBAH ###\n`;
-      prompt += `(Berikut adalah KONTEN ASLI file saat ini. Anda HARUS mengembalikan versi MODIFIKASI-nya dalam JSON)\n\n`;
-      for (const [path, content] of Object.entries(fileContents)) {
-        prompt += `--- FILE: ${path} ---\n`;
-        prompt += `${content}\n`;
-        prompt += `--- END FILE ---\n\n`;
+      // Tentukan apakah file besar atau kecil
+      const isLargeFile = Object.values(fileContents).some(c => c.length > 6000);
+      
+      if (isLargeFile) {
+        // === STRATEGI UNTUK FILE BESAR: SEARCH-REPLACE ===
+        // Jangan minta LLM kembalikan full file — terlalu besar dan sering truncate
+        prompt += `### STRATEGI MODIFIKASI: SEARCH-REPLACE ###\n`;
+        prompt += `File yang diminta BESAR (>6000 chars). JANGAN kembalikan full file!\n`;
+        prompt += `Gunakan format JSON SEARCH-REPLACE berikut:\n\n`;
+        prompt += `{\n`;
+        prompt += `  "path/ke/file.jsx": {\n`;
+        prompt += `    "__mode": "search_replace",\n`;
+        prompt += `    "changes": [\n`;
+        prompt += `      {\n`;
+        prompt += `        "search": "KODE ASLI YANG AKAN DIGANTI (EXACT, termasuk whitespace)",\n`;
+        prompt += `        "replace": "KODE BARU PENGGANTINYA"\n`;
+        prompt += `      }\n`;
+        prompt += `    ]\n`;
+        prompt += `  }\n`;
+        prompt += `}\n\n`;
+        prompt += `### CONTOH SEARCH-REPLACE YANG BENAR ###\n`;
+        prompt += `{\n`;
+        prompt += `  "frontend/src/components/workbench/ConversationEngine.jsx": {\n`;
+        prompt += `    "__mode": "search_replace",\n`;
+        prompt += `    "changes": [\n`;
+        prompt += `      {\n`;
+        prompt += `        "search": "const ConversationEngine = () => {",\n`;
+        prompt += `        "replace": "const ConversationEngine = () => {\\n  console.log('[ConversationEngine] Component mounted');"\n`;
+        prompt += `      }\n`;
+        prompt += `    ]\n`;
+        prompt += `  }\n`;
+        prompt += `}\n\n`;
+        
+        prompt += `### FILE YANG DIMINTA UNTUK DIUBAH (REFERENSI) ###\n`;
+        prompt += `(Hanya lihat konteks sekitar area yang perlu diubah. JANGAN kembalikan full file!)\n\n`;
+        const MAX_FILE_CHARS = 8000;
+        for (const [path, content] of Object.entries(fileContents)) {
+          prompt += `--- FILE: ${path} (${content.length} chars total) ---\n`;
+          if (content.length > MAX_FILE_CHARS) {
+            const half = MAX_FILE_CHARS / 2;
+            prompt += content.substring(0, half);
+            prompt += `\n\n...[${content.length - MAX_FILE_CHARS} karakter dihilangkan, total file ${content.length} chars]...\n\n`;
+            prompt += content.substring(content.length - half);
+          } else {
+            prompt += content;
+          }
+          prompt += `\n--- END FILE ---\n\n`;
+        }
+      } else {
+        // === STRATEGI UNTUK FILE KECIL: FULL REPLACEMENT ===
+        prompt += `### FILE YANG DIMINTA UNTUK DIUBAH ###\n`;
+        prompt += `(Kembalikan KONTEN LENGKAP file setelah perubahan dalam JSON)\n\n`;
+        for (const [path, content] of Object.entries(fileContents)) {
+          prompt += `--- FILE: ${path} ---\n`;
+          prompt += content;
+          prompt += `\n--- END FILE ---\n\n`;
+        }
       }
     }
+
     
     prompt += `### ATURAN KODE (WAJIB DIPATUHI) ###\n`;
     prompt += `- Kembalikan KONTEN LENGKAP file (jangan hanya diff/patch partial)\n`;
@@ -724,7 +829,9 @@ class Engineer {
     prompt += `- JANGAN modifikasi file core (Kernel.js, EventBus.js, ServiceManager.js, dll)\n\n`;
     
     prompt += `### MULAI OUTPUT JSON SEKARANG ###\n`;
-    prompt += `{`;
+    // JANGAN tambahkan '{' di sini — beberapa model (OpenAI, dll) tidak mendukung
+    // teknik prefill dan akan menghasilkan output rusak atau berulang.
+    // Biarkan model memulai JSON sendiri.
 
     return prompt;
   }
@@ -736,7 +843,22 @@ class Engineer {
       try {
         const trimmed = response.trim();
         if (trimmed.startsWith('{')) {
-          return JSON.parse(trimmed);
+          const parsed = JSON.parse(trimmed);
+          // Jika backend wrap dengan {message/reply: "..."} dan value-nya adalah JSON string, parse lagi
+          const keys = Object.keys(parsed);
+          if (keys.length === 1 && (keys[0] === 'message' || keys[0] === 'reply' || keys[0] === 'content')) {
+            const inner = parsed[keys[0]];
+            if (typeof inner === 'string' && inner.trim().startsWith('{')) {
+              try {
+                const innerParsed = JSON.parse(inner);
+                if (typeof innerParsed === 'object' && !Array.isArray(innerParsed)) {
+                  console.log('[Engineer] ✅ Double-JSON unwrapped successfully');
+                  return innerParsed;
+                }
+              } catch (_) {}
+            }
+          }
+          return parsed;
         }
       } catch (_) {}
 
@@ -835,7 +957,25 @@ class Engineer {
             console.warn(`[Engineer] ⚠️ WARNING: Modifying PROTECTED file: ${file.path}`);
           }
           
-          console.log(`[Engineer] ✍️ Menulis file: ${file.path} (${file.newContent.length} karakter)`);
+          // ✅ SAFETY CHECK: Jangan tulis file jika konten baru jauh lebih kecil dari aslinya
+          // Ini mencegah LLM yang truncate response dari merusak file
+          const originalSize = file.originalContent ? file.originalContent.length : 0;
+          const newSize = file.newContent.length;
+          if (originalSize > 500 && newSize < originalSize * 0.5) {
+            console.error(`[Engineer] 🚫 DITOLAK: Konten baru (${newSize} chars) < 50% dari asli (${originalSize} chars). LLM kemungkinan truncate response!`);
+            file.status = 'FAILED';
+            file.error = `Konten terlalu kecil: ${newSize} vs ${originalSize} chars (${Math.round(newSize/originalSize*100)}%). Kemungkinan LLM truncate response.`;
+            failCount++;
+            
+            this.eventBus.emit('Engineer:Recommendation', {
+              taskId: patch.taskId,
+              message: `⚠️ **Patch Ditolak Otomatis**: File \`${file.path}\` tidak ditulis karena LLM mengembalikan konten yang terpotong (${newSize} dari ${originalSize} karakter). Coba lagi dengan instruksi yang lebih spesifik.`,
+              type: 'SAFETY_REJECTION'
+            });
+            continue;
+          }
+
+          console.log(`[Engineer] ✍️ Menulis file: ${file.path} (${newSize} karakter, asli: ${originalSize} karakter)`);
           const writeResult = await this.storageManager.write(file.path, file.newContent);
 
           if (writeResult) {

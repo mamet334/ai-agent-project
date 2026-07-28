@@ -9,7 +9,7 @@ export class FileIndexService {
 
   async buildIndex() {
     try {
-      const allFiles = await this.storageManager.listRecursive('/');
+      const allFiles = await this.storageManager.listRecursive('.');
       this.fileIndex.clear();
       for (const filePath of allFiles) {
         const baseName = filePath.split('/').pop();
@@ -26,22 +26,67 @@ export class FileIndexService {
     }
   }
 
+  /**
+   * Mencari path lengkap berdasarkan nama file dengan prioritas ketat.
+   * Menghindari folder sampah (node_modules, .git) dan folder backup lama.
+   */
   resolvePath(filename) {
-    if (!this.isReady) return null;
-    const candidates = this.fileIndex.get(filename);
-    if (!candidates || candidates.length === 0) return null;
+    const candidates = this.fileIndex.get(filename) || [];
+    
+    if (candidates.length === 0) {
+      console.warn(`[FileIndexService] ❌ File not found in index: ${filename}`);
+      return null;
+    }
+    
     if (candidates.length === 1) return candidates[0];
 
-    // ✅ PRIORITAS 1: Pilih path yang mengandung "mamet os ecosystem"
-    let prioritized = candidates.find(p => p.includes('mamet os ecosystem'));
-    if (prioritized) return prioritized;
+    // 🛡️ BLACKLIST: Folder yang TIDAK BOLEH dipilih
+    const BLACKLIST = [
+      'node_modules', '.git', 'dist', 'release', '.vite', 
+      'ai-agent-project', 'backup', '.cache', 'mamet_fs'
+    ];
+    
+    // Filter path yang mengandung folder blacklist
+    const filtered = candidates.filter(p => {
+      const normalized = p.replace(/\\/g, '/');
+      return !BLACKLIST.some(b => 
+        normalized.includes(`/${b}/`) || 
+        normalized.startsWith(`${b}/`) ||
+        normalized.includes(`/${b}`)
+      );
+    });
 
-    // ✅ PRIORITAS 2: Jika tidak ada, pilih yang mengandung "frontend/src/components/workbench"
-    prioritized = candidates.find(p => p.includes('frontend/src/components/workbench'));
-    if (prioritized) return prioritized;
+    if (filtered.length === 0) {
+      console.warn(`[FileIndexService] ⚠️ All candidates blacklisted for ${filename}, falling back to first.`);
+      return candidates[0]; 
+    }
 
-    // ✅ PRIORITAS 3: Fallback path terpendek
-    return candidates.reduce((a, b) => a.length < b.length ? a : b);
+    // 🎯 PRIORITAS 1: Root folder aktif (Mamet OS Ecosystem)
+    const activeRoot = filtered.find(p => 
+      p.includes('mamet os ecosystem') || 
+      p.includes('mamet_os_ecosystem') ||
+      p.includes('mamet-os-ecosystem')
+    );
+    if (activeRoot) {
+      console.log(`[FileIndexService] ✅ Resolved via Active Root: ${activeRoot}`);
+      return activeRoot;
+    }
+
+    // 🎯 PRIORITAS 2: Workbench components (tempat ConversationEngine.jsx berada)
+    const workbench = filtered.find(p => p.includes('frontend/src/components/workbench'));
+    if (workbench) {
+      console.log(`[FileIndexService] ✅ Resolved via Workbench: ${workbench}`);
+      return workbench;
+    }
+
+    // 🎯 PRIORITAS 3: Frontend src secara umum
+    const frontendSrc = filtered.find(p => p.includes('frontend/src'));
+    if (frontendSrc) return frontendSrc;
+
+    // 🎯 PRIORITAS 4: Path terpendek (fallback paling aman)
+    const shortest = filtered.sort((a, b) => a.length - b.length)[0];
+    console.log(`[FileIndexService] ✅ Resolved via Shortest Path: ${shortest}`);
+    return shortest;
   }
 
   async refresh() {
