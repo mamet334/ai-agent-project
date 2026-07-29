@@ -422,22 +422,42 @@ class Engineer {
   async _loadStaticKnowledge() {
     try {
       const constitutionPaths = [
-        '/AGENTS.md',
-        '/constitution/MAEF_v3.0.md',
-        '/constitution/Mamet_AI_Constitution_v2.0.md',
-        '/constitution/vision.md',
-        '/constitution/master-architecture.md',
-        '/docs/adr/ADR-001.md',
-        '/docs/adr/ADR-002.md',
-        '/docs/adr/ADR-003.md',
-        '/docs/adr/ADR-004.md',
-        '/docs/adr/ADR-005.md',
-        '/docs/adr/ADR-006.md',
-        '/docs/adr/ADR-007.md',
-        '/docs/adr/ADR-008.md',
-        '/docs/adr/ADR-009.md',
-        '/docs/adr/ADR-010.md',
-        '/docs/adr/ADR-011.md'
+        // 📁 File di root proyek
+        'init.md',
+        'agent.md',
+        'AGENTS.md',
+        
+        // 📁 File di folder constitution/
+        'constitution/MAEF_v3.0.md',
+        'constitution/Mamet_AI_Constitution_v2.0.md',
+        'constitution/vision.md',
+        'constitution/master-architecture.md',
+        'constitution/00_CONSTITUTION.md',
+        'constitution/01_VISION.md',
+        'constitution/02_MAEF_KERNEL.md',
+        'constitution/03_CAPABILITY_PORT.md',
+        'constitution/04_OWNER_SOVEREIGNTY.md',
+        'constitution/05_KNOWLEDGE_SYSTEM.md',
+        'constitution/06_MEMORY_SYSTEM.md',
+        'constitution/07_ENGINEERING_SYSTEM.md',
+        'constitution/08_ROADMAP.md',
+        'constitution/09_DNA.md',
+        'constitution/10_ADR_SYSTEM.md',
+        'constitution/11_MAEF_EVENT_SYSTEM.md',
+        'constitution/12_CAPABILITY_ADAPTER_SPEC.md',
+        'constitution/13_VERIFICATION_ENGINE_SPEC.md',
+        'constitution/14_MAEF_ORCHESTRATOR_SPEC.md',
+        'constitution/15_LOGGING_OBSERVABILITY_SYSTEM.md',
+        'constitution/16_ENGINEERING_METRICS_SYSTEM.md',
+        'constitution/17_MAEF_BOOTSTRAP_SYSTEM.md',
+        'constitution/18_DEPLOYMENT_ARCHITECTURE.md',
+        'constitution/19_REFERENCE_IMPLEMENTATION.md',
+        'constitution/20_ENGINEERING POLICY.md',
+        'constitution/21 Engineer Capability.md',
+        'constitution/22_MUS_UI_SPECIFICATION.md',
+        'constitution/23_HOME_DASHBOARD_SPEC.md',
+        'constitution/ENGINEERING_CONTRACT.md',
+        'constitution/README.md'
       ];
 
       const staticData = {};
@@ -1003,15 +1023,15 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
     const text = `${task.title || ''} ${task.description || ''}`.toLowerCase();
     
     const adrMapping = [
-      { keywords: ['event', 'bus', 'emit', 'listener'], file: '/constitution/11_MAEF_EVENT_SYSTEM.md' },
-      { keywords: ['kernel', 'boot', 'phase', 'service'], file: '/constitution/02_MAEF_KERNEL.md' },
-      { keywords: ['adapter', 'vendor', 'openrouter', 'gemini'], file: '/constitution/12_CAPABILITY_ADAPTER_SPEC.md' },
-      { keywords: ['verification', 'confidence', 'evidence'], file: '/constitution/13_VERIFICATION_ENGINE_SPEC.md' },
-      { keywords: ['memory', 'user_memory', 'project_memory'], file: '/constitution/06_MEMORY_SYSTEM.md' },
-      { keywords: ['rag', 'embedding', 'vector', 'chunk'], file: '/constitution/05_KNOWLEDGE_SYSTEM.md' },
-      { keywords: ['engineer', 'patch', 'self-maintenance'], file: '/constitution/07_ENGINEERING_SYSTEM.md' },
-      { keywords: ['logging', 'telemetry', 'observability'], file: '/constitution/15_LOGGING_OBSERVABILITY_SYSTEM.md' },
-      { keywords: ['metric', 'health', 'shi'], file: '/constitution/16_ENGINEERING_METRICS_SYSTEM.md' }
+      { keywords: ['event', 'bus', 'emit', 'listener'], file: 'constitution/11_MAEF_EVENT_SYSTEM.md' },
+      { keywords: ['kernel', 'boot', 'phase', 'service'], file: 'constitution/02_MAEF_KERNEL.md' },
+      { keywords: ['adapter', 'vendor', 'openrouter', 'gemini'], file: 'constitution/12_CAPABILITY_ADAPTER_SPEC.md' },
+      { keywords: ['verification', 'confidence', 'evidence'], file: 'constitution/13_VERIFICATION_ENGINE_SPEC.md' },
+      { keywords: ['memory', 'user_memory', 'project_memory'], file: 'constitution/06_MEMORY_SYSTEM.md' },
+      { keywords: ['rag', 'embedding', 'vector', 'chunk'], file: 'constitution/05_KNOWLEDGE_SYSTEM.md' },
+      { keywords: ['engineer', 'patch', 'self-maintenance'], file: 'constitution/07_ENGINEERING_SYSTEM.md' },
+      { keywords: ['logging', 'telemetry', 'observability'], file: 'constitution/15_LOGGING_OBSERVABILITY_SYSTEM.md' },
+      { keywords: ['metric', 'health', 'shi'], file: 'constitution/16_ENGINEERING_METRICS_SYSTEM.md' }
     ];
     
     for (const mapping of adrMapping) {
