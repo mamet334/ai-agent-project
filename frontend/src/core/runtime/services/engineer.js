@@ -23,6 +23,117 @@ import { FileIndexService } from './FileIndexService.js';
  * - ✅ Correct VerificationEngine method name (verifyPatchEngineering)
  */
 
+/**
+ * SessionArtifact — Melacak konteks sesi Engineer untuk handoff antar model AI.
+ * Diinisialisasi sekali saat Engineer.start() dan diperbarui per task.
+ */
+class SessionArtifact {
+  constructor(sessionId) {
+    this.sessionId = sessionId;
+    this.decisions = [];          // Riwayat keputusan
+    this.analyzedFiles = [];      // File yang dianalisis
+    this.modifiedFiles = [];      // File yang diubah
+    this.maefViolations = [];     // Pelanggaran MAEF yang ditemukan
+    this.reasoningReports = [];   // Riwayat reasoning report
+    this.startedAt = new Date().toISOString();
+    this.lastActivity = new Date().toISOString();
+    this.taskCount = 0;
+  }
+
+  addDecision(decision) {
+    this.decisions.push({ ...decision, timestamp: new Date().toISOString() });
+    this.lastActivity = new Date().toISOString();
+  }
+
+  addAnalyzedFile(filePath) {
+    if (!this.analyzedFiles.includes(filePath)) {
+      this.analyzedFiles.push(filePath);
+    }
+    this.lastActivity = new Date().toISOString();
+  }
+
+  addModifiedFile(filePath) {
+    if (!this.modifiedFiles.includes(filePath)) {
+      this.modifiedFiles.push(filePath);
+    }
+    this.lastActivity = new Date().toISOString();
+  }
+
+  addReasoningReport(report) {
+    this.reasoningReports.push({
+      taskId: report.taskId,
+      summary: report.summary,
+      confidence: report.confidence,
+      timestamp: new Date().toISOString()
+    });
+    this.lastActivity = new Date().toISOString();
+  }
+
+  addMaefViolation(violation) {
+    this.maefViolations.push({ ...violation, recordedAt: new Date().toISOString() });
+    this.lastActivity = new Date().toISOString();
+  }
+
+  incrementTaskCount() {
+    this.taskCount++;
+    this.lastActivity = new Date().toISOString();
+  }
+
+  getSummary() {
+    const durationMs = Date.now() - new Date(this.startedAt).getTime();
+    const durationSeconds = Math.round(durationMs / 1000);
+    const minutes = Math.floor(durationSeconds / 60);
+    const seconds = durationSeconds % 60;
+
+    return {
+      sessionId: this.sessionId,
+      taskCount: this.taskCount,
+      decisionsCount: this.decisions.length,
+      analyzedFilesCount: this.analyzedFiles.length,
+      modifiedFilesCount: this.modifiedFiles.length,
+      violationsFound: this.maefViolations.length,
+      reasoningReportsCount: this.reasoningReports.length,
+      duration: `${minutes}m ${seconds}s`,
+      startedAt: this.startedAt,
+      lastActivity: this.lastActivity
+    };
+  }
+
+  /**
+   * Menghasilkan string konteks untuk di-inject ke prompt LLM.
+   * Berguna untuk handoff antar model AI.
+   */
+  toPromptContext() {
+    const summary = this.getSummary();
+    let context = `=== SESSION ARTIFACT ===\n`;
+    context += `Session ID: ${summary.sessionId}\n`;
+    context += `Durasi Sesi: ${summary.duration}\n`;
+    context += `Task Diproses: ${summary.taskCount}\n`;
+    context += `File Dianalisis: ${summary.analyzedFilesCount} (${this.analyzedFiles.join(', ') || 'tidak ada'})\n`;
+    context += `File Dimodifikasi: ${summary.modifiedFilesCount} (${this.modifiedFiles.join(', ') || 'tidak ada'})\n`;
+    context += `Keputusan Diambil: ${summary.decisionsCount}\n`;
+    context += `Pelanggaran MAEF: ${summary.violationsFound}\n`;
+    
+    if (this.reasoningReports.length > 0) {
+      context += `\n=== REASONING REPORTS ===\n`;
+      this.reasoningReports.forEach((r, i) => {
+        context += `[${i + 1}] Task: ${r.taskId} | Confidence: ${r.confidence?.level || 'N/A'} | ${r.summary}\n`;
+      });
+    }
+
+    if (this.decisions.length > 0) {
+      context += `\n=== KEPUTUSAN TERAKHIR ===\n`;
+      const lastDecisions = this.decisions.slice(-3);
+      lastDecisions.forEach(d => {
+        context += `- ${d.type || 'Decision'}: ${d.detail || d.summary || 'N/A'}\n`;
+      });
+    }
+
+    context += `\n=== END SESSION ARTIFACT ===\n`;
+    return context;
+  }
+}
+
 class Engineer {
   constructor(serviceManager) {
     this.serviceManager = serviceManager;
@@ -41,6 +152,9 @@ class Engineer {
     this.capability = 'IMPLEMENTER';
     this.pendingPatches = new Map();
     this.suspiciousAttempts = 0; // Circuit breaker counter
+    this.intentState = 'READY'; // READY | ANALYZING | ASK_CLARIFICATION | PROCEEDING
+    this.pendingConfirmations = new Map(); // Untuk Reasoning Lock
+    this.sessionArtifact = null; // FASE 4: Session Artifact — diinisialisasi di initialize()
 
     this.metrics = {
       tasksAnalyzed: 0,
@@ -63,9 +177,211 @@ class Engineer {
     await this.fileIndexService.buildIndex();
     console.log('[Engineer] ✅ FileIndexService siap digunakan');
   
+    // ✅ FASE 4: Inisialisasi Session Artifact (sekali, bukan per task)
+    this._initializeSessionArtifact();
+  
     this._registerListeners(); // Pastikan terjadi SETELAH indeks siap!
     console.log(`[Engineer] Initialized as ${this.capability}`);
     this.eventBus.emit('Engineer:Ready', { capability: this.capability });
+  }
+
+  // =============================================
+  // FASE 4: SESSION ARTIFACT
+  // =============================================
+
+  /**
+   * Menginisialisasi Session Artifact untuk melacak konteks sesi Engineer.
+   * Dipanggil sekali saat initialize(), bukan per task.
+   */
+  _initializeSessionArtifact() {
+    const sessionId = `ENG-SESSION-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    this.sessionArtifact = new SessionArtifact(sessionId);
+    console.log(`[Engineer] 📦 Session Artifact initialized: ${sessionId}`);
+  }
+
+  /**
+   * Memperbarui Session Artifact berdasarkan action yang terjadi.
+   * @param {string} action - Tipe action: 'ANALYSIS' | 'PATCH_GENERATED' | 'VERIFICATION' | 'APPROVED' | 'REJECTED' | 'REASONING' | 'CAPABILITY_BLOCKED'
+   * @param {Object} data - Data terkait action
+   */
+  _updateArtifact(action, data = {}) {
+    if (!this.sessionArtifact) {
+      console.warn('[Engineer] ⚠️ Session Artifact belum diinisialisasi');
+      return;
+    }
+
+    switch (action) {
+      case 'ANALYSIS':
+        this.sessionArtifact.incrementTaskCount();
+        if (data.files) {
+          data.files.forEach(f => this.sessionArtifact.addAnalyzedFile(f));
+        }
+        if (data.violations) {
+          data.violations.forEach(v => this.sessionArtifact.addMaefViolation(v));
+        }
+        this.sessionArtifact.addDecision({
+          type: 'ANALYSIS',
+          detail: data.summary || 'Analisis selesai',
+          taskId: data.taskId
+        });
+        break;
+
+      case 'REASONING':
+        if (data.report) {
+          this.sessionArtifact.addReasoningReport(data.report);
+        }
+        this.sessionArtifact.addDecision({
+          type: 'REASONING',
+          detail: data.summary || 'Reasoning report dikeluarkan',
+          taskId: data.taskId
+        });
+        break;
+
+      case 'PATCH_GENERATED':
+        if (data.files) {
+          data.files.forEach(f => this.sessionArtifact.addModifiedFile(f));
+        }
+        this.sessionArtifact.addDecision({
+          type: 'PATCH_GENERATED',
+          detail: `Patch generated: ${data.files?.length || 0} files`,
+          taskId: data.taskId
+        });
+        break;
+
+      case 'VERIFICATION':
+        this.sessionArtifact.addDecision({
+          type: 'VERIFICATION',
+          detail: data.passed ? 'Verifikasi lulus' : `Verifikasi gagal: ${data.issues || ''}`,
+          taskId: data.taskId
+        });
+        break;
+
+      case 'APPROVED':
+        this.sessionArtifact.addDecision({
+          type: 'APPROVED',
+          detail: `Patch disetujui: ${data.files?.length || 0} files`,
+          taskId: data.taskId
+        });
+        break;
+
+      case 'REJECTED':
+        this.sessionArtifact.addDecision({
+          type: 'REJECTED',
+          detail: data.reason || 'Patch ditolak',
+          taskId: data.taskId
+        });
+        break;
+
+      case 'CAPABILITY_BLOCKED':
+        this.sessionArtifact.addDecision({
+          type: 'CAPABILITY_BLOCKED',
+          detail: data.reason || 'Capability check gagal',
+          taskId: data.taskId
+        });
+        break;
+
+      default:
+        console.warn(`[Engineer] Unknown artifact action: ${action}`);
+    }
+  }
+
+  /**
+   * Menghasilkan string konteks Session Artifact untuk di-inject ke prompt LLM.
+   * Berguna untuk handoff antar model AI.
+   * @returns {string} Konteks terformat
+   */
+  _injectArtifactIntoPrompt() {
+    if (!this.sessionArtifact) {
+      return '';
+    }
+    return this.sessionArtifact.toPromptContext();
+  }
+
+  // =============================================
+  // FASE 2: CAPABILITY GUARD
+  // =============================================
+
+  /**
+   * Memeriksa apakah task memenuhi syarat untuk diproses Engineer.
+   * @param {Object} task - Task yang akan diperiksa
+   * @param {Object} options - Opsi tambahan (analysis, modelName)
+   * @returns {{ pass: boolean, reason?: string, suggestBatch?: boolean }}
+   */
+  _checkCapabilityAndDeclare(task, options = {}) {
+    const { analysis, modelName } = options;
+    const text = `${task.title || ''} ${task.description || ''}`;
+    const wordCount = text.split(/\s+/).filter(w => w.length > 0).length;
+    const targetFiles = task.files || this._extractFileNamesFromTask(task);
+
+    const checks = [];
+
+    // 1. Prompt Clarity Check — minimal 20 kata
+    if (wordCount < 20) {
+      checks.push({
+        pass: false,
+        reason: `Prompt terlalu pendek (${wordCount} kata). Minimal 20 kata untuk menghasilkan patch yang akurat. Silakan berikan instruksi yang lebih detail.`
+      });
+    }
+
+    // 2. File Limit Check — maksimal 10 file
+    if (targetFiles.length > 10) {
+      checks.push({
+        pass: false,
+        reason: `Terlalu banyak file (${targetFiles.length} file). Maksimal 10 file per patch. Sarankan memecah tugas menjadi beberapa batch.`,
+        suggestBatch: true
+      });
+    }
+
+    // 3. ADR Wajib Check — untuk perubahan struktur/core
+    const relevantADR = this._findRelevantADR(task);
+    if (!relevantADR) {
+      // Periksa apakah task menyentuh area yang membutuhkan ADR
+      // Gunakan frasa spesifik, bukan kata individual untuk menghindari false positive
+      const adrRequiredPhrases = ['perubahan arsitektur', 'arsitektur baru', 'service baru', 'module baru',
+        'new architecture', 'new service', 'new module', 'restruktur', 'restrukturisasi',
+        'mengubah flow', 'merubah flow', 'mengubah alur', 'merubah alur',
+        'pipeline baru', 'integration baru', 'integrasi baru',
+        'architectural change', 'structural change'];
+      const needsADR = adrRequiredPhrases.some(phrase => text.toLowerCase().includes(phrase));
+      if (needsADR) {
+        checks.push({
+          pass: false,
+          reason: `Perubahan ini menyentuh area arsitektur yang membutuhkan ADR (Architecture Decision Record). Silakan buat ADR terlebih dahulu atau arahkan saya ke ADR yang relevan.`
+        });
+      }
+    }
+
+    // 4. Confidence Threshold Check — jika analysis tersedia
+    if (analysis) {
+      const confidence = this._calculateConfidence(analysis);
+      if (confidence.level === 'LOW' || confidence.evidence < 70) {
+        checks.push({
+          pass: false,
+          reason: `Confidence terlalu rendah (${confidence.level}, evidence: ${confidence.evidence}/100) untuk auto-patch. Saya sarankan analisis manual terlebih dahulu.`,
+          confidenceDetails: confidence
+        });
+      }
+    }
+
+    // Jika ada pelanggaran, return detail pelanggaran pertama
+    if (checks.length > 0) {
+      const failedCheck = checks.find(c => c.pass === false);
+      console.log(`[Engineer] 🚫 Capability check failed: ${failedCheck?.reason}`);
+      return {
+        pass: false,
+        checks: checks,
+        reason: failedCheck?.reason || 'Capability check gagal',
+        suggestBatch: checks.some(c => c.suggestBatch),
+        modelName: modelName || 'unknown'
+      };
+    }
+
+    console.log(`[Engineer] ✅ Capability check passed`);
+    return {
+      pass: true,
+      checks: [],
+      modelName: modelName || 'unknown'
+    };
   }
 
   // =============================================
@@ -176,6 +492,167 @@ class Engineer {
       const response = wrappedPayload?.data || wrappedPayload;
       this._handleApprovalResponse(response);
     });
+    
+    // FASE 3: Reasoning Lock listener
+    this.eventBus.on('Engineer:UserConfirmation', (wrappedPayload) => {
+      const response = wrappedPayload?.data || wrappedPayload;
+      this._handleUserConfirmation(response);
+    });
+  }
+
+  // =============================================
+  // FASE 3: REASONING LOCK & LAPORAN
+  // =============================================
+
+  /**
+   * Menghasilkan laporan reasoning komprehensif sebelum eksekusi patch.
+   * Prinsip: Tidak ada kode yang dihasilkan tanpa analisis yang ditunjukkan.
+   * @param {Object} task - Task yang sedang diproses
+   * @param {Object} analysis - Hasil analisis dari _analyze()
+   * @param {Object} options - Opsi tambahan (intent, capabilityCheck, modelName)
+   * @returns {Object} Reasoning report object
+   */
+  _emitReasoningReport(task, analysis, options = {}) {
+    const { intent = 'MODIFY_CODE', capabilityCheck = null, modelName = 'unknown' } = options;
+    const targetFiles = task.files || this._extractFileNamesFromTask(task);
+    
+    const report = {
+      taskId: task.id,
+      summary: analysis.summary || `Analisis selesai untuk task: ${task.title || task.id}`,
+      findings: analysis.findings || [],
+      adrReferenced: analysis.metrics?.adrReferenced || 'None',
+      filesAnalyzed: Object.keys(analysis.rawContext || {}),
+      recommendedFiles: targetFiles,
+      compliance: analysis.compliance || { violations: [], warnings: [] },
+      confidence: this._calculateConfidence(analysis),
+      intent: intent,
+      capabilityCheck: capabilityCheck || { pass: true, checks: [] },
+      recommendation: analysis.recommendation || 'Lanjutkan dengan implementasi fitur',
+      modelName: modelName,
+      timestamp: new Date().toISOString()
+    };
+
+    console.log(`[Engineer] 🧠 Emitting Reasoning Report for task: ${task.id}`);
+    console.log(`[Engineer] 📋 Report summary: ${report.summary}`);
+    console.log(`[Engineer] 🎯 Intent: ${intent}, Model: ${modelName}`);
+
+    // Emit event ke UI untuk ditampilkan sebagai Reasoning Block
+    this.eventBus.emit('Engineer:ReasoningReport', {
+      ...report,
+      from: 'Engineer',
+      capability: this.capability,
+      requiresApproval: false, // Reasoning report tidak require approval, hanya konfirmasi
+    });
+
+    return report;
+  }
+
+  /**
+   * Menunggu konfirmasi eksplisit dari user sebelum melanjutkan ke generasi patch.
+   * Mengembalikan Promise yang di-resolve ketika user mengkonfirmasi (via Engineer:UserConfirmation).
+   * @param {Object} report - Reasoning report yang akan dikonfirmasi
+   * @returns {Promise<boolean>} true jika user mengkonfirmasi, false jika dibatalkan
+   */
+  _waitForUserConfirmation(report) {
+    return new Promise((resolve) => {
+      const confirmationId = report.taskId || `CONFIRM-${Date.now()}`;
+
+      // Simpan resolver di Map untuk direspon dari event listener
+      this.pendingConfirmations.set(confirmationId, { report, resolver: resolve });
+
+      // Emit event ke UI untuk menampilkan tombol konfirmasi
+      this.eventBus.emit('Engineer:RequestConfirmation', {
+        confirmationId: confirmationId,
+        report: report,
+        summary: report.summary,
+        findings: report.findings,
+        confidence: report.confidence,
+        intent: report.intent,
+        modelName: report.modelName,
+        filesAnalyzed: report.filesAnalyzed,
+        recommendedFiles: report.recommendedFiles,
+        timestamp: new Date().toISOString()
+      });
+
+      console.log(`[Engineer] ⏳ Waiting for user confirmation (ID: ${confirmationId})...`);
+    });
+  }
+
+  /**
+   * Handler untuk response konfirmasi dari user.
+   * Dipanggil dari event listener Engineer:UserConfirmation.
+   */
+  _handleUserConfirmation(response) {
+    const { confirmationId, confirmed } = response;
+    const pending = this.pendingConfirmations.get(confirmationId);
+
+    if (pending) {
+      console.log(`[Engineer] ${confirmed ? '✅' : '❌'} User confirmation received for: ${confirmationId}`);
+      pending.resolver(confirmed === true);
+      this.pendingConfirmations.delete(confirmationId);
+    } else {
+      console.warn(`[Engineer] ⚠️ No pending confirmation found for ID: ${confirmationId}`);
+    }
+  }
+
+  // =============================================
+  // FASE 1: INTENT DETECTION & KLARIFIKASI
+  // =============================================
+
+  /**
+   * Mendeteksi intent user berdasarkan keyword pada task title + description.
+   * @param {Object} task - Task object dengan title & description
+   * @returns {string} 'ANALYSIS' | 'MODIFY_CODE' | 'CLARIFICATION' | 'UNKNOWN'
+   */
+  _detectIntent(task) {
+    const text = `${task.title || ''} ${task.description || ''}`.toLowerCase().trim();
+    
+    if (!text) {
+      console.log('[Engineer] Task text kosong, return CLARIFICATION');
+      return 'CLARIFICATION';
+    }
+
+    const analysisKeywords = [
+      'analisis', 'review', 'telaah', 'evaluasi', 'cek', 'laporan',
+      'analyze', 'analyse', 'check', 'review', 'examine', 'inspect',
+      'audit', 'lihat', 'baca', 'pelajari', 'cari tahu',
+      'what is', 'how does', 'explain', 'describe', 'tunjukkan',
+      'diagnosa', 'diagnose'
+    ];
+
+    const modifyKeywords = [
+      'ubah', 'tambah', 'hapus', 'perbaiki', 'refactor', 'implementasi',
+      'change', 'add', 'remove', 'delete', 'fix', 'implement',
+      'modify', 'update', 'create', 'buat', 'tulis', 'write',
+      'patch', 'edit', 'ganti', 'masukkan', 'insert',
+      'refactor', 'migrate', 'pindahkan', 'move'
+    ];
+
+    let isAnalysis = analysisKeywords.some(kw => text.includes(kw));
+    let isModify = modifyKeywords.some(kw => text.includes(kw));
+
+    // === LOGIKA KLARIFIKASI ===
+    // 1. Jika ambiguous (kedua kategori terdeteksi)
+    if (isAnalysis && isModify) {
+      console.log('[Engineer] Intent ambiguous: analysis + modify detected');
+      return 'CLARIFICATION';
+    }
+    
+    // 2. Jika tidak ada kategori yang terdeteksi
+    if (!isAnalysis && !isModify) {
+      console.log('[Engineer] Intent unknown: no keywords matched');
+      return 'CLARIFICATION';
+    }
+
+    // 3. Analisis murni
+    if (isAnalysis && !isModify) {
+      console.log('[Engineer] Intent detected: ANALYSIS');
+      return 'ANALYSIS';
+    }
+
+    // 4. Modifikasi kode murni
+    console.log('[Engineer] Intent detected: MODIFY_CODE');
+    return 'MODIFY_CODE';
   }
 
   // =============================================
@@ -193,6 +670,15 @@ class Engineer {
     console.log(`[Engineer] Analyzing task: ${task.title || task.id}`);
     this.brain.dynamic = await this._buildDynamicContext(task);
     const analysis = await this._analyze(task);
+    
+    // FASE 4: Update Session Artifact
+    this._updateArtifact('ANALYSIS', {
+      taskId: task.id,
+      files: Object.keys(analysis.rawContext || {}),
+      violations: analysis.compliance?.violations || [],
+      summary: analysis.summary
+    });
+    
     this._emitRecommendation({
       type: 'ANALYSIS',
       taskId: task.id,
@@ -225,12 +711,115 @@ class Engineer {
       return;
     }
 
+    // === FASE 1: INTENT DETECTION ===
+    this.intentState = 'ANALYZING';
+    const intent = this._detectIntent(task);
+    console.log(`[Engineer] 🎯 Intent detected: ${intent} (task: ${task.title || task.id})`);
+
+    // Jika intent ANALYSIS, redirect ke analisis (bukan patch)
+    if (intent === 'ANALYSIS') {
+      this.intentState = 'READY';
+      console.log(`[Engineer] 📋 Redirecting to ANALYSIS handler (bukan patch)`);
+      await this._handleAnalysisTask(task);
+      return;
+    }
+
+    // Jika intent CLARIFICATION, minta user untuk memperjelas
+    if (intent === 'CLARIFICATION') {
+      this.intentState = 'ASK_CLARIFICATION';
+      const clarificationMsg = `Permintaan Anda membutuhkan klarifikasi. Apakah Anda ingin:
+1. 🔍 **Menganalisis** kode yang ada?
+2. ✏️ **Memodifikasi/menambahkan** kode?
+3. 📖 **Meninjau** perubahan yang sudah ada?
+
+_Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
+
+      console.log(`[Engineer] ❓ Asking clarification for task: ${task.title || task.id}`);
+      this._emitRecommendation({
+        type: 'ASK_CLARIFICATION',
+        taskId: task.id,
+        message: clarificationMsg,
+        intent: intent,
+        requiresApproval: false
+      });
+      return;
+    }
+
+    // Jika sampai sini, intent pasti MODIFY_CODE — lanjut ke flow normal
+    this.intentState = 'PROCEEDING';
     this.metrics.patchesGenerated++;
-    console.log(`[Engineer] Generating patch for: ${task.title || task.id}`);
+    console.log(`[Engineer] 🔨 Proceeding with patch generation for: ${task.title || task.id}`);
     this.brain.dynamic = await this._buildDynamicContext(task);
     
+    // === FASE 2: CAPABILITY GUARD ===
+    // Ambil model name untuk transparansi
+    let modelName = 'unknown';
+    try {
+      const brainService = this.serviceManager.get('BrainService');
+      if (brainService && typeof brainService.getActiveBrainContext === 'function') {
+        const context = await brainService.getActiveBrainContext();
+        modelName = context.model || modelName;
+      }
+    } catch (e) {
+      console.warn('[Engineer] Gagal mendapatkan model name:', e.message);
+    }
+
+    const capabilityCheck = this._checkCapabilityAndDeclare(task, { modelName });
+    
+    if (!capabilityCheck.pass) {
+      console.log(`[Engineer] 🚫 Capability check blocked task: ${task.title || task.id}`);
+      this._emitRecommendation({
+        type: 'CAPABILITY_BLOCKED',
+        taskId: task.id,
+        message: `🧠 **Engineer (${modelName})** — Saya tidak dapat memproses permintaan ini.\n\n**Alasan:** ${capabilityCheck.reason}`,
+        capabilityCheck,
+        modelName,
+        requiresApproval: false
+      });
+      return;
+    }
+
     const analysis = await this._analyze(task);
+    
+    // === FASE 3: REASONING LOCK ===
+    // Emit reasoning report dan tunggu konfirmasi user sebelum generate patch
+    const reasoningReport = this._emitReasoningReport(task, analysis, {
+      intent: 'MODIFY_CODE',
+      capabilityCheck,
+      modelName
+    });
+    
+    // FASE 4: Update Session Artifact — Reasoning
+    this._updateArtifact('REASONING', {
+      taskId: task.id,
+      report: reasoningReport,
+      summary: reasoningReport.summary
+    });
+    
+    // Tunggu konfirmasi user (Reasoning Lock)
+    const userConfirmed = await this._waitForUserConfirmation(reasoningReport);
+    
+    if (!userConfirmed) {
+      console.log(`[Engineer] 🚫 User membatalkan task: ${task.title || task.id}`);
+      this._emitRecommendation({
+        type: 'REASONING_REJECTED',
+        taskId: task.id,
+        message: `🧠 **Engineer (${modelName})** — Analisis telah dibatalkan.\n\n**Ringkasan Analisis:** ${reasoningReport.summary}\n\nAnda dapat mengirim ulang permintaan dengan instruksi yang lebih spesifik.`,
+        reasoningReport,
+        modelName,
+        requiresApproval: false
+      });
+      return;
+    }
+    
+    console.log(`[Engineer] ✅ User confirmed, proceeding to generate patch for: ${task.title || task.id}`);
     const patch = await this._generatePatch(task);
+
+    // FASE 4: Update Session Artifact — Patch Generated
+    this._updateArtifact('PATCH_GENERATED', {
+      taskId: task.id,
+      files: patch.files?.map(f => f.path) || []
+    });
 
     if (patch.ready) {
       const verificationEngine = this.serviceManager.get('VerificationEngine');
@@ -250,6 +839,13 @@ class Engineer {
             issues: verificationResult.failures,
             criticalCount: verificationResult.failures.filter(f => f.severity === 'CRITICAL').length
           };
+
+          // FASE 4: Update Session Artifact — Verification
+          this._updateArtifact('VERIFICATION', {
+            taskId: task.id,
+            passed: patch.verification.passed,
+            issues: patch.verification.issues?.map(i => i.message).join(', ')
+          });
 
           if (!patch.verification.passed) {
             console.warn('[Engineer] Patch gagal verifikasi:', patch.verification.issues);
@@ -278,6 +874,13 @@ class Engineer {
       if (approvalResult.approved) {
         await this._executePatchApplication(patch, approvalResult.approvedFiles);
         this.metrics.patchesApproved++;
+        
+        // FASE 4: Update Session Artifact — Approved
+        this._updateArtifact('APPROVED', {
+          taskId: task.id,
+          files: approvalResult.approvedFiles
+        });
+        
         this._emitRecommendation({
           type: 'PATCH_APPLIED',
           taskId: task.id,
@@ -287,6 +890,13 @@ class Engineer {
         });
       } else {
         this.metrics.patchesRejected++;
+        
+        // FASE 4: Update Session Artifact — Rejected
+        this._updateArtifact('REJECTED', {
+          taskId: task.id,
+          reason: 'User menolak patch'
+        });
+        
         this._emitRecommendation({
           type: 'PATCH_REJECTED',
           taskId: task.id,

@@ -216,10 +216,105 @@ export default function ConversationEngine({ sessionId }) {
           return [...prev, { role: 'model', content: `⚠️ **Patch Gagal**\n\n${rec.message || 'Terjadi kesalahan.'}` }];
         });
       }
+      // === FASE 3: REASONING LOCK HANDLERS ===
+      else if (rec.type === 'CAPABILITY_BLOCKED') {
+        setMessages(prev => [...prev, { role: 'model', content: rec.message, isReasoningBlock: false }]);
+      } else if (rec.type === 'REASONING_REJECTED') {
+        setMessages(prev => [...prev, { role: 'model', content: rec.message, isReasoningBlock: false }]);
+      } else if (rec.type === 'ASK_CLARIFICATION') {
+        setMessages(prev => [...prev, { role: 'model', content: rec.message, isReasoningBlock: false }]);
+      }
     };
 
     const unsubscribe = eventBus.on('Engineer:Recommendation', handler);
     return () => eventBus.off('Engineer:Recommendation', unsubscribe);
+  }, []);
+
+  // FASE 3: Listen for Reasoning Report events (Engineer:ReasoningReport & Engineer:RequestConfirmation)
+  useEffect(() => {
+    const eventBus = kernel.serviceManager?.get('EventBus');
+    if (!eventBus) return;
+
+    const reasoningReportHandler = (report) => {
+      console.log('[ConversationEngine] 🧠 Received Reasoning Report:', report.taskId);
+      
+      // Format findings sebagai string terformat
+      let findingsText = '';
+      if (report.findings && report.findings.length > 0) {
+        findingsText = '\n\n📋 **Temuan Analisis:**\n' + report.findings.join('\n');
+      }
+
+      // Format compliance summary
+      const violationsCount = report.compliance?.violations?.length || 0;
+      const warningsCount = report.compliance?.warnings?.length || 0;
+      let complianceText = '';
+      if (violationsCount > 0 || warningsCount > 0) {
+        complianceText = `\n\n🛡️ **MAEF Compliance:** ${violationsCount} pelanggaran, ${warningsCount} peringatan`;
+      }
+
+      // Format confidence
+      const confLevel = report.confidence?.level || 'UNKNOWN';
+      const confEmoji = confLevel === 'HIGH' ? '🟢' : confLevel === 'MEDIUM' ? '🟡' : '🔴';
+      const confidenceText = `\n\n${confEmoji} **Confidence:** ${confLevel} (coverage: ${report.confidence?.coverage || 0}%, evidence: ${report.confidence?.evidence || 0}/100)`;
+
+      // Format files analyzed
+      const filesText = report.filesAnalyzed?.length > 0 
+        ? `\n\n📁 **File Dianalisis:** ${report.filesAnalyzed.join(', ')}`
+        : '';
+
+      // Format model info
+      const modelText = `\n\n🤖 **Model:** ${report.modelName || 'unknown'}`;
+
+      // Format recommendation
+      const recText = report.recommendation 
+        ? `\n\n💡 **Rekomendasi:** ${report.recommendation}`
+        : '';
+
+      // ADR referenced
+      const adrText = report.adrReferenced && report.adrReferenced !== 'None'
+        ? `\n\n📐 **ADR Dirujuk:** ${report.adrReferenced}`
+        : '';
+
+      const fullMessage = `🧠 **Engineer Reasoning Report**${findingsText}${complianceText}${confidenceText}${filesText}${modelText}${recText}${adrText}\n\n⏳ _Menunggu konfirmasi Anda untuk melanjutkan ke pembuatan patch..._`;
+
+      setMessages(prev => [
+        ...prev,
+        { 
+          role: 'model', 
+          content: fullMessage, 
+          isReasoningBlock: true,
+          reasoningReport: report
+        }
+      ]);
+    };
+
+    const unsubscribeReasoning = eventBus.on('Engineer:ReasoningReport', reasoningReportHandler);
+    return () => eventBus.off('Engineer:ReasoningReport', unsubscribeReasoning);
+  }, []);
+
+  // FASE 3: Listen for User Confirmation request (Engineer:RequestConfirmation)
+  useEffect(() => {
+    const eventBus = kernel.serviceManager?.get('EventBus');
+    if (!eventBus) return;
+
+    const confirmationHandler = (request) => {
+      console.log('[ConversationEngine] 🔔 Received confirmation request:', request.confirmationId);
+      
+      // Tambahkan tombol konfirmasi sebagai pesan dengan action buttons
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'model',
+          content: `🔔 **Konfirmasi Diperlukan**\n\nRingkasan: ${request.summary || 'Analisis selesai.'}\n\nApakah Anda ingin melanjutkan ke pembuatan patch?`,
+          isConfirmationRequest: true,
+          confirmationId: request.confirmationId,
+          _reportForConfirmation: request
+        }
+      ]);
+    };
+
+    const unsubscribeConfirm = eventBus.on('Engineer:RequestConfirmation', confirmationHandler);
+    return () => eventBus.off('Engineer:RequestConfirmation', unsubscribeConfirm);
   }, []);
 
   const handleLoadChat = async (chatId) => {
@@ -812,6 +907,81 @@ export default function ConversationEngine({ sessionId }) {
 
                       {m.isStreaming && parsed.isThinkingComplete && <span className="animate-pulse text-primary"> ▍</span>}
                     </div>
+
+                    {/* FASE 5: Reasoning Block — Confirmation Buttons */}
+                    {m.isConfirmationRequest && (
+                      <div className="mt-4 flex items-center gap-3 border-t border-outline-variant pt-3">
+                        <button
+                          onClick={() => {
+                            const eventBus = kernel.serviceManager?.get('EventBus');
+                            if (eventBus && m.confirmationId) {
+                              eventBus.emit('Engineer:UserConfirmation', {
+                                confirmationId: m.confirmationId,
+                                confirmed: true
+                              });
+                              // Update message to show confirmed state
+                              setMessages(prev => {
+                                const next = [...prev];
+                                next[idx] = { ...next[idx], content: `✅ **Konfirmasi Diterima**\n\nMelanjutkan ke pembuatan patch...`, isConfirmationRequest: false };
+                                return next;
+                              });
+                            }
+                          }}
+                          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold transition-colors shadow-lg shadow-emerald-500/20"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                          ✅ Lanjutkan ke Patch
+                        </button>
+                        <button
+                          onClick={() => {
+                            const eventBus = kernel.serviceManager?.get('EventBus');
+                            if (eventBus && m.confirmationId) {
+                              eventBus.emit('Engineer:UserConfirmation', {
+                                confirmationId: m.confirmationId,
+                                confirmed: false
+                              });
+                              setMessages(prev => {
+                                const next = [...prev];
+                                next[idx] = { ...next[idx], content: `❌ **Konfirmasi Ditolak**\n\nPembuatan patch dibatalkan.`, isConfirmationRequest: false };
+                                return next;
+                              });
+                            }
+                          }}
+                          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 text-sm font-medium transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">cancel</span>
+                          ❌ Batalkan
+                        </button>
+                      </div>
+                    )}
+
+                    {/* FASE 5: Reasoning Block — Detail Expand Button */}
+                    {m.isReasoningBlock && m.reasoningReport && (
+                      <div className="mt-3 border-t border-outline-variant pt-3">
+                        <button
+                          onClick={() => {
+                            const report = m.reasoningReport;
+                            const detail = `🧠 **Reasoning Report Detail**\n\n` +
+                              `**Task ID:** ${report.taskId}\n` +
+                              `**Summary:** ${report.summary}\n` +
+                              `**Intent:** ${report.intent}\n` +
+                              `**Model:** ${report.modelName}\n` +
+                              `**Confidence:** ${report.confidence?.level} (${report.confidence?.coverage}% coverage, ${report.confidence?.evidence}/100 evidence)\n` +
+                              `**ADR Referenced:** ${report.adrReferenced}\n` +
+                              `**Files Analyzed:** ${(report.filesAnalyzed || []).join(', ')}\n` +
+                              `**Recommendation:** ${report.recommendation}\n` +
+                              `**Compliance:** ${report.compliance?.violations?.length || 0} violations, ${report.compliance?.warnings?.length || 0} warnings\n` +
+                              `**Timestamp:** ${report.timestamp}`;
+                            
+                            openLifecycleInspector('REASONING_DETAIL', detail);
+                          }}
+                          className="inline-flex items-center gap-2 px-3 py-2 bg-surface-container border border-outline-variant text-on-surface-variant text-body-sm rounded-lg hover:bg-surface-variant hover:text-on-surface transition-all shadow-sm"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">description</span>
+                          📋 Lihat Detail Reasoning
+                        </button>
+                      </div>
+                    )}
 
                     {/* Tombol Copy */}
                     {m.role === 'model' && !m.isStreaming && displayText && (
