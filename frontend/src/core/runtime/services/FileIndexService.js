@@ -92,4 +92,17 @@ export class FileIndexService {
   async refresh() {
     await this.buildIndex();
   }
+
+  /**
+   * Mengembalikan daftar semua file yang di-index
+   * @returns {string[]}
+   */
+  getAllFiles() {
+    if (!this.isReady) return [];
+    const allFiles = [];
+    for (const paths of this.fileIndex.values()) {
+      allFiles.push(...paths);
+    }
+    return allFiles;
+  }
 }

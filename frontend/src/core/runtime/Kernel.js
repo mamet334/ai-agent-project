@@ -266,7 +266,8 @@ class Kernel {
     const verificationEngine = {
       mode: 'SAFE_BOOTSTRAP_MODE',
       validate: () => ({ valid: true, confidence: 1.0 }),
-      verifyEvidence: () => ({ verdict: 'PASS' })
+      verifyEvidence: () => ({ verdict: 'PASS' }),
+      verifyPatchEngineering: () => ({ decision: 'PASS', score: 1.0, failures: [] })
     };
     serviceManager.register('VerificationEngine', verificationEngine);
     this.log('INFO', 'Verification Engine Started in SAFE_BOOTSTRAP_MODE');
