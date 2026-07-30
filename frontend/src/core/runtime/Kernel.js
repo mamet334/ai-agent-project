@@ -17,6 +17,8 @@ import { KnowledgeService } from './services/KnowledgeService.js';
 import { AgentOrchestratorService } from './services/AgentOrchestratorService.js';
 import { ToolRegistryService } from './services/ToolRegistryService.js';
 import { SemanticContextService } from './services/SemanticContextService.js';
+import { MetadataService } from '../metadata/MetadataService.js';
+import { NavigationService } from '../metadata/NavigationService.js';
 
 /**
  * MAEF Kernel v2.0
@@ -164,8 +166,7 @@ class Kernel {
     await discoveryManager.initialize();
     serviceManager.register('DiscoveryManager', discoveryManager);
 
-    // MetadataService
-    const { MetadataService } = await import('../metadata/MetadataService.js');
+    // 2. Metadata Service
     const metadataService = new MetadataService(serviceManager);
     await metadataService.initialize();
     serviceManager.register('MetadataService', metadataService);
@@ -370,19 +371,15 @@ class Kernel {
     }
 
     // Register ApplicationManager, WindowManager, & WorkspaceManager
-    const applicationManager = (await import('../application/ApplicationManager.js')).ApplicationManager;
-    const appManagerInstance = new applicationManager(serviceManager);
+    const appManagerInstance = new ApplicationManager(serviceManager);
     serviceManager.register('ApplicationManager', appManagerInstance);
     
-    const windowManager = (await import('../window/WindowManager.js')).WindowManager;
-    serviceManager.register('WindowManager', new windowManager(serviceManager));
+    serviceManager.register('WindowManager', new WindowManager(serviceManager));
     
-    const workspaceManager = (await import('../workspace/WorkspaceManager.js')).WorkspaceManager;
-    serviceManager.register('WorkspaceManager', new workspaceManager('mamet-os', serviceManager));
+    serviceManager.register('WorkspaceManager', new WorkspaceManager('mamet-os', serviceManager));
     this.log('INFO', 'ApplicationManager, WindowManager & WorkspaceManager Activated');
 
     // NavigationService
-    const { NavigationService } = await import('../metadata/NavigationService.js');
     const navigationService = new NavigationService(serviceManager);
     serviceManager.register('NavigationService', navigationService);
 
