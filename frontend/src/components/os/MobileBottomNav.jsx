@@ -1,5 +1,5 @@
 import React from 'react';
-import { serviceManager } from '../../core/runtime/ServiceManager';
+import { useService } from '../../core/runtime/hooks/useService';
 
 /**
  * MobileBottomNav
@@ -8,11 +8,19 @@ import { serviceManager } from '../../core/runtime/ServiceManager';
  * Di desktop komponen ini tidak dirender (disembunyikan via kondisi di OSDesktopShell).
  */
 export default function MobileBottomNav({ onMenuOpen }) {
-  const applicationManager = serviceManager.get('ApplicationManager');
-  const navigationService = serviceManager.get('NavigationService');
+  const applicationManager = useService('ApplicationManager');
+  const navigationService = useService('NavigationService');
 
-  const [appState, setAppState] = React.useState(() => applicationManager?.getState());
-  const [navTree, setNavTree] = React.useState(() => navigationService?.getTree() || []);
+  const [appState, setAppState] = React.useState({ apps: [], activeAppId: null });
+  const [navTree, setNavTree] = React.useState([]);
+
+  React.useEffect(() => {
+    if (applicationManager) setAppState(applicationManager.getState());
+  }, [applicationManager]);
+
+  React.useEffect(() => {
+    if (navigationService) setNavTree(navigationService.getTree() || []);
+  }, [navigationService]);
 
   React.useEffect(() => {
     if (!applicationManager) return;

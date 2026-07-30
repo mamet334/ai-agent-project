@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { serviceManager } from '../../core/runtime/ServiceManager';
+import { useService } from '../../core/runtime/hooks/useService';
 import { X } from 'lucide-react';
 
 /**
@@ -10,13 +10,27 @@ import { X } from 'lucide-react';
  *           Dikontrol via props isMobile, isOpen, onClose dari OSDesktopShell
  */
 export default function Sidebar({ isMobile = false, isOpen = false, onClose }) {
-  const applicationManager = serviceManager.get('ApplicationManager');
-  const navigationService = serviceManager.get('NavigationService');
-  
-  const [appState, setAppState] = useState(() => applicationManager.getState());
-  const [navTree, setNavTree] = useState(() => navigationService ? navigationService.getTree() : []);
+  const applicationManager = useService('ApplicationManager');
+  const navigationService = useService('NavigationService');
+
+  const [appState, setAppState] = useState({ apps: [], activeAppId: null });
+  const [navTree, setNavTree] = useState([]);
+
+  // Sync state saat service tersedia
+  useEffect(() => {
+    if (applicationManager) {
+      setAppState(applicationManager.getState());
+    }
+  }, [applicationManager]);
 
   useEffect(() => {
+    if (navigationService) {
+      setNavTree(navigationService.getTree() || []);
+    }
+  }, [navigationService]);
+
+  useEffect(() => {
+    if (!applicationManager) return;
     const unsub = applicationManager.subscribe((payload) => {
       setAppState(payload?.data || payload);
       if (navigationService) setNavTree(navigationService.getTree());

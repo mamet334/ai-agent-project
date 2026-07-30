@@ -155,6 +155,10 @@ class Engineer {
     this.process = serviceManager.get('ProcessManager');
     this.moduleLoader = serviceManager.get('ModuleLoader');
     this.fileIndexService = null; // Akan diinisialisasi setelah StorageManager siap
+    // Repository Reader — kemampuan membaca file dari GitHub/Electron
+    this.repositoryReader = serviceManager.has('RepositoryReaderService')
+      ? serviceManager.get('RepositoryReaderService')
+      : null;
 
     // Two-Brain Model
     this.brain = {
@@ -534,6 +538,12 @@ class Engineer {
       const response = wrappedPayload?.data || wrappedPayload;
       this._handleUserConfirmation(response);
     });
+
+    // READ_REPO: Membaca file/folder dari repository
+    this.eventBus.on('Engineer:ReadRepo', (wrappedPayload) => {
+      const task = wrappedPayload?.data || wrappedPayload;
+      this._handleReadRepoTask(task);
+    });
   }
 
   // =============================================
@@ -663,6 +673,15 @@ class Engineer {
       return 'CLARIFICATION';
     }
 
+    const readRepoKeywords = [
+      'baca file', 'baca kode', 'baca code', 'tampilkan file', 'tampilkan kode', 'tampilkan code',
+      'read file', 'show file', 'show code', 'open file', 'lihat file', 'lihat kode', 'lihat code',
+      'isi file', 'isi dari', 'content of', 'content dari',
+      'list file', 'list folder', 'daftar file', 'daftar folder', 'list directory',
+      'cari file', 'search file', 'find file', 'dimana file', 'where is file',
+      'struktur folder', 'struktur direktori', 'tree folder', 'tree directory'
+    ];
+
     const analysisKeywords = [
       'analisis', 'review', 'telaah', 'evaluasi', 'cek', 'laporan',
       'analyze', 'analyse', 'check', 'examine', 'inspect',
@@ -679,8 +698,15 @@ class Engineer {
       'migrate', 'pindahkan', 'move'
     ];
 
+    const isReadRepo = readRepoKeywords.some(kw => text.includes(kw));
     const isAnalysis = analysisKeywords.some(kw => text.includes(kw));
     const isModify = modifyKeywords.some(kw => text.includes(kw));
+
+    // 0. READ_REPO — prioritas tertinggi sebelum ambiguity check
+    if (isReadRepo && !isModify) {
+      console.log('[Engineer] Intent detected: READ_REPO');
+      return 'READ_REPO';
+    }
 
     // 1. Jika ambiguous (kedua kategori terdeteksi)
     if (isAnalysis && isModify) {
@@ -782,6 +808,243 @@ class Engineer {
     });
   }
 
+  // =============================================
+  // READ REPO — Membaca file dari repository
+  // =============================================
+
+  /**
+   * Handler utama untuk intent READ_REPO.
+   * Dipanggil dari _handlePatchTask() saat intent = READ_REPO,
+   * dan dari listener Engineer:ReadRepo.
+   */
+  async _handleReadRepoTask(task) {
+    const taskText = `${task.title || ''} ${task.description || ''}`;
+    console.log(`[Engineer] 📂 READ_REPO task: ${task.title || task.id}`);
+
+    if (!this.repositoryReader) {
+      this._emitRecommendation({
+        type: 'READ_REPO_ERROR',
+        taskId: task.id,
+        message: '❌ **RepositoryReaderService** belum tersedia. Coba restart OS.',
+        requiresApproval: false
+      });
+      return;
+    }
+
+    // Deteksi apakah LIST atau READ
+    const isListRequest = /list|daftar|struktur|tree|folder|direktori|directory/i.test(taskText);
+    const isSearchRequest = /cari|search|find|dimana|where/i.test(taskText);
+
+    if (isListRequest) {
+      const dirPath = this._extractDirectoryFromPrompt(taskText);
+      await this._handleListDirectory(task, dirPath);
+    } else if (isSearchRequest) {
+      const query = this._extractSearchQueryFromPrompt(taskText);
+      await this._handleSearchFiles(task, query);
+    } else {
+      // Default: baca konten file
+      const paths = this._extractPathsFromPrompt(taskText);
+      if (paths.length === 0) {
+        this._emitRecommendation({
+          type: 'READ_REPO_CLARIFICATION',
+          taskId: task.id,
+          message: '❓ **Engineer** — Sebutkan nama file atau path yang ingin dibaca.\n\nContoh:\n- `baca file Kernel.js`\n- `tampilkan isi engineer.js`\n- `list folder frontend/src/core`\n- `cari file BrainService`',
+          requiresApproval: false
+        });
+        return;
+      }
+      await this._handleReadFiles(task, paths);
+    }
+  }
+
+  /**
+   * Membaca satu atau beberapa file dan emit hasilnya ke UI.
+   */
+  async _handleReadFiles(task, paths) {
+    const results = [];
+    const errors = [];
+
+    for (const requestedPath of paths) {
+      // Coba resolve path via FileIndexService (jika hanya nama file)
+      let resolvedPath = requestedPath;
+      if (!requestedPath.includes('/') && this.fileIndexService?.isReady) {
+        const resolved = this.fileIndexService.resolvePath(requestedPath);
+        if (resolved) {
+          resolvedPath = resolved;
+          console.log(`[Engineer] 🔍 Path resolved: ${requestedPath} → ${resolvedPath}`);
+        }
+      }
+
+      const result = await this.repositoryReader.readFile(resolvedPath);
+      if (result) {
+        results.push(result);
+        this.sessionArtifact?.addAnalyzedFile(resolvedPath);
+      } else {
+        // Coba search sebagai fallback
+        const searchResults = await this.repositoryReader.searchFiles(requestedPath);
+        if (searchResults.length > 0) {
+          const firstMatch = searchResults[0];
+          const fallback = await this.repositoryReader.readFile(firstMatch);
+          if (fallback) {
+            results.push(fallback);
+            this.sessionArtifact?.addAnalyzedFile(firstMatch);
+          } else {
+            errors.push(requestedPath);
+          }
+        } else {
+          errors.push(requestedPath);
+        }
+      }
+    }
+
+    if (results.length === 0) {
+      this._emitRecommendation({
+        type: 'READ_REPO_NOT_FOUND',
+        taskId: task.id,
+        message: `❌ **Engineer** — File tidak ditemukan: ${errors.join(', ')}\n\nGunakan \`cari file [nama]\` untuk mencari file yang dimaksud.`,
+        requiresApproval: false
+      });
+      return;
+    }
+
+    // Emit setiap file sebagai FileContent event ke UI
+    for (const file of results) {
+      this.eventBus.emit('Engineer:FileContent', {
+        taskId: task.id,
+        path: file.path,
+        content: file.content,
+        size: file.size,
+        backend: file.backend,
+        from: 'Engineer',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Juga emit summary sebagai Recommendation
+    const summary = results.map(r => `📄 \`${r.path}\` (${r.size} chars)`).join('\n');
+    const errorNote = errors.length > 0 ? `\n\n⚠️ Tidak ditemukan: ${errors.join(', ')}` : '';
+
+    this._emitRecommendation({
+      type: 'READ_REPO_RESULT',
+      taskId: task.id,
+      message: `✅ **Engineer** — ${results.length} file berhasil dibaca:\n\n${summary}${errorNote}`,
+      files: results.map(r => ({ path: r.path, size: r.size, content: r.content })),
+      requiresApproval: false
+    });
+  }
+
+  /**
+   * Mendaftar isi direktori dan emit hasilnya.
+   */
+  async _handleListDirectory(task, dirPath) {
+    const entries = await this.repositoryReader.listDirectory(dirPath);
+
+    if (entries.length === 0) {
+      this._emitRecommendation({
+        type: 'READ_REPO_EMPTY',
+        taskId: task.id,
+        message: `📁 **Engineer** — Direktori \`${dirPath || '(root)'}\` kosong atau tidak ditemukan.`,
+        requiresApproval: false
+      });
+      return;
+    }
+
+    const dirs = entries.filter(e => e.type === 'dir');
+    const files = entries.filter(e => e.type !== 'dir');
+    let listing = `📁 **Isi direktori:** \`${dirPath || '(root)'}\`\n\n`;
+    if (dirs.length) listing += `**Folder (${dirs.length}):**\n` + dirs.map(d => `  📁 ${d.name}`).join('\n') + '\n\n';
+    if (files.length) listing += `**File (${files.length}):**\n` + files.map(f => `  📄 ${f.name}`).join('\n');
+
+    this._emitRecommendation({
+      type: 'READ_REPO_LISTING',
+      taskId: task.id,
+      message: listing,
+      entries,
+      dirPath,
+      requiresApproval: false
+    });
+  }
+
+  /**
+   * Mencari file berdasarkan query dan emit hasilnya.
+   */
+  async _handleSearchFiles(task, query) {
+    const matches = await this.repositoryReader.searchFiles(query);
+
+    if (matches.length === 0) {
+      this._emitRecommendation({
+        type: 'READ_REPO_NOT_FOUND',
+        taskId: task.id,
+        message: `🔍 **Engineer** — Tidak ada file yang cocok dengan: \`${query}\``,
+        requiresApproval: false
+      });
+      return;
+    }
+
+    const listing = matches.slice(0, 30).map(p => `  📄 ${p}`).join('\n');
+    const note = matches.length > 30 ? `\n\n_...dan ${matches.length - 30} file lainnya._` : '';
+
+    this._emitRecommendation({
+      type: 'READ_REPO_SEARCH_RESULT',
+      taskId: task.id,
+      message: `🔍 **Engineer** — Ditemukan **${matches.length} file** untuk: \`${query}\`\n\n${listing}${note}\n\nGunakan \`baca file [nama lengkap]\` untuk membaca isinya.`,
+      matches,
+      query,
+      requiresApproval: false
+    });
+  }
+
+  /**
+   * Mengekstrak path/nama file dari teks prompt.
+   * Contoh: "baca file Kernel.js" → ["Kernel.js"]
+   *         "tampilkan engineer.js dan BrainService.js" → ["engineer.js", "BrainService.js"]
+   */
+  _extractPathsFromPrompt(text) {
+    const paths = [];
+
+    // Pattern 1: kata dengan ekstensi file (.js, .jsx, .ts, .tsx, .css, .md, .json, dll)
+    const extPattern = /[\w\-./]+\.(js|jsx|ts|tsx|css|scss|md|json|html|txt|yaml|yml|cjs|mjs|env)/gi;
+    const extMatches = text.match(extPattern) || [];
+    paths.push(...extMatches);
+
+    // Pattern 2: path dengan slash (e.g., "frontend/src/Kernel.js")
+    const pathPattern = /(?:file|path|dari|of|di|in)\s+([\w\-./]+)/gi;
+    let m;
+    while ((m = pathPattern.exec(text)) !== null) {
+      if (!paths.includes(m[1])) paths.push(m[1]);
+    }
+
+    // Deduplicate & filter terlalu pendek
+    return [...new Set(paths)].filter(p => p.length > 2);
+  }
+
+  /**
+   * Mengekstrak nama direktori dari teks prompt.
+   */
+  _extractDirectoryFromPrompt(text) {
+    // Coba ekstrak path eksplisit (e.g., "frontend/src/core")
+    const pathPattern = /(?:folder|direktori|directory|di|in|of)\s+([\w\-./]+)/i;
+    const m = text.match(pathPattern);
+    if (m) return m[1].replace(/\\/g, '/');
+
+    // Cari path-like string
+    const pathLike = text.match(/[\w]+\/[\w./\-]*/);
+    if (pathLike) return pathLike[0];
+
+    return ''; // root
+  }
+
+  /**
+   * Mengekstrak query pencarian dari teks prompt.
+   */
+  _extractSearchQueryFromPrompt(text) {
+    const m = text.match(/(?:cari|search|find|dimana|where(?:\s+is)?)\s+(?:file\s+)?(.+)/i);
+    if (m) return m[1].trim().replace(/\?$/, '');
+    return text.replace(/cari|search|find|file/gi, '').trim();
+  }
+
+
+
   async _handlePatchTask(task) {
     if (this.capability !== 'IMPLEMENTER' && this.capability !== 'SELF_MAINTENANCE') {
       this.eventBus.emit('Engineer:Recommendation', {
@@ -797,6 +1060,13 @@ class Engineer {
     this.intentState = 'ANALYZING';
     const intent = this._detectIntent(task);
     console.log(`[Engineer] 🎯 Intent detected: ${intent} (task: ${task.title || task.id})`);
+
+    if (intent === 'READ_REPO') {
+      this.intentState = 'READY';
+      console.log(`[Engineer] 📂 Redirecting to READ_REPO handler`);
+      await this._handleReadRepoTask(task);
+      return;
+    }
 
     if (intent === 'ANALYSIS') {
       this.intentState = 'READY';

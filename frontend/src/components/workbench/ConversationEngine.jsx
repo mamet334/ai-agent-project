@@ -224,11 +224,51 @@ export default function ConversationEngine({ sessionId }) {
       } else if (rec.type === 'ASK_CLARIFICATION') {
         setMessages(prev => [...prev, { role: 'model', content: rec.message, isReasoningBlock: false }]);
       }
+      // === READ_REPO HANDLERS ===
+      else if ([
+        'READ_REPO_RESULT', 'READ_REPO_LISTING', 'READ_REPO_SEARCH_RESULT',
+        'READ_REPO_CLARIFICATION', 'READ_REPO_NOT_FOUND', 'READ_REPO_ERROR',
+        'READ_REPO_EMPTY'
+      ].includes(rec.type)) {
+        setMessages(prev => [...prev, { role: 'model', content: rec.message }]);
+      }
     };
 
     const unsubscribe = eventBus.on('Engineer:Recommendation', handler);
     return () => eventBus.off('Engineer:Recommendation', unsubscribe);
   }, []);
+
+  // READ_REPO: Listen for Engineer:FileContent events
+  useEffect(() => {
+    const eventBus = kernel.serviceManager?.get('EventBus');
+    if (!eventBus) return;
+
+    const fileContentHandler = (payload) => {
+      const data = payload?.data || payload;
+      const { path, content, size, backend } = data;
+      
+      // Deteksi bahasa dari ekstensi untuk syntax highlight
+      const ext = path?.split('.').pop()?.toLowerCase() || '';
+      const langMap = {
+        js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript',
+        css: 'css', scss: 'scss', html: 'html', json: 'json', md: 'markdown',
+        py: 'python', yaml: 'yaml', yml: 'yaml', sh: 'bash', txt: 'text'
+      };
+      const lang = langMap[ext] || ext || 'text';
+      const backendLabel = backend === 'github-raw' ? '🌐 GitHub' : backend === 'electron' ? '💻 Electron' : '📦 Cache';
+      
+      const header = `📄 **${path}** — ${size?.toLocaleString() || 0} chars | ${backendLabel}`;
+      const codeBlock = `\`\`\`${lang}\n${content}\n\`\`\``;
+      const message = `${header}\n\n${codeBlock}`;
+      
+      setMessages(prev => [...prev, { role: 'model', content: message, isFileContent: true, filePath: path }]);
+    };
+
+    const unsubFileContent = eventBus.on('Engineer:FileContent', fileContentHandler);
+    return () => eventBus.off('Engineer:FileContent', unsubFileContent);
+  }, []);
+
+
 
   // FASE 3: Listen for Reasoning Report events (Engineer:ReasoningReport & Engineer:RequestConfirmation)
   useEffect(() => {

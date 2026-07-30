@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Home, MessageSquare, Zap, Terminal, FlaskConical, Database, Bot, ShieldCheck, Activity, Cpu, Settings } from 'lucide-react';
-import { serviceManager } from '../../core/runtime/ServiceManager';
+import { useService } from '../../core/runtime/hooks/useService';
 
 const ActivityIcon = ({ icon, active, tooltip, onClick, disabled }) => (
   <div 
@@ -19,13 +19,22 @@ const GroupSeparator = () => (
 );
 
 export default function ActivityBar() {
-  const applicationManager = serviceManager.get('ApplicationManager');
-  const navigationService = serviceManager.get('NavigationService');
-  
-  const [appState, setAppState] = useState(() => applicationManager.getState());
-  const [navTree, setNavTree] = useState(() => navigationService ? navigationService.getTree() : []);
+  const applicationManager = useService('ApplicationManager');
+  const navigationService = useService('NavigationService');
+
+  const [appState, setAppState] = useState({ apps: [], activeAppId: null });
+  const [navTree, setNavTree] = useState([]);
 
   useEffect(() => {
+    if (applicationManager) setAppState(applicationManager.getState());
+  }, [applicationManager]);
+
+  useEffect(() => {
+    if (navigationService) setNavTree(navigationService.getTree() || []);
+  }, [navigationService]);
+
+  useEffect(() => {
+    if (!applicationManager) return;
     const unsub = applicationManager.subscribe((payload) => {
       setAppState(payload?.data || payload);
       if (navigationService) {

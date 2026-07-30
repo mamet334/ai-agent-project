@@ -19,6 +19,7 @@ import { ToolRegistryService } from './services/ToolRegistryService.js';
 import { SemanticContextService } from './services/SemanticContextService.js';
 import { MetadataService } from '../metadata/MetadataService.js';
 import { NavigationService } from '../metadata/NavigationService.js';
+import { RepositoryReaderService } from './services/RepositoryReaderService.js';
 
 /**
  * MAEF Kernel v2.0
@@ -117,6 +118,8 @@ class Kernel {
       this.status = 'RUNNING';
       this.config.mode = 'OPERATIONAL';
       this.log('INFO', 'MAEF Kernel Bootstrap Complete — SYSTEM READY');
+      // Emit boot complete agar useService() hook bisa mengambil services
+      this._emitEvent(serviceManager, 'Kernel:BootComplete', { status: 'RUNNING' });
     } catch (error) {
       this.log('ERROR', 'Bootstrap Failed', error);
       await this._handleBootFailure(error);
@@ -206,6 +209,12 @@ class Kernel {
     const brainService = new BrainService(serviceManager);
     await brainService.initialize();
     serviceManager.register('BrainService', brainService);
+
+    // 3. Repository Reader Service — WAJIB sebelum Engineer
+    // Engineer menggunakan ini untuk membaca file dari repository via GitHub API / Electron
+    const repositoryReaderService = new RepositoryReaderService(serviceManager);
+    await repositoryReaderService.initialize();
+    serviceManager.register('RepositoryReaderService', repositoryReaderService);
 
     // Engineer Service (Engineering Brain)
     const engineer = new Engineer(serviceManager);

@@ -1,11 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { serviceManager } from '../../core/runtime/ServiceManager';
+import { useService } from '../../core/runtime/hooks/useService';
 
 export default function ApplicationContainer() {
-  const applicationManager = serviceManager.get('ApplicationManager');
-  const [appState, setAppState] = useState(() => applicationManager.getState());
+  const applicationManager = useService('ApplicationManager');
+  const [appState, setAppState] = useState({ apps: [], activeAppId: null });
 
   useEffect(() => {
+    if (applicationManager) setAppState(applicationManager.getState());
+  }, [applicationManager]);
+
+  useEffect(() => {
+    if (!applicationManager) return;
     return applicationManager.subscribe((payload) => setAppState(payload?.data || payload));
   }, [applicationManager]);
 
