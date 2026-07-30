@@ -183,8 +183,7 @@ class Engineer {
   async initialize() {
     await this._loadStaticKnowledge();
 
-    // ✅ Inisialisasi FileIndexService dan tunggu selesai
-    const { FileIndexService } = await import('./FileIndexService.js');
+    // ✅ Inisialisasi FileIndexService menggunakan static import di atas, dan tunggu selesai
     this.fileIndexService = new FileIndexService(this.storageManager);
     console.log('[Engineer] 🔨 Membangun FileIndexService...');
     await this.fileIndexService.buildIndex();
