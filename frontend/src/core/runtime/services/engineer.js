@@ -2,30 +2,43 @@ import { FileIndexService } from './FileIndexService.js';
 
 /**
  * Engineer.js — Engineering Brain Mamet AI (Real Analysis Engine + Core Protection)
- * 
+ *
  * Peran:
  * - Membaca static knowledge (constitution, ADR)
  * - Menerima tugas via event bus
  * - Menganalisis, memberi rekomendasi
  * - Tidak pernah mengeksekusi perubahan tanpa persetujuan User
  * - TIDAK BOLEH mengubah file core (Kernel, EventBus, dll)
- * 
+ *
  * Two-Brain Model:
  * - Brain 1: Static Engineering Knowledge (dimuat sekali)
  * - Brain 2: Dynamic Engineering Context (dibangun per tugas)
- * 
+ *
  * Status: IMPLEMENTER — siap menghasilkan dan menerapkan patch
  * Upgrade: Real Analysis Engine (MAEF 4.5) + Core Protection Layer + Granular Approval
- * 
+ *
  * Fixes Applied:
  * - ✅ Granular Approval support (approvedFiles flow)
  * - ✅ Confidence & Compliance injection ke UI
  * - ✅ Correct VerificationEngine method name (verifyPatchEngineering)
+ * - ✅ [FIX #1] requiresApproval tidak lagi di-override oleh _emitRecommendation()
+ * - ✅ [FIX #2] Timeout 10 menit di _waitForUserConfirmation() dan _requestApproval()
+ * - ✅ [FIX #3] Session Artifact di-inject ke prompt LLM via _buildPatchPrompt()
+ * - ✅ [FIX #4] Slice limit diselaraskan: max 10 file di _generatePatch() sesuai capability check
+ * - ✅ [FIX #5] _buildDynamicContext() diperkaya dengan file list dan metadata task
  */
+
+// =============================================
+// CONSTANTS
+// =============================================
+
+const CONFIRMATION_TIMEOUT_MS = 10 * 60 * 1000; // 10 menit
+const APPROVAL_TIMEOUT_MS = 10 * 60 * 1000;      // 10 menit
+const MAX_FILES_PER_PATCH = 10;                   // Harus sama dengan Capability Guard
 
 /**
  * SessionArtifact — Melacak konteks sesi Engineer untuk handoff antar model AI.
- * Diinisialisasi sekali saat Engineer.start() dan diperbarui per task.
+ * Diinisialisasi sekali saat Engineer.initialize() dan diperbarui per task.
  */
 class SessionArtifact {
   constructor(sessionId) {
@@ -113,7 +126,7 @@ class SessionArtifact {
     context += `File Dimodifikasi: ${summary.modifiedFilesCount} (${this.modifiedFiles.join(', ') || 'tidak ada'})\n`;
     context += `Keputusan Diambil: ${summary.decisionsCount}\n`;
     context += `Pelanggaran MAEF: ${summary.violationsFound}\n`;
-    
+
     if (this.reasoningReports.length > 0) {
       context += `\n=== REASONING REPORTS ===\n`;
       this.reasoningReports.forEach((r, i) => {
@@ -143,7 +156,7 @@ class Engineer {
     this.moduleLoader = serviceManager.get('ModuleLoader');
     this.fileIndexService = null; // Akan diinisialisasi setelah StorageManager siap
 
-    // Two‑Brain Model
+    // Two-Brain Model
     this.brain = {
       static: null,
       dynamic: null
@@ -169,17 +182,17 @@ class Engineer {
 
   async initialize() {
     await this._loadStaticKnowledge();
-  
+
     // ✅ Inisialisasi FileIndexService dan tunggu selesai
-    const FileIndexService = (await import('./FileIndexService.js')).FileIndexService;
+    const { FileIndexService } = await import('./FileIndexService.js');
     this.fileIndexService = new FileIndexService(this.storageManager);
     console.log('[Engineer] 🔨 Membangun FileIndexService...');
     await this.fileIndexService.buildIndex();
     console.log('[Engineer] ✅ FileIndexService siap digunakan');
-  
+
     // ✅ FASE 4: Inisialisasi Session Artifact (sekali, bukan per task)
     this._initializeSessionArtifact();
-  
+
     this._registerListeners(); // Pastikan terjadi SETELAH indeks siap!
     console.log(`[Engineer] Initialized as ${this.capability}`);
     this.eventBus.emit('Engineer:Ready', { capability: this.capability });
@@ -201,7 +214,7 @@ class Engineer {
 
   /**
    * Memperbarui Session Artifact berdasarkan action yang terjadi.
-   * @param {string} action - Tipe action: 'ANALYSIS' | 'PATCH_GENERATED' | 'VERIFICATION' | 'APPROVED' | 'REJECTED' | 'REASONING' | 'CAPABILITY_BLOCKED'
+   * @param {string} action - Tipe action
    * @param {Object} data - Data terkait action
    */
   _updateArtifact(action, data = {}) {
@@ -286,12 +299,16 @@ class Engineer {
   }
 
   /**
-   * Menghasilkan string konteks Session Artifact untuk di-inject ke prompt LLM.
-   * Berguna untuk handoff antar model AI.
-   * @returns {string} Konteks terformat
+   * [FIX #3] Menghasilkan string konteks Session Artifact untuk di-inject ke prompt LLM.
+   * @returns {string} Konteks terformat, atau string kosong jika artifact belum ada
    */
   _injectArtifactIntoPrompt() {
     if (!this.sessionArtifact) {
+      return '';
+    }
+    // Hanya inject jika ada aktivitas sebelumnya yang relevan
+    const summary = this.sessionArtifact.getSummary();
+    if (summary.taskCount === 0 && summary.decisionsCount === 0) {
       return '';
     }
     return this.sessionArtifact.toPromptContext();
@@ -323,11 +340,12 @@ class Engineer {
       });
     }
 
-    // 2. File Limit Check — maksimal 10 file
-    if (targetFiles.length > 10) {
+    // 2. File Limit Check — maksimal MAX_FILES_PER_PATCH file
+    // [FIX #4] Menggunakan konstanta MAX_FILES_PER_PATCH agar konsisten dengan _generatePatch()
+    if (targetFiles.length > MAX_FILES_PER_PATCH) {
       checks.push({
         pass: false,
-        reason: `Terlalu banyak file (${targetFiles.length} file). Maksimal 10 file per patch. Sarankan memecah tugas menjadi beberapa batch.`,
+        reason: `Terlalu banyak file (${targetFiles.length} file). Maksimal ${MAX_FILES_PER_PATCH} file per patch. Sarankan memecah tugas menjadi beberapa batch.`,
         suggestBatch: true
       });
     }
@@ -335,13 +353,13 @@ class Engineer {
     // 3. ADR Wajib Check — untuk perubahan struktur/core
     const relevantADR = this._findRelevantADR(task);
     if (!relevantADR) {
-      // Periksa apakah task menyentuh area yang membutuhkan ADR
-      // Gunakan frasa spesifik, bukan kata individual untuk menghindari false positive
-      const adrRequiredPhrases = ['perubahan arsitektur', 'arsitektur baru', 'service baru', 'module baru',
+      const adrRequiredPhrases = [
+        'perubahan arsitektur', 'arsitektur baru', 'service baru', 'module baru',
         'new architecture', 'new service', 'new module', 'restruktur', 'restrukturisasi',
         'mengubah flow', 'merubah flow', 'mengubah alur', 'merubah alur',
         'pipeline baru', 'integration baru', 'integrasi baru',
-        'architectural change', 'structural change'];
+        'architectural change', 'structural change'
+      ];
       const needsADR = adrRequiredPhrases.some(phrase => text.toLowerCase().includes(phrase));
       if (needsADR) {
         checks.push({
@@ -419,15 +437,13 @@ class Engineer {
   // =============================================
   // STATIC KNOWLEDGE (Brain 1)
   // =============================================
+
   async _loadStaticKnowledge() {
     try {
       const constitutionPaths = [
-        // 📁 File di root proyek
         'init.md',
         'agent.md',
         'AGENTS.md',
-        
-        // 📁 File di folder constitution/
         'constitution/MAEF_v3.0.md',
         'constitution/Mamet_AI_Constitution_v2.0.md',
         'constitution/vision.md',
@@ -489,17 +505,18 @@ class Engineer {
   // =============================================
   // EVENT LISTENERS
   // =============================================
+
   _registerListeners() {
     this.eventBus.on('Engineer:AnalyzeTask', (wrappedPayload) => {
       const task = wrappedPayload?.data || wrappedPayload;
       this._handleAnalysisTask(task);
     });
-    
+
     this.eventBus.on('Engineer:ReviewChanges', (wrappedPayload) => {
       const task = wrappedPayload?.data || wrappedPayload;
       this._handleReviewTask(task);
     });
-    
+
     this.eventBus.on('Engineer:GeneratePatch', (wrappedPayload) => {
       const task = wrappedPayload?.data || wrappedPayload;
       console.log('[Engineer] 📨 Received GeneratePatch event:', task);
@@ -507,12 +524,12 @@ class Engineer {
       console.log('[Engineer] Task description:', task?.description?.substring(0, 100));
       this._handlePatchTask(task);
     });
-    
+
     this.eventBus.on('Engineer:ApprovalResponse', (wrappedPayload) => {
       const response = wrappedPayload?.data || wrappedPayload;
       this._handleApprovalResponse(response);
     });
-    
+
     // FASE 3: Reasoning Lock listener
     this.eventBus.on('Engineer:UserConfirmation', (wrappedPayload) => {
       const response = wrappedPayload?.data || wrappedPayload;
@@ -535,7 +552,7 @@ class Engineer {
   _emitReasoningReport(task, analysis, options = {}) {
     const { intent = 'MODIFY_CODE', capabilityCheck = null, modelName = 'unknown' } = options;
     const targetFiles = task.files || this._extractFileNamesFromTask(task);
-    
+
     const report = {
       taskId: task.id,
       summary: analysis.summary || `Analisis selesai untuk task: ${task.title || task.id}`,
@@ -556,29 +573,43 @@ class Engineer {
     console.log(`[Engineer] 📋 Report summary: ${report.summary}`);
     console.log(`[Engineer] 🎯 Intent: ${intent}, Model: ${modelName}`);
 
-    // Emit event ke UI untuk ditampilkan sebagai Reasoning Block
     this.eventBus.emit('Engineer:ReasoningReport', {
       ...report,
       from: 'Engineer',
       capability: this.capability,
-      requiresApproval: false, // Reasoning report tidak require approval, hanya konfirmasi
+      requiresApproval: false, // Reasoning report hanya perlu konfirmasi, bukan approval
     });
 
     return report;
   }
 
   /**
-   * Menunggu konfirmasi eksplisit dari user sebelum melanjutkan ke generasi patch.
-   * Mengembalikan Promise yang di-resolve ketika user mengkonfirmasi (via Engineer:UserConfirmation).
+   * [FIX #2] Menunggu konfirmasi eksplisit dari user sebelum melanjutkan ke generasi patch.
+   * Sekarang memiliki timeout otomatis 10 menit untuk mencegah memory leak.
    * @param {Object} report - Reasoning report yang akan dikonfirmasi
-   * @returns {Promise<boolean>} true jika user mengkonfirmasi, false jika dibatalkan
+   * @returns {Promise<boolean>} true jika user mengkonfirmasi, false jika dibatalkan atau timeout
    */
   _waitForUserConfirmation(report) {
     return new Promise((resolve) => {
       const confirmationId = report.taskId || `CONFIRM-${Date.now()}`;
 
-      // Simpan resolver di Map untuk direspon dari event listener
-      this.pendingConfirmations.set(confirmationId, { report, resolver: resolve });
+      // [FIX #2] Timeout otomatis untuk mencegah memory leak
+      const timeout = setTimeout(() => {
+        if (this.pendingConfirmations.has(confirmationId)) {
+          console.warn(`[Engineer] ⏰ Confirmation timeout for ID: ${confirmationId}. Auto-cancelling.`);
+          this.pendingConfirmations.delete(confirmationId);
+          resolve(false);
+        }
+      }, CONFIRMATION_TIMEOUT_MS);
+
+      // Simpan resolver + timeout di Map
+      this.pendingConfirmations.set(confirmationId, {
+        report,
+        resolver: (result) => {
+          clearTimeout(timeout); // Bersihkan timeout saat user merespons
+          resolve(result);
+        }
+      });
 
       // Emit event ke UI untuk menampilkan tombol konfirmasi
       this.eventBus.emit('Engineer:RequestConfirmation', {
@@ -591,10 +622,11 @@ class Engineer {
         modelName: report.modelName,
         filesAnalyzed: report.filesAnalyzed,
         recommendedFiles: report.recommendedFiles,
+        timeoutMs: CONFIRMATION_TIMEOUT_MS,
         timestamp: new Date().toISOString()
       });
 
-      console.log(`[Engineer] ⏳ Waiting for user confirmation (ID: ${confirmationId})...`);
+      console.log(`[Engineer] ⏳ Waiting for user confirmation (ID: ${confirmationId}, timeout: ${CONFIRMATION_TIMEOUT_MS / 1000}s)...`);
     });
   }
 
@@ -611,7 +643,7 @@ class Engineer {
       pending.resolver(confirmed === true);
       this.pendingConfirmations.delete(confirmationId);
     } else {
-      console.warn(`[Engineer] ⚠️ No pending confirmation found for ID: ${confirmationId}`);
+      console.warn(`[Engineer] ⚠️ No pending confirmation found for ID: ${confirmationId} (mungkin sudah timeout)`);
     }
   }
 
@@ -626,7 +658,7 @@ class Engineer {
    */
   _detectIntent(task) {
     const text = `${task.title || ''} ${task.description || ''}`.toLowerCase().trim();
-    
+
     if (!text) {
       console.log('[Engineer] Task text kosong, return CLARIFICATION');
       return 'CLARIFICATION';
@@ -634,7 +666,7 @@ class Engineer {
 
     const analysisKeywords = [
       'analisis', 'review', 'telaah', 'evaluasi', 'cek', 'laporan',
-      'analyze', 'analyse', 'check', 'review', 'examine', 'inspect',
+      'analyze', 'analyse', 'check', 'examine', 'inspect',
       'audit', 'lihat', 'baca', 'pelajari', 'cari tahu',
       'what is', 'how does', 'explain', 'describe', 'tunjukkan',
       'diagnosa', 'diagnose'
@@ -645,19 +677,18 @@ class Engineer {
       'change', 'add', 'remove', 'delete', 'fix', 'implement',
       'modify', 'update', 'create', 'buat', 'tulis', 'write',
       'patch', 'edit', 'ganti', 'masukkan', 'insert',
-      'refactor', 'migrate', 'pindahkan', 'move'
+      'migrate', 'pindahkan', 'move'
     ];
 
-    let isAnalysis = analysisKeywords.some(kw => text.includes(kw));
-    let isModify = modifyKeywords.some(kw => text.includes(kw));
+    const isAnalysis = analysisKeywords.some(kw => text.includes(kw));
+    const isModify = modifyKeywords.some(kw => text.includes(kw));
 
-    // === LOGIKA KLARIFIKASI ===
     // 1. Jika ambiguous (kedua kategori terdeteksi)
     if (isAnalysis && isModify) {
       console.log('[Engineer] Intent ambiguous: analysis + modify detected');
       return 'CLARIFICATION';
     }
-    
+
     // 2. Jika tidak ada kategori yang terdeteksi
     if (!isAnalysis && !isModify) {
       console.log('[Engineer] Intent unknown: no keywords matched');
@@ -678,9 +709,39 @@ class Engineer {
   // =============================================
   // DYNAMIC CONTEXT (Brain 2) & TASK HANDLING
   // =============================================
+
+  /**
+   * [FIX #5] _buildDynamicContext() diperkaya dengan metadata task dan file list.
+   * Sebelumnya hampir kosong — sekarang menyediakan konteks yang berguna untuk analisis.
+   * @param {Object} task - Task yang sedang diproses
+   * @returns {Object} Dynamic context object
+   */
   async _buildDynamicContext(task) {
+    const targetFiles = task.files || this._extractFileNamesFromTask(task);
+    let availableFiles = [];
+
+    try {
+      if (this.fileIndexService && this.fileIndexService.isReady) {
+        availableFiles = this.fileIndexService.getAllFiles?.() || [];
+      }
+    } catch (e) {
+      console.warn('[Engineer] Gagal mengambil file list dari FileIndexService:', e.message);
+    }
+
     return {
-      task: task,
+      task: {
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        files: targetFiles,
+        requestedModel: task.requestedModel || null
+      },
+      projectContext: {
+        totalIndexedFiles: availableFiles.length,
+        targetFileCount: targetFiles.length,
+        staticKnowledgeLoaded: this.brain.static?.loadedFiles?.length || 0
+      },
+      sessionContext: this.sessionArtifact ? this.sessionArtifact.getSummary() : null,
       timestamp: new Date().toISOString()
     };
   }
@@ -690,7 +751,7 @@ class Engineer {
     console.log(`[Engineer] Analyzing task: ${task.title || task.id}`);
     this.brain.dynamic = await this._buildDynamicContext(task);
     const analysis = await this._analyze(task);
-    
+
     // FASE 4: Update Session Artifact
     this._updateArtifact('ANALYSIS', {
       taskId: task.id,
@@ -698,12 +759,13 @@ class Engineer {
       violations: analysis.compliance?.violations || [],
       summary: analysis.summary
     });
-    
+
     this._emitRecommendation({
       type: 'ANALYSIS',
       taskId: task.id,
       analysis,
-      confidence: this._calculateConfidence(analysis)
+      confidence: this._calculateConfidence(analysis),
+      requiresApproval: false
     });
   }
 
@@ -716,7 +778,8 @@ class Engineer {
       type: 'REVIEW',
       taskId: task.id,
       review,
-      confidence: this._calculateConfidence(review)
+      confidence: this._calculateConfidence(review),
+      requiresApproval: false
     });
   }
 
@@ -736,7 +799,6 @@ class Engineer {
     const intent = this._detectIntent(task);
     console.log(`[Engineer] 🎯 Intent detected: ${intent} (task: ${task.title || task.id})`);
 
-    // Jika intent ANALYSIS, redirect ke analisis (bukan patch)
     if (intent === 'ANALYSIS') {
       this.intentState = 'READY';
       console.log(`[Engineer] 📋 Redirecting to ANALYSIS handler (bukan patch)`);
@@ -744,15 +806,9 @@ class Engineer {
       return;
     }
 
-    // Jika intent CLARIFICATION, minta user untuk memperjelas
     if (intent === 'CLARIFICATION') {
       this.intentState = 'ASK_CLARIFICATION';
-      const clarificationMsg = `Permintaan Anda membutuhkan klarifikasi. Apakah Anda ingin:
-1. 🔍 **Menganalisis** kode yang ada?
-2. ✏️ **Memodifikasi/menambahkan** kode?
-3. 📖 **Meninjau** perubahan yang sudah ada?
-
-_Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
+      const clarificationMsg = `Permintaan Anda membutuhkan klarifikasi. Apakah Anda ingin:\n1. 🔍 **Menganalisis** kode yang ada?\n2. ✏️ **Memodifikasi/menambahkan** kode?\n3. 📖 **Meninjau** perubahan yang sudah ada?\n\n_Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
 
       console.log(`[Engineer] ❓ Asking clarification for task: ${task.title || task.id}`);
       this._emitRecommendation({
@@ -765,14 +821,13 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
       return;
     }
 
-    // Jika sampai sini, intent pasti MODIFY_CODE — lanjut ke flow normal
+    // Jika sampai sini, intent pasti MODIFY_CODE
     this.intentState = 'PROCEEDING';
     this.metrics.patchesGenerated++;
     console.log(`[Engineer] 🔨 Proceeding with patch generation for: ${task.title || task.id}`);
     this.brain.dynamic = await this._buildDynamicContext(task);
-    
+
     // === FASE 2: CAPABILITY GUARD ===
-    // Ambil model name untuk transparansi
     let modelName = 'unknown';
     try {
       const brainService = this.serviceManager.get('BrainService');
@@ -785,9 +840,13 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
     }
 
     const capabilityCheck = this._checkCapabilityAndDeclare(task, { modelName });
-    
+
     if (!capabilityCheck.pass) {
       console.log(`[Engineer] 🚫 Capability check blocked task: ${task.title || task.id}`);
+      this._updateArtifact('CAPABILITY_BLOCKED', {
+        taskId: task.id,
+        reason: capabilityCheck.reason
+      });
       this._emitRecommendation({
         type: 'CAPABILITY_BLOCKED',
         taskId: task.id,
@@ -800,25 +859,24 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
     }
 
     const analysis = await this._analyze(task);
-    
+
     // === FASE 3: REASONING LOCK ===
-    // Emit reasoning report dan tunggu konfirmasi user sebelum generate patch
     const reasoningReport = this._emitReasoningReport(task, analysis, {
       intent: 'MODIFY_CODE',
       capabilityCheck,
       modelName
     });
-    
+
     // FASE 4: Update Session Artifact — Reasoning
     this._updateArtifact('REASONING', {
       taskId: task.id,
       report: reasoningReport,
       summary: reasoningReport.summary
     });
-    
+
     // Tunggu konfirmasi user (Reasoning Lock)
     const userConfirmed = await this._waitForUserConfirmation(reasoningReport);
-    
+
     if (!userConfirmed) {
       console.log(`[Engineer] 🚫 User membatalkan task: ${task.title || task.id}`);
       this._emitRecommendation({
@@ -831,7 +889,7 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
       });
       return;
     }
-    
+
     console.log(`[Engineer] ✅ User confirmed, proceeding to generate patch for: ${task.title || task.id}`);
     const patch = await this._generatePatch(task);
 
@@ -878,7 +936,8 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
               patch,
               verification: patch.verification,
               message: `Patch tidak lolos verifikasi: ${patch.verification.criticalCount} masalah kritis.`,
-              confidence: this._calculateConfidence(analysis)
+              confidence: this._calculateConfidence(analysis),
+              requiresApproval: false
             });
             return;
           }
@@ -894,35 +953,37 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
       if (approvalResult.approved) {
         await this._executePatchApplication(patch, approvalResult.approvedFiles);
         this.metrics.patchesApproved++;
-        
+
         // FASE 4: Update Session Artifact — Approved
         this._updateArtifact('APPROVED', {
           taskId: task.id,
           files: approvalResult.approvedFiles
         });
-        
+
         this._emitRecommendation({
           type: 'PATCH_APPLIED',
           taskId: task.id,
           patch,
           message: `Patch diterapkan: ${approvalResult.approvedFiles.length} file dari ${patch.files.length}.`,
-          confidence: this._calculateConfidence(analysis)
+          confidence: this._calculateConfidence(analysis),
+          requiresApproval: false
         });
       } else {
         this.metrics.patchesRejected++;
-        
+
         // FASE 4: Update Session Artifact — Rejected
         this._updateArtifact('REJECTED', {
           taskId: task.id,
           reason: 'User menolak patch'
         });
-        
+
         this._emitRecommendation({
           type: 'PATCH_REJECTED',
           taskId: task.id,
           patch,
           message: 'Patch ditolak oleh User.',
-          confidence: this._calculateConfidence(analysis)
+          confidence: this._calculateConfidence(analysis),
+          requiresApproval: false
         });
       }
     } else {
@@ -931,7 +992,8 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
           type: 'PATCH_FAILED',
           taskId: task.id,
           patch,
-          confidence: this._calculateConfidence(analysis)
+          confidence: this._calculateConfidence(analysis),
+          requiresApproval: false
         });
       }
     }
@@ -942,9 +1004,9 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
     const pending = this.pendingPatches.get(patchId);
 
     if (pending) {
-      pending.resolver({ 
-        approved, 
-        approvedFiles: approvedFiles || [] 
+      pending.resolver({
+        approved,
+        approvedFiles: approvedFiles || []
       });
       this.pendingPatches.delete(patchId);
     }
@@ -1021,7 +1083,7 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
 
   _findRelevantADR(task) {
     const text = `${task.title || ''} ${task.description || ''}`.toLowerCase();
-    
+
     const adrMapping = [
       { keywords: ['event', 'bus', 'emit', 'listener'], file: 'constitution/11_MAEF_EVENT_SYSTEM.md' },
       { keywords: ['kernel', 'boot', 'phase', 'service'], file: 'constitution/02_MAEF_KERNEL.md' },
@@ -1033,23 +1095,23 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
       { keywords: ['logging', 'telemetry', 'observability'], file: 'constitution/15_LOGGING_OBSERVABILITY_SYSTEM.md' },
       { keywords: ['metric', 'health', 'shi'], file: 'constitution/16_ENGINEERING_METRICS_SYSTEM.md' }
     ];
-    
+
     for (const mapping of adrMapping) {
       if (mapping.keywords.some(kw => text.includes(kw))) {
         return { title: mapping.file, path: mapping.file };
       }
     }
-    
+
     return null;
   }
 
   _checkCompliance(fileContents) {
     const violations = [];
     const warnings = [];
-    
+
     for (const [filePath, content] of Object.entries(fileContents)) {
       const lines = content.split('\n');
-      
+
       const eventEmitRegex = /eventBus\.emit\(['"]([^'"]+)['"]/g;
       const eventMatches = [...content.matchAll(eventEmitRegex)];
       for (const match of eventMatches) {
@@ -1064,7 +1126,7 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
           });
         }
       }
-      
+
       if (content.includes('eval(') || content.includes('new Function(')) {
         violations.push({
           file: filePath,
@@ -1074,7 +1136,7 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
           message: 'Terdeteksi penggunaan eval() atau new Function() yang dilarang'
         });
       }
-      
+
       const directVendorCalls = [
         /fetch\(['"]https:\/\/api\.openai\.com/,
         /fetch\(['"]https:\/\/generativelanguage\.googleapis\.com/,
@@ -1091,7 +1153,7 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
           });
         }
       }
-      
+
       if (lines.length > 200) {
         const jsdocCount = (content.match(/\/\*\*[\s\S]*?\*\//g) || []).length;
         if (jsdocCount < 3) {
@@ -1104,20 +1166,20 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
         }
       }
     }
-    
+
     return { violations, warnings };
   }
 
   async _analyze(task) {
     console.log(`[Engineer] Memulai Real Analysis untuk: ${task.title || task.id}`);
-    
+
     const targetFiles = this._extractFileNamesFromTask(task);
     console.log(`[Engineer] File terdeteksi: ${targetFiles.join(', ')}`);
-    
+
     const fileContents = {};
     const readResults = [];
-    
-    for (const filePath of targetFiles.slice(0, 10)) {
+
+    for (const filePath of targetFiles.slice(0, MAX_FILES_PER_PATCH)) {
       const result = await this._tryReadFile(filePath);
       if (result) {
         fileContents[result.path] = result.content;
@@ -1126,35 +1188,34 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
         readResults.push({ file: filePath, status: 'NOT_FOUND' });
       }
     }
-    
+
     const relevantADR = this._findRelevantADR(task);
     let adrContent = null;
     if (relevantADR) {
       adrContent = await this.readFile(relevantADR.path);
     }
-    
+
     const compliance = this._checkCompliance(fileContents);
-    
     const findings = [];
-    
+
     if (compliance.violations.length > 0) {
       findings.push(`🔴 Ditemukan ${compliance.violations.length} pelanggaran MAEF:`);
       compliance.violations.forEach(v => {
         findings.push(`   - [${v.severity}] ${v.file}:${v.line || '?'} - ${v.message} (${v.rule})`);
       });
     }
-    
+
     if (compliance.warnings.length > 0) {
       findings.push(`🟡 Ditemukan ${compliance.warnings.length} peringatan:`);
       compliance.warnings.forEach(w => {
         findings.push(`   - [${w.severity}] ${w.file} - ${w.message}`);
       });
     }
-    
+
     if (compliance.violations.length === 0 && compliance.warnings.length === 0) {
       findings.push('✅ Tidak ada pelanggaran MAEF yang terdeteksi pada file yang dianalisis.');
     }
-    
+
     const metrics = {
       filesAnalyzed: Object.keys(fileContents).length,
       totalCodeLines: Object.values(fileContents).reduce((sum, c) => sum + c.split('\n').length, 0),
@@ -1162,15 +1223,15 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
       warningsFound: compliance.warnings.length,
       adrReferenced: relevantADR ? relevantADR.path : 'None'
     };
-    
+
     return {
       summary: `Analisis selesai: ${metrics.filesAnalyzed} file, ${metrics.totalCodeLines} baris kode, ${metrics.violationsFound} pelanggaran`,
       findings: findings,
       rawContext: fileContents,
       compliance: compliance,
       metrics: metrics,
-      recommendation: metrics.violationsFound > 0 
-        ? 'Perlu perbaikan untuk mematuhi MAEF' 
+      recommendation: metrics.violationsFound > 0
+        ? 'Perlu perbaikan untuk mematuhi MAEF'
         : 'Kode aman, lanjutkan dengan implementasi fitur'
     };
   }
@@ -1192,13 +1253,14 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
       const relevantFiles = task?.files || [];
       const fileContents = {};
 
-      const targetFiles = relevantFiles.length > 0 
-        ? relevantFiles 
+      const targetFiles = relevantFiles.length > 0
+        ? relevantFiles
         : this._extractFileNamesFromTask(task);
 
       console.log(`[Engineer] 📂 Target files: ${targetFiles.join(', ')}`);
 
-      for (const filePath of targetFiles.slice(0, 5)) {
+      // [FIX #4] Disamakan dengan MAX_FILES_PER_PATCH (10), sebelumnya hanya slice(0, 5)
+      for (const filePath of targetFiles.slice(0, MAX_FILES_PER_PATCH)) {
         const result = await this._tryReadFile(filePath);
         if (result) {
           fileContents[result.path] = result.content;
@@ -1210,53 +1272,43 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
 
       if (Object.keys(fileContents).length === 0) {
         console.warn('[Engineer] No files could be read for patch generation');
-        return { 
-          files: [], 
-          description: 'No target files could be read.', 
-          ready: false, 
-          error: 'No readable files' 
+        return {
+          files: [],
+          description: 'No target files could be read.',
+          ready: false,
+          error: 'No readable files'
         };
       }
 
       let generatedCode = null;
       let rawLLMResponse = null;
       let modelUsed = 'fallback';
-      
+
       console.log('[Engineer] 🔍 Checking BrainService availability...');
-      console.log('[Engineer] serviceManager exists:', !!this.serviceManager);
-      console.log('[Engineer] serviceManager.has("BrainService"):', this.serviceManager?.has('BrainService'));
-      
-      if (this.serviceManager?.list) {
-        console.log('[Engineer] Available services:', this.serviceManager.list());
-      }
-      
+
       let brainService = null;
       try {
         brainService = this.serviceManager.get('BrainService');
-        console.log('[Engineer] BrainService object:', brainService);
-        console.log('[Engineer] BrainService methods:', brainService ? Object.getOwnPropertyNames(Object.getPrototypeOf(brainService)) : 'null');
       } catch (e) {
         console.error('[Engineer] Error getting BrainService:', e.message);
       }
-      
+
       if (brainService && typeof brainService.executeLLM === 'function') {
         console.log(`[Engineer] 🧠 BrainService available, calling LLM...`);
         const prompt = this._buildPatchPrompt(task, fileContents);
-        
+
         try {
-          rawLLMResponse = await brainService.executeLLM(prompt, { 
-            model: task?.requestedModel 
+          rawLLMResponse = await brainService.executeLLM(prompt, {
+            model: task?.requestedModel
           });
           modelUsed = task?.requestedModel || brainService.currentModel || 'unknown';
-          
+
           console.log(`[Engineer] === LLM RAW RESPONSE DIAGNOSTIC ===`);
           console.log(`[Engineer] 🤖 Model: ${modelUsed}`);
           console.log(`[Engineer] Response length: ${rawLLMResponse?.length || 0} chars`);
-          console.log(`[Engineer] Contains '{': ${rawLLMResponse?.includes('{') || false}`);
-          console.log(`[Engineer] Contains '}': ${rawLLMResponse?.includes('}') || false}`);
           console.log(`[Engineer] First 300 chars: "${(rawLLMResponse || '').substring(0, 300).replace(/\n/g, '\\n')}"`);
           console.log(`[Engineer] === END DIAGNOSTIC ===`);
-          
+
           generatedCode = this._extractCodeFromResponse(rawLLMResponse);
         } catch (llmError) {
           console.error('[Engineer] LLM call failed:', llmError.message);
@@ -1264,36 +1316,31 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
         }
       } else {
         console.warn('[Engineer] ⚠️ BrainService not available or missing executeLLM method');
-        console.log('[Engineer] brainService:', brainService);
-        console.log('[Engineer] brainService.executeLLM:', brainService?.executeLLM);
         generatedCode = this._generateFallbackPatch(task, fileContents);
       }
 
       const patchFiles = [];
       for (const [filePath, newContent] of Object.entries(generatedCode || {})) {
-        // Skip key "message" yang merupakan field wrapper dari backend, bukan file path
         if (filePath === 'message' || filePath === 'reply' || filePath === 'content') continue;
-        
+
         let finalContent = null;
-        
+
         // === HANDLE FORMAT SEARCH-REPLACE ===
         if (newContent && typeof newContent === 'object' && newContent.__mode === 'search_replace') {
           const originalContent = fileContents[filePath] || '';
           let workingContent = originalContent;
           let changeCount = 0;
-          
+
           if (Array.isArray(newContent.changes)) {
             for (const change of newContent.changes) {
               if (!change.search || typeof change.search !== 'string') continue;
               if (typeof change.replace !== 'string') continue;
-              
-              // Coba exact match dulu
+
               if (workingContent.includes(change.search)) {
                 workingContent = workingContent.replace(change.search, change.replace);
                 changeCount++;
                 console.log(`[Engineer] ✅ Search-replace applied: "${change.search.substring(0, 50)}..."`);
               } else {
-                // Coba trimmed match
                 const trimmedSearch = change.search.trim();
                 if (workingContent.includes(trimmedSearch)) {
                   workingContent = workingContent.replace(trimmedSearch, change.replace);
@@ -1305,7 +1352,7 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
               }
             }
           }
-          
+
           if (changeCount > 0) {
             finalContent = workingContent;
             console.log(`[Engineer] 🔄 Search-replace mode: ${changeCount} perubahan diterapkan ke ${filePath}`);
@@ -1323,7 +1370,7 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
           console.warn(`[Engineer] ⚠️ Skipping file "${filePath}": format tidak dikenal (${typeof newContent})`);
           continue;
         }
-        
+
         patchFiles.push({
           path: filePath,
           newContent: finalContent,
@@ -1353,10 +1400,23 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
     }
   }
 
+  /**
+   * [FIX #3] _buildPatchPrompt() sekarang menyertakan Session Artifact context
+   * untuk memungkinkan handoff antar model AI.
+   */
   _buildPatchPrompt(task, fileContents) {
     let prompt = `### SYSTEM INSTRUCTION (WAJIB DIPATUHI) ###\n`;
     prompt += `Anda adalah Mamet Engineer. Tugas Anda adalah menghasilkan PATCH FILE dalam format JSON MURNI.\n\n`;
-    
+
+    // [FIX #3] Inject Session Artifact jika ada konteks sesi sebelumnya
+    const artifactContext = this._injectArtifactIntoPrompt();
+    if (artifactContext) {
+      prompt += `### KONTEKS SESI SEBELUMNYA ###\n`;
+      prompt += `(Gunakan ini sebagai referensi keputusan yang sudah diambil dalam sesi ini)\n`;
+      prompt += artifactContext;
+      prompt += `\n\n`;
+    }
+
     prompt += `### ATURAN OUTPUT (CRITICAL - JANGAN DILANGGAR) ###\n`;
     prompt += `1. Karakter PERTAMA output Anda HARUS "{" (kurung kurawal buka)\n`;
     prompt += `2. Karakter TERAKHIR output Anda HARUS "}" (kurung kurawal tutup)\n`;
@@ -1365,34 +1425,31 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
     prompt += `5. DILARANG KERAS menggunakan markdown code block (\`\`\`json atau \`\`\`)\n`;
     prompt += `6. DILARANG KERAS menambah komentar di luar JSON\n`;
     prompt += `7. Output Anda akan di-PARSE oleh mesin. Jika ada teks di luar JSON, sistem akan ERROR.\n\n`;
-    
+
     prompt += `### FORMAT JSON WAJIB ###\n`;
     prompt += `{\n`;
     prompt += `  "path/lengkap/ke/file1.jsx": "KONTEN LENGKAP FILE SETELAH PERUBAHAN (semua baris, dari import sampai penutup)",\n`;
     prompt += `  "path/lengkap/ke/file2.js": "KONTEN LENGKAP FILE SETELAH PERUBAHAN"\n`;
     prompt += `}\n\n`;
-    
+
     prompt += `### CONTOH OUTPUT YANG BENAR ###\n`;
     prompt += `{\n`;
-    prompt += `  "frontend/src/components/chat/ConversationEngine.jsx": "import React from 'react';\\n\\nexport default function ConversationEngine() {\\n  console.log('Test Mamet OS');\\n  return <div>Test</div>;\\n}"\n`;
+    prompt += `  "frontend/src/components/chat/ConversationEngine.jsx": "import React from 'react';\\n\\nexport default function ConversationEngine() {\\n  return <div>Test</div>;\\n}"\n`;
     prompt += `}\n\n`;
-    
+
     prompt += `### CONTOH OUTPUT YANG SALAH (JANGAN DITIRU) ###\n`;
     prompt += `❌ "Tentu, berikut patch-nya:\\n\`\`\`json\\n{...}\\n\`\`\`\\nSemoga membantu!"\n`;
     prompt += `❌ "Saya akan menambahkan console.log. Ini kodenya: {...}"\n`;
     prompt += `❌ \`\`\`json\\n{...}\\n\`\`\`\n\n`;
-    
+
     prompt += `### TUGAS ANDA ###\n`;
     prompt += `Task ID: ${task.title || task.id}\n`;
     prompt += `Deskripsi: ${task.description || 'Tidak ada deskripsi'}\n\n`;
 
     if (Object.keys(fileContents).length > 0) {
-      // Tentukan apakah file besar atau kecil
       const isLargeFile = Object.values(fileContents).some(c => c.length > 6000);
-      
+
       if (isLargeFile) {
-        // === STRATEGI UNTUK FILE BESAR: SEARCH-REPLACE ===
-        // Jangan minta LLM kembalikan full file — terlalu besar dan sering truncate
         prompt += `### STRATEGI MODIFIKASI: SEARCH-REPLACE ###\n`;
         prompt += `File yang diminta BESAR (>6000 chars). JANGAN kembalikan full file!\n`;
         prompt += `Gunakan format JSON SEARCH-REPLACE berikut:\n\n`;
@@ -1407,19 +1464,7 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
         prompt += `    ]\n`;
         prompt += `  }\n`;
         prompt += `}\n\n`;
-        prompt += `### CONTOH SEARCH-REPLACE YANG BENAR ###\n`;
-        prompt += `{\n`;
-        prompt += `  "frontend/src/components/workbench/ConversationEngine.jsx": {\n`;
-        prompt += `    "__mode": "search_replace",\n`;
-        prompt += `    "changes": [\n`;
-        prompt += `      {\n`;
-        prompt += `        "search": "const ConversationEngine = () => {",\n`;
-        prompt += `        "replace": "const ConversationEngine = () => {\\n  console.log('[ConversationEngine] Component mounted');"\n`;
-        prompt += `      }\n`;
-        prompt += `    ]\n`;
-        prompt += `  }\n`;
-        prompt += `}\n\n`;
-        
+
         prompt += `### FILE YANG DIMINTA UNTUK DIUBAH (REFERENSI) ###\n`;
         prompt += `(Hanya lihat konteks sekitar area yang perlu diubah. JANGAN kembalikan full file!)\n\n`;
         const MAX_FILE_CHARS = 8000;
@@ -1436,7 +1481,6 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
           prompt += `\n--- END FILE ---\n\n`;
         }
       } else {
-        // === STRATEGI UNTUK FILE KECIL: FULL REPLACEMENT ===
         prompt += `### FILE YANG DIMINTA UNTUK DIUBAH ###\n`;
         prompt += `(Kembalikan KONTEN LENGKAP file setelah perubahan dalam JSON)\n\n`;
         for (const [path, content] of Object.entries(fileContents)) {
@@ -1447,7 +1491,6 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
       }
     }
 
-    
     prompt += `### ATURAN KODE (WAJIB DIPATUHI) ###\n`;
     prompt += `- Kembalikan KONTEN LENGKAP file (jangan hanya diff/patch partial)\n`;
     prompt += `- Jangan ubah file yang tidak diminta\n`;
@@ -1457,11 +1500,8 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
     prompt += `- Event EventBus HARUS pakai format Kategori:Nama (contoh: Engineer:Ready)\n`;
     prompt += `- Jangan panggil API vendor langsung (OpenAI, Gemini, dll)\n`;
     prompt += `- JANGAN modifikasi file core (Kernel.js, EventBus.js, ServiceManager.js, dll)\n\n`;
-    
+
     prompt += `### MULAI OUTPUT JSON SEKARANG ###\n`;
-    // JANGAN tambahkan '{' di sini — beberapa model (OpenAI, dll) tidak mendukung
-    // teknik prefill dan akan menghasilkan output rusak atau berulang.
-    // Biarkan model memulai JSON sendiri.
 
     return prompt;
   }
@@ -1469,12 +1509,11 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
   _extractCodeFromResponse(response) {
     try {
       if (!response || typeof response !== 'string') return {};
-      
+
       try {
         const trimmed = response.trim();
         if (trimmed.startsWith('{')) {
           const parsed = JSON.parse(trimmed);
-          // Jika backend wrap dengan {message/reply: "..."} dan value-nya adalah JSON string, parse lagi
           const keys = Object.keys(parsed);
           if (keys.length === 1 && (keys[0] === 'message' || keys[0] === 'reply' || keys[0] === 'content')) {
             const inner = parsed[keys[0]];
@@ -1524,7 +1563,7 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
 
       const jsonMatch = response.match(/\{[\s\S]*\}/);
       if (jsonMatch) return JSON.parse(jsonMatch[0]);
-      
+
       return {};
     } catch (e) {
       console.warn('[Engineer] Failed to extract code from response:', e);
@@ -1550,7 +1589,7 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
           console.error(`[Engineer] 🚫 BLOCKED: Attempt to modify IMMUTABLE core file: ${file.path}`);
           this.metrics.coreModificationsBlocked++;
           this.suspiciousAttempts++;
-          
+
           if (this.suspiciousAttempts >= 3) {
             this.capability = 'OBSERVER';
             this.eventBus.emit('Engineer:EmergencyLockdown', {
@@ -1558,14 +1597,15 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
               attempts: this.suspiciousAttempts
             });
           }
-          
+
           this._emitRecommendation({
             type: 'CORE_MODIFICATION_BLOCKED',
             taskId: patch.taskId,
             message: `🚫 BLOKIR: File "${file.path}" adalah CORE IMMUTABLE.`,
-            severity: 'CRITICAL'
+            severity: 'CRITICAL',
+            requiresApproval: false
           });
-          
+
           return { success: false, error: 'Core file modification blocked' };
         }
       }
@@ -1586,21 +1626,21 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
           if (this._isProtectedFile(file.path)) {
             console.warn(`[Engineer] ⚠️ WARNING: Modifying PROTECTED file: ${file.path}`);
           }
-          
-          // ✅ SAFETY CHECK: Jangan tulis file jika konten baru jauh lebih kecil dari aslinya
-          // Ini mencegah LLM yang truncate response dari merusak file
+
+          // Safety Check: Cegah LLM truncation overwrite file
           const originalSize = file.originalContent ? file.originalContent.length : 0;
           const newSize = file.newContent.length;
           if (originalSize > 500 && newSize < originalSize * 0.5) {
             console.error(`[Engineer] 🚫 DITOLAK: Konten baru (${newSize} chars) < 50% dari asli (${originalSize} chars). LLM kemungkinan truncate response!`);
             file.status = 'FAILED';
-            file.error = `Konten terlalu kecil: ${newSize} vs ${originalSize} chars (${Math.round(newSize/originalSize*100)}%). Kemungkinan LLM truncate response.`;
+            file.error = `Konten terlalu kecil: ${newSize} vs ${originalSize} chars (${Math.round(newSize / originalSize * 100)}%). Kemungkinan LLM truncate response.`;
             failCount++;
-            
+
             this.eventBus.emit('Engineer:Recommendation', {
               taskId: patch.taskId,
               message: `⚠️ **Patch Ditolak Otomatis**: File \`${file.path}\` tidak ditulis karena LLM mengembalikan konten yang terpotong (${newSize} dari ${originalSize} karakter). Coba lagi dengan instruksi yang lebih spesifik.`,
-              type: 'SAFETY_REJECTION'
+              type: 'SAFETY_REJECTION',
+              requiresApproval: false
             });
             continue;
           }
@@ -1660,17 +1700,17 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
   _calculateConfidence(result) {
     let coverage = 0;
     let evidence = 0;
-    
+
     if (result.rawContext) {
       const filesAttempted = result.metrics?.filesAnalyzed || 0;
       const filesRead = Object.keys(result.rawContext).length;
       coverage = filesAttempted > 0 ? Math.round((filesRead / filesAttempted) * 100) : 0;
     }
-    
+
     if (result.compliance) {
       const violations = result.compliance.violations?.length || 0;
       const warnings = result.compliance.warnings?.length || 0;
-      
+
       if (violations === 0 && warnings === 0) {
         evidence = 90;
       } else if (violations === 0) {
@@ -1681,11 +1721,11 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
         evidence = 20;
       }
     }
-    
+
     let level = 'LOW';
     if (coverage >= 80 && evidence >= 70) level = 'HIGH';
     else if (coverage >= 50 && evidence >= 50) level = 'MEDIUM';
-    
+
     return { coverage, evidence, level };
   }
 
@@ -1708,7 +1748,6 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
 
     const extensions = ['.js', '.jsx', '.ts', '.tsx', '.json', '.md'];
     const baseName = normalizedBase.replace(/\.[^.]+$/, '');
-    console.log(`[Engineer:_tryReadFile] 🔄 Fallback ekstensi: baseName="${baseName}"`);
 
     for (const ext of extensions) {
       const candidate = baseName + ext;
@@ -1718,9 +1757,7 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
           console.log(`[Engineer:_tryReadFile] ✅ BERHASIL membaca: "${candidate}"`);
           return { content, path: candidate };
         }
-      } catch (_) {
-        // Lanjut ke ekstensi berikutnya
-      }
+      } catch (_) {}
     }
 
     if (this.fileIndexService && this.fileIndexService.isReady) {
@@ -1731,23 +1768,37 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
         console.log(`[Engineer:_tryReadFile] 📍 FileIndexService meresolve ke: "${resolvedPath}"`);
         const content = await this.storageManager.read(resolvedPath);
         if (content !== null && content !== undefined) {
-          console.log(`[Engineer:_tryReadFile] ✅ BERHASIL membaca via indeks: "${resolvedPath}"`);
           return { content, path: resolvedPath };
         }
-      } else {
-        console.log(`[Engineer:_tryReadFile] ⚠️ FileIndexService tidak menemukan "${fileName}"`);
       }
-    } else {
-      console.log(`[Engineer:_tryReadFile] ⚠️ FileIndexService tidak tersedia atau belum siap`);
     }
 
     console.log(`[Engineer:_tryReadFile] ❌ GAGAL: Semua metode gagal untuk "${normalizedBase}"`);
     return null;
   }
 
+  /**
+   * [FIX #2] _requestApproval() sekarang memiliki timeout otomatis 10 menit
+   * untuk mencegah memory leak jika user menutup dialog tanpa merespons.
+   */
   async _requestApproval(patch, analysis = null) {
     return new Promise((resolve) => {
-      this.pendingPatches.set(patch.id, { patch, resolver: resolve });
+      // [FIX #2] Timeout otomatis
+      const timeout = setTimeout(() => {
+        if (this.pendingPatches.has(patch.id)) {
+          console.warn(`[Engineer] ⏰ Approval timeout for patch: ${patch.id}. Auto-rejecting.`);
+          this.pendingPatches.delete(patch.id);
+          resolve({ approved: false, approvedFiles: [] });
+        }
+      }, APPROVAL_TIMEOUT_MS);
+
+      this.pendingPatches.set(patch.id, {
+        patch,
+        resolver: (result) => {
+          clearTimeout(timeout);
+          resolve(result);
+        }
+      });
 
       this.eventBus.emit('Engineer:RequestApproval', {
         patchId: patch.id,
@@ -1765,17 +1816,24 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
         verification: patch.verification || null,
         confidence: analysis ? this._calculateConfidence(analysis) : { level: 'UNKNOWN', coverage: 0, evidence: 0 },
         compliance: analysis?.compliance || { violations: [], warnings: [] },
+        timeoutMs: APPROVAL_TIMEOUT_MS,
         timestamp: new Date().toISOString()
       });
     });
   }
 
+  /**
+   * [FIX #1] _emitRecommendation() tidak lagi memaksa requiresApproval: true.
+   * Menggunakan nullish coalescing (??) agar caller bisa set requiresApproval: false.
+   */
   _emitRecommendation(recommendation) {
     this.eventBus.emit('Engineer:Recommendation', {
       ...recommendation,
       from: 'Engineer',
       capability: this.capability,
-      requiresApproval: true,
+      // [FIX #1] Sebelumnya: requiresApproval: true (selalu override)
+      // Sekarang: pakai nilai dari caller, default true hanya jika tidak di-set
+      requiresApproval: recommendation.requiresApproval ?? true,
       timestamp: new Date().toISOString()
     });
   }
@@ -1796,10 +1854,11 @@ _Mohon diperjelas agar Engineer dapat memberikan hasil yang tepat._`;
   }
 
   getMetrics() {
-    return { 
-      ...this.metrics, 
+    return {
+      ...this.metrics,
       capability: this.capability,
-      suspiciousAttempts: this.suspiciousAttempts
+      suspiciousAttempts: this.suspiciousAttempts,
+      sessionSummary: this.sessionArtifact ? this.sessionArtifact.getSummary() : null
     };
   }
 }
