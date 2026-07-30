@@ -8,14 +8,22 @@
  * 
  * UPGRADE: executeLLM() ditambahkan agar Engineer.js dapat memanggil LLM
  * langsung tanpa harus melewati ConversationEngine.
+ *
+ * SECURITY FIX (2026-07-30): executeLLM() sekarang WAJIB memiliki API key eksplisit
+ * dari user (via VaultService/Settings). Jika tidak ada, request DITOLAK dengan error
+ * informatif. Ini mencegah fallback ke Supabase yang akan memakai API key sistem
+ * dan menghabiskan saldo tanpa izin user.
+ *
+ * DEFAULT PROVIDER diubah dari 'openrouter' (berbayar, model mahal) ke 'gemini'
+ * untuk mencegah saldo habis saat settings belum dikonfigurasi.
  */
 class BrainService {
   constructor(serviceManager) {
     this.serviceManager = serviceManager;
     this.eventBus = serviceManager.get('EventBus');
     this.state = {
-      provider: 'openrouter',
-      model: 'anthropic/claude-3.5-sonnet'
+      provider: 'gemini',         // [SECURITY FIX] Default ke Gemini (free tier tersedia), bukan OpenRouter yang berbayar
+      model: 'gemini-2.0-flash'   // [SECURITY FIX] Model ringan sebagai default aman
     };
   }
 
@@ -77,6 +85,22 @@ class BrainService {
     const model = options.model || context.model || this.state.model;
     const provider = context.provider || this.state.provider;
     const apiKey = context.key || '';
+
+    // === [SECURITY FIX] GUARD: WAJIB ADA API KEY EKSPLISIT DARI USER ===
+    // Jika tidak ada apiKey dari VaultService/Settings, TOLAK langsung.
+    // Ini mencegah fallback ke Supabase yang memakai API key sistem (saldo habis).
+    if (!apiKey) {
+      const errorMsg = [
+        `[BrainService:executeLLM] 🚫 DITOLAK: Tidak ada API Key untuk provider "${provider}".`,
+        `Silakan masuk ke Settings → AI Provider dan masukkan API Key Anda.`,
+        `Engineer tidak dapat membuat patch tanpa API Key eksplisit dari user.`
+      ].join('\n');
+      console.error(errorMsg);
+      throw new Error(
+        `Tidak ada API Key untuk provider "${provider}". ` +
+        `Buka Settings → AI Provider dan masukkan API Key Anda terlebih dahulu.`
+      );
+    }
 
     console.log(`[BrainService:executeLLM] 🧠 Memanggil LLM: provider=${provider}, model=${model}`);
 

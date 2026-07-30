@@ -123,6 +123,30 @@ export async function executeRequestPipeline(
   const finalProvider = providerApiKey ? provider : 'openrouter';
   const finalApiKey = providerApiKey || (request.headers.get('x-byok-openrouter') || (getAllKeys('OPENROUTER_API_KEY').length > 0 ? getAllKeys('OPENROUTER_API_KEY')[0] : '')).trim();
 
+  // [SECURITY FIX 2026-07-30] GUARD: Mode ENGINEER wajib menggunakan BYOK key dari user.
+  // Jika tidak ada BYOK key, TOLAK request. Engineer TIDAK BOLEH menggunakan API key sistem.
+  // Ini mencegah Engineer menghabiskan saldo owner tanpa izin eksplisit.
+  if (parsed.mode === 'ENGINEER' || parsed.appSource === 'engineer') {
+    const byokOpenrouter = request.headers.get('x-byok-openrouter') || '';
+    const byokGemini    = request.headers.get('x-byok-gemini')     || '';
+    const byokGroq      = request.headers.get('x-byok-groq')       || '';
+    const byokOpenai    = request.headers.get('x-byok-openai')     || '';
+    const byokAnthropic = request.headers.get('x-byok-anthropic')  || '';
+    const hasAnyByok = byokOpenrouter || byokGemini || byokGroq || byokOpenai || byokAnthropic;
+
+    if (!hasAnyByok) {
+      console.warn('[RequestPipeline] ⛔ ENGINEER mode request ditolak: tidak ada BYOK API key dari user.');
+      return { ctx: {} as any, rctx: {} as any, response: new Response(JSON.stringify({
+        error: 'ENGINEER_NO_API_KEY',
+        message: 'Engineer mode memerlukan API Key eksplisit dari user (BYOK). ' +
+                 'Buka Settings → AI Provider dan masukkan API Key Anda terlebih dahulu.'
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }) };
+    }
+  }
+
   console.log(`[RequestPipeline] Provider: ${finalProvider}, Key source: ${byokProviderKey ? 'BYOK header' : Deno.env.get(envVarKey) ? 'Environment' : 'Fallback'}`);
 
   // Hapus duplikasi ctx yang error!

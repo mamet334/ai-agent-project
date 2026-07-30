@@ -198,15 +198,18 @@ class Kernel {
     await vaultService.initialize();
     serviceManager.register('VaultService', vaultService);
 
+    // 2. Brain Service — WAJIB diinisialisasi SEBELUM Engineer
+    // [FIX 2026-07-30] Engineer.initialize() langsung memanggil _registerListeners(),
+    // dan saat task GeneratePatch diterima, Engineer memanggil BrainService.getActiveBrainContext().
+    // Jika BrainService belum terdaftar, serviceManager.get() akan gagal/null.
+    const brainService = new BrainService(serviceManager);
+    await brainService.initialize();
+    serviceManager.register('BrainService', brainService);
+
     // Engineer Service (Engineering Brain)
     const engineer = new Engineer(serviceManager);
     await engineer.initialize();
     serviceManager.register('Engineer', engineer);
-
-    // 2. Brain Service (AI Orchestration)
-    const brainService = new BrainService(serviceManager);
-    await brainService.initialize();
-    serviceManager.register('BrainService', brainService);
 
     // Memory Service
     const memoryService = new MemoryService(serviceManager);
@@ -267,7 +270,22 @@ class Kernel {
       mode: 'SAFE_BOOTSTRAP_MODE',
       validate: () => ({ valid: true, confidence: 1.0 }),
       verifyEvidence: () => ({ verdict: 'PASS' }),
-      verifyPatchEngineering: () => ({ decision: 'PASS', score: 1.0, failures: [] })
+      // [FIX 2026-07-30] Verifikasi patch dengan cek keamanan nyata, bukan auto-PASS.
+      // Mencegah patch berbahaya (eval, new Function, vendor API langsung) lolos tanpa pemeriksaan.
+      verifyPatchEngineering: (context) => {
+        const failures = [];
+        try {
+          const responseText = context?.responseText || '';
+          if (responseText.includes('eval('))      failures.push({ severity: 'CRITICAL', message: 'Terdeteksi penggunaan eval() yang dilarang' });
+          if (responseText.includes('new Function(')) failures.push({ severity: 'CRITICAL', message: 'Terdeteksi new Function() yang dilarang' });
+          if (/fetch\(['"]https:\/\/(api\.openai\.com|generativelanguage\.googleapis\.com)/.test(responseText))
+            failures.push({ severity: 'HIGH', message: 'Terdeteksi pemanggilan vendor API langsung tanpa Adapter Layer' });
+        } catch (e) {
+          // Jika parsing gagal, tetap lanjut dengan failures kosong
+        }
+        const passed = failures.filter(f => f.severity === 'CRITICAL').length === 0;
+        return { decision: passed ? 'PASS' : 'FAIL', score: passed ? 1.0 : 0.0, failures };
+      }
     };
     serviceManager.register('VerificationEngine', verificationEngine);
     this.log('INFO', 'Verification Engine Started in SAFE_BOOTSTRAP_MODE');
