@@ -912,13 +912,12 @@
       "supabase_functions_agent_process_plugins_registry_getpluginbyname"
     ],
     "30": [
-      "supabase_functions_agent_process_plugins_coder",
-      "supabase_functions_agent_process_plugins_coder_executepiston",
-      "supabase_functions_agent_process_plugins_coder_extractcode",
-      "supabase_functions_agent_process_plugins_coder_extractinlinedata",
       "supabase_functions_agent_process_plugins_communicator",
       "supabase_functions_agent_process_plugins_cron_manager",
       "supabase_functions_agent_process_plugins_debate",
+      "supabase_functions_agent_process_plugins_deep_research",
+      "supabase_functions_agent_process_plugins_deep_research_fetchyahooimages",
+      "supabase_functions_agent_process_plugins_deep_research_searchduckduckgo",
       "supabase_functions_agent_process_plugins_file_analyzer",
       "supabase_functions_agent_process_plugins_language",
       "supabase_functions_agent_process_plugins_logic",
@@ -2033,9 +2032,10 @@
       "stress_test_memory_supabase"
     ],
     "143": [
-      "supabase_functions_agent_process_plugins_deep_research",
-      "supabase_functions_agent_process_plugins_deep_research_fetchyahooimages",
-      "supabase_functions_agent_process_plugins_deep_research_searchduckduckgo"
+      "supabase_functions_agent_process_plugins_coder",
+      "supabase_functions_agent_process_plugins_coder_executepiston",
+      "supabase_functions_agent_process_plugins_coder_extractcode",
+      "supabase_functions_agent_process_plugins_coder_extractinlinedata"
     ],
     "144": [
       "supabase_functions_agent_process_plugins_self_healing",
@@ -2456,7 +2456,7 @@
     "27": 0.13725490196078433,
     "28": 0.11764705882352941,
     "29": 0.16911764705882354,
-    "30": 0.1111111111111111,
+    "30": 0.11764705882352941,
     "31": 0.125,
     "32": 0.225,
     "33": 0.275,
@@ -2569,7 +2569,7 @@
     "140": 0.6666666666666666,
     "141": 0.6666666666666666,
     "142": 0.5,
-    "143": 0.6666666666666666,
+    "143": 0.5,
     "144": 0.8333333333333334,
     "145": 0.5,
     "146": 0.5,
@@ -2773,41 +2773,8 @@
       "why": "connects across different repos/directories"
     }
   ],
-  "questions": [
-    {
-      "type": "bridge_node",
-      "question": "Why does `dependencies` connect `dependencies` to `@supabase/supabase-js`, `mermaid`, `frontend/package.json`, `file-saver`, `dependencies`, `ghost-cursor`, `lucide-react`, `puppeteer-extra`, `xlsx`, `dependencies`, `dependencies`?",
-      "why": "High betweenness centrality (0.130) - this node is a cross-community bridge."
-    },
-    {
-      "type": "bridge_node",
-      "question": "Why does `processExcel()` connect `index.jsx` to `xlsx`?",
-      "why": "High betweenness centrality (0.121) - this node is a cross-community bridge."
-    },
-    {
-      "type": "bridge_node",
-      "question": "Why does `xlsx` connect `xlsx` to `dependencies`, `index.jsx`?",
-      "why": "High betweenness centrality (0.120) - this node is a cross-community bridge."
-    },
-    {
-      "type": "isolated_nodes",
-      "question": "What connects `anonClient`, `name`, `version` to the rest of the system?",
-      "why": "537 weakly-connected nodes found - possible documentation gaps or missing edges."
-    },
-    {
-      "type": "low_cohesion",
-      "question": "Should `AIAgent.jsx` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.05254237288135593 - nodes in this community are weakly interconnected."
-    },
-    {
-      "type": "low_cohesion",
-      "question": "Should `memoryEngine.ts` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.08325624421831637 - nodes in this community are weakly interconnected."
-    },
-    {
-      "type": "low_cohesion",
-      "question": "Should `adapter_registry.ts` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.08405797101449275 - nodes in this community are weakly interconnected."
-    }
-  ]
+  "tokens": {
+    "input": 0,
+    "output": 0
+  }
 }

@@ -420,14 +420,14 @@
     "semantic_hash": "888abe74267872fc98c32689013514a2"
   },
   "frontend/src/components/os/ActivityBar.jsx": {
-    "mtime": 1785424890.5868716,
-    "ast_hash": "d87c1e9cb2f661892db5eedd01045621",
-    "semantic_hash": "d87c1e9cb2f661892db5eedd01045621"
+    "mtime": 1784101099.0,
+    "ast_hash": "8154372d35e038ebf7839d43c21a852d",
+    "semantic_hash": "8154372d35e038ebf7839d43c21a852d"
   },
   "frontend/src/components/os/ApplicationContainer.jsx": {
-    "mtime": 1785424878.8287225,
-    "ast_hash": "307b2c5782bbfdbd41ff5ece302424a0",
-    "semantic_hash": "307b2c5782bbfdbd41ff5ece302424a0"
+    "mtime": 1784172079.3345234,
+    "ast_hash": "54af8c52e0ff4bc8d34e3473cd26e293",
+    "semantic_hash": "54af8c52e0ff4bc8d34e3473cd26e293"
   },
   "frontend/src/components/os/FloatingWindowManager.jsx": {
     "mtime": 1784101099.0,
@@ -435,9 +435,9 @@
     "semantic_hash": "93a86f225e935bf885d2e4465abe856d"
   },
   "frontend/src/components/os/MobileBottomNav.jsx": {
-    "mtime": 1785424899.1655157,
-    "ast_hash": "c04217e88685a65d18acaa11f4ba5c2c",
-    "semantic_hash": "c04217e88685a65d18acaa11f4ba5c2c"
+    "mtime": 1784172010.0204165,
+    "ast_hash": "7f63dc69990d3dad30c878bf67e9ce78",
+    "semantic_hash": "7f63dc69990d3dad30c878bf67e9ce78"
   },
   "frontend/src/components/os/OSDesktopShell.jsx": {
     "mtime": 1784172028.315474,
@@ -445,9 +445,9 @@
     "semantic_hash": "01bdf0ad7981e0632ed1627b1ec04a82"
   },
   "frontend/src/components/os/Sidebar.jsx": {
-    "mtime": 1785424864.3550959,
-    "ast_hash": "63d95cc3e46236f0f2b7f3e4f5728a56",
-    "semantic_hash": "63d95cc3e46236f0f2b7f3e4f5728a56"
+    "mtime": 1784172068.4832282,
+    "ast_hash": "38615d49b491d0575c9811605dff388d",
+    "semantic_hash": "38615d49b491d0575c9811605dff388d"
   },
   "frontend/src/components/research/ResearchApp.jsx": {
     "mtime": 1784101099.0,
@@ -495,9 +495,9 @@
     "semantic_hash": "ff4ec65545485a70af761a8bf2831bbe"
   },
   "frontend/src/components/workbench/ConversationEngine.jsx": {
-    "mtime": 1785424956.8466723,
-    "ast_hash": "f7237e2070ee07f9a63fb2988350dcef",
-    "semantic_hash": "f7237e2070ee07f9a63fb2988350dcef"
+    "mtime": 1785288773.836227,
+    "ast_hash": "c09d1d83d1469b125b45c333869533fd",
+    "semantic_hash": "c09d1d83d1469b125b45c333869533fd"
   },
   "frontend/src/components/workbench/EngineerApprovalDialog.jsx": {
     "mtime": 1785141859.5361676,
@@ -550,9 +550,9 @@
     "semantic_hash": "b130acbadef28115a3aefe055d8a097b"
   },
   "frontend/src/core/runtime/Kernel.js": {
-    "mtime": 1785424731.1552675,
-    "ast_hash": "0a1a865f0852aa6f6420a21769f1ee94",
-    "semantic_hash": "0a1a865f0852aa6f6420a21769f1ee94"
+    "mtime": 1785379791.2617865,
+    "ast_hash": "38be8ddb65cf8303190f367c1778abd1",
+    "semantic_hash": ""
   },
   "frontend/src/core/runtime/ProcessManager.js": {
     "mtime": 1784101099.0,
@@ -582,7 +582,7 @@
   "frontend/src/core/runtime/services/BrainService.js": {
     "mtime": 1785376980.340747,
     "ast_hash": "7eca16fb9d15a0ead908f26478684414",
-    "semantic_hash": "7eca16fb9d15a0ead908f26478684414"
+    "semantic_hash": ""
   },
   "frontend/src/core/runtime/services/EntityExtractor.js": {
     "mtime": 1784101099.0,
@@ -592,7 +592,7 @@
   "frontend/src/core/runtime/services/FileIndexService.js": {
     "mtime": 1785374058.6209912,
     "ast_hash": "839c6c72a3b43c865474cddd725a12ab",
-    "semantic_hash": "839c6c72a3b43c865474cddd725a12ab"
+    "semantic_hash": ""
   },
   "frontend/src/core/runtime/services/IntentParser.js": {
     "mtime": 1784101099.0,
@@ -625,9 +625,9 @@
     "semantic_hash": "9b509df766637e86b34806381f1768d4"
   },
   "frontend/src/core/runtime/services/engineer.js": {
-    "mtime": 1785424849.1234932,
-    "ast_hash": "b708a2172df1664a4bcbde291bc1342f",
-    "semantic_hash": "b708a2172df1664a4bcbde291bc1342f"
+    "mtime": 1785382197.2823656,
+    "ast_hash": "027bf32f5d5c78cc1a65b4db3e75069c",
+    "semantic_hash": ""
   },
   "frontend/src/core/window/WindowManager.js": {
     "mtime": 1784101099.0,
@@ -670,9 +670,9 @@
     "semantic_hash": "33203dacb02a802e89f1ce09e942d078"
   },
   "frontend/src/main.jsx": {
-    "mtime": 1785424916.7743378,
-    "ast_hash": "c4197a12c9d3f18ab79222786f6b1470",
-    "semantic_hash": "c4197a12c9d3f18ab79222786f6b1470"
+    "mtime": 1784101099.0,
+    "ast_hash": "76546620225c02b4b9f458e83d94b9e3",
+    "semantic_hash": "76546620225c02b4b9f458e83d94b9e3"
   },
   "frontend/src/services/ExecutionTraceService.js": {
     "mtime": 1784279995.2621884,
@@ -1907,7 +1907,7 @@
   "supabase/functions/agent-process/lib/request/request_pipeline.ts": {
     "mtime": 1785377040.1524422,
     "ast_hash": "9d63a34ca8b445b80a8b008a29861c4e",
-    "semantic_hash": "9d63a34ca8b445b80a8b008a29861c4e"
+    "semantic_hash": ""
   },
   "supabase/functions/agent-process/lib/request/types.ts": {
     "mtime": 1784101099.0,
@@ -3818,15 +3818,5 @@
     "mtime": 1785377087.5831485,
     "ast_hash": "c0e96e063ed1f73e5a6ab08a90748de7",
     "semantic_hash": ""
-  },
-  "frontend/src/core/runtime/hooks/useService.js": {
-    "mtime": 1785424686.0408626,
-    "ast_hash": "bb3d304d7a457b29ee4acff07c0ffaa2",
-    "semantic_hash": "bb3d304d7a457b29ee4acff07c0ffaa2"
-  },
-  "frontend/src/core/runtime/services/RepositoryReaderService.js": {
-    "mtime": 1785424766.9071155,
-    "ast_hash": "fe96a0c1fa8be8da915e33ec2f417014",
-    "semantic_hash": "fe96a0c1fa8be8da915e33ec2f417014"
   }
 }
