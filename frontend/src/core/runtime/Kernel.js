@@ -123,7 +123,10 @@ class Kernel {
     } catch (error) {
       this.log('ERROR', 'Bootstrap Failed', error);
       await this._handleBootFailure(error);
-      throw error;
+      
+      // JANGAN throw error; Setelah ini, sistem berjalan dalam mode Degraded
+      this.status = 'RUNNING';
+      this.log('WARN', 'Kernel running in DEGRADED mode (Safe Mode)');
     }
   }
 
@@ -503,9 +506,17 @@ class Kernel {
   }
 
   async _handleBootFailure(error) {
-    this.status = 'ERROR';
+    this.status = 'DEGRADED'; // Ubah dari ERROR ke DEGRADED
     this.config.mode = 'SAFE_MODE';
-    this.log('ERROR', 'Entering SAFE_MODE', error);
+    this.log('ERROR', 'Entering SAFE_MODE due to failure', error);
+
+    // Emit event untuk UI agar menampilkan notifikasi, BUKAN layar crash!
+    this._emitEvent(this.serviceManager, 'System:Degraded', { 
+      reason: error.message, 
+      phase: this.currentPhase 
+    });
+    
+    // Hapus baris yang mengubah status ke RUNNING di sini
   }
 
   _emitEvent(serviceManager, eventName, data) {
