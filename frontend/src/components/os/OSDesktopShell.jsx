@@ -4,6 +4,20 @@ import ApplicationContainer from './ApplicationContainer';
 import MobileBottomNav from './MobileBottomNav';
 import SystemNotificationCenter from './SystemNotificationCenter';
 
+export default function OSDesktopShell() {
+  // ... kode lainnya ...
+  return (
+    <>
+      <SystemNotificationCenter /> {/* Tambahkan di sini */}
+      <ActivityBar />
+      <div className="flex flex-1 overflow-hidden">
+         {/* ... sisa kode shell Anda ... */}
+      </div>
+    </>
+  );
+}
+
+
 /**
  * OSDesktopShell — Responsive Layout Shell
  *

@@ -13,6 +13,17 @@ async function bootstrapOS() {
   try {
     console.log('[LIFECYCLE] Booting Kernel...');
     await kernel.boot(serviceManager);
+    
+    // =========================================================
+    // 🔽 TAMBAHKAN KODE INI DI SINI (Setelah boot Kernel sukses)
+    // =========================================================
+    // Hanya ekspos untuk debugging di mode development
+    if (import.meta.env.DEV) {
+      window.__mamet = { serviceManager };
+      console.log('🔧 Dev Mode: ServiceManager exposed to window.__mamet for debugging.');
+    }
+    // =========================================================
+
     console.log('[LIFECYCLE] Kernel Boot Complete. Mounting UI.');
   } catch (error) {
     console.error('[LIFECYCLE] Kernel Boot Failed:', error);
