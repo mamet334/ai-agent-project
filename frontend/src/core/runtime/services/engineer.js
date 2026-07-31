@@ -169,6 +169,7 @@ class Engineer {
     this.capability = 'IMPLEMENTER';
     this.pendingPatches = new Map();
     this.suspiciousAttempts = 0; // Circuit breaker counter
+    this._lastApiReset = 0;
     this.intentState = 'READY'; // READY | ANALYZING | ASK_CLARIFICATION | PROCEEDING
     this.pendingConfirmations = new Map(); // Untuk Reasoning Lock
     this.sessionArtifact = null; // FASE 4: Session Artifact — diinisialisasi di initialize()
@@ -1046,6 +1047,24 @@ class Engineer {
 
 
   async _handlePatchTask(task) {
+    // =============================================
+    // CIRCUIT BREAKER: Mencegah saldo OpenRouter habis akibat loop AI
+    // =============================================
+    if (!this._apiCallCount) this._apiCallCount = 0;
+    this._apiCallCount++;
+
+    const now = Date.now();
+    if (now - this._lastApiReset > 60000) {
+      this._apiCallCount = 1;
+      this._lastApiReset = now;
+    }
+
+    if (this._apiCallCount > 5) {
+      this.capability = 'OBSERVER';
+      console.warn('[Engineer] 🚨 CIRCUIT BREAKER TRIPPED! API calls exceeded 5/min. Downgrading to OBSERVER.');
+      return;
+    }
+
     if (this.capability !== 'IMPLEMENTER' && this.capability !== 'SELF_MAINTENANCE') {
       this.eventBus.emit('Engineer:Recommendation', {
         type: 'ERROR',
