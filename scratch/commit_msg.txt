@@ -1,6 +1,0 @@
-feat: enforce Phase 7 (Implementer) & Phase 8 (Self Maintenance) rules
-
-- Created ADR-0005 defining the safety flow for Code Implementation (Generate Patch -> Self Verification -> User Review -> Apply).
-- Logged TASK-0015 and ADR-0005 to Supabase Project Memory.
-- Updated `agent-process` system prompt to strictly enforce Phase 7 (Self Verification checks for Syntax, Architecture, Coding Rules, Dependencies) and Phase 8 (Self Maintenance checks against Project Health).
-- Bound these rules under the MAEF compliance clause in the `ENGINEER` execution mode.
