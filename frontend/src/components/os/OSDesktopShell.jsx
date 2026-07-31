@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import ApplicationContainer from './ApplicationContainer';
 import MobileBottomNav from './MobileBottomNav';
+import SystemNotificationCenter from './SystemNotificationCenter';
 
 /**
  * OSDesktopShell — Responsive Layout Shell
