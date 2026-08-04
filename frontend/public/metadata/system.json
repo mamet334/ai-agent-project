@@ -16,6 +16,7 @@
     { "id": "app:engineer", "name": "Engineer", "icon": "Terminal", "workspace": "ws-engineer", "component": "ConversationEngine" },
     { "id": "app:knowledge-base", "name": "Knowledge Base", "icon": "FlaskConical", "component": "ResearchApp" },
     { "id": "app:memory-graph", "name": "Memory", "icon": "Database", "component": "MemoryApp" },
+    { "id": "app:file-explorer", "name": "File Explorer", "icon": "FolderOpen", "workspace": "global", "component": "FileExplorer" },
     { "id": "app:agent-forge", "name": "Agent Forge", "icon": "Bot", "component": "AgentForge" },
     { "id": "app:settings", "name": "Settings", "icon": "Settings", "component": "Settings" }
   ]

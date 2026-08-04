@@ -247,16 +247,30 @@ export class RepositoryReaderService {
     }
   }
 
-  async _listDirectoryElectron(dirPath) {
+async _listDirectoryElectron(dirPath) {
     try {
       const entries = await window.electronAPI.listFiles(dirPath || '.');
       if (!Array.isArray(entries)) return [];
-      return entries.map(name => ({
-        name,
-        path: dirPath ? `${dirPath}/${name}` : name,
-        type: 'unknown', // Electron API tidak selalu memberikan tipe
-        size: 0
-      }));
+      // Elektron main handler (fs:listFiles) kini mengembalikan objek
+      // { name, path, type: 'dir'|'file', size }. Normalisasi ke bentuk standar.
+      return entries.map(entry => {
+        // Jika ternyata masih string (backward compat), buat objek dasar
+        if (typeof entry === 'string') {
+          const name = entry.split('/').pop() || entry;
+          return {
+            name,
+            path: dirPath ? `${dirPath}/${name}` : name,
+            type: 'unknown',
+            size: 0
+          };
+        }
+        return {
+          name: entry.name,
+          path: dirPath ? `${dirPath}/${entry.name}` : entry.name,
+          type: entry.type === 'dir' ? 'dir' : 'file',
+          size: entry.size || 0
+        };
+      });
     } catch (e) {
       console.error(`[RepositoryReaderService] Electron list error for ${dirPath}:`, e.message);
       return [];

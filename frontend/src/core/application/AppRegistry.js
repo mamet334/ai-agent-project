@@ -24,6 +24,7 @@ export const AppComponents = {
   'AgentForge': lazy(() => import('../../components/agent-forge/AgentForge')),
   'ResearchApp': lazy(() => import('../../components/research/ResearchApp')),
   'MemoryApp': lazy(() => import('../../components/memory/MemoryApp')),
+  'FileExplorer': lazy(() => import('../../components/explorer/FileExplorer')),
   'Settings': lazy(() => import('../../components/Settings')),
   
   // Widgets

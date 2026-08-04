@@ -490,8 +490,22 @@ ipcMain.handle('fs:listFiles', async (event, dirPath) => {
     if (!fs.existsSync(normalizedPath) || !fs.statSync(normalizedPath).isDirectory()) {
       return [];
     }
-    const files = fs.readdirSync(normalizedPath);
-    return files.map(f => path.join(dirPath, f));
+    const entries = fs.readdirSync(normalizedPath, { withFileTypes: true });
+    return entries.map(entry => {
+      const fullPath = path.join(normalizedPath, entry.name);
+      let size = 0;
+      try {
+        if (entry.isFile()) {
+          size = fs.statSync(fullPath).size;
+        }
+      } catch (e) { /* abaikan */ }
+      return {
+        name: entry.name,
+        path: path.join(dirPath, entry.name).replace(/\\/g, '/'),
+        type: entry.isDirectory() ? 'dir' : 'file',
+        size
+      };
+    });
   } catch (error) {
     console.error('[FS] Gagal listing direktori:', dirPath, error);
     return [];
