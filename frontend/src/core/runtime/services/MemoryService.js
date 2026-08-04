@@ -58,12 +58,17 @@ export class MemoryService {
     return result;
   }
 
-  /**
+/**
    * Menyimpan memori baru.
    * @param {string} key 
    * @param {any} value 
+   * @param {Object} [options] - Metadata opsional golden source
+   * @param {string} [options.source_reference] - Reference ke sumber asli (file/path/doc)
+   * @param {string} [options.chat_id] - Chat ID terkait
+   * @param {string} [options.version_code] - Kode versi
+   * @param {string} [options.source_type] - 'fact' | 'preference' | 'location' | 'engineer_session'
    */
-  async storeMemory(key, value) {
+  async storeMemory(key, value, options = {}) {
     if (!this.isInitialized) throw new Error('MemoryService not initialized');
     
     // Input validation
@@ -91,7 +96,34 @@ export class MemoryService {
       
       const content = typeof value === 'object' ? JSON.stringify(value) : String(value);
       const summary = key.length > 100 ? key.substring(0, 100) + '...' : key;
-      
+
+      // === GOLDEN SOURCE PATH (MemoryGovernorService) ===
+      // Jika metadata golden source disediakan, delegasikan ke MemoryGovernorService
+      // agar raw content disimpan + ringkasan mendapat metadata wajib.
+      const hasGoldenMeta = options.source_reference || options.chat_id || options.version_code;
+      if (hasGoldenMeta) {
+        const governor = this.serviceManager.has('MemoryGovernorService')
+          ? this.serviceManager.get('MemoryGovernorService')
+          : null;
+
+        if (governor && typeof governor.storeGoldenMemory === 'function') {
+          const result = await governor.storeGoldenMemory({
+            user_id: userId,
+            content,
+            summary,
+            source_type: options.source_type || 'fact',
+            source_reference: options.source_reference || null,
+            chat_id: options.chat_id || null,
+            version_code: options.version_code || null
+          });
+          success = !!result;
+          this.eventBus.emit('Memory:Stored', { key, success });
+          return success;
+        }
+        // Fallback: if governor not available, continue standard insert below
+      }
+
+      // === STANDARD PATH (backward compatible) ===
       const { error } = await supabase
         .from('user_memories')
         .insert([

@@ -1,4 +1,4 @@
-# Graph Report - .  (2026-07-31)
+# Graph Report - .  (2026-08-04)
 
 ## Corpus Check
 - cluster-only mode — file stats not available
@@ -9,7 +9,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `55676cf9`
+- Built from commit: `d789a523`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -102,7 +102,7 @@
 - replace_index_clean.js
 - replace_index_request.js
 - verification_engine_v2_acceptance.ts
-- OpenAIEmbeddingAdapter
+- GeminiEmbeddingAdapter
 - electron
 - nsis
 - contextUnifier.ts
@@ -246,8 +246,8 @@ Cohesion: 0.08
 Nodes (36): handler(), handler(), handler(), app, axios, cheerio, cors, express (+28 more)
 
 ### Community 2 - "adapter_registry.ts"
-Cohesion: 0.08
-Nodes (9): GeminiAdapter, GroqAdapter, OpenAIAdapter, OpenRouterAdapter, processOpenAIStream(), AdapterContext, AdapterResult, CapabilityAdapter (+1 more)
+Cohesion: 0.09
+Nodes (8): GeminiAdapter, GroqAdapter, OpenAIAdapter, OpenRouterAdapter, processOpenAIStream(), AdapterContext, AdapterResult, CapabilityAdapter
 
 ### Community 4 - "TokenSaverAgent"
 Cohesion: 0.07
@@ -306,7 +306,7 @@ Cohesion: 0.15
 Nodes (15): ActivityGraph(), HomeDashboard(), formatDate(), NodeInspector(), ObservabilityPanel(), useDashboardData(), buildPipeline(), enrichEventWithStep() (+7 more)
 
 ### Community 20 - "llm_orchestrator.ts"
-Cohesion: 0.16
+Cohesion: 0.20
 Nodes (9): CapabilityRegistry, callLLMWithCascade(), callLLMWithMetadata(), PROVIDER_COOLDOWN_DURATIONS, runCoordinatorLLM(), runLLM(), runStreamLLM(), generateEmbedding() (+1 more)
 
 ### Community 21 - "request_pipeline.ts"
@@ -746,4 +746,4 @@ _Questions this graph is uniquely positioned to answer:_
 - **Should `memoryEngine.ts` be split into smaller, more focused modules?**
   _Cohesion score 0.08325624421831637 - nodes in this community are weakly interconnected._
 - **Should `adapter_registry.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.08405797101449275 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08562367864693446 - nodes in this community are weakly interconnected._

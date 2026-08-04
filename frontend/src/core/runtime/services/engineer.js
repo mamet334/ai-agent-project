@@ -302,7 +302,7 @@ class Engineer {
     }
   }
 
-  /**
+/**
    * [FIX #3] Menghasilkan string konteks Session Artifact untuk di-inject ke prompt LLM.
    * @returns {string} Konteks terformat, atau string kosong jika artifact belum ada
    */
@@ -316,6 +316,58 @@ class Engineer {
       return '';
     }
     return this.sessionArtifact.toPromptContext();
+  }
+
+  /**
+   * [FASE 1] Memfinalisasi sesi Engineering: memanggil MemoryGovernorService
+   * untuk memverifikasi ringkasan memori terhadap raw content (golden source).
+   * Dipanggil di akhir _executePatchApplication() ketika patch berhasil/selesai.
+   * @param {Object} patch - Patch yang baru saja diterapkan
+   * @returns {Promise<Object|null>} hasil verifikasi, atau null jika governor tidak tersedia
+   */
+  async _finalizeSession(patch = null) {
+    try {
+      const governor = this.serviceManager.has('MemoryGovernorService')
+        ? this.serviceManager.get('MemoryGovernorService')
+        : null;
+
+      if (!governor || typeof governor.verifyEngineeringSession !== 'function') {
+        console.warn('[Engineer] MemoryGovernorService tidak tersedia, skip finalisasi sesi');
+        return null;
+      }
+
+      // Kotak metadata untuk memori yang disimpan selama sesi
+      const goldenMeta = {
+        source_type: 'engineer_session',
+        source_reference: patch?.files?.map(f => f.path).join(',') || null,
+        version_code: `ENG-${Date.now()}`,
+        chat_id: null
+      };
+
+      // Simpan ringkasan sesi sebagai golden memory (opsional, via MemoryService)
+      try {
+        const memoryService = this.serviceManager.get('MemoryService');
+        if (memoryService && this.sessionArtifact) {
+          const summary = this.sessionArtifact.getSummary();
+          const sessionSummary = `Engineering session ${summary.sessionId}: ${summary.taskCount} task, ${summary.modifiedFilesCount} file dimodifikasi, ${summary.violationsFound} pelanggaran MAEF.`;
+          await memoryService.storeMemory(
+            `Engineering session ${summary.sessionId}`,
+            sessionSummary,
+            goldenMeta
+          );
+        }
+      } catch (e) {
+        console.warn('[Engineer] Gagal menyimpan ringkasan sesi ke golden memory:', e);
+      }
+
+      // Verifikasi file yang dimodifikasi terhadap raw content
+      const result = await governor.verifyEngineeringSession(this.sessionArtifact);
+      console.log('[Engineer] Sesi Engineering difinalisasi:', result);
+      return result;
+    } catch (err) {
+      console.error('[Engineer] _finalizeSession error:', err);
+      return null;
+    }
   }
 
   // =============================================
@@ -1975,8 +2027,15 @@ class Engineer {
         files: patch.files
       };
 
-      this.eventBus.emit('Engineer:PatchApplied', result);
+this.eventBus.emit('Engineer:PatchApplied', result);
       console.log(`[Engineer] 🎯 Patch selesai: ${successCount} applied, ${skippedCount} skipped, ${failCount} failed`);
+
+      // [FASE 1] Finalisasi sesi: verifikasi ringkasan memori terhadap golden source
+      try {
+        await this._finalizeSession(patch);
+      } catch (e) {
+        console.warn('[Engineer] Finalisasi sesi gagal (tidak memblokir patch):', e.message);
+      }
 
       return result;
     } catch (error) {

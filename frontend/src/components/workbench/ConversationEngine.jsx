@@ -5,11 +5,12 @@ import { supabase } from '../../supabase';
 import { kernel } from '../../core/runtime/Kernel';
 import FolderSelector from '../FolderSelector';
 import ChatHistory from './ChatHistory';
+import MemoryContextPanel from './MemoryContextPanel';
 
 const parseThinkingContent = (text) => {
   if (!text) return { thinking: '', answer: '', isThinkingComplete: false };
-  const startIndex = text.indexOf('<think>');
-  const endIndex = text.indexOf('</think>');
+  const startIndex = text.indexOf(' thinking');
+  const endIndex = text.indexOf(' response');
 
   if (startIndex !== -1) {
     if (endIndex !== -1) {
@@ -49,6 +50,15 @@ export default function ConversationEngine({ sessionId }) {
   const [attachedFile, setAttachedFile] = useState(null);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // =============================================
+  // STATE PANEL MEMORY CONTEXT (Fitur #2)
+  // Menampilkan daftar memori yang di-retrieve AI
+  // =============================================
+  const [activeMemories, setActiveMemories] = useState([]);
+  const [lastMemoryQuery, setLastMemoryQuery] = useState('');
+  const [isMemoryPanelOpen, setIsMemoryPanelOpen] = useState(true);
+  const [isMemoryLoading, setIsMemoryLoading] = useState(false);
 
   // Guard untuk handleNewChat: prevent auto-trigger dari lifecycle
   const isNewChatInitiatedByUser = useRef(false);
@@ -246,7 +256,7 @@ export default function ConversationEngine({ sessionId }) {
     const fileContentHandler = (payload) => {
       const data = payload?.data || payload;
       const { path, content, size, backend } = data;
-      
+
       // Deteksi bahasa dari ekstensi untuk syntax highlight
       const ext = path?.split('.').pop()?.toLowerCase() || '';
       const langMap = {
@@ -256,19 +266,17 @@ export default function ConversationEngine({ sessionId }) {
       };
       const lang = langMap[ext] || ext || 'text';
       const backendLabel = backend === 'github-raw' ? '🌐 GitHub' : backend === 'electron' ? '💻 Electron' : '📦 Cache';
-      
+
       const header = `📄 **${path}** — ${size?.toLocaleString() || 0} chars | ${backendLabel}`;
       const codeBlock = `\`\`\`${lang}\n${content}\n\`\`\``;
       const message = `${header}\n\n${codeBlock}`;
-      
+
       setMessages(prev => [...prev, { role: 'model', content: message, isFileContent: true, filePath: path }]);
     };
 
     const unsubFileContent = eventBus.on('Engineer:FileContent', fileContentHandler);
     return () => eventBus.off('Engineer:FileContent', unsubFileContent);
   }, []);
-
-
 
   // FASE 3: Listen for Reasoning Report events (Engineer:ReasoningReport & Engineer:RequestConfirmation)
   useEffect(() => {
@@ -277,7 +285,7 @@ export default function ConversationEngine({ sessionId }) {
 
     const reasoningReportHandler = (report) => {
       console.log('[ConversationEngine] 🧠 Received Reasoning Report:', report.taskId);
-      
+
       // Format findings sebagai string terformat
       let findingsText = '';
       if (report.findings && report.findings.length > 0) {
@@ -298,7 +306,7 @@ export default function ConversationEngine({ sessionId }) {
       const confidenceText = `\n\n${confEmoji} **Confidence:** ${confLevel} (coverage: ${report.confidence?.coverage || 0}%, evidence: ${report.confidence?.evidence || 0}/100)`;
 
       // Format files analyzed
-      const filesText = report.filesAnalyzed?.length > 0 
+      const filesText = report.filesAnalyzed?.length > 0
         ? `\n\n📁 **File Dianalisis:** ${report.filesAnalyzed.join(', ')}`
         : '';
 
@@ -306,7 +314,7 @@ export default function ConversationEngine({ sessionId }) {
       const modelText = `\n\n🤖 **Model:** ${report.modelName || 'unknown'}`;
 
       // Format recommendation
-      const recText = report.recommendation 
+      const recText = report.recommendation
         ? `\n\n💡 **Rekomendasi:** ${report.recommendation}`
         : '';
 
@@ -319,9 +327,9 @@ export default function ConversationEngine({ sessionId }) {
 
       setMessages(prev => [
         ...prev,
-        { 
-          role: 'model', 
-          content: fullMessage, 
+        {
+          role: 'model',
+          content: fullMessage,
           isReasoningBlock: true,
           reasoningReport: report
         }
@@ -339,7 +347,7 @@ export default function ConversationEngine({ sessionId }) {
 
     const confirmationHandler = (request) => {
       console.log('[ConversationEngine] 🔔 Received confirmation request:', request.confirmationId);
-      
+
       // Tambahkan tombol konfirmasi sebagai pesan dengan action buttons
       setMessages(prev => [
         ...prev,
@@ -356,6 +364,46 @@ export default function ConversationEngine({ sessionId }) {
     const unsubscribeConfirm = eventBus.on('Engineer:RequestConfirmation', confirmationHandler);
     return () => eventBus.off('Engineer:RequestConfirmation', unsubscribeConfirm);
   }, []);
+
+  // =============================================
+  // PANEL MEMORY CONTEXT (Fitur #2)
+  // Listen event 'Memory:Retrieved' dari MemoryService
+  // untuk mengisi panel secara otomatis tanpa menyentuh
+  // logika inti handleSend / streaming / persistensi.
+  // =============================================
+  useEffect(() => {
+    const eventBus = kernel.serviceManager?.get('EventBus');
+    if (!eventBus) return;
+
+    const memoryRetrievedHandler = (payload) => {
+      const data = payload?.result || payload;
+      const query = payload?.query || '';
+      console.log('[ConversationEngine] 🧠 Memory:Retrieved event diterima:', query, data?.length || 0, 'memori');
+      setLastMemoryQuery(query || '');
+      setActiveMemories(Array.isArray(data) ? data : []);
+      setIsMemoryLoading(false);
+    };
+
+    const unsubscribeMemory = eventBus.on('Memory:Retrieved', memoryRetrievedHandler);
+    return () => eventBus.off('Memory:Retrieved', unsubscribeMemory);
+  }, []);
+
+  // Handler manual refresh memori (memanggil ulang getMemory untuk query terakhir)
+  const handleRefreshMemory = useCallback(async () => {
+    if (!lastMemoryQuery) return;
+    setIsMemoryLoading(true);
+    try {
+      const memoryService = kernel.serviceManager?.get('MemoryService');
+      if (memoryService) {
+        const memories = await memoryService.getMemory(lastMemoryQuery);
+        setActiveMemories(Array.isArray(memories) ? memories : []);
+      }
+    } catch (err) {
+      console.warn('[ConversationEngine] Refresh memori gagal:', err);
+    } finally {
+      setIsMemoryLoading(false);
+    }
+  }, [lastMemoryQuery]);
 
   const handleLoadChat = async (chatId) => {
     const { data, error } = await supabase
@@ -377,12 +425,12 @@ export default function ConversationEngine({ sessionId }) {
    */
   const _extractFilePathFromMessage = (message) => {
     if (!message) return null;
-    
+
     // Pattern 1: "di file [path]"
     const pattern1 = /(?:di\s+)?(?:file|berkas)\s+([a-zA-Z0-9_\-\/\.]+\.(jsx?|tsx?|ts|js))/i;
     const match1 = message.match(pattern1);
     if (match1) return match1[1];
-    
+
     // Pattern 2: "[filename]" langsung
     const pattern2 = /([a-zA-Z0-9_\-\/]+\.(jsx?|tsx?))/g;
     const match2 = message.match(pattern2);
@@ -391,7 +439,7 @@ export default function ConversationEngine({ sessionId }) {
       const withSlash = match2.find(m => m.includes('/'));
       return withSlash || match2[0];
     }
-    
+
     return null;
   };
 
@@ -441,20 +489,20 @@ export default function ConversationEngine({ sessionId }) {
     // =============================================
     const activeWorkspace = workspaceManager?.activeWorkspaceId || 'ws-assistant';
     const isEngineerMode = activeWorkspace === 'ws-engineer' || activeWorkspace === 'ENGINEER';
-    
+
     console.log(`[ConversationEngine] Mode check: workspace=${activeWorkspace}, isEngineerMode=${isEngineerMode}, kernelStatus=${kernel.status}`);
-    
+
     if (isEngineerMode && kernel.status === 'RUNNING') {
       try {
         const engineer = kernel.serviceManager.get('Engineer');
         const eventBus = kernel.serviceManager.get('EventBus');
-        
+
         console.log(`[ConversationEngine] Services check: engineer=${!!engineer}, eventBus=${!!eventBus}`);
-        
+
         if (engineer && eventBus) {
           console.log('[ConversationEngine] 🎯 Delegating to Engineer frontend...');
           console.log('[ConversationEngine] 📌 Model yang akan digunakan:', formattedModel || 'default');
-          
+
           // Emit event untuk trigger Engineer
           eventBus.emit('Engineer:GeneratePatch', {
             id: `TASK-${Date.now()}`,
@@ -464,12 +512,12 @@ export default function ConversationEngine({ sessionId }) {
             requestedModel: formattedModel,
             requestedFilePath: _extractFilePathFromMessage(userMsg)
           });
-          
+
           setMessages(prev => [...prev, {
             role: 'model',
             content: `🔧 **Engineer sedang menyiapkan patch menggunakan model ${formattedModel || 'default'}...**\n\nMohon tunggu, approval dialog akan muncul setelah patch siap.`
           }]);
-          
+
           setIsLoading(false);
           return; // ⛔ JANGAN lanjut ke fetch backend
         } else {
@@ -483,7 +531,7 @@ export default function ConversationEngine({ sessionId }) {
     // =============================================
     // FALLBACK: Normal backend flow (untuk ASSISTANT & LITE)
     // =============================================
-    
+
     // --- Natural Language Memory Trigger ---
     const memoryKeywords = ['ingat', 'simpan', 'catat', 'remember', 'save', 'store'];
     const lowerMsg = userMsg.toLowerCase();
@@ -616,7 +664,7 @@ export default function ConversationEngine({ sessionId }) {
       }
 
       const isLiteMode = resolvedMode === 'LITE';
-      
+
       // Proses file attachment jika ada
       let fileData = null;
       if (attachedFile) {
@@ -856,9 +904,9 @@ export default function ConversationEngine({ sessionId }) {
 
       {/* Overlay Backdrop for Mobile */}
       {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden" 
-          onClick={() => setIsSidebarOpen(false)} 
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden"
+          onClick={() => setIsSidebarOpen(false)}
         />
       )}
 
@@ -884,233 +932,246 @@ export default function ConversationEngine({ sessionId }) {
           </button>
         </div>
 
-        {/* Inner Wrapper (Holds overflow-hidden and glows) */}
-        <div className="flex-1 flex flex-col relative overflow-hidden pt-4 min-h-0">
-          <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto p-3 md:p-4 space-y-3 custom-scrollbar relative z-10">
-            {messages.length === 0 && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center opacity-20 pointer-events-none gap-1">
-                <span className="material-symbols-outlined text-[28px] text-primary">chat_bubble</span>
-                <div className="text-[10px] tracking-widest text-primary uppercase font-mono">Conversation Engine</div>
-              </div>
-            )}
+        {/* Chat + Memory Context Panel (Fitur #2) */}
+        <div className="flex-1 flex flex-col md:flex-row relative min-h-0 min-w-0">
+          {/* Inner Wrapper (Holds overflow-hidden and glows) */}
+          <div className="flex-1 flex flex-col relative overflow-hidden pt-4 min-h-0 min-w-0">
+            <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto p-3 md:p-4 space-y-3 custom-scrollbar relative z-10">
+              {messages.length === 0 && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center opacity-20 pointer-events-none gap-1">
+                  <span className="material-symbols-outlined text-[28px] text-primary">chat_bubble</span>
+                  <div className="text-[10px] tracking-widest text-primary uppercase font-mono">Conversation Engine</div>
+                </div>
+              )}
 
-            {messages.map((m, idx) => {
-              const parsed = parseThinkingContent(m.content);
-              const displayText = parsed.answer || m.content || '';
+              {messages.map((m, idx) => {
+                const parsed = parseThinkingContent(m.content);
+                const displayText = parsed.answer || m.content || '';
 
-              return (
-                <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`relative group max-w-[85%] lg:max-w-[75%] rounded-2xl px-5 py-4 ${m.role === 'user' ? 'bg-primary-container/20 text-on-surface border border-primary/30' : 'glass-panel rim-light text-on-surface border border-outline-variant'}`}>
-                    <div className="text-body-base leading-relaxed">
-                      {/* Deep Link 1: AI Reasoning / Thinking */}
-                      {parsed.thinking && (
-                        <div
-                          onClick={() => openLifecycleInspector('AI_REASONING', parsed.thinking)}
-                          className="mb-3 inline-flex items-center gap-2 px-3 py-2 bg-surface-container border border-outline-variant text-on-surface-variant text-body-sm rounded-lg cursor-pointer hover:bg-surface-variant hover:text-on-surface transition-all shadow-sm"
-                          title="Open AI thought trace in Right Workbench"
-                        >
-                          <span className="material-symbols-outlined text-[16px]">psychology</span>
-                          [Deep Link] View AI Reasoning Trace
+                return (
+                  <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`relative group max-w-[85%] lg:max-w-[75%] rounded-2xl px-5 py-4 ${m.role === 'user' ? 'bg-primary-container/20 text-on-surface border border-primary/30' : 'glass-panel rim-light text-on-surface border border-outline-variant'}`}>
+                      <div className="text-body-base leading-relaxed">
+                        {/* Deep Link 1: AI Reasoning / Thinking */}
+                        {parsed.thinking && (
+                          <div
+                            onClick={() => openLifecycleInspector('AI_REASONING', parsed.thinking)}
+                            className="mb-3 inline-flex items-center gap-2 px-3 py-2 bg-surface-container border border-outline-variant text-on-surface-variant text-body-sm rounded-lg cursor-pointer hover:bg-surface-variant hover:text-on-surface transition-all shadow-sm"
+                            title="Open AI thought trace in Right Workbench"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">psychology</span>
+                            [Deep Link] View AI Reasoning Trace
+                          </div>
+                        )}
+
+                        {/* Deep Link 2: System & Execution Reports */}
+                        {(() => {
+                          if (!displayText) return null;
+                          const parts = displayText.split(/(\[OS EXECUTION REPORT\]|\[SYSTEM:[^\]]+\])/g);
+
+                          return parts.map((part, i) => {
+                            if (part === '[OS EXECUTION REPORT]') {
+                              return (
+                                <div key={i} className="my-2 block w-max items-center px-3 py-2 bg-primary/10 border border-primary/30 text-primary text-body-sm font-bold rounded-lg cursor-pointer hover:bg-primary/20 transition-colors shadow-sm"
+                                  onClick={() => openLifecycleInspector('OS_EXECUTION', displayText)}>
+                                  <span className="material-symbols-outlined inline-block mr-2 text-[16px] align-text-bottom">terminal</span>
+                                  OS EXECUTION REPORT (Click to Inspect)
+                                </div>
+                              );
+                            }
+
+                            if (part.startsWith('[SYSTEM:')) {
+                              const title = part.replace('[SYSTEM: ', '').replace(']', '');
+                              return (
+                                <div key={i} className="my-2 block w-max items-center px-3 py-2 bg-surface-container-high border border-outline-variant text-on-surface-variant text-body-sm font-bold rounded-lg cursor-pointer hover:bg-surface-variant transition-colors shadow-sm"
+                                  onClick={() => openLifecycleInspector(title, displayText)}>
+                                  <span className="material-symbols-outlined inline-block mr-2 text-[16px] align-text-bottom">settings_system_daydream</span>
+                                  {title} (Inspect Context)
+                                </div>
+                              );
+                            }
+
+                            return <span key={i} className="whitespace-pre-wrap">{part}</span>;
+                          });
+                        })()}
+
+                        {m.isStreaming && parsed.isThinkingComplete && <span className="animate-pulse text-primary"> ▍</span>}
+                      </div>
+
+                      {/* FASE 5: Reasoning Block — Confirmation Buttons */}
+                      {m.isConfirmationRequest && (
+                        <div className="mt-4 flex items-center gap-3 border-t border-outline-variant pt-3">
+                          <button
+                            onClick={() => {
+                              const eventBus = kernel.serviceManager?.get('EventBus');
+                              if (eventBus && m.confirmationId) {
+                                eventBus.emit('Engineer:UserConfirmation', {
+                                  confirmationId: m.confirmationId,
+                                  confirmed: true
+                                });
+                                // Update message to show confirmed state
+                                setMessages(prev => {
+                                  const next = [...prev];
+                                  next[idx] = { ...next[idx], content: `✅ **Konfirmasi Diterima**\n\nMelanjutkan ke pembuatan patch...`, isConfirmationRequest: false };
+                                  return next;
+                                });
+                              }
+                            }}
+                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold transition-colors shadow-lg shadow-emerald-500/20"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                            ✅ Lanjutkan ke Patch
+                          </button>
+                          <button
+                            onClick={() => {
+                              const eventBus = kernel.serviceManager?.get('EventBus');
+                              if (eventBus && m.confirmationId) {
+                                eventBus.emit('Engineer:UserConfirmation', {
+                                  confirmationId: m.confirmationId,
+                                  confirmed: false
+                                });
+                                setMessages(prev => {
+                                  const next = [...prev];
+                                  next[idx] = { ...next[idx], content: `❌ **Konfirmasi Ditolak**\n\nPembuatan patch dibatalkan.`, isConfirmationRequest: false };
+                                  return next;
+                                });
+                              }
+                            }}
+                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 text-sm font-medium transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">cancel</span>
+                            ❌ Batalkan
+                          </button>
                         </div>
                       )}
 
-                      {/* Deep Link 2: System & Execution Reports */}
-                      {(() => {
-                        if (!displayText) return null;
-                        const parts = displayText.split(/(\[OS EXECUTION REPORT\]|\[SYSTEM:[^\]]+\])/g);
+                      {/* FASE 5: Reasoning Block — Detail Expand Button */}
+                      {m.isReasoningBlock && m.reasoningReport && (
+                        <div className="mt-3 border-t border-outline-variant pt-3">
+                          <button
+                            onClick={() => {
+                              const report = m.reasoningReport;
+                              const detail = `🧠 **Reasoning Report Detail**\n\n` +
+                                `**Task ID:** ${report.taskId}\n` +
+                                `**Summary:** ${report.summary}\n` +
+                                `**Intent:** ${report.intent}\n` +
+                                `**Model:** ${report.modelName}\n` +
+                                `**Confidence:** ${report.confidence?.level} (${report.confidence?.coverage}% coverage, ${report.confidence?.evidence}/100 evidence)\n` +
+                                `**ADR Referenced:** ${report.adrReferenced}\n` +
+                                `**Files Analyzed:** ${(report.filesAnalyzed || []).join(', ')}\n` +
+                                `**Recommendation:** ${report.recommendation}\n` +
+                                `**Compliance:** ${report.compliance?.violations?.length || 0} violations, ${report.compliance?.warnings?.length || 0} warnings\n` +
+                                `**Timestamp:** ${report.timestamp}`;
 
-                        return parts.map((part, i) => {
-                          if (part === '[OS EXECUTION REPORT]') {
-                            return (
-                              <div key={i} className="my-2 block w-max items-center px-3 py-2 bg-primary/10 border border-primary/30 text-primary text-body-sm font-bold rounded-lg cursor-pointer hover:bg-primary/20 transition-colors shadow-sm"
-                                onClick={() => openLifecycleInspector('OS_EXECUTION', displayText)}>
-                                <span className="material-symbols-outlined inline-block mr-2 text-[16px] align-text-bottom">terminal</span>
-                                OS EXECUTION REPORT (Click to Inspect)
-                              </div>
-                            );
-                          }
+                              openLifecycleInspector('REASONING_DETAIL', detail);
+                            }}
+                            className="inline-flex items-center gap-2 px-3 py-2 bg-surface-container border border-outline-variant text-on-surface-variant text-body-sm rounded-lg hover:bg-surface-variant hover:text-on-surface transition-all shadow-sm"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">description</span>
+                            📋 Lihat Detail Reasoning
+                          </button>
+                        </div>
+                      )}
 
-                          if (part.startsWith('[SYSTEM:')) {
-                            const title = part.replace('[SYSTEM: ', '').replace(']', '');
-                            return (
-                              <div key={i} className="my-2 block w-max items-center px-3 py-2 bg-surface-container-high border border-outline-variant text-on-surface-variant text-body-sm font-bold rounded-lg cursor-pointer hover:bg-surface-variant transition-colors shadow-sm"
-                                onClick={() => openLifecycleInspector(title, displayText)}>
-                                <span className="material-symbols-outlined inline-block mr-2 text-[16px] align-text-bottom">settings_system_daydream</span>
-                                {title} (Inspect Context)
-                              </div>
-                            );
-                          }
-
-                          return <span key={i} className="whitespace-pre-wrap">{part}</span>;
-                        });
-                      })()}
-
-                      {m.isStreaming && parsed.isThinkingComplete && <span className="animate-pulse text-primary"> ▍</span>}
+                      {/* Tombol Copy */}
+                      {m.role === 'model' && !m.isStreaming && displayText && (
+                        <button
+                          onClick={() => handleCopy(displayText, idx)}
+                          className="absolute top-2 right-2 p-1.5 rounded-lg bg-surface-container hover:bg-surface-variant border border-outline-variant opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Salin ke clipboard"
+                        >
+                          {copiedIndex === idx ? (
+                            <span className="material-symbols-outlined text-[16px] text-primary">check</span>
+                          ) : (
+                            <span className="material-symbols-outlined text-[16px] text-on-surface-variant">content_copy</span>
+                          )}
+                        </button>
+                      )}
                     </div>
-
-                    {/* FASE 5: Reasoning Block — Confirmation Buttons */}
-                    {m.isConfirmationRequest && (
-                      <div className="mt-4 flex items-center gap-3 border-t border-outline-variant pt-3">
-                        <button
-                          onClick={() => {
-                            const eventBus = kernel.serviceManager?.get('EventBus');
-                            if (eventBus && m.confirmationId) {
-                              eventBus.emit('Engineer:UserConfirmation', {
-                                confirmationId: m.confirmationId,
-                                confirmed: true
-                              });
-                              // Update message to show confirmed state
-                              setMessages(prev => {
-                                const next = [...prev];
-                                next[idx] = { ...next[idx], content: `✅ **Konfirmasi Diterima**\n\nMelanjutkan ke pembuatan patch...`, isConfirmationRequest: false };
-                                return next;
-                              });
-                            }
-                          }}
-                          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold transition-colors shadow-lg shadow-emerald-500/20"
-                        >
-                          <span className="material-symbols-outlined text-[18px]">check_circle</span>
-                          ✅ Lanjutkan ke Patch
-                        </button>
-                        <button
-                          onClick={() => {
-                            const eventBus = kernel.serviceManager?.get('EventBus');
-                            if (eventBus && m.confirmationId) {
-                              eventBus.emit('Engineer:UserConfirmation', {
-                                confirmationId: m.confirmationId,
-                                confirmed: false
-                              });
-                              setMessages(prev => {
-                                const next = [...prev];
-                                next[idx] = { ...next[idx], content: `❌ **Konfirmasi Ditolak**\n\nPembuatan patch dibatalkan.`, isConfirmationRequest: false };
-                                return next;
-                              });
-                            }
-                          }}
-                          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 text-sm font-medium transition-colors"
-                        >
-                          <span className="material-symbols-outlined text-[18px]">cancel</span>
-                          ❌ Batalkan
-                        </button>
-                      </div>
-                    )}
-
-                    {/* FASE 5: Reasoning Block — Detail Expand Button */}
-                    {m.isReasoningBlock && m.reasoningReport && (
-                      <div className="mt-3 border-t border-outline-variant pt-3">
-                        <button
-                          onClick={() => {
-                            const report = m.reasoningReport;
-                            const detail = `🧠 **Reasoning Report Detail**\n\n` +
-                              `**Task ID:** ${report.taskId}\n` +
-                              `**Summary:** ${report.summary}\n` +
-                              `**Intent:** ${report.intent}\n` +
-                              `**Model:** ${report.modelName}\n` +
-                              `**Confidence:** ${report.confidence?.level} (${report.confidence?.coverage}% coverage, ${report.confidence?.evidence}/100 evidence)\n` +
-                              `**ADR Referenced:** ${report.adrReferenced}\n` +
-                              `**Files Analyzed:** ${(report.filesAnalyzed || []).join(', ')}\n` +
-                              `**Recommendation:** ${report.recommendation}\n` +
-                              `**Compliance:** ${report.compliance?.violations?.length || 0} violations, ${report.compliance?.warnings?.length || 0} warnings\n` +
-                              `**Timestamp:** ${report.timestamp}`;
-                            
-                            openLifecycleInspector('REASONING_DETAIL', detail);
-                          }}
-                          className="inline-flex items-center gap-2 px-3 py-2 bg-surface-container border border-outline-variant text-on-surface-variant text-body-sm rounded-lg hover:bg-surface-variant hover:text-on-surface transition-all shadow-sm"
-                        >
-                          <span className="material-symbols-outlined text-[16px]">description</span>
-                          📋 Lihat Detail Reasoning
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Tombol Copy */}
-                    {m.role === 'model' && !m.isStreaming && displayText && (
-                      <button
-                        onClick={() => handleCopy(displayText, idx)}
-                        className="absolute top-2 right-2 p-1.5 rounded-lg bg-surface-container hover:bg-surface-variant border border-outline-variant opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Salin ke clipboard"
-                      >
-                        {copiedIndex === idx ? (
-                          <span className="material-symbols-outlined text-[16px] text-primary">check</span>
-                        ) : (
-                          <span className="material-symbols-outlined text-[16px] text-on-surface-variant">content_copy</span>
-                        )}
-                      </button>
-                    )}
+                  </div>
+                );
+              })}
+              {isLoading && messages[messages.length - 1]?.role !== 'model' && (
+                <div className="flex justify-start">
+                  <div className="glass-panel rim-light px-5 py-3 rounded-2xl border border-outline-variant text-on-surface-variant text-body-sm flex items-center gap-3">
+                    <Loader2 className="w-4 h-4 animate-spin text-primary" /> Awaiting Intent Dispatch...
                   </div>
                 </div>
-              )
-            })}
-            {isLoading && messages[messages.length - 1]?.role !== 'model' && (
-              <div className="flex justify-start">
-                <div className="glass-panel rim-light px-5 py-3 rounded-2xl border border-outline-variant text-on-surface-variant text-body-sm flex items-center gap-3">
-                  <Loader2 className="w-4 h-4 animate-spin text-primary" /> Awaiting Intent Dispatch...
-                </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Compact Input Area */}
-          <div className="px-3 pt-3 pb-2 bg-gradient-to-t from-background via-background to-transparent z-10 flex flex-col items-center w-full">
-            {(workspaceManager?.activeWorkspaceId === 'ws-engineer' || workspaceManager?.activeWorkspaceId === 'ws-assistant') && (
-              <div className="w-full max-w-3xl mb-2 flex justify-start">
-                <FolderSelector onSelect={(path) => setSelectedFolder(path)} currentPath={selectedFolder} showLabel={true} className="scale-90 origin-left" />
-              </div>
-            )}
-            
-            {attachedFile && (
-              <div className="w-full max-w-3xl mb-2 flex items-center justify-between bg-surface-container border border-outline-variant rounded-lg px-3 py-2 animate-in fade-in slide-in-from-bottom-2">
-                <div className="flex items-center gap-2 text-body-sm text-on-surface">
-                  <span className="material-symbols-outlined text-[16px] text-primary">attach_file</span>
-                  <span className="truncate max-w-[200px]">{attachedFile.name}</span>
-                </div>
-                <button type="button" onClick={() => setAttachedFile(null)} className="text-on-surface-variant hover:text-error transition-colors">
-                  <span className="material-symbols-outlined text-[16px]">close</span>
-                </button>
-              </div>
-            )}
-            <form onSubmit={handleSend} className="w-full max-w-3xl relative flex items-end gap-2 bg-surface-container-low border border-outline-variant rounded-2xl p-2 focus-within:border-primary transition-all shadow-lg pulse-focus">
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(e, null); } }}
-                placeholder="Ketik instruksi atau mulai percakapan dengan OS..."
-                className="flex-1 max-h-48 min-h-[44px] bg-transparent resize-none py-3 px-4 text-body-base text-on-surface placeholder-on-surface-variant focus:outline-none custom-scrollbar overflow-y-auto"
-                rows="1"
-              />
-              {workspaceManager?.activeWorkspaceId === 'ws-lite' && (
-                <>
-                  <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    className="hidden" 
-                    onChange={(e) => { if (e.target.files && e.target.files[0]) setAttachedFile(e.target.files[0]); }} 
-                  />
-                  <button 
-                    type="button" 
-                    onClick={() => fileInputRef.current?.click()} 
-                    className="p-3 mb-1 mr-1 rounded-xl bg-surface-container-high hover:bg-surface-variant text-on-surface-variant transition-all"
-                    title="Upload Dokumen RAG"
-                  >
-                    <span className="material-symbols-outlined text-[20px]">attach_file</span>
-                  </button>
-                </>
               )}
-              <button type="submit" disabled={(!input.trim() && !attachedFile) || isLoading} className="p-3 mb-1 mr-1 rounded-xl bg-primary hover:bg-primary-fixed text-on-primary disabled:opacity-50 disabled:hover:bg-primary transition-all shadow-md">
-                <span className="material-symbols-outlined text-[20px]">send</span>
-              </button>
-            </form>
-            <div className="text-center mt-1 text-[9px] text-on-surface-variant tracking-widest uppercase opacity-50">
-              CE v2.0 • {workspaceManager.activeWorkspaceId}
+              <div ref={messagesEndRef} />
             </div>
+
+            {/* Compact Input Area */}
+            <div className="px-3 pt-3 pb-2 bg-gradient-to-t from-background via-background to-transparent z-10 flex flex-col items-center w-full">
+              {(workspaceManager?.activeWorkspaceId === 'ws-engineer' || workspaceManager?.activeWorkspaceId === 'ws-assistant') && (
+                <div className="w-full max-w-3xl mb-2 flex justify-start">
+                  <FolderSelector onSelect={(path) => setSelectedFolder(path)} currentPath={selectedFolder} showLabel={true} className="scale-90 origin-left" />
+                </div>
+              )}
+
+              {attachedFile && (
+                <div className="w-full max-w-3xl mb-2 flex items-center justify-between bg-surface-container border border-outline-variant rounded-lg px-3 py-2 animate-in fade-in slide-in-from-bottom-2">
+                  <div className="flex items-center gap-2 text-body-sm text-on-surface">
+                    <span className="material-symbols-outlined text-[16px] text-primary">attach_file</span>
+                    <span className="truncate max-w-[200px]">{attachedFile.name}</span>
+                  </div>
+                  <button type="button" onClick={() => setAttachedFile(null)} className="text-on-surface-variant hover:text-error transition-colors">
+                    <span className="material-symbols-outlined text-[16px]">close</span>
+                  </button>
+                </div>
+              )}
+              <form onSubmit={handleSend} className="w-full max-w-3xl relative flex items-end gap-2 bg-surface-container-low border border-outline-variant rounded-2xl p-2 focus-within:border-primary transition-all shadow-lg pulse-focus">
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(e, null); } }}
+                  placeholder="Ketik instruksi atau mulai percakapan dengan OS..."
+                  className="flex-1 max-h-48 min-h-[44px] bg-transparent resize-none py-3 px-4 text-body-base text-on-surface placeholder-on-surface-variant focus:outline-none custom-scrollbar overflow-y-auto"
+                  rows="1"
+                />
+                {workspaceManager?.activeWorkspaceId === 'ws-lite' && (
+                  <>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      className="hidden"
+                      onChange={(e) => { if (e.target.files && e.target.files[0]) setAttachedFile(e.target.files[0]); }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="p-3 mb-1 mr-1 rounded-xl bg-surface-container-high hover:bg-surface-variant text-on-surface-variant transition-all"
+                      title="Upload Dokumen RAG"
+                    >
+                      <span className="material-symbols-outlined text-[20px]">attach_file</span>
+                    </button>
+                  </>
+                )}
+                <button type="submit" disabled={(!input.trim() && !attachedFile) || isLoading} className="p-3 mb-1 mr-1 rounded-xl bg-primary hover:bg-primary-fixed text-on-primary disabled:opacity-50 disabled:hover:bg-primary transition-all shadow-md">
+                  <span className="material-symbols-outlined text-[20px]">send</span>
+                </button>
+              </form>
+              <div className="text-center mt-1 text-[9px] text-on-surface-variant tracking-widest uppercase opacity-50">
+                CE v2.0 • {workspaceManager.activeWorkspaceId}
+              </div>
+            </div>
+
+            {/* Atmospheric Background Glow */}
+            <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-primary/5 blur-[120px] rounded-full pointer-events-none z-0"></div>
+            <div className="absolute -top-32 -left-32 w-96 h-96 bg-secondary/5 blur-[120px] rounded-full pointer-events-none z-0"></div>
           </div>
 
-          {/* Atmospheric Background Glow */}
-          <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-primary/5 blur-[120px] rounded-full pointer-events-none z-0"></div>
-          <div className="absolute -top-32 -left-32 w-96 h-96 bg-secondary/5 blur-[120px] rounded-full pointer-events-none z-0"></div>
-
+          {/* Memory Context Panel (Sidebar Kanan) */}
+          {isMemoryPanelOpen && (
+            <MemoryContextPanel
+              memories={activeMemories}
+              query={lastMemoryQuery}
+              loading={isMemoryLoading}
+              onClose={() => setIsMemoryPanelOpen(false)}
+              onRefresh={handleRefreshMemory}
+            />
+          )}
         </div>
       </div>
     </div>

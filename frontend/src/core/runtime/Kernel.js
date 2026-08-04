@@ -13,6 +13,7 @@ import { ProcessManager } from './ProcessManager.js';
 import { ModuleLoader } from './module-loader.js';
 import { DiscoveryManager } from './DiscoveryManager.js';
 import { MemoryService } from './services/MemoryService.js';
+import { MemoryGovernorService } from './services/MemoryGovernorService.js';
 import { KnowledgeService } from './services/KnowledgeService.js';
 import { AgentOrchestratorService } from './services/AgentOrchestratorService.js';
 import { ToolRegistryService } from './services/ToolRegistryService.js';
@@ -224,10 +225,17 @@ class Kernel {
     await engineer.initialize();
     serviceManager.register('Engineer', engineer);
 
-    // Memory Service
+// Memory Service
     const memoryService = new MemoryService(serviceManager);
     await memoryService.initialize();
     serviceManager.register('MemoryService', memoryService);
+
+    // Memory Governor Service — Anti-Bias & Memory Maintenance
+    // [FASE 1] Memerlukan MemoryService (untuk bookkeeping) & BrainService (untuk AI murah).
+    // Didaftarkan setelah keduanya agar dependensi tersedia di serviceManager.
+    const memoryGovernorService = new MemoryGovernorService(serviceManager);
+    await memoryGovernorService.initialize();
+    serviceManager.register('MemoryGovernorService', memoryGovernorService);
 
     // Semantic Context Service
     const semanticContextService = new SemanticContextService(serviceManager);

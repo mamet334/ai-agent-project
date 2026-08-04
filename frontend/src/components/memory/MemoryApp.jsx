@@ -15,9 +15,9 @@ export default function MemoryApp() {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) return;
 
-            let query = supabase
+let query = supabase
                 .from('user_memories')
-                .select('id, summary, memory_type, memory_state, memory_hits, created_at, last_used_at')
+                .select('id, summary, memory_type, memory_state, memory_hits, created_at, last_used_at, source_reference, version_code, chat_id')
                 .eq('user_id', session.user.id);
 
             if (searchQuery.trim()) {
@@ -122,7 +122,7 @@ export default function MemoryApp() {
                         >
                             <div className="flex-1 min-w-0 mr-3">
                                 <p className="text-sm text-slate-200 break-words">{memory.summary}</p>
-                                <div className="flex items-center gap-3 mt-2">
+<div className="flex items-center gap-3 mt-2">
                                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${memory.memory_state === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-400'
                                         }`}>
                                         {memory.memory_state || 'ACTIVE'}
@@ -133,6 +133,26 @@ export default function MemoryApp() {
                                     <span className="text-[10px] text-slate-500">{memory.memory_hits || 0} hits</span>
                                     <span className="text-[10px] text-slate-600">{formatDate(memory.created_at)}</span>
                                 </div>
+                                {/* Golden Source Metadata (Fase 1) — graceful, hanya tampil jika ada */}
+                                {(memory.source_reference || memory.version_code || memory.chat_id) && (
+                                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                        {memory.source_reference && (
+                                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 truncate max-w-[200px]" title={memory.source_reference}>
+                                                📎 {memory.source_reference}
+                                            </span>
+                                        )}
+                                        {memory.version_code && (
+                                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                                                v{memory.version_code}
+                                            </span>
+                                        )}
+                                        {memory.chat_id && (
+                                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-700/40 text-slate-400 border border-slate-600/30">
+                                                💬 {memory.chat_id.substring(0, 8)}
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                             <button
                                 onClick={() => handleDelete(memory.id)}
