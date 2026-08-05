@@ -16300,9 +16300,9 @@
       "source_file": "supabase/functions/agent-process/lib/adapters/adapter_registry.ts",
       "source_location": "L51",
       "_origin": "ast",
-      "community": 20,
+      "community": 2,
       "norm_label": ".getadapter()",
-      "community_name": "llm_orchestrator.ts",
+      "community_name": "adapter_registry.ts",
       "id": "supabase_functions_agent_process_lib_adapters_adapter_registry_capabilityregistry_getadapter"
     },
     {
@@ -16531,9 +16531,9 @@
       "source_file": "supabase/functions/agent-process/lib/adapters/ai_adapter.ts",
       "source_location": "L243",
       "_origin": "ast",
-      "community": 20,
+      "community": 2,
       "norm_label": ".initialize()",
-      "community_name": "llm_orchestrator.ts",
+      "community_name": "adapter_registry.ts",
       "id": "supabase_functions_agent_process_lib_adapters_ai_adapter_geminiadapter_initialize"
     },
     {
@@ -16773,9 +16773,9 @@
       "source_file": "supabase/functions/agent-process/lib/adapters/embedding_adapter.ts",
       "source_location": "L4",
       "_origin": "ast",
-      "community": 2,
+      "community": 88,
       "norm_label": "geminiembeddingadapter",
-      "community_name": "adapter_registry.ts",
+      "community_name": "GeminiEmbeddingAdapter",
       "id": "supabase_functions_agent_process_lib_adapters_embedding_adapter_geminiembeddingadapter"
     },
     {
@@ -16784,9 +16784,9 @@
       "source_file": "supabase/functions/agent-process/lib/adapters/embedding_adapter.ts",
       "source_location": "L10",
       "_origin": "ast",
-      "community": 2,
+      "community": 88,
       "norm_label": ".constructor()",
-      "community_name": "adapter_registry.ts",
+      "community_name": "GeminiEmbeddingAdapter",
       "id": "supabase_functions_agent_process_lib_adapters_embedding_adapter_geminiembeddingadapter_constructor"
     },
     {
@@ -16795,9 +16795,9 @@
       "source_file": "supabase/functions/agent-process/lib/adapters/embedding_adapter.ts",
       "source_location": "L14",
       "_origin": "ast",
-      "community": 20,
+      "community": 88,
       "norm_label": ".initialize()",
-      "community_name": "llm_orchestrator.ts",
+      "community_name": "GeminiEmbeddingAdapter",
       "id": "supabase_functions_agent_process_lib_adapters_embedding_adapter_geminiembeddingadapter_initialize"
     },
     {
@@ -16817,9 +16817,9 @@
       "source_file": "supabase/functions/agent-process/lib/adapters/embedding_adapter.ts",
       "source_location": "L54",
       "_origin": "ast",
-      "community": 2,
+      "community": 88,
       "norm_label": ".stream()",
-      "community_name": "adapter_registry.ts",
+      "community_name": "GeminiEmbeddingAdapter",
       "id": "supabase_functions_agent_process_lib_adapters_embedding_adapter_geminiembeddingadapter_stream"
     },
     {
@@ -16830,7 +16830,7 @@
       "_origin": "ast",
       "community": 88,
       "norm_label": ".healthcheck()",
-      "community_name": "OpenAIEmbeddingAdapter",
+      "community_name": "GeminiEmbeddingAdapter",
       "id": "supabase_functions_agent_process_lib_adapters_embedding_adapter_geminiembeddingadapter_healthcheck"
     },
     {
@@ -16839,9 +16839,9 @@
       "source_file": "supabase/functions/agent-process/lib/adapters/embedding_adapter.ts",
       "source_location": "L62",
       "_origin": "ast",
-      "community": 2,
+      "community": 88,
       "norm_label": ".shutdown()",
-      "community_name": "adapter_registry.ts",
+      "community_name": "GeminiEmbeddingAdapter",
       "id": "supabase_functions_agent_process_lib_adapters_embedding_adapter_geminiembeddingadapter_shutdown"
     },
     {
@@ -16852,7 +16852,7 @@
       "_origin": "ast",
       "community": 88,
       "norm_label": "openaiembeddingadapter",
-      "community_name": "OpenAIEmbeddingAdapter",
+      "community_name": "GeminiEmbeddingAdapter",
       "id": "supabase_functions_agent_process_lib_adapters_embedding_adapter_openaiembeddingadapter"
     },
     {
@@ -16863,7 +16863,7 @@
       "_origin": "ast",
       "community": 88,
       "norm_label": ".constructor()",
-      "community_name": "OpenAIEmbeddingAdapter",
+      "community_name": "GeminiEmbeddingAdapter",
       "id": "supabase_functions_agent_process_lib_adapters_embedding_adapter_openaiembeddingadapter_constructor"
     },
     {
@@ -16874,7 +16874,7 @@
       "_origin": "ast",
       "community": 88,
       "norm_label": ".initialize()",
-      "community_name": "OpenAIEmbeddingAdapter",
+      "community_name": "GeminiEmbeddingAdapter",
       "id": "supabase_functions_agent_process_lib_adapters_embedding_adapter_openaiembeddingadapter_initialize"
     },
     {
@@ -16896,7 +16896,7 @@
       "_origin": "ast",
       "community": 88,
       "norm_label": ".stream()",
-      "community_name": "OpenAIEmbeddingAdapter",
+      "community_name": "GeminiEmbeddingAdapter",
       "id": "supabase_functions_agent_process_lib_adapters_embedding_adapter_openaiembeddingadapter_stream"
     },
     {
@@ -16907,7 +16907,7 @@
       "_origin": "ast",
       "community": 88,
       "norm_label": ".healthcheck()",
-      "community_name": "OpenAIEmbeddingAdapter",
+      "community_name": "GeminiEmbeddingAdapter",
       "id": "supabase_functions_agent_process_lib_adapters_embedding_adapter_openaiembeddingadapter_healthcheck"
     },
     {
@@ -16918,7 +16918,7 @@
       "_origin": "ast",
       "community": 88,
       "norm_label": ".shutdown()",
-      "community_name": "OpenAIEmbeddingAdapter",
+      "community_name": "GeminiEmbeddingAdapter",
       "id": "supabase_functions_agent_process_lib_adapters_embedding_adapter_openaiembeddingadapter_shutdown"
     },
     {
@@ -19798,9 +19798,9 @@
       "source_file": "supabase/functions/agent-process/plugins/coder.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 143,
+      "community": 30,
       "norm_label": "coder.ts",
-      "community_name": "coder.ts",
+      "community_name": "plugins/registry.ts",
       "id": "supabase_functions_agent_process_plugins_coder"
     },
     {
@@ -19809,9 +19809,9 @@
       "source_file": "supabase/functions/agent-process/plugins/coder.ts",
       "source_location": "L13",
       "_origin": "ast",
-      "community": 143,
+      "community": 30,
       "norm_label": "executepiston()",
-      "community_name": "coder.ts",
+      "community_name": "plugins/registry.ts",
       "id": "supabase_functions_agent_process_plugins_coder_executepiston"
     },
     {
@@ -19820,9 +19820,9 @@
       "source_file": "supabase/functions/agent-process/plugins/coder.ts",
       "source_location": "L57",
       "_origin": "ast",
-      "community": 143,
+      "community": 30,
       "norm_label": "extractcode()",
-      "community_name": "coder.ts",
+      "community_name": "plugins/registry.ts",
       "id": "supabase_functions_agent_process_plugins_coder_extractcode"
     },
     {
@@ -19831,9 +19831,9 @@
       "source_file": "supabase/functions/agent-process/plugins/coder.ts",
       "source_location": "L86",
       "_origin": "ast",
-      "community": 143,
+      "community": 30,
       "norm_label": "extractinlinedata()",
-      "community_name": "coder.ts",
+      "community_name": "plugins/registry.ts",
       "id": "supabase_functions_agent_process_plugins_coder_extractinlinedata"
     },
     {
@@ -19919,9 +19919,9 @@
       "source_file": "supabase/functions/agent-process/plugins/deep_research.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 30,
+      "community": 143,
       "norm_label": "deep_research.ts",
-      "community_name": "plugins/registry.ts",
+      "community_name": "deep_research.ts",
       "id": "supabase_functions_agent_process_plugins_deep_research"
     },
     {
@@ -19930,9 +19930,9 @@
       "source_file": "supabase/functions/agent-process/plugins/deep_research.ts",
       "source_location": "L3",
       "_origin": "ast",
-      "community": 30,
+      "community": 143,
       "norm_label": "searchduckduckgo()",
-      "community_name": "plugins/registry.ts",
+      "community_name": "deep_research.ts",
       "id": "supabase_functions_agent_process_plugins_deep_research_searchduckduckgo"
     },
     {
@@ -19941,9 +19941,9 @@
       "source_file": "supabase/functions/agent-process/plugins/deep_research.ts",
       "source_location": "L43",
       "_origin": "ast",
-      "community": 30,
+      "community": 143,
       "norm_label": "fetchyahooimages()",
-      "community_name": "plugins/registry.ts",
+      "community_name": "deep_research.ts",
       "id": "supabase_functions_agent_process_plugins_deep_research_fetchyahooimages"
     },
     {
@@ -53487,5 +53487,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "ec072c5f71b6cfa2f87335659e55060e9de5bcb1"
+  "built_at_commit": "d789a523608deda63d3f4a6f53f7f6ba74d347cb"
 }

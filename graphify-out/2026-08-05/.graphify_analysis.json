@@ -113,11 +113,13 @@
     ],
     "2": [
       "supabase_functions_agent_process_lib_adapters_adapter_registry",
+      "supabase_functions_agent_process_lib_adapters_adapter_registry_capabilityregistry_getadapter",
       "supabase_functions_agent_process_lib_adapters_ai_adapter",
       "supabase_functions_agent_process_lib_adapters_ai_adapter_geminiadapter",
       "supabase_functions_agent_process_lib_adapters_ai_adapter_geminiadapter_constructor",
       "supabase_functions_agent_process_lib_adapters_ai_adapter_geminiadapter_execute",
       "supabase_functions_agent_process_lib_adapters_ai_adapter_geminiadapter_healthcheck",
+      "supabase_functions_agent_process_lib_adapters_ai_adapter_geminiadapter_initialize",
       "supabase_functions_agent_process_lib_adapters_ai_adapter_geminiadapter_shutdown",
       "supabase_functions_agent_process_lib_adapters_ai_adapter_geminiadapter_stream",
       "supabase_functions_agent_process_lib_adapters_ai_adapter_groqadapter",
@@ -152,11 +154,7 @@
       "supabase_functions_agent_process_lib_adapters_capability_adapter_capabilityadapter_shutdown",
       "supabase_functions_agent_process_lib_adapters_capability_adapter_capabilityadapter_stream",
       "supabase_functions_agent_process_lib_adapters_embedding_adapter",
-      "supabase_functions_agent_process_lib_adapters_embedding_adapter_geminiembeddingadapter",
-      "supabase_functions_agent_process_lib_adapters_embedding_adapter_geminiembeddingadapter_constructor",
       "supabase_functions_agent_process_lib_adapters_embedding_adapter_geminiembeddingadapter_execute",
-      "supabase_functions_agent_process_lib_adapters_embedding_adapter_geminiembeddingadapter_shutdown",
-      "supabase_functions_agent_process_lib_adapters_embedding_adapter_geminiembeddingadapter_stream",
       "supabase_functions_agent_process_lib_adapters_embedding_adapter_openaiembeddingadapter_execute"
     ],
     "3": [
@@ -707,14 +705,11 @@
     "20": [
       "supabase_functions_agent_process_lib_adapters_adapter_registry_capabilityregistry",
       "supabase_functions_agent_process_lib_adapters_adapter_registry_capabilityregistry_clearallcooldowns",
-      "supabase_functions_agent_process_lib_adapters_adapter_registry_capabilityregistry_getadapter",
       "supabase_functions_agent_process_lib_adapters_adapter_registry_capabilityregistry_getavailableaiadapters",
       "supabase_functions_agent_process_lib_adapters_adapter_registry_capabilityregistry_getavailableembeddingadapters",
       "supabase_functions_agent_process_lib_adapters_adapter_registry_capabilityregistry_initializeadapters",
       "supabase_functions_agent_process_lib_adapters_adapter_registry_capabilityregistry_isproviderlocked",
       "supabase_functions_agent_process_lib_adapters_adapter_registry_capabilityregistry_lockprovider",
-      "supabase_functions_agent_process_lib_adapters_ai_adapter_geminiadapter_initialize",
-      "supabase_functions_agent_process_lib_adapters_embedding_adapter_geminiembeddingadapter_initialize",
       "supabase_functions_agent_process_lib_llm_orchestrator",
       "supabase_functions_agent_process_lib_llm_orchestrator_callllmwithcascade",
       "supabase_functions_agent_process_lib_llm_orchestrator_callllmwithmetadata",
@@ -912,12 +907,13 @@
       "supabase_functions_agent_process_plugins_registry_getpluginbyname"
     ],
     "30": [
+      "supabase_functions_agent_process_plugins_coder",
+      "supabase_functions_agent_process_plugins_coder_executepiston",
+      "supabase_functions_agent_process_plugins_coder_extractcode",
+      "supabase_functions_agent_process_plugins_coder_extractinlinedata",
       "supabase_functions_agent_process_plugins_communicator",
       "supabase_functions_agent_process_plugins_cron_manager",
       "supabase_functions_agent_process_plugins_debate",
-      "supabase_functions_agent_process_plugins_deep_research",
-      "supabase_functions_agent_process_plugins_deep_research_fetchyahooimages",
-      "supabase_functions_agent_process_plugins_deep_research_searchduckduckgo",
       "supabase_functions_agent_process_plugins_file_analyzer",
       "supabase_functions_agent_process_plugins_language",
       "supabase_functions_agent_process_plugins_logic",
@@ -1644,7 +1640,12 @@
       "scratch_verification_engine_v2_acceptance_report"
     ],
     "88": [
+      "supabase_functions_agent_process_lib_adapters_embedding_adapter_geminiembeddingadapter",
+      "supabase_functions_agent_process_lib_adapters_embedding_adapter_geminiembeddingadapter_constructor",
       "supabase_functions_agent_process_lib_adapters_embedding_adapter_geminiembeddingadapter_healthcheck",
+      "supabase_functions_agent_process_lib_adapters_embedding_adapter_geminiembeddingadapter_initialize",
+      "supabase_functions_agent_process_lib_adapters_embedding_adapter_geminiembeddingadapter_shutdown",
+      "supabase_functions_agent_process_lib_adapters_embedding_adapter_geminiembeddingadapter_stream",
       "supabase_functions_agent_process_lib_adapters_embedding_adapter_openaiembeddingadapter",
       "supabase_functions_agent_process_lib_adapters_embedding_adapter_openaiembeddingadapter_constructor",
       "supabase_functions_agent_process_lib_adapters_embedding_adapter_openaiembeddingadapter_healthcheck",
@@ -2032,10 +2033,9 @@
       "stress_test_memory_supabase"
     ],
     "143": [
-      "supabase_functions_agent_process_plugins_coder",
-      "supabase_functions_agent_process_plugins_coder_executepiston",
-      "supabase_functions_agent_process_plugins_coder_extractcode",
-      "supabase_functions_agent_process_plugins_coder_extractinlinedata"
+      "supabase_functions_agent_process_plugins_deep_research",
+      "supabase_functions_agent_process_plugins_deep_research_fetchyahooimages",
+      "supabase_functions_agent_process_plugins_deep_research_searchduckduckgo"
     ],
     "144": [
       "supabase_functions_agent_process_plugins_self_healing",
@@ -2428,7 +2428,7 @@
   "cohesion": {
     "0": 0.05254237288135593,
     "1": 0.08325624421831637,
-    "2": 0.08405797101449275,
+    "2": 0.08562367864693446,
     "3": 0.1111111111111111,
     "4": 0.06504065040650407,
     "5": 0.08067226890756303,
@@ -2446,7 +2446,7 @@
     "17": 0.10507246376811594,
     "18": 0.16600790513833993,
     "19": 0.15151515151515152,
-    "20": 0.15714285714285714,
+    "20": 0.19607843137254902,
     "21": 0.2,
     "22": 0.1,
     "23": 0.10526315789473684,
@@ -2456,7 +2456,7 @@
     "27": 0.13725490196078433,
     "28": 0.11764705882352941,
     "29": 0.16911764705882354,
-    "30": 0.11764705882352941,
+    "30": 0.1111111111111111,
     "31": 0.125,
     "32": 0.225,
     "33": 0.275,
@@ -2514,7 +2514,7 @@
     "85": 0.2857142857142857,
     "86": 0.2857142857142857,
     "87": 0.2857142857142857,
-    "88": 0.3333333333333333,
+    "88": 0.18181818181818182,
     "89": 0.3333333333333333,
     "90": 0.3333333333333333,
     "91": 0.3333333333333333,
@@ -2569,7 +2569,7 @@
     "140": 0.6666666666666666,
     "141": 0.6666666666666666,
     "142": 0.5,
-    "143": 0.5,
+    "143": 0.6666666666666666,
     "144": 0.8333333333333334,
     "145": 0.5,
     "146": 0.5,
@@ -2807,7 +2807,7 @@
     {
       "type": "low_cohesion",
       "question": "Should `adapter_registry.ts` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.08405797101449275 - nodes in this community are weakly interconnected."
+      "why": "Cohesion score 0.08562367864693446 - nodes in this community are weakly interconnected."
     }
   ]
 }
