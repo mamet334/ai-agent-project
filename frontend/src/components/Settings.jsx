@@ -68,23 +68,26 @@ export default function Settings() {
         return;
       }
 
+      // FIX: API key harus dikirim di header `x-byok-{provider}`,
+      // bukan di body sebagai `apiKey`. request_pipeline.ts membaca dari header.
+      const byokHeaderKey = `x-byok-${aiProvider}`;
       const endpoint = 'https://uuyzdjifhdfyyvpxsofu.supabase.co/functions/v1/agent-process';
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          [byokHeaderKey]: aiKey,  // ← key dikirim di header yang benar
         },
         body: JSON.stringify({
           message: 'Halo, tes koneksi. Balas dengan "OK".',
           provider: aiProvider,
           model: aiModel,
-          apiKey: aiKey,
           history: []
         })
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      if (!response.ok) throw new Error(data.error || data.message || `HTTP ${response.status}`);
       setTestStatus('success');
       setTimeout(() => setTestStatus(''), 4000);
     } catch (err) {

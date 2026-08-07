@@ -65,6 +65,10 @@ export default function ConversationEngine({ sessionId }) {
   const isInitialMount = useRef(true);
   const prevSessionIdRef = useRef(sessionId);
 
+  // Engineer Autonomous Mode: track status tiap command per pesan
+  // key: "${msgIdx}_${cmd}" → { status: 'pending'|'running'|'done'|'skipped', output: string }
+  const [engineerCmdStates, setEngineerCmdStates] = useState({});
+
   // Auto-grow textarea
   useEffect(() => {
     if (textareaRef.current) {
@@ -485,48 +489,13 @@ export default function ConversationEngine({ sessionId }) {
     }
 
     // =============================================
-    // ✅ ENGINEER MODE DELEGATION (UPGRADE 1)
+    // ENGINEER MODE — Alur ke LLM Supabase (seperti Antigravity)
+    // Engineer ngobrol dulu via LLM, patch hanya ketika LLM propose + user klik Apply
     // =============================================
     const activeWorkspace = workspaceManager?.activeWorkspaceId || 'ws-assistant';
     const isEngineerMode = activeWorkspace === 'ws-engineer' || activeWorkspace === 'ENGINEER';
 
-    console.log(`[ConversationEngine] Mode check: workspace=${activeWorkspace}, isEngineerMode=${isEngineerMode}, kernelStatus=${kernel.status}`);
-
-    if (isEngineerMode && kernel.status === 'RUNNING') {
-      try {
-        const engineer = kernel.serviceManager.get('Engineer');
-        const eventBus = kernel.serviceManager.get('EventBus');
-
-        console.log(`[ConversationEngine] Services check: engineer=${!!engineer}, eventBus=${!!eventBus}`);
-
-        if (engineer && eventBus) {
-          console.log('[ConversationEngine] 🎯 Delegating to Engineer frontend...');
-          console.log('[ConversationEngine] 📌 Model yang akan digunakan:', formattedModel || 'default');
-
-          // Emit event untuk trigger Engineer
-          eventBus.emit('Engineer:GeneratePatch', {
-            id: `TASK-${Date.now()}`,
-            title: userMsg.substring(0, 100),
-            description: userMsg,
-            files: [],
-            requestedModel: formattedModel,
-            requestedFilePath: _extractFilePathFromMessage(userMsg)
-          });
-
-          setMessages(prev => [...prev, {
-            role: 'model',
-            content: `🔧 **Engineer sedang menyiapkan patch menggunakan model ${formattedModel || 'default'}...**\n\nMohon tunggu, approval dialog akan muncul setelah patch siap.`
-          }]);
-
-          setIsLoading(false);
-          return; // ⛔ JANGAN lanjut ke fetch backend
-        } else {
-          console.warn('[ConversationEngine] Engineer or EventBus not available, falling back to backend');
-        }
-      } catch (err) {
-        console.error('[ConversationEngine] Engineer delegation failed:', err);
-      }
-    }
+    console.log(`[ConversationEngine] Mode check: workspace=${activeWorkspace}, isEngineerMode=${isEngineerMode}`);
 
     // =============================================
     // FALLBACK: Normal backend flow (untuk ASSISTANT & LITE)
@@ -744,12 +713,21 @@ export default function ConversationEngine({ sessionId }) {
       if (contentType.includes('application/json')) {
         console.log("[LIFECYCLE] Received JSON response (DIRECT mode)");
         const jsonData = await response.json();
-        const messageContent = jsonData.message || jsonData;
+        const rawContent = typeof (jsonData.message || jsonData) === 'string'
+          ? (jsonData.message || jsonData)
+          : JSON.stringify(jsonData.message || jsonData);
+
+        // Deteksi patch proposal dari Engineer LLM
+        const hasPatch = isEngineerMode && rawContent.includes('[MAMET_PATCH_READY]');
+        const cleanContent = hasPatch ? rawContent.replace('[MAMET_PATCH_READY]', '').trim() : rawContent;
+
         setMessages(prev => [...prev, {
           role: 'model',
-          content: messageContent,
+          content: cleanContent,
           steps: jsonData.processingSteps || [],
-          metadata: jsonData
+          metadata: jsonData,
+          hasPatchProposal: hasPatch,
+          patchOriginalTask: hasPatch ? userMsg : undefined
         }]);
 
         openLifecycleInspector('execution', jsonData);
@@ -811,7 +789,25 @@ export default function ConversationEngine({ sessionId }) {
       }
 
       console.log("[LIFECYCLE] Stream completed");
-      setMessages(prev => { const next = [...prev]; next[next.length - 1].isStreaming = false; return next; });
+
+      // Deteksi patch proposal dari Engineer LLM (streaming path)
+      if (isEngineerMode && aiResponseText.includes('[MAMET_PATCH_READY]')) {
+        const cleanText = aiResponseText.replace('[MAMET_PATCH_READY]', '').trim();
+        setMessages(prev => {
+          const next = [...prev];
+          next[next.length - 1] = {
+            ...next[next.length - 1],
+            content: cleanText,
+            isStreaming: false,
+            hasPatchProposal: true,
+            patchOriginalTask: userMsg
+          };
+          return next;
+        });
+      } else {
+        setMessages(prev => { const next = [...prev]; next[next.length - 1].isStreaming = false; return next; });
+      }
+
       const finalAiResponseText = aiResponseText;
 
       // === OS EXECUTION INTERCEPTOR (Local Sandbox Execution) ===
@@ -886,6 +882,29 @@ export default function ConversationEngine({ sessionId }) {
       setMessages(prev => [...prev, { role: 'model', content: `⚠️ Error: ${err.message}` }]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // =============================================
+  // ENGINEER AUTONOMOUS: Run terminal command + auto-feed output ke LLM
+  // ponytail: pakai electronAPI yang sudah ada, tidak ada IPC baru
+  // =============================================
+  const handleRunCommand = async (cmd, cmdKey) => {
+    if (!window.electronAPI) {
+      setEngineerCmdStates(prev => ({ ...prev, [cmdKey]: { status: 'error', output: 'Electron API tidak tersedia (bukan desktop mode).' } }));
+      return;
+    }
+    setEngineerCmdStates(prev => ({ ...prev, [cmdKey]: { status: 'running', output: '' } }));
+    try {
+      const result = await window.electronAPI.runTerminalCommand(cmd);
+      const output = result?.output || result?.error || 'Command selesai (tidak ada output).';
+      setEngineerCmdStates(prev => ({ ...prev, [cmdKey]: { status: 'done', output } }));
+      // Opsi A: Auto-feed output ke Engineer LLM untuk analisis lanjutan
+      setTimeout(() => handleSend(null, `[TERMINAL OUTPUT for: ${cmd}]\n${output}`), 300);
+    } catch (err) {
+      const errMsg = err?.message || String(err);
+      setEngineerCmdStates(prev => ({ ...prev, [cmdKey]: { status: 'error', output: errMsg } }));
+      setTimeout(() => handleSend(null, `[TERMINAL ERROR for: ${cmd}]\n${errMsg}`), 300);
     }
   };
 
@@ -964,12 +983,80 @@ export default function ConversationEngine({ sessionId }) {
                           </div>
                         )}
 
-                        {/* Deep Link 2: System & Execution Reports */}
+                        {/* Render konten dengan parser marker Engineer */}
                         {(() => {
                           if (!displayText) return null;
-                          const parts = displayText.split(/(\[OS EXECUTION REPORT\]|\[SYSTEM:[^\]]+\])/g);
+
+                          // Split semua marker sekaligus: MAMET_CMD, MAMET_CRITICAL, OS REPORT, SYSTEM
+                          const MARKER_RE = /(\[MAMET_CMD:[^\]]+\]|\[MAMET_CRITICAL:[^\]]*\]|\[OS EXECUTION REPORT\]|\[SYSTEM:[^\]]+\])/g;
+                          const parts = displayText.split(MARKER_RE);
+                          const isEngineer = (workspaceManager?.activeWorkspaceId === 'ws-engineer');
 
                           return parts.map((part, i) => {
+                            // --- MAMET_CMD: terminal command approval button ---
+                            if (isEngineer && part.startsWith('[MAMET_CMD:')) {
+                              const cmd = part.replace('[MAMET_CMD:', '').replace(']', '').trim();
+                              const cmdKey = `${idx}_${cmd}`;
+                              const state = engineerCmdStates[cmdKey];
+
+                              return (
+                                <div key={i} className="my-2 flex items-center gap-2 flex-wrap">
+                                  <code className="px-2 py-1 rounded bg-surface-container-high border border-outline-variant text-body-sm font-mono text-primary">{cmd}</code>
+                                  {!state || state.status === 'pending' ? (
+                                    <>
+                                      <button
+                                        onClick={() => handleRunCommand(cmd, cmdKey)}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-sm active:scale-95"
+                                      >
+                                        <span className="material-symbols-outlined text-[14px]">terminal</span>
+                                        🖥️ Jalankan
+                                      </button>
+                                      <button
+                                        onClick={() => setEngineerCmdStates(prev => ({ ...prev, [cmdKey]: { status: 'skipped', output: '' } }))}
+                                        className="px-3 py-1.5 rounded-lg border border-outline-variant text-on-surface-variant text-xs hover:bg-surface-variant transition-all"
+                                      >Lewati</button>
+                                    </>
+                                  ) : state.status === 'running' ? (
+                                    <span className="flex items-center gap-1.5 text-xs text-amber-400 animate-pulse">
+                                      <span className="material-symbols-outlined text-[14px]">hourglass_empty</span>Menjalankan...
+                                    </span>
+                                  ) : state.status === 'done' ? (
+                                    <details className="inline">
+                                      <summary className="flex items-center gap-1.5 text-xs text-emerald-400 cursor-pointer">
+                                        <span className="material-symbols-outlined text-[14px]">check_circle</span>Selesai — lihat output
+                                      </summary>
+                                      <pre className="mt-1 p-2 rounded bg-surface-container text-[11px] font-mono text-on-surface-variant overflow-x-auto max-h-40 custom-scrollbar">{state.output}</pre>
+                                    </details>
+                                  ) : state.status === 'skipped' ? (
+                                    <span className="text-xs text-on-surface-variant italic">Dilewati</span>
+                                  ) : (
+                                    <details className="inline">
+                                      <summary className="flex items-center gap-1.5 text-xs text-red-400 cursor-pointer">
+                                        <span className="material-symbols-outlined text-[14px]">error</span>Error — lihat detail
+                                      </summary>
+                                      <pre className="mt-1 p-2 rounded bg-red-900/20 text-[11px] font-mono text-red-300 overflow-x-auto max-h-40 custom-scrollbar">{state.output}</pre>
+                                    </details>
+                                  )}
+                                </div>
+                              );
+                            }
+
+                            // --- MAMET_CRITICAL: critical warning card ---
+                            if (isEngineer && part.startsWith('[MAMET_CRITICAL:')) {
+                              const msg = part.replace('[MAMET_CRITICAL:', '').replace(/\]$/, '').trim();
+                              return (
+                                <div key={i} className="my-3 p-3 rounded-xl border border-red-500/50 bg-red-950/30 text-red-300">
+                                  <div className="flex items-center gap-2 font-bold text-sm mb-1">
+                                    <span className="material-symbols-outlined text-[18px] text-red-400">warning</span>
+                                    ⚠️ CRITICAL — Perlu Analisis User
+                                  </div>
+                                  <p className="text-sm whitespace-pre-wrap">{msg}</p>
+                                  <p className="mt-2 text-xs text-red-400 italic">Ketik di chat untuk modifikasi plan atau berikan instruksi lanjutan.</p>
+                                </div>
+                              );
+                            }
+
+                            // --- OS Execution Report ---
                             if (part === '[OS EXECUTION REPORT]') {
                               return (
                                 <div key={i} className="my-2 block w-max items-center px-3 py-2 bg-primary/10 border border-primary/30 text-primary text-body-sm font-bold rounded-lg cursor-pointer hover:bg-primary/20 transition-colors shadow-sm"
@@ -980,6 +1067,7 @@ export default function ConversationEngine({ sessionId }) {
                               );
                             }
 
+                            // --- System report ---
                             if (part.startsWith('[SYSTEM:')) {
                               const title = part.replace('[SYSTEM: ', '').replace(']', '');
                               return (
@@ -1070,6 +1158,36 @@ export default function ConversationEngine({ sessionId }) {
                             <span className="material-symbols-outlined text-[16px]">description</span>
                             📋 Lihat Detail Reasoning
                           </button>
+                        </div>
+                      )}
+
+                      {/* Engineer Patch Proposal — Apply Patch Button */}
+                      {m.hasPatchProposal && (
+                        <div className="mt-4 flex items-center gap-3 border-t border-primary/20 pt-3">
+                          <button
+                            onClick={() => {
+                              const eventBus = kernel.serviceManager?.get('EventBus');
+                              if (eventBus) {
+                                eventBus.emit('Engineer:GeneratePatch', {
+                                  id: `TASK-${Date.now()}`,
+                                  title: (m.patchOriginalTask || '').substring(0, 100),
+                                  description: m.patchOriginalTask || '',
+                                  files: [],
+                                  llmProposedContent: m.content
+                                });
+                                setMessages(prev => {
+                                  const next = [...prev];
+                                  next[idx] = { ...next[idx], hasPatchProposal: false, content: next[idx].content + '\n\n_⚙️ Engineer patch pipeline dimulai — Reasoning Lock aktif..._' };
+                                  return next;
+                                });
+                              }
+                            }}
+                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary hover:bg-primary-fixed text-on-primary text-sm font-bold transition-all shadow-lg shadow-primary/20 active:scale-95"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">build</span>
+                            ⚙️ Apply Patch
+                          </button>
+                          <span className="text-body-sm text-on-surface-variant italic">Reasoning Lock akan aktif sebelum eksekusi</span>
                         </div>
                       )}
 

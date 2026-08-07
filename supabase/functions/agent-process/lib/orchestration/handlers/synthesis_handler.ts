@@ -88,11 +88,22 @@ export const SynthesisHandler = {
         // =============================================
         // MULTI-PROFILE VERIFICATION ROUTING (ADR-0013)
         // =============================================
-        // Gunakan helper method deterministik yang memilih profile berdasarkan mode
-        // ENGINEER → PATCH_ENGINEERING (JSON patch validation)
-        // LITE → PERSONAL (lightweight sanity check)
-        // ASSISTANT → ENGINEERING (full ADR trace + evidence check)
-        const vReport = VerificationEngine.verify(requestMode, vContext);
+        // ENGINEER mode: adaptif berdasarkan konten respons.
+        // Patch JSON aktual ditandai dengan struktur array/object yang spesifik.
+        // Chat natural → PERSONAL, Patch JSON → PATCH_ENGINEERING
+        // LITE      → PERSONAL, ASSISTANT → ENGINEERING
+        const responseText = vContext.responseText || '';
+        // Cek apakah ini benar-benar JSON patch (bukan sekadar code block markdown dengan kurung kurawal)
+        const looksLikeJsonPatch = requestMode === 'ENGINEER' && (
+          /^\s*[\[\{]/.test(responseText) ||          // mulai dengan [ atau {
+          responseText.includes('"files"') ||          // field khas patch Engineer
+          responseText.includes('"newContent"') ||     // field khas patch Engineer
+          responseText.includes('"patches"')           // field khas patch Engineer
+        );
+        const effectiveMode = (requestMode === 'ENGINEER' && !looksLikeJsonPatch)
+          ? 'LITE'   // pakai profile PERSONAL — ringan untuk chat natural
+          : requestMode;
+        const vReport = VerificationEngine.verify(effectiveMode, vContext);
         
         console.log(`[SynthesisHandler] Verification Profile: ${vReport.profile} | Decision: ${vReport.decision} | Score: ${vReport.score} | Mode: ${requestMode}`);
 
