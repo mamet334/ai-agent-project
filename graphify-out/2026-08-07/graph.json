@@ -16410,9 +16410,9 @@
       "source_file": "supabase/functions/agent-process/lib/adapters/ai_adapter.ts",
       "source_location": "L99",
       "_origin": "ast",
-      "community": 237,
+      "community": 2,
       "norm_label": ".healthcheck()",
-      "community_name": "OpenAIAdapter",
+      "community_name": "adapter_registry.ts",
       "id": "supabase_functions_agent_process_lib_adapters_ai_adapter_groqadapter_healthcheck"
     },
     {
@@ -16487,9 +16487,9 @@
       "source_file": "supabase/functions/agent-process/lib/adapters/ai_adapter.ts",
       "source_location": "L226",
       "_origin": "ast",
-      "community": 237,
+      "community": 2,
       "norm_label": ".healthcheck()",
-      "community_name": "OpenAIAdapter",
+      "community_name": "adapter_registry.ts",
       "id": "supabase_functions_agent_process_lib_adapters_ai_adapter_openrouteradapter_healthcheck"
     },
     {
@@ -16564,9 +16564,9 @@
       "source_file": "supabase/functions/agent-process/lib/adapters/ai_adapter.ts",
       "source_location": "L389",
       "_origin": "ast",
-      "community": 237,
+      "community": 2,
       "norm_label": ".healthcheck()",
-      "community_name": "OpenAIAdapter",
+      "community_name": "adapter_registry.ts",
       "id": "supabase_functions_agent_process_lib_adapters_ai_adapter_geminiadapter_healthcheck"
     },
     {
@@ -16586,9 +16586,9 @@
       "source_file": "supabase/functions/agent-process/lib/adapters/ai_adapter.ts",
       "source_location": "L396",
       "_origin": "ast",
-      "community": 237,
+      "community": 2,
       "norm_label": "openaiadapter",
-      "community_name": "OpenAIAdapter",
+      "community_name": "adapter_registry.ts",
       "id": "supabase_functions_agent_process_lib_adapters_ai_adapter_openaiadapter"
     },
     {
@@ -16597,9 +16597,9 @@
       "source_file": "supabase/functions/agent-process/lib/adapters/ai_adapter.ts",
       "source_location": "L401",
       "_origin": "ast",
-      "community": 237,
+      "community": 2,
       "norm_label": ".constructor()",
-      "community_name": "OpenAIAdapter",
+      "community_name": "adapter_registry.ts",
       "id": "supabase_functions_agent_process_lib_adapters_ai_adapter_openaiadapter_constructor"
     },
     {
@@ -16608,9 +16608,9 @@
       "source_file": "supabase/functions/agent-process/lib/adapters/ai_adapter.ts",
       "source_location": "L405",
       "_origin": "ast",
-      "community": 237,
+      "community": 2,
       "norm_label": ".initialize()",
-      "community_name": "OpenAIAdapter",
+      "community_name": "adapter_registry.ts",
       "id": "supabase_functions_agent_process_lib_adapters_ai_adapter_openaiadapter_initialize"
     },
     {
@@ -16619,9 +16619,9 @@
       "source_file": "supabase/functions/agent-process/lib/adapters/ai_adapter.ts",
       "source_location": "L409",
       "_origin": "ast",
-      "community": 237,
+      "community": 2,
       "norm_label": ".execute()",
-      "community_name": "OpenAIAdapter",
+      "community_name": "adapter_registry.ts",
       "id": "supabase_functions_agent_process_lib_adapters_ai_adapter_openaiadapter_execute"
     },
     {
@@ -16641,9 +16641,9 @@
       "source_file": "supabase/functions/agent-process/lib/adapters/ai_adapter.ts",
       "source_location": "L458",
       "_origin": "ast",
-      "community": 237,
+      "community": 2,
       "norm_label": ".healthcheck()",
-      "community_name": "OpenAIAdapter",
+      "community_name": "adapter_registry.ts",
       "id": "supabase_functions_agent_process_lib_adapters_ai_adapter_openaiadapter_healthcheck"
     },
     {
@@ -16652,9 +16652,9 @@
       "source_file": "supabase/functions/agent-process/lib/adapters/ai_adapter.ts",
       "source_location": "L462",
       "_origin": "ast",
-      "community": 237,
+      "community": 2,
       "norm_label": ".shutdown()",
-      "community_name": "OpenAIAdapter",
+      "community_name": "adapter_registry.ts",
       "id": "supabase_functions_agent_process_lib_adapters_ai_adapter_openaiadapter_shutdown"
     },
     {
@@ -53487,5 +53487,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "8acb24b25128889103d641637b1b61aebb53ce03"
+  "built_at_commit": "ec072c5f71b6cfa2f87335659e55060e9de5bcb1"
 }

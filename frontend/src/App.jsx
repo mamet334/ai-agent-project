@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import OSDesktopShell from './components/os/OSDesktopShell'
 import ErrorBoundary from './components/workbench/ErrorBoundary'
 import EngineerApprovalDialog from './components/workbench/EngineerApprovalDialog'
-import Login from './components/Login'
+import LampLogin from './components/LampLogin'
 import { kernel } from './core/runtime/Kernel'
 import { supabase } from './supabase'
 import './App.css'
@@ -43,7 +43,7 @@ export default function App() {
   }
 
   if (!session) {
-    return <Login onLoginSuccess={() => { }} />
+    return <LampLogin onLoginSuccess={() => { }} />
   }
 
   return (
