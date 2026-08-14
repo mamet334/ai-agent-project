@@ -187,7 +187,9 @@ class Engineer {
     // Two-Brain Model
     this.brain = {
       static: null,
-      dynamic: null
+      dynamic: null,
+      verifiedApproaches: [],  // Pendekatan yang terbukti berhasil (lintas sesi)
+      rejectedPatterns: []     // Pola yang pernah ditolak user
     };
 
     this.capability = 'IMPLEMENTER';
@@ -211,6 +213,9 @@ class Engineer {
 
   async initialize() {
     await this._loadStaticKnowledge();
+
+    // ✅ VERIFIED APPROACH MEMORY: Load pendekatan terbukti dari sesi sebelumnya ke Brain
+    await this._loadVerifiedApproaches();
 
     // ✅ Inisialisasi FileIndexService menggunakan static import di atas, dan tunggu selesai
     this.fileIndexService = new FileIndexService(this.storageManager);
@@ -472,6 +477,169 @@ class Engineer {
     } catch (e) {
       console.warn('[Engineer] _restorePersistedPatches error:', e.message);
     }
+  }
+
+  // =============================================
+  // VERIFIED APPROACH MEMORY
+  // Engineer belajar dari setiap sesi: pendekatan yang berhasil disimpan
+  // dan di-inject ke Brain 1 pada sesi berikutnya.
+  // Storage: StorageManager lokal (eng:approach:* / eng:rejected:*)
+  // =============================================
+
+  _approachKey(taskType, files) {
+    // Hash sederhana dari taskType + file list untuk key unik tapi deterministik
+    const raw = `${taskType}:${(files || []).sort().join(',')}`;
+    let h = 5381;
+    for (let i = 0; i < raw.length; i++) h = ((h << 5) + h) ^ raw.charCodeAt(i);
+    return `eng:approach:${(h >>> 0).toString(16).padStart(8, '0')}`;
+  }
+
+  /**
+   * Simpan pendekatan yang BERHASIL (patch approved) ke persistent memory.
+   * Dipanggil setelah _executePatchApplication berhasil.
+   */
+  async _saveVerifiedApproach(task, patch) {
+    try {
+      const taskType  = task.intent || task.type || 'MODIFY_CODE';
+      const files     = patch.files?.map(f => f.path) || [];
+      const key       = this._approachKey(taskType, files);
+
+      // Load existing entry jika ada (untuk increment approvalCount)
+      let existing = null;
+      try {
+        const raw = await this.storageManager.read(key);
+        if (raw) existing = JSON.parse(raw);
+      } catch (_) {}
+
+      const entry = {
+        taskType,
+        files,
+        taskSummary: (task.description || task.title || '').slice(0, 200),
+        approvalCount: (existing?.approvalCount || 0) + 1,
+        lastApprovedAt: new Date().toISOString(),
+        // Simpan confidence terakhir sebagai sinyal kualitas
+        confidence: patch.confidence?.level || 'MEDIUM',
+        // Simpan garis besar approach: file mana yang diubah + status
+        fileChanges: files.map(f => {
+          const pf = patch.files?.find(p => p.path === f);
+          return { path: f, status: pf?.status || 'MODIFIED' };
+        })
+      };
+
+      await this.storageManager.write(key, JSON.stringify(entry));
+      console.log(`[Engineer] 🧠 Verified approach saved: ${taskType} (count: ${entry.approvalCount})`);
+
+      // Bersihkan jika terlalu banyak (max 50 entries)
+      await this._pruneApproachMemory('eng:approach:', 50);
+    } catch (e) {
+      console.warn('[Engineer] _saveVerifiedApproach error (non-blocking):', e.message);
+    }
+  }
+
+  /**
+   * Simpan pola yang DITOLAK user ke memory, agar Engineer hindari di masa depan.
+   */
+  async _saveRejectedApproach(task, reason = '') {
+    try {
+      const taskType = task.intent || task.type || 'MODIFY_CODE';
+      const files    = task.files || [];
+      const key      = `eng:rejected:${this._approachKey(taskType, files).replace('eng:approach:', '')}`;
+
+      let existing = null;
+      try {
+        const raw = await this.storageManager.read(key);
+        if (raw) existing = JSON.parse(raw);
+      } catch (_) {}
+
+      const entry = {
+        taskType,
+        files,
+        taskSummary: (task.description || task.title || '').slice(0, 200),
+        rejectionCount: (existing?.rejectionCount || 0) + 1,
+        lastRejectedAt: new Date().toISOString(),
+        reason: reason.slice(0, 300)
+      };
+
+      await this.storageManager.write(key, JSON.stringify(entry));
+      console.log(`[Engineer] ⚠️ Rejected pattern saved: ${taskType} (count: ${entry.rejectionCount})`);
+
+      await this._pruneApproachMemory('eng:rejected:', 30);
+    } catch (e) {
+      console.warn('[Engineer] _saveRejectedApproach error (non-blocking):', e.message);
+    }
+  }
+
+  /**
+   * Load semua verified approaches ke brain.verifiedApproaches[].
+   * Dipanggil di initialize() — menjadi bagian Brain 1 (Static Knowledge).
+   */
+  async _loadVerifiedApproaches() {
+    try {
+      const allKeys = await this.storageManager.list('.');
+      if (!allKeys?.length) return;
+
+      const approachKeys  = allKeys.filter(k => String(k).includes('eng:approach:'));
+      const rejectedKeys  = allKeys.filter(k => String(k).includes('eng:rejected:'));
+
+      // Load approaches
+      const approaches = [];
+      for (const key of approachKeys) {
+        try {
+          const raw = await this.storageManager.read(key);
+          if (raw) approaches.push(JSON.parse(raw));
+        } catch (_) {}
+      }
+      // Sort by approvalCount desc — yang paling sering berhasil tampil duluan
+      this.brain.verifiedApproaches = approaches
+        .sort((a, b) => (b.approvalCount || 0) - (a.approvalCount || 0))
+        .slice(0, 10); // max 10 untuk dijadikan konteks LLM
+
+      // Load rejected patterns
+      const rejected = [];
+      for (const key of rejectedKeys) {
+        try {
+          const raw = await this.storageManager.read(key);
+          if (raw) rejected.push(JSON.parse(raw));
+        } catch (_) {}
+      }
+      this.brain.rejectedPatterns = rejected
+        .sort((a, b) => (b.rejectionCount || 0) - (a.rejectionCount || 0))
+        .slice(0, 5); // max 5 pola yang paling sering ditolak
+
+      if (this.brain.verifiedApproaches.length > 0 || this.brain.rejectedPatterns.length > 0) {
+        console.log(`[Engineer] 🧠 Loaded ${this.brain.verifiedApproaches.length} verified approaches + ${this.brain.rejectedPatterns.length} rejected patterns from memory`);
+      }
+    } catch (e) {
+      console.warn('[Engineer] _loadVerifiedApproaches error (non-blocking):', e.message);
+    }
+  }
+
+  /**
+   * Hapus entries lama jika jumlah melebihi batas.
+   * Strategi: hapus yang paling jarang diapprove / paling lama.
+   */
+  async _pruneApproachMemory(prefix, maxCount) {
+    try {
+      const allKeys = await this.storageManager.list('.');
+      const matching = (allKeys || []).filter(k => String(k).includes(prefix));
+      if (matching.length <= maxCount) return;
+
+      // Load semua, sort, hapus yang paling tidak berguna
+      const entries = [];
+      for (const key of matching) {
+        try {
+          const raw = await this.storageManager.read(key);
+          if (raw) entries.push({ key, ...JSON.parse(raw) });
+        } catch (_) {}
+      }
+      const sortedByScore = entries.sort((a, b) =>
+        ((b.approvalCount || b.rejectionCount || 0)) - ((a.approvalCount || a.rejectionCount || 0))
+      );
+      const toDelete = sortedByScore.slice(maxCount);
+      for (const e of toDelete) {
+        await this.storageManager.write(e.key, null);
+      }
+    } catch (_) {}
   }
 
   // =============================================
@@ -1483,6 +1651,10 @@ class Engineer {
           confidence: this._calculateConfidence(analysis),
           requiresApproval: false
         });
+
+        // 🧠 VERIFIED APPROACH MEMORY: simpan pendekatan yang berhasil
+        this._saveVerifiedApproach(task, patch); // fire-and-forget
+
       } else {
         this.metrics.patchesRejected++;
 
@@ -1491,6 +1663,9 @@ class Engineer {
           taskId: task.id,
           reason: 'User menolak patch'
         });
+
+        // 🧠 VERIFIED APPROACH MEMORY: simpan pola yang ditolak
+        this._saveRejectedApproach(task, 'User menolak patch'); // fire-and-forget
 
         this._emitRecommendation({
           type: 'PATCH_REJECTED',
@@ -2099,6 +2274,37 @@ class Engineer {
       prompt += `(Gunakan ini sebagai referensi keputusan yang sudah diambil dalam sesi ini)\n`;
       prompt += artifactContext;
       prompt += `\n\n`;
+    }
+
+    // 🧠 VERIFIED APPROACH MEMORY: inject pendekatan terbukti dari sesi-sesi sebelumnya
+    const verifiedApproaches = this.brain?.verifiedApproaches || [];
+    const rejectedPatterns   = this.brain?.rejectedPatterns   || [];
+
+    if (verifiedApproaches.length > 0 || rejectedPatterns.length > 0) {
+      prompt += `### MEMORI ENGINEER (DARI SESI-SESI SEBELUMNYA) ###\n`;
+      prompt += `Gunakan ini sebagai panduan — pendekatan yang sudah terbukti berhasil atau pernah ditolak.\n\n`;
+
+      if (verifiedApproaches.length > 0) {
+        prompt += `✅ PENDEKATAN YANG TERBUKTI BERHASIL:\n`;
+        verifiedApproaches.slice(0, 5).forEach((a, i) => {
+          const files = (a.files || []).map(f => f.split('/').pop()).join(', ');
+          prompt += `${i + 1}. [${a.taskType}] Task: "${(a.taskSummary || '').slice(0, 100)}"\n`;
+          prompt += `   File: ${files || '(tidak ada)'} | Disetujui: ${a.approvalCount}x | Terakhir: ${(a.lastApprovedAt || '').slice(0, 10)}\n`;
+        });
+        prompt += `\n`;
+      }
+
+      if (rejectedPatterns.length > 0) {
+        prompt += `❌ POLA YANG PERNAH DITOLAK (HINDARI):\n`;
+        rejectedPatterns.slice(0, 3).forEach((r, i) => {
+          const files = (r.files || []).map(f => f.split('/').pop()).join(', ');
+          prompt += `${i + 1}. [${r.taskType}] Task: "${(r.taskSummary || '').slice(0, 100)}"\n`;
+          prompt += `   File: ${files || '(tidak ada)'} | Ditolak: ${r.rejectionCount}x | Alasan: ${(r.reason || '-').slice(0, 100)}\n`;
+        });
+        prompt += `\n`;
+      }
+
+      prompt += `=== END MEMORI ENGINEER ===\n\n`;
     }
 
     prompt += `### ATURAN OUTPUT (CRITICAL - JANGAN DILANGGAR) ###\n`;
