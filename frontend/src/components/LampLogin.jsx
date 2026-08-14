@@ -358,4 +358,19 @@ export default function LampLogin({ onLoginSuccess }) {
                       setPassword('');
                       setEmail('');
                     }}
-                    className="text-[#e4b84f] hover:text-[#
+                    className="text-[#e4b84f] hover:text-[#ffe29a] transition-colors underline"
+                  >
+                    {isSignUp ? 'Masuk' : 'Daftar'}
+                  </button>
+                </p>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      {/* FINAL VIGNETTE — di atas semua layer, mencakup seluruh layar */}
+      <div className="absolute inset-0 z-[20] pointer-events-none bg-[radial-gradient(ellipse_82%_82%_at_47%_47%,transparent_40%,rgba(0,0,0,.08)_65%,rgba(0,0,0,.40)_100%)]" />
+    </div>
+  );
+}
