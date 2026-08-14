@@ -84,7 +84,7 @@ export default function LampLogin({ onLoginSuccess }) {
         <div
           className="absolute left-1/2 top-0 z-[11] -translate-x-1/2"
           style={{
-            width: 'clamp(140px, 34vw, 220px)',
+            width: 'clamp(140px, min(34vw, 42vh), 260px)',
           }}
         >
           <svg viewBox="0 0 300 420" className="w-full h-auto overflow-visible">
@@ -154,71 +154,74 @@ export default function LampLogin({ onLoginSuccess }) {
         </div>
 
         {/* =========================================================
-            ✨ BRANDING MAMET OS — 3 baris, rata tengah, di bawah
-            sorot cahaya lampu gantung.
+            ✨ BRANDING + SAKELAR — dibungkus satu flex-column agar
+            sakelar SELALU jatuh tepat di bawah teks apa pun tinggi
+            teks yang sebenarnya dirender (tidak lagi pakai top-%
+            terpisah yang bisa menyebabkan tumpang tindih).
             ========================================================= */}
         <div
-          className="absolute left-[6%] top-[40%] flex flex-col items-start pointer-events-none z-10 select-none"
+          className="absolute left-[6%] top-[40%] flex flex-col items-start gap-[3%] pointer-events-none z-10 select-none"
         >
-          {['MAMET', 'OS', 'ECOSYSTEM'].map((line) => (
-            <span
-              key={line}
-              className="text-[#fff8ec] tracking-[0.15em] uppercase font-mono font-light leading-[1.25] text-left"
-              style={{
-                fontSize: 'clamp(20px, 4vw, 46px)',
-                textShadow: `
-                  0 0 10px rgba(255, 220, 150, 0.6),
-                  0 0 20px rgba(255, 220, 150, 0.4),
-                  0 0 40px rgba(255, 200, 100, 0.2),
-                  0 0 80px rgba(255, 180, 80, 0.1)
-                `
-              }}
-            >
-              {line}
-            </span>
-          ))}
-        </div>
+          <div className="flex flex-col items-start">
+            {['MAMET', 'OS', 'ECOSYSTEM'].map((line) => (
+              <span
+                key={line}
+                className="text-[#fff8ec] tracking-[0.15em] uppercase font-mono font-light leading-[1.25] text-left"
+                style={{
+                  fontSize: 'clamp(20px, 4vw, 46px)',
+                  textShadow: `
+                    0 0 10px rgba(255, 220, 150, 0.6),
+                    0 0 20px rgba(255, 220, 150, 0.4),
+                    0 0 40px rgba(255, 200, 100, 0.2),
+                    0 0 80px rgba(255, 180, 80, 0.1)
+                  `
+                }}
+              >
+                {line}
+              </span>
+            ))}
+          </div>
 
-        {/* =========================================================
-            ✨ SAKELAR DINDING — tombol bulat, di bawah teks branding
-            ========================================================= */}
-        <div
-          className="absolute left-[9%] top-[58%] z-[11]"
-          style={{ width: 'clamp(34px, 4.5vw, 52px)' }}
-        >
-          <svg
-            viewBox="0 0 60 60"
-            className="w-full h-full overflow-visible cursor-pointer"
-            role="button"
-            tabIndex="0"
-            aria-label="Nyalakan atau matikan lampu"
-            onClick={toggleLamp}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleLamp(); } }}
+          {/* Sakelar — sekarang bagian dari flex yang sama,
+              otomatis menempel di bawah teks tanpa tabrakan */}
+          <div
+            className="pointer-events-auto"
+            style={{ width: 'clamp(34px, 4.5vw, 52px)' }}
           >
-            <defs>
-              <radialGradient id="wallPlate">
-                <stop offset="0" stopColor="#241608" />
-                <stop offset="1" stopColor="#0e0906" />
-              </radialGradient>
-              <radialGradient id="switchMetalWall">
-                <stop offset="0" stopColor="#dca35b" />
-                <stop offset=".35" stopColor="#8a4d1c" />
-                <stop offset=".72" stopColor="#2b170c" />
-                <stop offset="1" stopColor="#070605" />
-              </radialGradient>
-            </defs>
-            {/* Plat dinding sakelar */}
-            <rect x="4" y="4" width="52" height="52" rx="10" fill="url(#wallPlate)" stroke="#3a2412" strokeWidth="1.5" />
-            {/* Hit-area lebih besar dari tombol visual */}
-            <circle cx="30" cy="30" r="26" fill="transparent" />
-            {/* Tombol bulat */}
-            <circle cx="30" cy="30" r="14" fill="#080604" />
-            <circle cx="30" cy="30" r="11" fill="url(#switchMetalWall)" stroke="#6e3d18" strokeWidth="1" className="transition-transform active:translate-y-[1px]" />
-            <ellipse cx="27" cy="26" rx="3.5" ry="2" fill="rgba(255,220,150,.55)" />
-            {lampOn && (
-              <circle cx="30" cy="30" r="14" fill="none" stroke="#ffcc66" strokeWidth="1.5" opacity="0.6" filter="url(#softGlowHang)" />
-            )}
-          </svg>
+            <svg
+              viewBox="0 0 60 60"
+              className="w-full h-full overflow-visible cursor-pointer"
+              role="button"
+              tabIndex="0"
+              aria-label="Nyalakan atau matikan lampu"
+              onClick={toggleLamp}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleLamp(); } }}
+            >
+              <defs>
+                <radialGradient id="wallPlate">
+                  <stop offset="0" stopColor="#241608" />
+                  <stop offset="1" stopColor="#0e0906" />
+                </radialGradient>
+                <radialGradient id="switchMetalWall">
+                  <stop offset="0" stopColor="#dca35b" />
+                  <stop offset=".35" stopColor="#8a4d1c" />
+                  <stop offset=".72" stopColor="#2b170c" />
+                  <stop offset="1" stopColor="#070605" />
+                </radialGradient>
+              </defs>
+              {/* Plat dinding sakelar */}
+              <rect x="4" y="4" width="52" height="52" rx="10" fill="url(#wallPlate)" stroke="#3a2412" strokeWidth="1.5" />
+              {/* Hit-area lebih besar dari tombol visual */}
+              <circle cx="30" cy="30" r="26" fill="transparent" />
+              {/* Tombol bulat */}
+              <circle cx="30" cy="30" r="14" fill="#080604" />
+              <circle cx="30" cy="30" r="11" fill="url(#switchMetalWall)" stroke="#6e3d18" strokeWidth="1" className="transition-transform active:translate-y-[1px]" />
+              <ellipse cx="27" cy="26" rx="3.5" ry="2" fill="rgba(255,220,150,.55)" />
+              {lampOn && (
+                <circle cx="30" cy="30" r="14" fill="none" stroke="#ffcc66" strokeWidth="1.5" opacity="0.6" filter="url(#softGlowHang)" />
+              )}
+            </svg>
+          </div>
         </div>
 
         {/* =========================================================
@@ -261,7 +264,7 @@ export default function LampLogin({ onLoginSuccess }) {
             ========================================================= */}
         <div
           className={`absolute z-[15] right-[5%] w-[38%] min-w-[240px] max-w-[430px] p-[5%] rounded-[0.6vw] transition-all duration-600 ${lampOn ? 'opacity-100 scale-100 visible pointer-events-auto' : 'opacity-0 scale-95 invisible pointer-events-none'}`}
-          style={{ top: 'max(8%, 90px)' }}
+          style={{ top: 'max(18%, 140px)' }}
         >
 
           {/* Background Glass + Shadow — flat poster-on-wall look:
@@ -355,19 +358,4 @@ export default function LampLogin({ onLoginSuccess }) {
                       setPassword('');
                       setEmail('');
                     }}
-                    className="text-[#e4b84f] hover:text-[#ffe29a] transition-colors underline"
-                  >
-                    {isSignUp ? 'Masuk' : 'Daftar'}
-                  </button>
-                </p>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-
-      {/* FINAL VIGNETTE — di atas semua layer, mencakup seluruh layar */}
-      <div className="absolute inset-0 z-[20] pointer-events-none bg-[radial-gradient(ellipse_82%_82%_at_47%_47%,transparent_40%,rgba(0,0,0,.08)_65%,rgba(0,0,0,.40)_100%)]" />
-    </div>
-  );
-}
+                    className="text-[#e4b84f] hover:text-[#
