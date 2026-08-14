@@ -82,7 +82,7 @@ export default function LampLogin({ onLoginSuccess }) {
             agar tetap jadi focal point yang jelas di kedua kondisi.
             ========================================================= */}
         <div
-          className="absolute left-[18%] top-0 z-[11] -translate-x-1/2"
+          className="absolute left-1/2 top-0 z-[11] -translate-x-1/2"
           style={{
             width: 'clamp(140px, 34vw, 220px)',
           }}
@@ -158,7 +158,7 @@ export default function LampLogin({ onLoginSuccess }) {
             sorot cahaya lampu gantung.
             ========================================================= */}
         <div
-          className="absolute left-[18%] top-[38%] -translate-x-1/2 flex flex-col items-center pointer-events-none z-10 select-none"
+          className="absolute left-1/2 top-[38%] -translate-x-1/2 flex flex-col items-center pointer-events-none z-10 select-none"
         >
           {['MAMET', 'OS', 'ECOSYSTEM'].map((line) => (
             <span
@@ -183,7 +183,7 @@ export default function LampLogin({ onLoginSuccess }) {
             ✨ SAKELAR DINDING — tombol bulat, di bawah teks branding
             ========================================================= */}
         <div
-          className="absolute left-[18%] top-[58%] -translate-x-1/2 z-[11]"
+          className="absolute left-1/2 top-[58%] -translate-x-1/2 z-[11]"
           style={{ width: 'clamp(34px, 4.5vw, 52px)' }}
         >
           <svg
@@ -232,24 +232,23 @@ export default function LampLogin({ onLoginSuccess }) {
         </div>
 
         {/* =========================================================
-            DESK & HORIZON
+            DESK & HORIZON — strip tipis dekoratif di bagian paling
+            bawah layar, bukan lagi pembatas besar yang memotong scene.
             ========================================================= */}
-        <div className="absolute inset-x-0 bottom-[62%] h-[30%] bg-[radial-gradient(ellipse_42%_70%_at_32%_0%,rgba(202,126,58,.27),transparent_72%),linear-gradient(180deg,#63391d,#3b2112_15%,#1a0e08_55%,#080605)] shadow-[inset_0_5px_13px_rgba(255,184,91,.08),inset_0_-20px_35px_rgba(0,0,0,.46)] transition-all duration-900" />
-        <div className="absolute inset-x-0 bottom-[89%] h-[0.3%] z-[6] bg-[#0d0805] shadow-[0_-1px_3px_rgba(255,178,86,.09),0_3px_14px_#000]" />
+        <div className="absolute inset-x-0 bottom-[10%] h-[7%] bg-[radial-gradient(ellipse_42%_70%_at_32%_0%,rgba(202,126,58,.27),transparent_72%),linear-gradient(180deg,#63391d,#3b2112_15%,#1a0e08_55%,#080605)] shadow-[inset_0_5px_13px_rgba(255,184,91,.08),inset_0_-20px_35px_rgba(0,0,0,.46)] transition-all duration-900" />
+        <div className="absolute inset-x-0 bottom-[17%] h-[0.3%] z-[6] bg-[#0d0805] shadow-[0_-1px_3px_rgba(255,178,86,.09),0_3px_14px_#000]" />
 
         {/* =========================================================
-            KAKI MEJA — mengisi ruang kosong di bawah permukaan meja,
+            KAKI MEJA — mengisi sisa ruang di bawah permukaan meja,
             dengan sela-sela gelap antar kaki agar terlihat natural.
             ========================================================= */}
-        <div className="absolute inset-x-0 bottom-0 h-[62%] bg-[#050403]" />
-        <div className="absolute inset-x-[6%] bottom-0 h-[62%] flex justify-between pointer-events-none">
+        <div className="absolute inset-x-0 bottom-0 h-[10%] bg-[#050403]" />
+        <div className="absolute inset-x-[10%] bottom-0 h-[10%] flex justify-between pointer-events-none">
           <div
-            className="w-[6%] bg-gradient-to-b from-[#3b2112] via-[#1a0e08] to-[#050302] shadow-[inset_2px_0_4px_rgba(255,184,91,.08),inset_-2px_0_6px_rgba(0,0,0,.6)]"
-            style={{ height: '100%' }}
+            className="w-[8%] h-full bg-gradient-to-b from-[#3b2112] via-[#1a0e08] to-[#050302] shadow-[inset_2px_0_4px_rgba(255,184,91,.08),inset_-2px_0_6px_rgba(0,0,0,.6)]"
           />
           <div
-            className="w-[6%] bg-gradient-to-b from-[#3b2112] via-[#1a0e08] to-[#050302] shadow-[inset_2px_0_4px_rgba(255,184,91,.08),inset_-2px_0_6px_rgba(0,0,0,.6)]"
-            style={{ height: '100%' }}
+            className="w-[8%] h-full bg-gradient-to-b from-[#3b2112] via-[#1a0e08] to-[#050302] shadow-[inset_2px_0_4px_rgba(255,184,91,.08),inset_-2px_0_6px_rgba(0,0,0,.6)]"
           />
         </div>
 
