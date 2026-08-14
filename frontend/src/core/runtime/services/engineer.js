@@ -48,6 +48,7 @@ class SessionArtifact {
     this.modifiedFiles = [];      // File yang diubah
     this.maefViolations = [];     // Pelanggaran MAEF yang ditemukan
     this.reasoningReports = [];   // Riwayat reasoning report
+    this.executedCommands = [];   // Audit trail terminal commands [MAMET_CMD:]
     this.startedAt = new Date().toISOString();
     this.lastActivity = new Date().toISOString();
     this.taskCount = 0;
@@ -87,6 +88,17 @@ class SessionArtifact {
     this.lastActivity = new Date().toISOString();
   }
 
+  // Catat setiap terminal command yang dijalankan via [MAMET_CMD:]
+  addCommand(cmd, status, output = '') {
+    this.executedCommands.push({
+      command: cmd,
+      status,          // 'success' | 'error' | 'skipped'
+      outputSnippet: output.slice(0, 300), // simpan max 300 char
+      executedAt: new Date().toISOString()
+    });
+    this.lastActivity = new Date().toISOString();
+  }
+
   incrementTaskCount() {
     this.taskCount++;
     this.lastActivity = new Date().toISOString();
@@ -106,6 +118,7 @@ class SessionArtifact {
       modifiedFilesCount: this.modifiedFiles.length,
       violationsFound: this.maefViolations.length,
       reasoningReportsCount: this.reasoningReports.length,
+      commandsExecuted: this.executedCommands.length,
       duration: `${minutes}m ${seconds}s`,
       startedAt: this.startedAt,
       lastActivity: this.lastActivity
@@ -126,6 +139,17 @@ class SessionArtifact {
     context += `File Dimodifikasi: ${summary.modifiedFilesCount} (${this.modifiedFiles.join(', ') || 'tidak ada'})\n`;
     context += `Keputusan Diambil: ${summary.decisionsCount}\n`;
     context += `Pelanggaran MAEF: ${summary.violationsFound}\n`;
+    context += `Terminal Commands: ${summary.commandsExecuted}\n`;
+
+    // Inject 5 command terakhir ke konteks LLM — Engineer tahu apa yang sudah dijalankan
+    if (this.executedCommands.length > 0) {
+      context += `\n=== TERMINAL AUDIT TRAIL (5 terakhir) ===\n`;
+      this.executedCommands.slice(-5).forEach((c, i) => {
+        const icon = c.status === 'success' ? '[OK]' : c.status === 'error' ? '[ERR]' : '[SKIP]';
+        context += `${icon} $ ${c.command} | ${c.executedAt.slice(11,19)}\n`;
+        if (c.outputSnippet) context += `    > ${c.outputSnippet.replace(/\n/g, ' ').slice(0, 120)}\n`;
+      });
+    }
 
     if (this.reasoningReports.length > 0) {
       context += `\n=== REASONING REPORTS ===\n`;
@@ -196,6 +220,9 @@ class Engineer {
 
     // ✅ FASE 4: Inisialisasi Session Artifact (sekali, bukan per task)
     this._initializeSessionArtifact();
+
+    // ✅ PERSISTENT PENDING: Restore patch yang belum diapprove dari sesi sebelumnya
+    await this._restorePersistedPatches();
 
     this._registerListeners(); // Pastikan terjadi SETELAH indeks siap!
     console.log(`[Engineer] Initialized as ${this.capability}`);
@@ -297,6 +324,20 @@ class Engineer {
         });
         break;
 
+      case 'COMMAND_EXECUTED':
+        // Audit trail: catat setiap terminal command [MAMET_CMD:]
+        this.sessionArtifact.addCommand(
+          data.command || 'unknown',
+          data.status  || 'unknown',
+          data.output  || ''
+        );
+        this.sessionArtifact.addDecision({
+          type: 'COMMAND_EXECUTED',
+          detail: `[${(data.status || '?').toUpperCase()}] $ ${data.command || 'unknown'}`,
+          taskId: data.taskId || null
+        });
+        break;
+
       default:
         console.warn(`[Engineer] Unknown artifact action: ${action}`);
     }
@@ -367,6 +408,69 @@ class Engineer {
     } catch (err) {
       console.error('[Engineer] _finalizeSession error:', err);
       return null;
+    }
+  }
+
+  // =============================================
+  // PERSISTENT PENDING PATCH
+  // Patch tidak hilang saat timeout/restart — disimpan ke StorageManager
+  // =============================================
+
+  _pendingKey(patchId) { return `eng:pending:${patchId}`; }
+
+  async _savePendingPatch(patch) {
+    try {
+      const payload = JSON.stringify({
+        patchId: patch.id,
+        patch,
+        savedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 hari
+      });
+      await this.storageManager.write(this._pendingKey(patch.id), payload);
+      console.log(`[Engineer] 💾 Pending patch saved: ${patch.id}`);
+    } catch (e) {
+      console.warn('[Engineer] Gagal menyimpan pending patch:', e.message);
+    }
+  }
+
+  async _clearPendingPatch(patchId) {
+    try {
+      await this.storageManager.write(this._pendingKey(patchId), null);
+      console.log(`[Engineer] 🗑️ Pending patch cleared: ${patchId}`);
+    } catch (e) {
+      console.warn('[Engineer] Gagal menghapus pending patch:', e.message);
+    }
+  }
+
+  async _restorePersistedPatches() {
+    try {
+      const allKeys = await this.storageManager.list('.');
+      const pendingKeys = (allKeys || []).filter(k => String(k).includes('eng:pending:'));
+      if (pendingKeys.length === 0) return;
+
+      console.log(`[Engineer] 🔄 Menemukan ${pendingKeys.length} pending patch dari sesi sebelumnya`);
+      for (const key of pendingKeys) {
+        try {
+          const raw = await this.storageManager.read(key);
+          if (!raw) continue;
+          const saved = JSON.parse(raw);
+          if (new Date(saved.expiresAt) < new Date()) {
+            await this.storageManager.write(key, null); // expired, hapus
+            continue;
+          }
+          this.eventBus.emit('Engineer:PatchPersisted', {
+            patchId: saved.patchId,
+            patch: saved.patch,
+            savedAt: saved.savedAt,
+            message: `📋 Ada patch yang menunggu dari sesi sebelumnya (${new Date(saved.savedAt).toLocaleString('id-ID')}). Ketik "lanjutkan patch ${saved.patchId}" untuk melanjutkan, atau "batalkan patch ${saved.patchId}" untuk membatalkan.`
+          });
+          console.log(`[Engineer] 📋 Restored pending patch: ${saved.patchId}`);
+        } catch (e) {
+          console.warn('[Engineer] Gagal restore patch:', key, e.message);
+        }
+      }
+    } catch (e) {
+      console.warn('[Engineer] _restorePersistedPatches error:', e.message);
     }
   }
 
@@ -596,6 +700,13 @@ class Engineer {
     this.eventBus.on('Engineer:ReadRepo', (wrappedPayload) => {
       const task = wrappedPayload?.data || wrappedPayload;
       this._handleReadRepoTask(task);
+    });
+
+    // AUDIT TRAIL: terminal command dijalankan via [MAMET_CMD:] di ConversationEngine
+    this.eventBus.on('Engineer:CommandExecuted', (wrappedPayload) => {
+      const data = wrappedPayload?.data || wrappedPayload;
+      console.log(`[Engineer] 📟 Command audit: [${(data?.status || '?').toUpperCase()}] $ ${data?.command || 'unknown'}`);
+      this._updateArtifact('COMMAND_EXECUTED', data);
     });
   }
 
@@ -1288,6 +1399,40 @@ class Engineer {
     }
 
     if (patch.ready) {
+      // ===================================================
+      // [C] BREAKING CHANGE DETECTOR
+      // Cek export yang hilang & masih dipakai file lain.
+      // Non-blocking: warning ditampilkan tapi tidak menghentikan proses.
+      // ===================================================
+      try {
+        console.log('[Engineer] 🔍 Menjalankan Breaking Change Detector...');
+        const bcWarnings = await this._detectBreakingChanges(patch);
+        const highSeverity = bcWarnings.filter(w => w.severity === 'HIGH');
+
+        if (highSeverity.length > 0) {
+          // Simpan di patch agar tampil di approval dialog
+          patch.breakingWarnings = highSeverity;
+
+          const lines = highSeverity.map(w =>
+            `- \`${w.symbol}\` dihapus dari \`${w.file}\`\n  Digunakan di: ${w.callers.slice(0, 3).join(', ')}${w.callers.length > 3 ? ` +${w.callers.length - 3} lainnya` : ''}`
+          );
+          this._emitRecommendation({
+            type: 'BREAKING_CHANGE_WARNING',
+            taskId: task.id,
+            message: `⚠️ **Peringatan Breaking Change** — ${highSeverity.length} export yang dihapus masih digunakan di tempat lain:\n\n${lines.join('\n\n')}\n\n_Patch tetap bisa dilanjutkan — tapi Anda perlu memperbarui file yang terpengaruh._`,
+            breakingWarnings: highSeverity,
+            requiresApproval: false
+          });
+          console.warn(`[Engineer] ⚠️ Breaking changes terdeteksi: ${highSeverity.length} symbol`);
+        } else if (bcWarnings.length > 0) {
+          console.log(`[Engineer] ℹ️ Breaking change LOW severity: ${bcWarnings.length} (tidak ada caller aktif, aman)`);
+        } else {
+          console.log('[Engineer] ✅ Tidak ada breaking change terdeteksi');
+        }
+      } catch (bcErr) {
+        console.warn('[Engineer] Breaking change detector error (non-blocking):', bcErr.message);
+      }
+
       const approvalResult = await this._requestApproval(patch, analysis);
 
       if (approvalResult.approved) {
@@ -1299,6 +1444,36 @@ class Engineer {
           taskId: task.id,
           files: approvalResult.approvedFiles
         });
+
+        // ===================================================
+        // [D] SEMANTIC DIFF VERIFICATION (post-apply)
+        // Baca ulang file yang baru ditulis, verifikasi strukturnya.
+        // ===================================================
+        try {
+          console.log('[Engineer] 🔬 Menjalankan Semantic Diff Verification...');
+          const semanticIssues = await this._verifySemanticDiff(patch);
+          const criticalIssues = semanticIssues.filter(i => i.severity === 'CRITICAL');
+          const highIssues     = semanticIssues.filter(i => i.severity === 'HIGH');
+
+          if (semanticIssues.length > 0) {
+            const issueLines = semanticIssues.map(i =>
+              `- \`${i.file}\` [${i.severity}]: ${i.issue}`
+            );
+            const isCritical = criticalIssues.length > 0;
+            this._emitRecommendation({
+              type: 'SEMANTIC_DIFF_ISSUE',
+              taskId: task.id,
+              message: `${isCritical ? '🔴' : '🟡'} **Semantic Diff ${isCritical ? 'Kritis' : 'Peringatan'}** — ${semanticIssues.length} masalah terdeteksi setelah patch diterapkan:\n\n${issueLines.join('\n')}\n\n${isCritical ? '_Disarankan untuk rollback menggunakan tombol Rollback di atas._' : '_Periksa file tersebut untuk memastikan tidak ada masalah._'}`,
+              semanticIssues,
+              requiresApproval: false
+            });
+            console.warn(`[Engineer] Semantic issues: ${criticalIssues.length} critical, ${highIssues.length} high`);
+          } else {
+            console.log('[Engineer] ✅ Semantic diff OK - semua file terverifikasi');
+          }
+        } catch (sdErr) {
+          console.warn('[Engineer] Semantic diff verification error (non-blocking):', sdErr.message);
+        }
 
         this._emitRecommendation({
           type: 'PATCH_APPLIED',
@@ -1339,6 +1514,173 @@ class Engineer {
     }
   }
 
+  // =============================================
+  // FASE 3: BREAKING CHANGE DETECTOR
+  // Sebelum patch apply: cek apakah ada export yang hilang/berubah
+  // yang masih dipakai oleh file lain di codebase.
+  // =============================================
+
+  /**
+   * Extract semua nama export dari konten file JS/TS.
+   * @param {string} content - Isi file
+   * @returns {string[]} Daftar nama yang di-export
+   */
+  _extractExports(content) {
+    if (!content || typeof content !== 'string') return [];
+    const names = new Set();
+    const patterns = [
+      /export\s+(?:async\s+)?function\s+(\w+)/g,
+      /export\s+(?:const|let|var)\s+(\w+)/g,
+      /export\s+class\s+(\w+)/g,
+      /export\s+type\s+(\w+)/g,
+      /export\s+interface\s+(\w+)/g,
+      /export\s+\{([^}]+)\}/g,        // export { a, b as c }
+    ];
+    for (const pattern of patterns) {
+      let match;
+      const re = new RegExp(pattern.source, pattern.flags);
+      while ((match = re.exec(content)) !== null) {
+        // Handle export { a, b as c } — bisa berisi banyak nama
+        match[1].split(',').forEach(part => {
+          const clean = part.trim().split(/\s+as\s+/)[0].trim();
+          if (clean && /^\w+$/.test(clean)) names.add(clean);
+        });
+      }
+    }
+    return [...names];
+  }
+
+  /**
+   * Cari semua file di codebase yang mengandung symbol tertentu.
+   * Gunakan fileIndexService.getAllFiles() + storageManager.read per file.
+   * Dibatasi 200 file agar tidak terlalu lambat.
+   * @param {string} symbol - Nama fungsi/class/const yang dicari
+   * @param {string} excludePath - Path file sumber yang dilewati
+   * @returns {Promise<string[]>} List file path yang menggunakan symbol
+   */
+  async _findUsages(symbol, excludePath) {
+    const callers = [];
+    if (!this.fileIndexService?.isReady) return callers;
+
+    const SOURCE_EXTS = ['.js', '.jsx', '.ts', '.tsx', '.vue', '.svelte'];
+    const SKIP_DIRS = ['node_modules', '.git', 'dist', 'release', '.vite', 'mamet_fs', 'backup'];
+
+    const allFiles = this.fileIndexService.getAllFiles()
+      .filter(p => {
+        const normalized = p.replace(/\\/g, '/');
+        if (normalized === excludePath?.replace(/\\/g, '/')) return false;
+        if (SKIP_DIRS.some(d => normalized.includes(`/${d}/`) || normalized.startsWith(`${d}/`))) return false;
+        return SOURCE_EXTS.some(ext => normalized.endsWith(ext));
+      })
+      .slice(0, 200); // limit agar tidak freeze
+
+    for (const filePath of allFiles) {
+      try {
+        const content = await this.storageManager.read(filePath);
+        if (content && content.includes(symbol)) {
+          callers.push(filePath);
+        }
+      } catch (_) {}
+    }
+    return callers;
+  }
+
+  /**
+   * [C] Breaking Change Detector — dipanggil setelah patch di-generate, sebelum _requestApproval.
+   * Cari export yang hilang/berubah dan cek apakah masih dipakai file lain.
+   * @param {Object} patch - Patch yang akan diterapkan
+   * @returns {Promise<Array>} warnings[] — { file, symbol, callers[], severity }
+   */
+  async _detectBreakingChanges(patch) {
+    const warnings = [];
+    for (const file of patch.files) {
+      if (!file.originalContent || !file.newContent) continue;
+      // Skip file baru (belum ada original)
+      if (file.originalContent.trim().length === 0) continue;
+
+      const originalExports = this._extractExports(file.originalContent);
+      const newExports      = this._extractExports(file.newContent);
+
+      // Export yang ada di original tapi hilang di versi baru
+      const removedExports = originalExports.filter(name => !newExports.includes(name));
+      if (removedExports.length === 0) continue;
+
+      for (const symbol of removedExports) {
+        const callers = await this._findUsages(symbol, file.path);
+        warnings.push({
+          file: file.path,
+          symbol,
+          callers,
+          severity: callers.length > 0 ? 'HIGH' : 'LOW'
+        });
+      }
+    }
+    return warnings;
+  }
+
+  // =============================================
+  // FASE 3: SEMANTIC DIFF VERIFICATION
+  // Setelah patch ditulis: baca ulang file dan verifikasi
+  // struktur masih valid — export tidak hilang, tidak kosong.
+  // =============================================
+
+  /**
+   * [D] Semantic Diff Verification — dipanggil setelah _executePatchApplication.
+   * Re-read setiap file yang berhasil ditulis dan cek:
+   * - File tidak kosong
+   * - Export original masih ada
+   * - Tidak ada truncation silent (di luar check size yang sudah ada)
+   * @param {Object} patch - Patch yang sudah diterapkan
+   * @returns {Promise<Array>} issues[] — { file, issue, severity }
+   */
+  async _verifySemanticDiff(patch) {
+    const issues = [];
+    for (const file of patch.files) {
+      if (file.status !== 'APPLIED') continue;
+      let writtenContent;
+      try {
+        writtenContent = await this.storageManager.read(file.path);
+      } catch (e) {
+        issues.push({ file: file.path, issue: 'Tidak bisa membaca file setelah ditulis', severity: 'CRITICAL' });
+        continue;
+      }
+
+      // 1. File kosong
+      if (!writtenContent || writtenContent.trim().length === 0) {
+        issues.push({ file: file.path, issue: 'File kosong setelah patch', severity: 'CRITICAL' });
+        continue;
+      }
+
+      // 2. Export original hilang dari file yang sudah ditulis
+      if (file.originalContent) {
+        const originalExports = this._extractExports(file.originalContent);
+        const writtenExports  = this._extractExports(writtenContent);
+        const missingExports  = originalExports.filter(e => !writtenExports.includes(e));
+        if (missingExports.length > 0) {
+          issues.push({
+            file: file.path,
+            issue: `Export hilang setelah patch: ${missingExports.join(', ')}`,
+            severity: 'HIGH'
+          });
+        }
+      }
+
+      // 3. File sangat kecil tanpa komentar (< 5 baris kode nyata)
+      const realLines = writtenContent.split('\n').filter(l => {
+        const t = l.trim();
+        return t.length > 0 && !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*');
+      });
+      if (realLines.length < 5 && (file.originalContent?.split('\n').length || 0) > 20) {
+        issues.push({
+          file: file.path,
+          issue: `File terlalu pendek setelah patch (${realLines.length} baris kode vs ${file.originalContent.split('\n').length} sebelumnya)`,
+          severity: 'HIGH'
+        });
+      }
+    }
+    return issues;
+  }
+
   _handleApprovalResponse(response) {
     const { patchId, approved, approvedFiles } = response;
     const pending = this.pendingPatches.get(patchId);
@@ -1349,6 +1691,8 @@ class Engineer {
         approvedFiles: approvedFiles || []
       });
       this.pendingPatches.delete(patchId);
+      // Hapus dari persistent storage — patch sudah diselesaikan (approve/reject)
+      this._clearPendingPatch(patchId);
     }
   }
 
@@ -1954,6 +2298,29 @@ class Engineer {
       let failCount = 0;
       let skippedCount = 0;
 
+      // =============================================
+      // ROLLBACK CHECKPOINT — git stash sebelum write
+      // Dilakukan sekali sebelum semua file ditulis.
+      // Jika ada error, user bisa rollback dengan aman.
+      // =============================================
+      let checkpointRef = null;
+      if (window.electronAPI?.gitCheckpoint) {
+        try {
+          const cp = await window.electronAPI.gitCheckpoint(
+            patch.taskId || patch.id,
+            patch.files.map(f => f.path)
+          );
+          if (cp?.success) {
+            checkpointRef = cp.ref || `ENG-CHECKPOINT-${patch.taskId || patch.id}`;
+            console.log(`[Engineer] 💾 Checkpoint dibuat: ${checkpointRef}`);
+          } else {
+            console.warn('[Engineer] ⚠️ Checkpoint gagal dibuat:', cp?.error || cp?.message);
+          }
+        } catch (cpErr) {
+          console.warn('[Engineer] Checkpoint error (non-blocking):', cpErr.message);
+        }
+      }
+
       for (const file of patch.files) {
         try {
           if (approvedFiles.length > 0 && !approvedFiles.includes(file.path)) {
@@ -2024,7 +2391,8 @@ class Engineer {
         successCount,
         skippedCount,
         failCount,
-        files: patch.files
+        files: patch.files,
+        checkpointRef  // dikirim ke UI untuk tombol Rollback
       };
 
 this.eventBus.emit('Engineer:PatchApplied', result);
@@ -2129,13 +2497,23 @@ this.eventBus.emit('Engineer:PatchApplied', result);
    * untuk mencegah memory leak jika user menutup dialog tanpa merespons.
    */
   async _requestApproval(patch, analysis = null) {
+    // Simpan ke persistent storage SEBELUM menunggu — tidak hilang jika timeout/restart
+    await this._savePendingPatch(patch);
+
     return new Promise((resolve) => {
-      // [FIX #2] Timeout otomatis
       const timeout = setTimeout(() => {
         if (this.pendingPatches.has(patch.id)) {
-          console.warn(`[Engineer] ⏰ Approval timeout for patch: ${patch.id}. Auto-rejecting.`);
-          this.pendingPatches.delete(patch.id);
-          resolve({ approved: false, approvedFiles: [] });
+          console.warn(`[Engineer] ⏰ Approval timeout: ${patch.id}. Persisting, tidak di-reject.`);
+          this.pendingPatches.delete(patch.id); // bebas memori, data sudah di storage
+          this.eventBus.emit('Engineer:Recommendation', {
+            type: 'PATCH_PERSISTED',
+            patchId: patch.id,
+            message: `⏰ **Waktu Habis** — Patch \`${patch.id}\` belum disetujui dalam 10 menit.\n\n💾 Patch **disimpan otomatis** — tidak hilang. Saat Anda membuka kembali aplikasi, patch akan tampil kembali untuk persetujuan.\n\nAtau ketik: **"lanjutkan patch ${patch.id}"** untuk melanjutkan sekarang.`,
+            requiresApproval: false,
+            from: 'Engineer',
+            timestamp: new Date().toISOString()
+          });
+          resolve({ approved: false, approvedFiles: [], persisted: true });
         }
       }, APPROVAL_TIMEOUT_MS);
 

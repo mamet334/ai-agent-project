@@ -87,7 +87,7 @@ export default function LampLogin({ onLoginSuccess }) {
             width: 'clamp(140px, min(34vw, 42vh), 260px)',
           }}
         >
-          <svg viewBox="0 0 300 420" className="w-full h-auto overflow-visible">
+          <svg viewBox="0 0 300 340" className="w-full h-auto overflow-visible">
             <defs>
               <linearGradient id="chainMetal" x1="0" x2="1">
                 <stop offset="0" stopColor="#2a1a0d" />
@@ -111,8 +111,8 @@ export default function LampLogin({ onLoginSuccess }) {
               <filter id="softGlowHang"><feGaussianBlur stdDeviation="4" /></filter>
             </defs>
 
-            {/* Rantai penggantung */}
-            {Array.from({ length: 9 }).map((_, i) => (
+            {/* Rantai penggantung — 5 link, lebih dekat langit-langit */}
+            {Array.from({ length: 5 }).map((_, i) => (
               <ellipse
                 key={i}
                 cx={150 + (i % 2 === 0 ? -4 : 4)}
@@ -126,7 +126,7 @@ export default function LampLogin({ onLoginSuccess }) {
             ))}
             {/* Kabel listrik melilit rantai */}
             <path
-              d="M150 8 C165 30 135 52 150 74 C165 96 135 118 150 140"
+              d="M150 8 C165 22 135 38 150 54 C165 70 135 86 150 80"
               fill="none"
               stroke="#0d0a08"
               strokeWidth="2.5"
@@ -134,22 +134,22 @@ export default function LampLogin({ onLoginSuccess }) {
             />
 
             {/* Dudukan atas kap lampu */}
-            <rect x="136" y="140" width="28" height="18" rx="5" fill="#24150b" />
-            <rect x="141" y="143" width="18" height="14" rx="4" fill="url(#chainMetal)" />
+            <rect x="136" y="80" width="28" height="18" rx="5" fill="#24150b" />
+            <rect x="141" y="83" width="18" height="14" rx="4" fill="url(#chainMetal)" />
 
-            {/* Kap lampu (kepala lampu, desain sama seperti versi meja) */}
-            <path d="M82 158 Q150 138 218 158 L232 300 Q150 324 68 300 Z" fill="#120b07" stroke="#060504" strokeWidth="7" />
-            <path d="M88 164 Q150 146 212 164 L221 292 Q151 312 79 292 Z" fill="url(#shadeHang)" stroke="#5d3218" strokeWidth="2" />
-            <path d="M100 168 L93 288 M114 164 L110 293 M129 161 L128 297 M146 159 L146 300 M163 159 L165 300 M181 161 L185 297 M197 164 L205 293" stroke="rgba(255,214,155,.18)" strokeWidth="2" />
+            {/* Kap lampu */}
+            <path d="M82 98 Q150 78 218 98 L232 240 Q150 264 68 240 Z" fill="#120b07" stroke="#060504" strokeWidth="7" />
+            <path d="M88 104 Q150 86 212 104 L221 232 Q151 252 79 232 Z" fill="url(#shadeHang)" stroke="#5d3218" strokeWidth="2" />
+            <path d="M100 108 L93 228 M114 104 L110 233 M129 101 L128 237 M146 99 L146 240 M163 99 L165 240 M181 101 L185 237 M197 104 L205 233" stroke="rgba(255,214,155,.18)" strokeWidth="2" />
 
             {/* Bohlam & cahaya */}
-            <ellipse cx="150" cy="302" rx="76" ry="14" fill="#5b3218" />
-            <ellipse cx="150" cy="299" rx="71" ry="10" fill="#fff0bc" />
-            <ellipse cx="150" cy="299" rx="54" ry="7" fill="#fffbe9" />
-            <ellipse cx="150" cy="299" rx="44" ry="5" fill="#fff" />
-            <ellipse cx="150" cy="299" rx="71" ry="10" fill="none" stroke="#ffcc66" strokeWidth="4" opacity={lampOn ? "0.4" : "0.7"} filter="url(#softGlowHang)" />
-            <ellipse cx="150" cy="310" rx="130" ry="115" fill="url(#bulbHang)" opacity={lampOn ? "0.4" : "0"} filter="url(#glowHang)" />
-            <ellipse cx="150" cy="299" rx="40" ry="28" fill="url(#bulbHang)" opacity={lampOn ? "0.85" : "0"} filter="url(#softGlowHang)" />
+            <ellipse cx="150" cy="242" rx="76" ry="14" fill="#5b3218" />
+            <ellipse cx="150" cy="239" rx="71" ry="10" fill="#fff0bc" />
+            <ellipse cx="150" cy="239" rx="54" ry="7" fill="#fffbe9" />
+            <ellipse cx="150" cy="239" rx="44" ry="5" fill="#fff" />
+            <ellipse cx="150" cy="239" rx="71" ry="10" fill="none" stroke="#ffcc66" strokeWidth="4" opacity={lampOn ? "0.4" : "0.7"} filter="url(#softGlowHang)" />
+            <ellipse cx="150" cy="250" rx="130" ry="115" fill="url(#bulbHang)" opacity={lampOn ? "0.4" : "0"} filter="url(#glowHang)" />
+            <ellipse cx="150" cy="239" rx="40" ry="28" fill="url(#bulbHang)" opacity={lampOn ? "0.85" : "0"} filter="url(#softGlowHang)" />
           </svg>
         </div>
 
@@ -257,23 +257,41 @@ export default function LampLogin({ onLoginSuccess }) {
 
 
         {/* =========================================================
-            LOGIN PANEL — GAYA "POSTER MENEMPEL DI DINDING"
-            Frame tipis + shadow yang menyarankan panel ini menempel
-            rata di permukaan dinding (bukan melayang), transparan
-            sehingga cahaya lampu & teks di baliknya tetap terlihat.
+            LOGIN PANEL — TERUKIR DI DINDING
+            Efek: ceruk/cekungan di permukaan dinding.
+            Inset shadow di semua sisi = kesan tertekan ke dalam.
+            Warna background = sama dengan dinding (bukan kaca).
+            Border = bingkai kayu/plester, bukan golden glow.
             ========================================================= */}
         <div
-          className={`absolute z-[15] right-[5%] w-[38%] min-w-[240px] max-w-[430px] p-[5%] rounded-[0.6vw] transition-all duration-600 ${lampOn ? 'opacity-100 scale-100 visible pointer-events-auto' : 'opacity-0 scale-95 invisible pointer-events-none'}`}
-          style={{ top: 'max(18%, 140px)' }}
+          className={`absolute z-[15] right-[5%] w-[38%] min-w-[240px] max-w-[430px] rounded-[4px] transition-all duration-600 ${lampOn ? 'opacity-100 scale-100 visible pointer-events-auto' : 'opacity-0 scale-95 invisible pointer-events-none'}`}
+          style={{
+            top: 'max(10%, 80px)',
+            bottom: 'max(22%, 130px)',
+            overflowY: 'auto',
+            padding: 'min(5%, 28px)',
+            /* Ceruk di dinding: inset shadow kuat di semua sisi */
+            background: 'radial-gradient(ellipse at 60% 30%, rgba(42,27,14,.82) 0%, rgba(20,12,7,.92) 100%)',
+            boxShadow: [
+              'inset 0 4px 14px rgba(0,0,0,.9)',   /* atas — kedalaman ceruk */
+              'inset 0 -3px 10px rgba(0,0,0,.7)',  /* bawah */
+              'inset 4px 0 12px rgba(0,0,0,.8)',   /* kiri */
+              'inset -4px 0 12px rgba(0,0,0,.8)',  /* kanan */
+              '0 0 0 1.5px rgba(45,28,14,.95)',    /* groove border luar — seperti alur ukiran */
+              '0 0 0 3px rgba(65,42,20,.5)',        /* trim kayu luar */
+              '0 0 0 4px rgba(30,18,8,.8)',         /* shadow tepi terluar */
+            ].join(',')
+          }}
         >
-
-          {/* Background Glass + Shadow — flat poster-on-wall look:
-              tepi lebih tegas, shadow lebih dekat ke tepi (bukan
-              shadow besar mengambang), kesan menempel rata */}
-          <div className="absolute inset-0 rounded-[0.6vw] bg-gradient-to-br from-[rgba(35,24,16,.52)] to-[rgba(8,7,6,.38)] border-[1.5px] border-[rgba(255,208,125,.32)] shadow-[0_4px_18px_rgba(0,0,0,.55),0_1px_0_rgba(255,220,170,.10)_inset] backdrop-blur-[3px] saturate-115" />
-          {/* Aksen "paku poster" di keempat sudut */}
-          <div className="absolute top-[3%] left-[3%] w-[6px] h-[6px] rounded-full bg-[rgba(255,208,125,.35)] shadow-[0_1px_2px_rgba(0,0,0,.6)]" />
-          <div className="absolute top-[3%] right-[3%] w-[6px] h-[6px] rounded-full bg-[rgba(255,208,125,.35)] shadow-[0_1px_2px_rgba(0,0,0,.6)]" />
+          {/* Highlight tipis di sisi atas ceruk — pantulan cahaya lampu */}
+          <div className="absolute inset-x-0 top-0 h-[2px] rounded-t-[4px]"
+            style={{ background: 'linear-gradient(90deg, transparent, rgba(255,190,90,.12) 30%, rgba(255,210,120,.18) 50%, rgba(255,190,90,.12) 70%, transparent)' }}
+          />
+          {/* Sudut bingkai — molding kayu, bukan paku */}
+          <div className="absolute top-0 left-0 w-4 h-4 border-t border-l border-[rgba(90,58,25,.6)] rounded-tl-[4px]" />
+          <div className="absolute top-0 right-0 w-4 h-4 border-t border-r border-[rgba(90,58,25,.6)] rounded-tr-[4px]" />
+          <div className="absolute bottom-0 left-0 w-4 h-4 border-b border-l border-[rgba(90,58,25,.6)] rounded-bl-[4px]" />
+          <div className="absolute bottom-0 right-0 w-4 h-4 border-b border-r border-[rgba(90,58,25,.6)] rounded-br-[4px]" />
 
           <div className="relative z-10 text-center">
             <h1 className="font-bold tracking-[-.03em] text-[#fff8ec] drop-shadow-[0_2px_15px_rgba(0,0,0,.45)]" style={{ fontSize: 'clamp(18px, 1.8vw, 30px)' }}>

@@ -319,6 +319,87 @@ ipcMain.handle('run-terminal-command', async (event, { command }) => {
   }
 });
 
+// =============================================
+// ENGINEER ROLLBACK SYSTEM
+// Checkpoint = git stash sebelum apply patch
+// Rollback = git stash pop untuk undo
+// =============================================
+
+// 2a. Git Checkpoint — dipanggil SEBELUM patch apply (silent, tanpa dialog)
+ipcMain.handle('eng:git-checkpoint', async (event, { taskId, files }) => {
+  try {
+    const label = `ENG-CHECKPOINT-${taskId || Date.now()}`;
+    // Cek apakah ada perubahan yang perlu di-stash
+    const statusResult = await new Promise((resolve) => {
+      exec('git status --porcelain', { cwd: PROJECT_ROOT, timeout: 10000 }, (err, stdout) => {
+        resolve({ hasChanges: stdout?.trim().length > 0, err });
+      });
+    });
+
+    if (!statusResult.hasChanges) {
+      // Tidak ada perubahan bersih — simpan state dengan commit kosong
+      return { success: true, ref: null, message: 'Working tree bersih, tidak perlu checkpoint.' };
+    }
+
+    // Stash dengan label unik
+    const result = await new Promise((resolve) => {
+      exec(`git stash push -m "${label}"`, { cwd: PROJECT_ROOT, timeout: 15000 }, (err, stdout, stderr) => {
+        if (err) resolve({ success: false, error: stderr || err.message });
+        else resolve({ success: true, ref: label, output: stdout.trim() });
+      });
+    });
+
+    console.log(`[ENG-CHECKPOINT] ${result.success ? '✅' : '❌'} ${result.ref || result.error}`);
+    return result;
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// 2b. Git Rollback — dipanggil user untuk undo patch terakhir
+ipcMain.handle('eng:git-rollback', async (event, { checkpointLabel }) => {
+  try {
+    // Konfirmasi dari user
+    const confirm = await dialog.showMessageBox(mainWindow, {
+      type: 'warning',
+      buttons: ['Batal', '↩️ Rollback Sekarang'],
+      defaultId: 0,
+      title: 'Konfirmasi Rollback',
+      message: `Apakah Anda yakin ingin membatalkan patch terakhir?\n\nCheckpoint: ${checkpointLabel || 'terakhir'}\n\nSemua perubahan yang diterapkan akan dikembalikan ke kondisi sebelum patch.`
+    });
+
+    if (confirm.response !== 1) {
+      return { success: false, cancelled: true, message: 'Rollback dibatalkan.' };
+    }
+
+    // Cek apakah ada stash dengan label yang sesuai
+    const stashList = await new Promise((resolve) => {
+      exec('git stash list', { cwd: PROJECT_ROOT, timeout: 10000 }, (err, stdout) => {
+        resolve(stdout || '');
+      });
+    });
+
+    const hasCheckpoint = checkpointLabel ? stashList.includes(checkpointLabel) : stashList.trim().length > 0;
+
+    if (!hasCheckpoint) {
+      return { success: false, error: 'Checkpoint tidak ditemukan di stash list. Rollback tidak bisa dilakukan.' };
+    }
+
+    // Pop stash teratas (yang merupakan checkpoint kita)
+    const result = await new Promise((resolve) => {
+      exec('git stash pop', { cwd: PROJECT_ROOT, timeout: 15000 }, (err, stdout, stderr) => {
+        if (err) resolve({ success: false, error: stderr || err.message });
+        else resolve({ success: true, output: stdout.trim() });
+      });
+    });
+
+    console.log(`[ENG-ROLLBACK] ${result.success ? '✅ Berhasil' : '❌ Gagal'}: ${result.output || result.error}`);
+    return result;
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
 // 3. Folder Selection
 ipcMain.handle('select-folder', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {

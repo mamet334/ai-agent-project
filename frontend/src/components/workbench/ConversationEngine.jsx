@@ -69,6 +69,10 @@ export default function ConversationEngine({ sessionId }) {
   // key: "${msgIdx}_${cmd}" → { status: 'pending'|'running'|'done'|'skipped', output: string }
   const [engineerCmdStates, setEngineerCmdStates] = useState({});
 
+  // Engineer Rollback: simpan checkpointRef dari patch terakhir
+  const [lastCheckpoint, setLastCheckpoint] = useState(null); // { ref, patchId, appliedAt }
+  const [rollbackState, setRollbackState] = useState('idle'); // 'idle'|'loading'|'done'|'error'
+
   // Auto-grow textarea
   useEffect(() => {
     if (textareaRef.current) {
@@ -250,6 +254,62 @@ export default function ConversationEngine({ sessionId }) {
 
     const unsubscribe = eventBus.on('Engineer:Recommendation', handler);
     return () => eventBus.off('Engineer:Recommendation', unsubscribe);
+  }, []);
+
+  // =============================================
+  // ENGINEER ROLLBACK: Listen Engineer:PatchApplied
+  // Simpan checkpointRef, tampilkan tombol Rollback
+  // =============================================
+  useEffect(() => {
+    const eventBus = kernel.serviceManager?.get('EventBus');
+    if (!eventBus) return;
+
+    const patchAppliedHandler = (result) => {
+      const data = result?.data || result;
+      // Simpan checkpoint untuk tombol rollback
+      if (data?.checkpointRef) {
+        setLastCheckpoint({
+          ref: data.checkpointRef,
+          patchId: data.patchId,
+          appliedAt: new Date().toLocaleTimeString('id-ID')
+        });
+        setRollbackState('idle');
+      }
+      // Append pesan sukses ke chat
+      const files = data?.files?.filter(f => f.status === 'APPLIED').map(f => f.path) || [];
+      const successMsg = data?.successCount > 0
+        ? `✅ **Patch Berhasil!** ${data.successCount} file diubah${data.skippedCount > 0 ? `, ${data.skippedCount} dilewati` : ''}.${files.length > 0 ? '\n\n📁 ' + files.join('\n📁 ') : ''}${data.checkpointRef ? '\n\n💾 Checkpoint dibuat — Anda bisa rollback.' : ''}`
+        : `⚠️ Patch selesai tapi ${data?.failCount || 0} file gagal.`;
+      setMessages(prev => [...prev, {
+        role: 'model',
+        content: successMsg,
+        isPatchResult: true,
+        checkpointRef: data?.checkpointRef || null
+      }]);
+    };
+
+    const unsubPatch = eventBus.on('Engineer:PatchApplied', patchAppliedHandler);
+    return () => eventBus.off('Engineer:PatchApplied', unsubPatch);
+  }, []);
+
+  // =============================================
+  // PERSISTENT PATCH: Tampilkan notifikasi saat ada patch tersimpan dari sesi sebelumnya
+  // =============================================
+  useEffect(() => {
+    const eventBus = kernel.serviceManager?.get('EventBus');
+    if (!eventBus) return;
+
+    const persistedHandler = (data) => {
+      setMessages(prev => [...prev, {
+        role: 'model',
+        content: data.message || `📋 Ada patch pending dari sesi sebelumnya (ID: ${data.patchId}).`,
+        isPatchPersisted: true,
+        patchId: data.patchId
+      }]);
+    };
+
+    const unsubPersisted = eventBus.on('Engineer:PatchPersisted', persistedHandler);
+    return () => eventBus.off('Engineer:PatchPersisted', unsubPersisted);
   }, []);
 
   // READ_REPO: Listen for Engineer:FileContent events
@@ -895,16 +955,59 @@ export default function ConversationEngine({ sessionId }) {
       return;
     }
     setEngineerCmdStates(prev => ({ ...prev, [cmdKey]: { status: 'running', output: '' } }));
+
+    // Helper: emit audit trail ke Engineer SessionArtifact
+    const auditCommand = (status, output = '') => {
+      try {
+        const eventBus = kernel.serviceManager?.get('EventBus');
+        eventBus?.emit('Engineer:CommandExecuted', { command: cmd, status, output });
+      } catch (_) {}
+    };
+
     try {
       const result = await window.electronAPI.runTerminalCommand(cmd);
       const output = result?.output || result?.error || 'Command selesai (tidak ada output).';
-      setEngineerCmdStates(prev => ({ ...prev, [cmdKey]: { status: 'done', output } }));
+      const status = result?.success ? 'success' : 'error';
+      setEngineerCmdStates(prev => ({ ...prev, [cmdKey]: { status: status === 'success' ? 'done' : 'error', output } }));
+      auditCommand(status, output);
       // Opsi A: Auto-feed output ke Engineer LLM untuk analisis lanjutan
       setTimeout(() => handleSend(null, `[TERMINAL OUTPUT for: ${cmd}]\n${output}`), 300);
     } catch (err) {
       const errMsg = err?.message || String(err);
       setEngineerCmdStates(prev => ({ ...prev, [cmdKey]: { status: 'error', output: errMsg } }));
+      auditCommand('error', errMsg);
       setTimeout(() => handleSend(null, `[TERMINAL ERROR for: ${cmd}]\n${errMsg}`), 300);
+    }
+  };
+
+  // =============================================
+  // ENGINEER ROLLBACK: Undo patch via git stash pop
+  // =============================================
+  const handleRollback = async () => {
+    if (!window.electronAPI?.gitRollback) {
+      alert('Rollback tidak tersedia (bukan desktop mode).');
+      return;
+    }
+    setRollbackState('loading');
+    try {
+      const result = await window.electronAPI.gitRollback(lastCheckpoint?.ref);
+      if (result?.cancelled) { setRollbackState('idle'); return; }
+      if (result?.success) {
+        setRollbackState('done');
+        setLastCheckpoint(null);
+        setMessages(prev => [...prev, {
+          role: 'model',
+          content: `↩️ **Rollback Berhasil!** Semua perubahan patch telah dikembalikan.\n\nOutput: ${result.output || 'selesai.'}`
+        }]);
+      } else {
+        setRollbackState('error');
+        setMessages(prev => [...prev, {
+          role: 'model',
+          content: `❌ **Rollback Gagal:** ${result?.error || 'Unknown error'}\n\nCoba jalankan git stash pop secara manual.`
+        }]);
+      }
+    } catch (err) {
+      setRollbackState('error');
     }
   };
 
@@ -950,6 +1053,41 @@ export default function ConversationEngine({ sessionId }) {
             <span className="material-symbols-outlined text-[20px]">add</span>
           </button>
         </div>
+
+        {/* ENGINEER ROLLBACK BANNER — muncul setelah patch berhasil */}
+        {lastCheckpoint && (
+          <div className="mx-3 mt-14 mb-0 flex items-center gap-2 px-3 py-2 rounded-xl border border-amber-500/30 bg-amber-950/20 text-amber-300 text-xs z-40 shrink-0">
+            <span className="material-symbols-outlined text-[15px] text-amber-400 shrink-0">history</span>
+            <div className="flex-1 min-w-0 truncate">
+              <span className="font-bold">Checkpoint tersedia</span>
+              <span className="text-amber-400/60 ml-1.5">{lastCheckpoint.appliedAt} — {lastCheckpoint.ref}</span>
+            </div>
+            {rollbackState === 'loading' ? (
+              <span className="flex items-center gap-1 animate-pulse shrink-0">
+                <span className="material-symbols-outlined text-[13px]">hourglass_empty</span>Mengembalikan...
+              </span>
+            ) : rollbackState === 'done' ? (
+              <span className="text-emerald-400 shrink-0">✅ Selesai</span>
+            ) : (
+              <>
+                <button
+                  onClick={handleRollback}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition-all active:scale-95 shrink-0"
+                >
+                  <span className="material-symbols-outlined text-[13px]">undo</span>
+                  Rollback
+                </button>
+                <button
+                  onClick={() => setLastCheckpoint(null)}
+                  className="p-0.5 rounded hover:bg-amber-900/40 text-amber-500/50 hover:text-amber-300 transition-colors shrink-0"
+                  title="Tutup"
+                >
+                  <span className="material-symbols-outlined text-[14px]">close</span>
+                </button>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Chat + Memory Context Panel (Fitur #2) */}
         <div className="flex-1 flex flex-col md:flex-row relative min-h-0 min-w-0">

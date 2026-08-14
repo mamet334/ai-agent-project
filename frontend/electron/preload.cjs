@@ -37,6 +37,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   runTerminalCommand: (command) => ipcRenderer.invoke('run-terminal-command', { command }),
 
   // =============================================
+  // ENGINEER ROLLBACK SYSTEM
+  // =============================================
+
+  // Buat checkpoint git sebelum apply patch (dipanggil otomatis oleh Engineer)
+  gitCheckpoint: (taskId, files) => ipcRenderer.invoke('eng:git-checkpoint', { taskId, files }),
+  // Rollback ke checkpoint terakhir (dipanggil user via tombol Undo)
+  gitRollback: (checkpointLabel) => ipcRenderer.invoke('eng:git-rollback', { checkpointLabel }),
+
+
+  // =============================================
   // SURGICAL FILE EDITING
   // =============================================
 

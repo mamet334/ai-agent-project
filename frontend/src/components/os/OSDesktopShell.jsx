@@ -34,8 +34,9 @@ export default function OSDesktopShell() {
         />
       )}
 
+      {/* ✅ UBAH: Kirim prop isMobile ke ApplicationContainer */}
       <div className={`flex flex-col flex-1 min-w-0 overflow-hidden ${isMobile ? 'pb-16' : 'ml-16'}`}>
-        <ApplicationContainer />
+        <ApplicationContainer isMobile={isMobile} />
       </div>
 
       {isMobile && (
