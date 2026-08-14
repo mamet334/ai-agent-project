@@ -158,14 +158,14 @@ export default function LampLogin({ onLoginSuccess }) {
             sorot cahaya lampu gantung.
             ========================================================= */}
         <div
-          className="absolute left-1/2 top-[38%] -translate-x-1/2 flex flex-col items-center pointer-events-none z-10 select-none"
+          className="absolute left-[6%] top-[40%] flex flex-col items-start pointer-events-none z-10 select-none"
         >
           {['MAMET', 'OS', 'ECOSYSTEM'].map((line) => (
             <span
               key={line}
-              className="text-[#fff8ec] tracking-[0.15em] uppercase font-mono font-light leading-[1.25]"
+              className="text-[#fff8ec] tracking-[0.15em] uppercase font-mono font-light leading-[1.25] text-left"
               style={{
-                fontSize: 'clamp(15px, 2.6vw, 34px)',
+                fontSize: 'clamp(20px, 4vw, 46px)',
                 textShadow: `
                   0 0 10px rgba(255, 220, 150, 0.6),
                   0 0 20px rgba(255, 220, 150, 0.4),
@@ -183,7 +183,7 @@ export default function LampLogin({ onLoginSuccess }) {
             ✨ SAKELAR DINDING — tombol bulat, di bawah teks branding
             ========================================================= */}
         <div
-          className="absolute left-1/2 top-[58%] -translate-x-1/2 z-[11]"
+          className="absolute left-[9%] top-[58%] z-[11]"
           style={{ width: 'clamp(34px, 4.5vw, 52px)' }}
         >
           <svg
@@ -226,9 +226,9 @@ export default function LampLogin({ onLoginSuccess }) {
             lampu gantung, menjangkau ke bawah (teks & sakelar) dan
             melebar ke kanan menuju area panel login.
             ========================================================= */}
-        <div className={`absolute left-[2%] top-0 w-[85%] h-[75%] pointer-events-none z-[2] transition-all duration-900 ${lampOn ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
-          <div className="absolute left-[6%] top-[8%] w-[75%] h-[65%] bg-[radial-gradient(ellipse_at_30%_30%,rgba(255,191,88,.28)_0%,rgba(231,143,52,.16)_28%,rgba(190,100,31,.06)_52%,transparent_75%)] blur-[30px]" />
-          <div className="absolute left-[10%] top-[20%] w-[70%] h-[55%] bg-[radial-gradient(ellipse_at_40%_20%,rgba(255,188,82,.22),rgba(215,119,37,.08)_46%,transparent_76%)] blur-[20px]" />
+        <div className={`absolute left-0 top-0 w-full h-[75%] pointer-events-none z-[2] transition-all duration-900 ${lampOn ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
+          <div className="absolute left-[2%] top-[8%] w-[85%] h-[65%] bg-[radial-gradient(ellipse_at_45%_30%,rgba(255,191,88,.28)_0%,rgba(231,143,52,.16)_28%,rgba(190,100,31,.06)_52%,transparent_75%)] blur-[30px]" />
+          <div className="absolute left-[4%] top-[20%] w-[80%] h-[55%] bg-[radial-gradient(ellipse_at_48%_20%,rgba(255,188,82,.22),rgba(215,119,37,.08)_46%,transparent_76%)] blur-[20px]" />
         </div>
 
         {/* =========================================================
@@ -254,18 +254,23 @@ export default function LampLogin({ onLoginSuccess }) {
 
 
         {/* =========================================================
-            LOGIN PANEL GLASSMORPHISM
-            Lebar & posisi relatif terhadap scene container, jadi
-            selalu proporsional dan tidak pernah terpotong ataupun
-            menabrak lampu, di rasio layar apa pun.
+            LOGIN PANEL — GAYA "POSTER MENEMPEL DI DINDING"
+            Frame tipis + shadow yang menyarankan panel ini menempel
+            rata di permukaan dinding (bukan melayang), transparan
+            sehingga cahaya lampu & teks di baliknya tetap terlihat.
             ========================================================= */}
         <div
-          className={`absolute z-[15] right-[5%] w-[38%] min-w-[240px] max-w-[430px] p-[5%] rounded-[1.5vw] transition-all duration-600 ${lampOn ? 'opacity-100 scale-100 visible pointer-events-auto' : 'opacity-0 scale-95 invisible pointer-events-none'}`}
+          className={`absolute z-[15] right-[5%] w-[38%] min-w-[240px] max-w-[430px] p-[5%] rounded-[0.6vw] transition-all duration-600 ${lampOn ? 'opacity-100 scale-100 visible pointer-events-auto' : 'opacity-0 scale-95 invisible pointer-events-none'}`}
           style={{ top: 'max(8%, 90px)' }}
         >
 
-          {/* Background Glass + Shadow */}
-          <div className="absolute inset-0 rounded-[1.5vw] bg-gradient-to-br from-[rgba(35,24,16,.46)] to-[rgba(8,7,6,.30)] border border-[rgba(255,208,125,.28)] shadow-[0_25px_70px_rgba(0,0,0,.48),inset_0_1px_0_rgba(255,220,170,.10)] backdrop-blur-[5px] saturate-115" />
+          {/* Background Glass + Shadow — flat poster-on-wall look:
+              tepi lebih tegas, shadow lebih dekat ke tepi (bukan
+              shadow besar mengambang), kesan menempel rata */}
+          <div className="absolute inset-0 rounded-[0.6vw] bg-gradient-to-br from-[rgba(35,24,16,.52)] to-[rgba(8,7,6,.38)] border-[1.5px] border-[rgba(255,208,125,.32)] shadow-[0_4px_18px_rgba(0,0,0,.55),0_1px_0_rgba(255,220,170,.10)_inset] backdrop-blur-[3px] saturate-115" />
+          {/* Aksen "paku poster" di keempat sudut */}
+          <div className="absolute top-[3%] left-[3%] w-[6px] h-[6px] rounded-full bg-[rgba(255,208,125,.35)] shadow-[0_1px_2px_rgba(0,0,0,.6)]" />
+          <div className="absolute top-[3%] right-[3%] w-[6px] h-[6px] rounded-full bg-[rgba(255,208,125,.35)] shadow-[0_1px_2px_rgba(0,0,0,.6)]" />
 
           <div className="relative z-10 text-center">
             <h1 className="font-bold tracking-[-.03em] text-[#fff8ec] drop-shadow-[0_2px_15px_rgba(0,0,0,.45)]" style={{ fontSize: 'clamp(18px, 1.8vw, 30px)' }}>
