@@ -49,6 +49,15 @@ export function buildUnifiedExecutionContext(input: { message: string, desktopOS
   const POLICY_LAYER_ENABLED = true;
   if (!POLICY_LAYER_ENABLED) return ctx;
 
+  // ENGINEER mode sudah divalidasi dengan BYOK key di request_pipeline.ts.
+  // Prompt Engineer berisi kode source file (panjang, banyak token berulang) yang
+  // secara salah memicu riskScore >= 4 → BLOCK. Exempt dari policy risk scoring.
+  if (isMametEngineer) {
+    ctx.policy.riskScore = 0;
+    ctx.trace.riskScore = 0;
+    return ctx;
+  }
+
   let riskScore = 0;
   const injectionPatterns = ["ignore previous instructions", "system prompt", "developer mode", "reveal memory", "bypass"];
   if (injectionPatterns.some(p => lowerMsg.includes(p))) { riskScore += 3; }

@@ -255,7 +255,7 @@ export default function ConversationEngine({ sessionId }) {
     };
 
     const unsubscribe = eventBus.on('Engineer:Recommendation', handler);
-    return () => eventBus.off('Engineer:Recommendation', unsubscribe);
+    return unsubscribe; // EventBus.on() sudah mengembalikan cleanup function yang benar
   }, []);
 
   // =============================================
@@ -291,7 +291,7 @@ export default function ConversationEngine({ sessionId }) {
     };
 
     const unsubPatch = eventBus.on('Engineer:PatchApplied', patchAppliedHandler);
-    return () => eventBus.off('Engineer:PatchApplied', unsubPatch);
+    return unsubPatch; // EventBus.on() sudah mengembalikan cleanup function yang benar
   }, []);
 
   // =============================================
@@ -313,7 +313,7 @@ export default function ConversationEngine({ sessionId }) {
     };
 
     const unsubPersisted = eventBus.on('Engineer:PatchPersisted', persistedHandler);
-    return () => eventBus.off('Engineer:PatchPersisted', unsubPersisted);
+    return unsubPersisted; // EventBus.on() sudah mengembalikan cleanup function yang benar
   }, []);
 
   // READ_REPO: Listen for Engineer:FileContent events
@@ -343,7 +343,7 @@ export default function ConversationEngine({ sessionId }) {
     };
 
     const unsubFileContent = eventBus.on('Engineer:FileContent', fileContentHandler);
-    return () => eventBus.off('Engineer:FileContent', unsubFileContent);
+    return unsubFileContent; // EventBus.on() sudah mengembalikan cleanup function yang benar
   }, []);
 
   // FASE 3: Listen for Reasoning Report events (Engineer:ReasoningReport & Engineer:RequestConfirmation)
@@ -407,7 +407,7 @@ export default function ConversationEngine({ sessionId }) {
     };
 
     const unsubscribeReasoning = eventBus.on('Engineer:ReasoningReport', reasoningReportHandler);
-    return () => eventBus.off('Engineer:ReasoningReport', unsubscribeReasoning);
+    return unsubscribeReasoning; // EventBus.on() sudah mengembalikan cleanup function yang benar
   }, []);
 
   // FASE 3: Listen for User Confirmation request (Engineer:RequestConfirmation)
@@ -434,7 +434,7 @@ export default function ConversationEngine({ sessionId }) {
     };
 
     const unsubscribeConfirm = eventBus.on('Engineer:RequestConfirmation', confirmationHandler);
-    return () => eventBus.off('Engineer:RequestConfirmation', unsubscribeConfirm);
+    return unsubscribeConfirm; // EventBus.on() sudah mengembalikan cleanup function yang benar
   }, []);
 
   // =============================================
