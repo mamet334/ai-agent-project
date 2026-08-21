@@ -195,7 +195,9 @@ export default function ConversationEngine({ sessionId }) {
     const eventBus = kernel.serviceManager?.get('EventBus');
     if (!eventBus) return;
 
-    const handler = (rec) => {
+    const handler = (wrappedPayload) => {
+      // EventBus membungkus payload dalam { source, timestamp, data }
+      const rec = wrappedPayload?.data || wrappedPayload;
       if (rec.type === 'PATCH_APPLIED') {
         setMessages(prev => {
           // Ganti pesan "sedang menyiapkan..." yang terakhir dengan hasil ini
@@ -299,7 +301,9 @@ export default function ConversationEngine({ sessionId }) {
     const eventBus = kernel.serviceManager?.get('EventBus');
     if (!eventBus) return;
 
-    const persistedHandler = (data) => {
+    const persistedHandler = (wrappedPayload) => {
+      // EventBus membungkus payload dalam { source, timestamp, data }
+      const data = wrappedPayload?.data || wrappedPayload;
       setMessages(prev => [...prev, {
         role: 'model',
         content: data.message || `📋 Ada patch pending dari sesi sebelumnya (ID: ${data.patchId}).`,
@@ -347,8 +351,10 @@ export default function ConversationEngine({ sessionId }) {
     const eventBus = kernel.serviceManager?.get('EventBus');
     if (!eventBus) return;
 
-    const reasoningReportHandler = (report) => {
-      console.log('[ConversationEngine] 🧠 Received Reasoning Report:', report.taskId);
+    const reasoningReportHandler = (wrappedPayload) => {
+      // EventBus membungkus payload dalam { source, timestamp, data }
+      const report = wrappedPayload?.data || wrappedPayload;
+      console.log('[ConversationEngine] 🧠 Received Reasoning Report:', report?.taskId);
 
       // Format findings sebagai string terformat
       let findingsText = '';
@@ -409,8 +415,10 @@ export default function ConversationEngine({ sessionId }) {
     const eventBus = kernel.serviceManager?.get('EventBus');
     if (!eventBus) return;
 
-    const confirmationHandler = (request) => {
-      console.log('[ConversationEngine] 🔔 Received confirmation request:', request.confirmationId);
+    const confirmationHandler = (wrappedPayload) => {
+      // EventBus membungkus payload dalam { source, timestamp, data }
+      const request = wrappedPayload?.data || wrappedPayload;
+      console.log('[ConversationEngine] 🔔 Received confirmation request:', request?.confirmationId);
 
       // Tambahkan tombol konfirmasi sebagai pesan dengan action buttons
       setMessages(prev => [
