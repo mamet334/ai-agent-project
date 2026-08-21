@@ -240,6 +240,7 @@ export async function executeVerificationPipeline(
     sourceTrace: fullSystemContext.substring(0, 1000),
     confidenceReport,
     evidenceReport,
+    mode,   // Diteruskan dari params.mode agar CHECK_002 bisa skip untuk ASSISTANT
     runtimeContext: {
       llmProvider: rctx.model.model?.split('/')[0] || "AUTO",
       llmModel: rctx.model.model || "AUTO"

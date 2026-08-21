@@ -296,6 +296,37 @@ Wajib ikuti struktur persis seperti contoh di atas!`;
   }
 
   ctx.request.agentIdentityPrompt = agentIdentityPrompt;
+
+  // =============================================
+  // [ENGINEER MODE] Tambahkan instruksi khusus patch proposal
+  // =============================================
+  // Frontend (ConversationEngine.jsx) mendeteksi marker [MAMET_PATCH_READY] di response
+  // untuk menampilkan tombol "Apply Patch". Tanpa instruksi ini, LLM tidak pernah
+  // menambahkan marker dan tombol Apply tidak muncul.
+  if (parsed.mode === 'ENGINEER' || parsed.appSource === 'engineer') {
+    ctx.request.agentIdentityPrompt += `\n\n[ENGINEER MODE — INSTRUKSI WAJIB]
+Anda adalah Mamet Engineer, AI yang membantu merencanakan perubahan kode.
+
+ATURAN RESPONS DI MODE ENGINEER:
+1. Analisis permintaan user dengan cermat.
+2. Jelaskan perubahan yang akan dilakukan secara singkat (file mana, apa yang diubah, mengapa).
+3. Jika user meminta modifikasi kode (perbaiki, tambah, ubah, fix, implement, patch, buat, create, update):
+   - Tulis proposal perubahan dalam format yang mudah dipahami
+   - WAJIB tambahkan teks: [MAMET_PATCH_READY] di baris PALING AKHIR respons Anda
+   - Marker ini memberitahu sistem untuk menampilkan tombol "Apply Patch"
+4. Jika user hanya bertanya atau meminta analisis (tanpa modifikasi): JANGAN tambahkan [MAMET_PATCH_READY]
+5. JANGAN langsung menulis kode lengkap — cukup deskripsikan perubahannya. Kode akan dibuat oleh Engineer pipeline setelah user klik Apply.
+
+CONTOH RESPONS YANG BENAR (untuk permintaan modifikasi):
+"Saya akan menambahkan properti mode ke interface VerificationContext dan menambahkan logika skip CHECK_002 untuk mode ASSISTANT.
+
+File yang akan diubah:
+- verification_engine.ts: tambah mode?: string ke VerificationContext, skip CHECK_002 jika mode === 'ASSISTANT'  
+- verification_pipeline.ts: tambah mode: params.mode ke vContext
+
+[MAMET_PATCH_READY]"`;
+  }
+
   ctx.request.userContextPrompt = userContextPrompt;
   ctx.request.isRagEnabled = (parsed.ragEnabled !== false) && (ctx.policy.ragTopK > 0);
   ctx.request.effectiveRagMatchCount = ctx.policy.ragTopK;

@@ -63,6 +63,7 @@ export interface VerificationContext {
   confidenceReport?: any;
   evidenceReport?: any;
   runtimeContext?: any;
+  mode?: string;   // Mode request: 'ENGINEER' | 'ASSISTANT' | 'LITE'
 }
 
 export class VerificationEngine {
@@ -109,37 +110,44 @@ export class VerificationEngine {
       message: "Source trace string is present."
     };
 
-    const hasEvidence = context.evidenceReport && context.evidenceReport.totalEvidence > 0;
-    const hasParserTrace = !!(context.sourceTrace && typeof context.sourceTrace === "string" && context.sourceTrace.trim().length > 0);
-    const backendTraceItems = context.confidenceReport?.sourceTrace;
-    const hasBackendTrace = Array.isArray(backendTraceItems) && backendTraceItems.length > 0;
+    // Jika mode ASSISTANT, CHECK_002 dilewati — chat natural tidak memerlukan ADR source trace
+    if (context.mode === 'ASSISTANT') {
+      check002.status = "PASS";
+      check002.severity = "INFO";
+      check002.message = "CHECK_002 dilewati untuk mode ASSISTANT (chat natural tidak memerlukan source trace).";
+    } else {
+      const hasEvidence = context.evidenceReport && context.evidenceReport.totalEvidence > 0;
+      const hasParserTrace = !!(context.sourceTrace && typeof context.sourceTrace === "string" && context.sourceTrace.trim().length > 0);
+      const backendTraceItems = context.confidenceReport?.sourceTrace;
+      const hasBackendTrace = Array.isArray(backendTraceItems) && backendTraceItems.length > 0;
 
-    if (!hasParserTrace) {
-      if (!hasEvidence && !hasBackendTrace) {
-        check002.status = "WARN";
-        check002.severity = "WARNING";
-        check002.message = "Source trace is missing, but no evidence was provided (e.g. casual chat).";
-      } else if (hasEvidence && !hasBackendTrace) {
-        check002.status = "FAIL";
-        check002.message = "Source trace is missing and backend confidence trace is empty despite evidence. Pipeline integrity issue.";
-        overallStatus = "FAIL";
-        overallScore = 0;
-      } else if (hasBackendTrace) {
-        const failMessage = `LLM response did not include SOURCE TRACE in parseable format (regex /[A-Z]{2,3}-\\d{4}/ not found in last 30 lines). Backend has ${backendTraceItems.length} evidence item(s) but parser returned undefined. Check prompt instruction compliance.`;
-
-        if (isStrictMode) {
-          check002.status = "FAIL";
-          check002.message = failMessage;
-          overallStatus = "FAIL";
-          overallScore = 0;
-        } else {
+      if (!hasParserTrace) {
+        if (!hasEvidence && !hasBackendTrace) {
           check002.status = "WARN";
           check002.severity = "WARNING";
-          check002.message = `[STRICT_MODE=OFF] ${failMessage}`;
+          check002.message = "Source trace is missing, but no evidence was provided (e.g. casual chat).";
+        } else if (hasEvidence && !hasBackendTrace) {
+          check002.status = "FAIL";
+          check002.message = "Source trace is missing and backend confidence trace is empty despite evidence. Pipeline integrity issue.";
+          overallStatus = "FAIL";
+          overallScore = 0;
+        } else if (hasBackendTrace) {
+          const failMessage = `LLM response did not include SOURCE TRACE in parseable format (regex /[A-Z]{2,3}-\\d{4}/ not found in last 30 lines). Backend has ${backendTraceItems.length} evidence item(s) but parser returned undefined. Check prompt instruction compliance.`;
+
+          if (isStrictMode) {
+            check002.status = "FAIL";
+            check002.message = failMessage;
+            overallStatus = "FAIL";
+            overallScore = 0;
+          } else {
+            check002.status = "WARN";
+            check002.severity = "WARNING";
+            check002.message = `[STRICT_MODE=OFF] ${failMessage}`;
+          }
         }
+      } else {
+        check002.message = `Source trace found via parser (${context.sourceTrace!.length} chars).`;
       }
-    } else {
-      check002.message = `Source trace found via parser (${context.sourceTrace!.length} chars).`;
     }
 
     checks.push(check002);
