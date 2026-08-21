@@ -2142,6 +2142,8 @@ class Engineer {
       let generatedCode = null;
       let rawLLMResponse = null;
       let modelUsed = 'fallback';
+      let isFallback = false;
+      let llmErrorMessage = null;
 
       console.log('[Engineer] 🔍 Checking BrainService availability...');
 
@@ -2171,10 +2173,14 @@ class Engineer {
           generatedCode = this._extractCodeFromResponse(rawLLMResponse);
         } catch (llmError) {
           console.error('[Engineer] LLM call failed:', llmError.message);
+          llmErrorMessage = llmError.message;
+          isFallback = true;
           generatedCode = this._generateFallbackPatch(task, fileContents);
         }
       } else {
         console.warn('[Engineer] ⚠️ BrainService not available or missing executeLLM method');
+        llmErrorMessage = 'BrainService not available or missing executeLLM method';
+        isFallback = true;
         generatedCode = this._generateFallbackPatch(task, fileContents);
       }
 
@@ -2248,7 +2254,9 @@ class Engineer {
         ready: patchFiles.length > 0,
         rawLLMResponse: rawLLMResponse,
         extractedCodeKeys: Object.keys(generatedCode || {}),
-        modelUsed: modelUsed
+        modelUsed: modelUsed,
+        isFallback: isFallback,
+        llmError: llmErrorMessage
       };
 
       this.eventBus.emit('Engineer:PatchGenerated', patch);
@@ -2731,9 +2739,15 @@ this.eventBus.emit('Engineer:PatchApplied', result);
         }
       });
 
+      const fallbackWarning = patch.isFallback
+        ? `⚠️ **PERINGATAN: Patch Cadangan (Fallback)** — Pemanggilan LLM gagal (${patch.llmError || 'unknown error'}). Patch ini dibuat oleh template darurat, BUKAN hasil analisis AI penuh. Tinjau dengan lebih hati-hati sebelum menyetujui.\n\n`
+        : '';
+
       this.eventBus.emit('Engineer:RequestApproval', {
         patchId: patch.id,
-        summary: patch.description || 'Patch generated',
+        summary: fallbackWarning + (patch.description || 'Patch generated'),
+        isFallback: patch.isFallback || false,
+        llmError: patch.llmError || null,
         files: patch.files.map(f => ({
           path: f.path,
           status: f.status,
