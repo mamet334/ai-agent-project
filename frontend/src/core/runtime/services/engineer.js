@@ -2759,7 +2759,7 @@ this.eventBus.emit('Engineer:PatchApplied', result);
         })),
         diff: patch.diff || '',
         verification: patch.verification || null,
-        confidence: analysis ? this._calculateConfidence(analysis) : { level: 'UNKNOWN', coverage: 0, evidence: 0 },
+        confidence: confidence,
         compliance: analysis?.compliance || { violations: [], warnings: [] },
         timeoutMs: APPROVAL_TIMEOUT_MS,
         timestamp: new Date().toISOString()
