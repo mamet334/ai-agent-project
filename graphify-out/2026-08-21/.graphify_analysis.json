@@ -117,27 +117,18 @@
       "supabase_functions_agent_process_lib_adapters_ai_adapter_geminiadapter",
       "supabase_functions_agent_process_lib_adapters_ai_adapter_geminiadapter_constructor",
       "supabase_functions_agent_process_lib_adapters_ai_adapter_geminiadapter_execute",
-      "supabase_functions_agent_process_lib_adapters_ai_adapter_geminiadapter_healthcheck",
       "supabase_functions_agent_process_lib_adapters_ai_adapter_geminiadapter_shutdown",
       "supabase_functions_agent_process_lib_adapters_ai_adapter_geminiadapter_stream",
       "supabase_functions_agent_process_lib_adapters_ai_adapter_groqadapter",
       "supabase_functions_agent_process_lib_adapters_ai_adapter_groqadapter_constructor",
       "supabase_functions_agent_process_lib_adapters_ai_adapter_groqadapter_execute",
-      "supabase_functions_agent_process_lib_adapters_ai_adapter_groqadapter_healthcheck",
       "supabase_functions_agent_process_lib_adapters_ai_adapter_groqadapter_initialize",
       "supabase_functions_agent_process_lib_adapters_ai_adapter_groqadapter_shutdown",
       "supabase_functions_agent_process_lib_adapters_ai_adapter_groqadapter_stream",
-      "supabase_functions_agent_process_lib_adapters_ai_adapter_openaiadapter",
-      "supabase_functions_agent_process_lib_adapters_ai_adapter_openaiadapter_constructor",
-      "supabase_functions_agent_process_lib_adapters_ai_adapter_openaiadapter_execute",
-      "supabase_functions_agent_process_lib_adapters_ai_adapter_openaiadapter_healthcheck",
-      "supabase_functions_agent_process_lib_adapters_ai_adapter_openaiadapter_initialize",
-      "supabase_functions_agent_process_lib_adapters_ai_adapter_openaiadapter_shutdown",
       "supabase_functions_agent_process_lib_adapters_ai_adapter_openaiadapter_stream",
       "supabase_functions_agent_process_lib_adapters_ai_adapter_openrouteradapter",
       "supabase_functions_agent_process_lib_adapters_ai_adapter_openrouteradapter_constructor",
       "supabase_functions_agent_process_lib_adapters_ai_adapter_openrouteradapter_execute",
-      "supabase_functions_agent_process_lib_adapters_ai_adapter_openrouteradapter_healthcheck",
       "supabase_functions_agent_process_lib_adapters_ai_adapter_openrouteradapter_initialize",
       "supabase_functions_agent_process_lib_adapters_ai_adapter_openrouteradapter_shutdown",
       "supabase_functions_agent_process_lib_adapters_ai_adapter_openrouteradapter_stream",
@@ -2423,12 +2414,23 @@
     ],
     "236": [
       "test_yt"
+    ],
+    "237": [
+      "supabase_functions_agent_process_lib_adapters_ai_adapter_geminiadapter_healthcheck",
+      "supabase_functions_agent_process_lib_adapters_ai_adapter_groqadapter_healthcheck",
+      "supabase_functions_agent_process_lib_adapters_ai_adapter_openaiadapter",
+      "supabase_functions_agent_process_lib_adapters_ai_adapter_openaiadapter_constructor",
+      "supabase_functions_agent_process_lib_adapters_ai_adapter_openaiadapter_execute",
+      "supabase_functions_agent_process_lib_adapters_ai_adapter_openaiadapter_healthcheck",
+      "supabase_functions_agent_process_lib_adapters_ai_adapter_openaiadapter_initialize",
+      "supabase_functions_agent_process_lib_adapters_ai_adapter_openaiadapter_shutdown",
+      "supabase_functions_agent_process_lib_adapters_ai_adapter_openrouteradapter_healthcheck"
     ]
   },
   "cohesion": {
     "0": 0.05254237288135593,
     "1": 0.08325624421831637,
-    "2": 0.08405797101449275,
+    "2": 0.1036036036036036,
     "3": 0.1111111111111111,
     "4": 0.06504065040650407,
     "5": 0.08067226890756303,
@@ -2662,7 +2664,8 @@
     "233": 1.0,
     "234": 1.0,
     "235": 1.0,
-    "236": 1.0
+    "236": 1.0,
+    "237": 0.25
   },
   "gods": [
     {
@@ -2807,7 +2810,7 @@
     {
       "type": "low_cohesion",
       "question": "Should `adapter_registry.ts` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.08405797101449275 - nodes in this community are weakly interconnected."
+      "why": "Cohesion score 0.1036036036036036 - nodes in this community are weakly interconnected."
     }
   ]
 }
