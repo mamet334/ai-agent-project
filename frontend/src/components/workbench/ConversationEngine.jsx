@@ -457,7 +457,7 @@ export default function ConversationEngine({ sessionId }) {
     };
 
     const unsubscribeMemory = eventBus.on('Memory:Retrieved', memoryRetrievedHandler);
-    return () => eventBus.off('Memory:Retrieved', unsubscribeMemory);
+    return unsubscribeMemory; // EventBus.on() sudah mengembalikan cleanup function yang benar
   }, []);
 
   // Handler manual refresh memori (memanggil ulang getMemory untuk query terakhir)

@@ -561,15 +561,23 @@ export class VerificationEngine {
     ];
 
     const foundDangerous: string[] = [];
-    for (const { pattern, name } of dangerousPatterns) {
-      if (pattern.test(rawResponse)) {
-        foundDangerous.push(name);
+    // ✅ Periksa HANYA konten file dalam parsedPatch, bukan rawResponse.
+    // rawResponse bisa berisi kode konteks (misal: verification_engine.ts yang berisi
+    // eval() sebagai bagian dari kode deteksi — bukan penggunaan aktual).
+    // Kita hanya peduli apakah kode yang AKAN DITULIS ke disk mengandung pola berbahaya.
+    if (parsedPatch) {
+      const patchContent = Object.values(parsedPatch).join('\n');
+      for (const { pattern, name } of dangerousPatterns) {
+        if (pattern.test(patchContent)) {
+          foundDangerous.push(name);
+        }
       }
     }
+    // Jika parsedPatch null (CHECK_P02 sudah FAIL), skip P03 — tidak ada yang diperiksa.
 
     if (foundDangerous.length > 0) {
       checkP03.status = "FAIL";
-      checkP03.message = `Dangerous patterns detected: ${foundDangerous.join(', ')}`;
+      checkP03.message = `Dangerous patterns detected in patch content: ${foundDangerous.join(', ')}`;
       overallStatus = "FAIL";
       overallScore = 0;
     }
