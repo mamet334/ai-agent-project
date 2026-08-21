@@ -2743,6 +2743,20 @@ this.eventBus.emit('Engineer:PatchApplied', result);
         ? `⚠️ **PERINGATAN: Patch Cadangan (Fallback)** — Pemanggilan LLM gagal (${patch.llmError || 'unknown error'}). Patch ini dibuat oleh template darurat, BUKAN hasil analisis AI penuh. Tinjau dengan lebih hati-hati sebelum menyetujui.\n\n`
         : '';
 
+      // [FIX #6-B] Patch fallback tidak boleh membawa skor confidence yang
+      // dihitung dari analysis normal — itu akan bertentangan dengan
+      // fallbackWarning di atas (mis. tampil "HIGH confidence" pada patch
+      // yang sebenarnya kosong secara substansi). Saat isFallback true,
+      // confidence dipaksa ke LOW/0 tanpa mengubah _calculateConfidence()
+      // itu sendiri (masih dipakai apa adanya di jalur analysis lain).
+      const computedConfidence = analysis
+        ? this._calculateConfidence(analysis)
+        : { level: 'UNKNOWN', coverage: 0, evidence: 0 };
+
+      const confidence = patch.isFallback
+        ? { level: 'LOW', coverage: 0, evidence: 0, forcedByFallback: true }
+        : computedConfidence;
+
       this.eventBus.emit('Engineer:RequestApproval', {
         patchId: patch.id,
         summary: fallbackWarning + (patch.description || 'Patch generated'),
