@@ -1575,7 +1575,8 @@ class Engineer {
       try {
         console.log('[Engineer] 🔍 Menjalankan Breaking Change Detector...');
         const bcWarnings = await this._detectBreakingChanges(patch);
-        const highSeverity = bcWarnings.filter(w => w.severity === 'HIGH');
+        const highSeverity   = bcWarnings.filter(w => w.severity === 'HIGH');
+        const medSeverity    = bcWarnings.filter(w => w.severity === 'MEDIUM');
 
         if (highSeverity.length > 0) {
           // Simpan di patch agar tampil di approval dialog
@@ -1592,10 +1593,32 @@ class Engineer {
             requiresApproval: false
           });
           console.warn(`[Engineer] ⚠️ Breaking changes terdeteksi: ${highSeverity.length} symbol`);
-        } else if (bcWarnings.length > 0) {
-          console.log(`[Engineer] ℹ️ Breaking change LOW severity: ${bcWarnings.length} (tidak ada caller aktif, aman)`);
-        } else {
-          console.log('[Engineer] ✅ Tidak ada breaking change terdeteksi');
+        }
+
+        if (medSeverity.length > 0) {
+          const sigLines = medSeverity.map(w => {
+            const callerInfo = w.callers.length > 0
+              ? `\n  Digunakan di: ${w.callers.slice(0, 3).join(', ')}${w.callers.length > 3 ? ` +${w.callers.length - 3} lainnya` : ''}`
+              : '';
+            return `- \`${w.symbol}\` — ${w.detail}${callerInfo}`;
+          });
+          this._emitRecommendation({
+            type: 'SIGNATURE_CHANGE_WARNING',
+            taskId: task.id,
+            message: `⚠️ **Peringatan Signature Berubah** — ${medSeverity.length} fungsi mengalami perubahan jumlah parameter:\n\n${sigLines.join('\n\n')}\n\n_Periksa apakah parameter baru bersifat optional. Caller lama mungkin masih valid._`,
+            breakingWarnings: medSeverity,
+            requiresApproval: false
+          });
+          console.warn(`[Engineer] ⚠️ Signature changes terdeteksi: ${medSeverity.length} symbol`);
+        }
+
+        if (highSeverity.length === 0 && medSeverity.length === 0) {
+          const lowCount = bcWarnings.filter(w => w.severity === 'LOW').length;
+          if (lowCount > 0) {
+            console.log(`[Engineer] ℹ️ Breaking change LOW severity: ${lowCount} (tidak ada caller aktif, aman)`);
+          } else {
+            console.log('[Engineer] ✅ Tidak ada breaking change terdeteksi');
+          }
         }
       } catch (bcErr) {
         console.warn('[Engineer] Breaking change detector error (non-blocking):', bcErr.message);
@@ -1726,6 +1749,40 @@ class Engineer {
   }
 
   /**
+   * Extract signature (nama → jumlah parameter) untuk setiap export function di file.
+   * Hanya menangani export function dan export const arrow — cukup untuk mendeteksi
+   * perubahan arity yang bisa merusak caller.
+   * @param {string} content - Isi file
+   * @returns {Map<string, number>} nama → jumlah parameter
+   */
+  _extractFunctionSignatures(content) {
+    if (!content || typeof content !== 'string') return new Map();
+    const sigs = new Map();
+
+    // export function foo(a, b) { / export async function foo(a, b) {
+    const fnRe = /export\s+(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)/g;
+    let m;
+    while ((m = fnRe.exec(content)) !== null) {
+      const name   = m[1];
+      const params = m[2].trim();
+      const count  = params === '' ? 0 : params.split(',').length;
+      sigs.set(name, count);
+    }
+
+    // export const foo = (a, b) => / export const foo = async (a, b) =>
+    const arrowRe = /export\s+const\s+(\w+)\s*=\s*(?:async\s+)?\(([^)]*)\)\s*=>/g;
+    while ((m = arrowRe.exec(content)) !== null) {
+      const name   = m[1];
+      const params = m[2].trim();
+      const count  = params === '' ? 0 : params.split(',').length;
+      // Prioritaskan export function kalau sudah ada (lebih reliable)
+      if (!sigs.has(name)) sigs.set(name, count);
+    }
+
+    return sigs;
+  }
+
+  /**
    * Cari semua file di codebase yang mengandung symbol tertentu.
    * Gunakan fileIndexService.getAllFiles() + storageManager.read per file.
    * Dibatasi 200 file agar tidak terlalu lambat.
@@ -1776,10 +1833,8 @@ class Engineer {
       const originalExports = this._extractExports(file.originalContent);
       const newExports      = this._extractExports(file.newContent);
 
-      // Export yang ada di original tapi hilang di versi baru
+      // --- Fase 1: Export yang ada di original tapi hilang di versi baru ---
       const removedExports = originalExports.filter(name => !newExports.includes(name));
-      if (removedExports.length === 0) continue;
-
       for (const symbol of removedExports) {
         const callers = await this._findUsages(symbol, file.path);
         warnings.push({
@@ -1788,6 +1843,31 @@ class Engineer {
           callers,
           severity: callers.length > 0 ? 'HIGH' : 'LOW'
         });
+      }
+
+      // --- Fase 2: Export yang masih ada tapi signature (arity) berubah ---
+      // Perubahan jumlah parameter bisa merusak caller walau nama export tetap sama.
+      const survivingExports = originalExports.filter(name => newExports.includes(name));
+      if (survivingExports.length > 0) {
+        const originalSigs = this._extractFunctionSignatures(file.originalContent);
+        const newSigs      = this._extractFunctionSignatures(file.newContent);
+
+        for (const symbol of survivingExports) {
+          const origCount = originalSigs.get(symbol);
+          const newCount  = newSigs.get(symbol);
+          // Hanya flag kalau keduanya terdeteksi (keduanya adalah function) dan berbeda
+          if (origCount !== undefined && newCount !== undefined && origCount !== newCount) {
+            const callers = await this._findUsages(symbol, file.path);
+            warnings.push({
+              file: file.path,
+              symbol,
+              callers,
+              type: 'SIGNATURE_CHANGED',
+              detail: `Parameter berubah: ${origCount} → ${newCount} (mungkin aman jika parameter baru optional)`,
+              severity: 'MEDIUM'
+            });
+          }
+        }
       }
     }
     return warnings;
