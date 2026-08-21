@@ -112,7 +112,8 @@ class BrainService {
       provider: provider,
       model: model,
       history: [],
-      userName: 'Engineer'
+      userName: 'Engineer',
+      max_tokens: 16000,    // Pastikan output tidak terpotong untuk patch file besar
     };
     if (apiKey) localPayload.apiKey = apiKey;
 

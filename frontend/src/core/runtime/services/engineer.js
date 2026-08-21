@@ -1027,8 +1027,13 @@ class Engineer {
       'change', 'add', 'remove', 'delete', 'fix', 'implement',
       'modify', 'update', 'create', 'buat', 'tulis', 'write',
       'patch', 'edit', 'ganti', 'masukkan', 'insert',
-      'migrate', 'pindahkan', 'move'
+      'migrate', 'pindahkan', 'move','perubahan','patch'
     ];
+
+    if (text.includes('patch') || text.includes('perbaiki') || text.includes('perubahan')) {
+    console.log('[Engineer] Intent forced: MODIFY_CODE (keyword patch/perbaiki/perubahan)');
+    return 'MODIFY_CODE';
+    }
 
     const isReadRepo = readRepoKeywords.some(kw => text.includes(kw));
     const isAnalysis = analysisKeywords.some(kw => text.includes(kw));
@@ -2244,11 +2249,10 @@ class Engineer {
           });
           modelUsed = task?.requestedModel || brainService.currentModel || 'unknown';
 
-          console.log(`[Engineer] === LLM RAW RESPONSE DIAGNOSTIC ===`);
-          console.log(`[Engineer] 🤖 Model: ${modelUsed}`);
-          console.log(`[Engineer] Response length: ${rawLLMResponse?.length || 0} chars`);
-          console.log(`[Engineer] First 300 chars: "${(rawLLMResponse || '').substring(0, 300).replace(/\n/g, '\\n')}"`);
-          console.log(`[Engineer] === END DIAGNOSTIC ===`);
+          console.log('[Engineer] === LLM RAW RESPONSE ===');
+          console.log(rawLLMResponse);
+          console.log('[Engineer] === END RAW RESPONSE ===');
+          console.log(`[Engineer] 🤖 Model: ${modelUsed} | Length: ${rawLLMResponse?.length || 0} chars`);
 
           generatedCode = this._extractCodeFromResponse(rawLLMResponse);
         } catch (llmError) {
@@ -2354,6 +2358,13 @@ class Engineer {
   _buildPatchPrompt(task, fileContents) {
     let prompt = `### SYSTEM INSTRUCTION (WAJIB DIPATUHI) ###\n`;
     prompt += `Anda adalah Mamet Engineer. Tugas Anda adalah menghasilkan PATCH FILE dalam format JSON MURNI.\n\n`;
+
+    prompt += `### PERINGATAN KERAS ###\n`;
+    prompt += `- Jika Anda tidak mengembalikan JSON murni, sistem akan ERROR.\n`;
+    prompt += `- JANGAN menulis kalimat pembuka atau penutup.\n`;
+    prompt += `- JANGAN menggunakan markdown code block.\n`;
+    prompt += `- HANYA JSON yang akan diproses.\n`;
+    prompt += `- Kembalikan KONTEN LENGKAP file, bukan diff/snippet.\n\n`;
 
     // [FIX #3] Inject Session Artifact jika ada konteks sesi sebelumnya
     const artifactContext = this._injectArtifactIntoPrompt();
@@ -2540,7 +2551,63 @@ class Engineer {
       }
 
       const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (jsonMatch) return JSON.parse(jsonMatch[0]);
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+            return parsed;
+          }
+        } catch (_) {}
+      }
+
+      // =============================================
+      // FALLBACK: Ekstrak dari diff atau natural language
+      // =============================================
+      try {
+        // Coba ekstrak file path + content dari diff format
+        const diffRegex = /--- a\/(.+?)\n\+\+\+ b\/(.+?)\n@@.*?\n([\s\S]+?)(?=\n---|\n@@|$)/g;
+        const matches = [...response.matchAll(diffRegex)];
+        if (matches.length > 0) {
+          const result = {};
+          for (const match of matches) {
+            const filePath = match[2] || match[1];
+            let content = match[3].trim();
+            // Hapus tanda + di awal baris (untuk baris yang ditambahkan)
+            content = content.split('\n').map(line => {
+              if (line.startsWith('+')) return line.substring(1);
+              if (line.startsWith('-')) return null; // skip baris yang dihapus
+              return line;
+            }).filter(Boolean).join('\n');
+            if (content.length > 50) {
+              result[filePath] = content;
+            }
+          }
+          if (Object.keys(result).length > 0) {
+            console.log('[Engineer] ✅ Extracted files from diff format:', Object.keys(result));
+            return result;
+          }
+        }
+
+        // Coba cari kata kunci "file" atau "path" diikuti konten
+        const fileBlockRegex = /(?:file|path)\s*[:：]\s*([^\n]+)\s*```(?:js|ts|jsx|tsx|json)\s*\n([\s\S]+?)\s*```/gi;
+        const blockMatches = [...response.matchAll(fileBlockRegex)];
+        if (blockMatches.length > 0) {
+          const result = {};
+          for (const match of blockMatches) {
+            const filePath = match[1].trim();
+            const content = match[2].trim();
+            if (content.length > 50) {
+              result[filePath] = content;
+            }
+          }
+          if (Object.keys(result).length > 0) {
+            console.log('[Engineer] ✅ Extracted files from named code blocks:', Object.keys(result));
+            return result;
+          }
+        }
+      } catch (e) {
+        console.warn('[Engineer] Fallback extraction error:', e.message);
+      }
 
       return {};
     } catch (e) {

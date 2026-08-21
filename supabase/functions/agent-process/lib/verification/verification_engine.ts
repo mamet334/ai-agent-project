@@ -510,8 +510,7 @@ export class VerificationEngine {
 
       const invalidPaths = keys.filter(k => 
         typeof k !== 'string' || 
-        k.trim().length === 0 || 
-        (!k.includes('/') && !k.includes('.') && !k.includes('\\'))
+        k.trim().length === 0
       );
       if (invalidPaths.length > 0) {
         throw new Error(`Invalid file path format: ${invalidPaths.slice(0, 3).join(', ')}`);
@@ -830,6 +829,53 @@ export class VerificationEngine {
           parsed: syntheticPatch, 
           method: 'CODE_BLOCK_TO_PATCH_FALLBACK' 
         };
+      }
+    }
+
+    // =====================================================
+    // STAGE 7: DIFF FORMAT EXTRACTION
+    // =====================================================
+    // Handle: --- a/path/to/file.js\n+++ b/path/to/file.js\n@@ ... @@\n+content
+    const diffRegex = /--- a\/(.+?)\n\+\+\+ b\/(.+?)\n@@.*?\n([\s\S]+?)(?=\n---|\n@@|$)/g;
+    const diffMatches = [...raw.matchAll(diffRegex)];
+    if (diffMatches.length > 0) {
+      const syntheticPatch: Record<string, string> = {};
+      for (const match of diffMatches) {
+        const filePath = match[2] || match[1];
+        const lines = match[3].split('\n');
+        const content = lines
+          .map((line: string) => {
+            if (line.startsWith('+')) return line.substring(1);
+            if (line.startsWith('-')) return null;
+            return line;
+          })
+          .filter(Boolean)
+          .join('\n')
+          .trim();
+        if (content.length > 50) syntheticPatch[filePath] = content;
+      }
+      if (Object.keys(syntheticPatch).length > 0) {
+        console.log(`[EXTRACTION] Stage 7: Converted ${Object.keys(syntheticPatch).length} file(s) from diff format`);
+        return { parsed: syntheticPatch, method: 'DIFF_FORMAT_EXTRACTION' };
+      }
+    }
+
+    // =====================================================
+    // STAGE 8: NAMED CODE BLOCK EXTRACTION
+    // =====================================================
+    // Handle: "file: path/to/file.js\n```js\ncode\n```"
+    const namedBlockRegex = /(?:file|path)\s*[:：]\s*([^\n]+)\s*```(?:js|ts|jsx|tsx|json)\s*\n([\s\S]+?)\s*```/gi;
+    const namedMatches = [...raw.matchAll(namedBlockRegex)];
+    if (namedMatches.length > 0) {
+      const syntheticPatch: Record<string, string> = {};
+      for (const match of namedMatches) {
+        const filePath = match[1].trim();
+        const content = match[2].trim();
+        if (content.length > 50) syntheticPatch[filePath] = content;
+      }
+      if (Object.keys(syntheticPatch).length > 0) {
+        console.log(`[EXTRACTION] Stage 8: Extracted ${Object.keys(syntheticPatch).length} file(s) from named code blocks`);
+        return { parsed: syntheticPatch, method: 'NAMED_CODE_BLOCK_EXTRACTION' };
       }
     }
 

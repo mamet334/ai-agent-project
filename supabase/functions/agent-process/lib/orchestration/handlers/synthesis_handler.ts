@@ -94,11 +94,15 @@ export const SynthesisHandler = {
         // LITE      → PERSONAL, ASSISTANT → ENGINEERING
         const responseText = vContext.responseText || '';
         // Cek apakah ini benar-benar JSON patch (bukan sekadar code block markdown dengan kurung kurawal)
+        // Patch Engineer format: {"path/ke/file.js": "content"} — dimulai dengan { dan berisi string values
+        // CATATAN: format lama juga dicek untuk backward compat
         const looksLikeJsonPatch = requestMode === 'ENGINEER' && (
-          /^\s*[\[\{]/.test(responseText) ||          // mulai dengan [ atau {
-          responseText.includes('"files"') ||          // field khas patch Engineer
-          responseText.includes('"newContent"') ||     // field khas patch Engineer
-          responseText.includes('"patches"')           // field khas patch Engineer
+          /^\s*[\[{]/.test(responseText) ||           // mulai dengan [ atau { (JSON murni)
+          responseText.includes('"files"') ||          // field khas patch Engineer (format lama)
+          responseText.includes('"newContent"') ||     // field khas patch Engineer (format lama)
+          responseText.includes('"patches"') ||        // field khas patch Engineer (format lama)
+          responseText.includes('"__mode"') ||         // search-replace mode
+          /"\s*:\s*"/.test(responseText)               // ada pola key: "string" → kemungkinan file path map
         );
         const effectiveMode = (requestMode === 'ENGINEER' && !looksLikeJsonPatch)
           ? 'LITE'   // pakai profile PERSONAL — ringan untuk chat natural
