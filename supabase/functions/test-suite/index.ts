@@ -9,13 +9,10 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
-
-  try {
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
     const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
     const userId = '11111111-2222-3333-4444-555555555555';
-    // Use a dummy anon key format if SUPABASE_ANON_KEY is somehow missing
-    const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV1eXpkamlmaGRmeXl2cHhzb2Z1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2NjMyODUsImV4cCI6MjA5NTIzOTI4NX0.xxx';
+    const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 
     const adminSupabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
