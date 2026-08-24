@@ -569,3 +569,37 @@ supabase/schema_reference.md
 ---
 
 *Dibuat oleh BLACKBOXAI — Analisis Import Dependency Graph*
+
+
+
+Addendum Dead Code — Sesi Audit 2026-08-23
+Temuan tambahan di luar _DEAD_CODE_ARCHIVE_LIST.md yang sudah ada.
+Metode: grep manual + cross-check AppRegistry.js (lazy-loading) + verifikasi graph.json (Graphify) + verifikasi manual per-file (bukan cuma daftar dari scanner otomatis).
+⚠️ PENTING: JANGAN DIARSIPKAN (klarifikasi tambahan)
+Tambahan untuk tabel "JANGAN DIARSIPKAN" yang sudah ada — ini bukan dead code walau tidak muncul di import statis:
+File / Pola
+Alasan
+18 komponen di frontend/src/core/application/AppRegistry.js (HomeDashboard, ConversationEngine, AgentForge, ResearchApp, MemoryApp, FileExplorer, Settings, + 11 Widget)
+Dipanggil via React.lazy(() => import(...)) — dynamic import, tidak terdeteksi scanner yang hanya cek import statis di atas file
+mametlite/eslint.config.js, frontend/postcss.config.js, dll (config lain yang belum tercatat)
+Dibaca langsung oleh tool build, bukan lewat import kode
+Catatan metode: graph dependency (termasuk tool Graphify yang sudah kamu jalankan di graphify-out/) tidak menangkap dynamic import()/lazy(). Kalau mau hasil akurat untuk komponen React lazy-loaded, verifikasi manual lewat AppRegistry.js (atau file registry setara) tetap wajib — jangan percaya scanner otomatis 100% untuk kategori ini.
+PRIORITAS 1 — DEAD CODE TERKONFIRMASI (baru, belum ada di daftar lama)
+A. api/memory/ — 3 file (Sistem memory "era AI Agent", dead end)
+Terhubung secara internal ke lib/memoryEngine.ts (dan turunannya), TAPI tidak pernah dipanggil dari frontend manapun — sudah di-grep di seluruh repo untuk string api/memory, /memory/write, /memory/read, /memory/override, hasil nihil.
+Kode
+File pendukung yang ikut jadi kandidat (dipakai HANYA oleh 3 file di atas, tidak ada pemanggil lain):
+Kode
+⚠️ Sebelum diarsipkan: cek dulu apakah lib/memoryGovernor.ts, lib/decisionEngine.ts, lib/ocb.ts, lib/supabaseClient.ts juga eksklusif dipakai jalur ini atau dipakai tempat lain — belum sempat diverifikasi di sesi ini.
+B. Komponen React yang benar-benar tidak terdaftar di mana pun — 9 file
+Beda dengan kategori "JANGAN DIARSIPKAN" di atas — 9 file ini TIDAK ADA di AppRegistry.js maupun dipanggil import statis dari file manapun. Sudah di-grep satu-satu by name, hasil nihil semua:
+Kode
+Kemungkinan penyebab: versi lama sebelum sistem dashboard/widget direstrukturisasi ke AppRegistry.js, belum sempat dihapus.
+SUDAH DIKONFIRMASI ULANG (cocok dengan _DEAD_CODE_ARCHIVE_LIST.md lama)
+11 file di lib/ yang sudah tercatat sebelumnya ("Memory engine versi lama") — diverifikasi ulang via grep seluruh repo, hasilnya benar dead code, tidak ada satupun file aktif yang mengimpornya:
+Kode
+Kesimpulan: scanner "ponytail" kamu benar untuk 11 file ini — kekhawatiran soal kesalahan scan tidak terbukti untuk kategori ini.
+Langkah verifikasi lanjutan yang disarankan (belum dikerjakan di sesi ini)
+Cek apakah lib/memoryGovernor.ts, lib/decisionEngine.ts, lib/ocb.ts, lib/supabaseClient.ts eksklusif dipakai oleh sistem memory "era AI Agent" (kategori A) atau dipakai bagian lain yang masih aktif.
+Cek folder mametlite/ — apakah dia proyek benar-benar independen dari root repo, atau sebagian filenya masih saling silang dengan frontend/.
+Scan folder supabase/functions/ satu-satu — mana yang benar-benar di-deploy aktif vs sisa eksperimen (catatan lama bilang "mungkin aktif", belum dipastikan).
