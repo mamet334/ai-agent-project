@@ -277,28 +277,114 @@ ipcMain.handle('edit-file-surgical', async (event, { filePath, content }) => {
   }
 });
 
-// 2. Terminal Command Execution
-ipcMain.handle('run-terminal-command', async (event, { command }) => {
-  try {
-    const lowerCmd = command.toLowerCase().replace(/\s+/g, ' ').trim();
-    const blockedPatterns = [
-      /format\s+[a-z]:/i, /del\s+\/[sf]/i, /rmdir\s+\/[sq]/i, /rd\s+\/[sq]/i,
-      /reg\s+(delete|add)/i, /net\s+user/i, /schtasks\s+\/create/i,
-      /powershell.*-encodedcommand/i, /powershell.*downloadstring/i,
-      /powershell.*invoke-webrequest.*\|.*iex/i, /certutil.*-urlcache/i,
-      /bitsadmin.*\/transfer/i, /shutdown\s+\/[sr]/i,
-    ];
-    const isBlocked = blockedPatterns.some(pattern => pattern.test(lowerCmd));
-    if (isBlocked) {
-      return { success: false, output: `DITOLAK OLEH KEAMANAN: Perintah "${command}" terdeteksi sebagai operasi berbahaya dan telah diblokir.` };
+// =============================================
+// PATCH: run-terminal-command — versi diperluas
+// Menggantikan blok "// 2. Terminal Command Execution" yang lama.
+//
+// Perubahan dari versi asli:
+// 1. Blocklist Windows LAMA tetap dipertahankan (tidak menghapus proteksi yang sudah ada)
+// 2. Ditambah blocklist Unix/Linux/Mac (rm -rf, dd, mkfs, fork bomb, chmod 777 /, dll)
+//    — penting karena target deploy Mamet Ecosystem bisa ke Linux (Buildroot/Raspberry Pi)
+// 3. Command dipecah dulu berdasarkan operator chaining (; && || |) sebelum dicek,
+//    supaya "echo halo && rm -rf ~" tidak lolos hanya karena diawali command aman
+// 4. Dialog approval sekarang menampilkan alasan/reasoning dari AI (jika ada) dan
+//    highlight bagian mana yang berisiko, bukan cuma command mentah
+// =============================================
+
+// --- Blocklist Windows (dipertahankan dari versi asli) ---
+const BLOCKED_PATTERNS_WINDOWS = [
+  /format\s+[a-z]:/i, /del\s+\/[sf]/i, /rmdir\s+\/[sq]/i, /rd\s+\/[sq]/i,
+  /reg\s+(delete|add)/i, /net\s+user/i, /schtasks\s+\/create/i,
+  /powershell.*-encodedcommand/i, /powershell.*downloadstring/i,
+  /powershell.*invoke-webrequest.*\|.*iex/i, /certutil.*-urlcache/i,
+  /bitsadmin.*\/transfer/i, /shutdown\s+\/[sr]/i,
+];
+
+// --- Blocklist Unix/Linux/Mac (BARU) ---
+const BLOCKED_PATTERNS_UNIX = [
+  /rm\s+-rf\s+\/(\s|$)/i,              // rm -rf / — penghancuran total dari root
+  /rm\s+-rf\s+~(\s|$)/i,               // rm -rf ~ — hapus seluruh home directory
+  /rm\s+-rf\s+\*(\s|$)/i,              // rm -rf * di direktori sensitif
+  /:\(\)\{\s*:\|:&\s*\};:/,            // fork bomb klasik
+  /dd\s+.*of=\/dev\/(sd|hd|nvme|disk)/i, // overwrite raw disk device
+  /mkfs\.\w+/i,                         // format filesystem
+  />\s*\/dev\/(sd|hd|nvme|disk)/i,     // tulis langsung ke disk device
+  /chmod\s+-R\s+777\s+\/(\s|$)/i,      // permission disaster di root
+  /chown\s+-R\s+.*\s+\/(\s|$)/i,       // chown recursive dari root
+  /curl\s+.*\|\s*(ba)?sh/i,            // curl | sh — download & eksekusi langsung
+  /wget\s+.*\|\s*(ba)?sh/i,            // wget | sh — sama, via wget
+  />\s*\/etc\/(passwd|shadow|sudoers)/i, // overwrite file sistem kritis
+  /shutdown\s+-h\s+now/i, /poweroff/i, /reboot\s+-f/i,
+];
+
+const ALL_BLOCKED_PATTERNS = [...BLOCKED_PATTERNS_WINDOWS, ...BLOCKED_PATTERNS_UNIX];
+
+/**
+ * Pecah command berdasarkan operator chaining shell (; && || |)
+ * supaya tiap bagian bisa dicek terpisah terhadap blocklist.
+ * Ini mencegah "echo aman && rm -rf ~" lolos hanya karena
+ * bagian pertama terlihat tidak berbahaya.
+ *
+ * Catatan: ini bukan parser shell lengkap (tidak menangani semua edge
+ * case seperti quoting kompleks atau command substitution bersarang),
+ * tapi cukup untuk menangkap pola chaining paling umum.
+ */
+function splitChainedCommand(command) {
+  return command
+    .split(/(?:&&|\|\||;|\|)/)
+    .map(part => part.trim())
+    .filter(Boolean);
+}
+
+function checkBlockedCommand(command) {
+  const fullLower = command.toLowerCase().replace(/\s+/g, ' ').trim();
+
+  // Cek command utuh dulu (menangkap pattern yang butuh konteks penuh)
+  for (const pattern of ALL_BLOCKED_PATTERNS) {
+    if (pattern.test(fullLower)) {
+      return { blocked: true, matchedPattern: pattern.toString(), segment: fullLower };
     }
+  }
+
+  // Cek tiap segmen hasil pemecahan chaining
+  const segments = splitChainedCommand(fullLower);
+  if (segments.length > 1) {
+    for (const segment of segments) {
+      for (const pattern of ALL_BLOCKED_PATTERNS) {
+        if (pattern.test(segment)) {
+          return { blocked: true, matchedPattern: pattern.toString(), segment, isChained: true };
+        }
+      }
+    }
+  }
+
+  return { blocked: false };
+}
+
+// 2. Terminal Command Execution (VERSI DIPERLUAS)
+ipcMain.handle('run-terminal-command', async (event, { command, reasoning = '' }) => {
+  try {
+    const blockCheck = checkBlockedCommand(command);
+    if (blockCheck.blocked) {
+      const chainNote = blockCheck.isChained
+        ? `\n\n(Terdeteksi di dalam rangkaian command — bagian berbahaya: "${blockCheck.segment}")`
+        : '';
+      return {
+        success: false,
+        output: `DITOLAK OLEH KEAMANAN: Perintah "${command}" terdeteksi sebagai operasi berbahaya dan telah diblokir.${chainNote}`
+      };
+    }
+
+    const reasoningText = reasoning
+      ? `\n\nAlasan AI menjalankan ini: ${reasoning}`
+      : '\n\n(AI tidak menyertakan alasan untuk command ini — pertimbangkan dengan hati-hati.)';
 
     const response = await dialog.showMessageBox(mainWindow, {
       type: 'warning',
       buttons: ['Batal', 'Izinkan Terminal'],
       defaultId: 0,
       title: 'Peringatan Keamanan (Terminal)',
-      message: `Mamet AI meminta izin untuk menjalankan perintah di Terminal / CMD:\n\n"${command}"\n\nTindakan ini bisa berbahaya. Lanjutkan?`
+      message: `Mamet AI meminta izin untuk menjalankan perintah di Terminal / CMD:\n\n"${command}"${reasoningText}\n\nTindakan ini bisa berbahaya. Lanjutkan?`
     });
 
     if (response.response === 1) {
@@ -318,6 +404,7 @@ ipcMain.handle('run-terminal-command', async (event, { command }) => {
     return { success: false, output: error.message };
   }
 });
+
 
 // =============================================
 // ENGINEER ROLLBACK SYSTEM
