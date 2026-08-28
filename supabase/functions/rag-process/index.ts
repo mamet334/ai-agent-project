@@ -18,7 +18,11 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { title, text, userId, spaceId } = await req.json();
+    // Terima source attribution fields (PR#4)
+    // source_type: 'web_search' | 'user_upload' | 'manual_entry' — nullable
+    // source_url:  URL asal dokumen — nullable (untuk upload manual tidak ada URL)
+    // retrieved_at: kapan dokumen diambil — nullable
+    const { title, text, userId, spaceId, source_url, source_type, retrieved_at } = await req.json();
 
     if (!title || !text || !userId) {
       return new Response(JSON.stringify({ error: 'Missing title, text, or userId' }), { status: 400, headers: corsHeaders });
@@ -55,10 +59,20 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Gemini API Key is missing' }), { status: 400, headers: corsHeaders });
     }
 
-    // 1. Simpan dokumen induk
+    // 1. Simpan dokumen induk (dengan source attribution fields jika ada)
+    const docPayload: Record<string, any> = {
+      title,
+      user_id: userId,
+      space_id: targetSpaceId
+    };
+    // Sertakan source attribution hanya jika dikirim (backward-compatible)
+    if (source_url   !== undefined) docPayload.source_url   = source_url;
+    if (source_type  !== undefined) docPayload.source_type  = source_type;
+    if (retrieved_at !== undefined) docPayload.retrieved_at = retrieved_at;
+
     const { data: docData, error: docError } = await supabaseClient
       .from('documents')
-      .insert({ title, user_id: userId, space_id: targetSpaceId })
+      .insert(docPayload)
       .select('id')
       .single();
 
@@ -83,13 +97,18 @@ serve(async (req) => {
       try {
         const embeddingVector = await getGeminiEmbeddingWithRetry(chunk, allGeminiKeys);
         
+        // Sertakan source attribution ke tiap chunk (untuk PR#5 adaptive retrieval)
+        const chunkPayload: Record<string, any> = {
+          document_id: documentId,
+          content: chunk,
+          embedding: embeddingVector
+        };
+        if (source_url  !== undefined) chunkPayload.source_url  = source_url;
+        if (source_type !== undefined) chunkPayload.source_type = source_type;
+
         const { error: chunkError } = await supabaseClient
           .from('document_chunks')
-          .insert({
-            document_id: documentId,
-            content: chunk,
-            embedding: embeddingVector
-          });
+          .insert(chunkPayload);
 
         if (chunkError) {
           throw new Error(`DB Insert Error: ${chunkError.message}`);

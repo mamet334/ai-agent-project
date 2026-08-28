@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Terminal, Loader2, Copy, Check, Activity } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useWorkspace } from '../../core/workspace/WorkspaceContext';
 import { supabase } from '../../supabase';
 import { kernel } from '../../core/runtime/Kernel';
@@ -7,11 +7,13 @@ import FolderSelector from '../FolderSelector';
 import ChatHistory from './ChatHistory';
 import MemoryContextPanel from './MemoryContextPanel';
 
+// =============================================
+// HELPER: Parse thinking/answer dari respons AI
+// =============================================
 const parseThinkingContent = (text) => {
   if (!text) return { thinking: '', answer: '', isThinkingComplete: false };
   const startIndex = text.indexOf(' thinking');
   const endIndex = text.indexOf(' response');
-
   if (startIndex !== -1) {
     if (endIndex !== -1) {
       return {
@@ -19,61 +21,79 @@ const parseThinkingContent = (text) => {
         answer: text.substring(endIndex + 8).trim(),
         isThinkingComplete: true
       };
-    } else {
-      return {
-        thinking: text.substring(startIndex + 7).trim(),
-        answer: '',
-        isThinkingComplete: false
-      };
     }
+    return { thinking: text.substring(startIndex + 7).trim(), answer: '', isThinkingComplete: false };
   }
   return { thinking: '', answer: text, isThinkingComplete: true };
 };
 
+// =============================================
+// COMPONENT: ConversationEngine (Thin UI Layer)
+//
+// Tanggung jawab komponen ini setelah PR#3:
+//   - useState untuk state UI (messages, input, loading, dll)
+//   - useEffect untuk subscribe EventBus (Engineer events, Memory events)
+//   - Delegasi semua logika bisnis ke AssistantService
+//   - Rendering JSX
+//
+// Tidak ada lagi: fetch(), supabase.from(), kernel.serviceManager.get()
+// untuk logika bisnis — semua ada di AssistantService.
+// =============================================
 export default function ConversationEngine({ sessionId }) {
   const { manager: workspaceManager, osState } = useWorkspace();
+
+  // --- UI State ---
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState('');
   const [copiedIndex, setCopiedIndex] = useState(null);
   const [currentChatId, setCurrentChatId] = useState(() => {
-    // Restore currentChatId dari localStorage saat mount
     const saved = localStorage.getItem('mamet_v4_current_chat_id');
     return saved || null;
   });
   const [initialRestoreDone, setInitialRestoreDone] = useState(false);
-  const messagesEndRef = useRef(null);
-  const scrollContainerRef = useRef(null);
-  const textareaRef = useRef(null);
-  const fileInputRef = useRef(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [attachedFile, setAttachedFile] = useState(null);
 
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
-  // =============================================
-  // STATE PANEL MEMORY CONTEXT (Fitur #2)
-  // Menampilkan daftar memori yang di-retrieve AI
-  // =============================================
+  // --- Memory Context Panel State ---
   const [activeMemories, setActiveMemories] = useState([]);
   const [lastMemoryQuery, setLastMemoryQuery] = useState('');
   const [isMemoryPanelOpen, setIsMemoryPanelOpen] = useState(true);
   const [isMemoryLoading, setIsMemoryLoading] = useState(false);
 
-  // Guard untuk handleNewChat: prevent auto-trigger dari lifecycle
+  // --- Engineer State ---
+  const [engineerCmdStates, setEngineerCmdStates] = useState({});
+  const [lastCheckpoint, setLastCheckpoint] = useState(null);
+  const [rollbackState, setRollbackState] = useState('idle');
+
+  // --- Refs ---
+  const messagesEndRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+  const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
   const isNewChatInitiatedByUser = useRef(false);
   const isInitialMount = useRef(true);
   const prevSessionIdRef = useRef(sessionId);
 
-  // Engineer Autonomous Mode: track status tiap command per pesan
-  // key: "${msgIdx}_${cmd}" → { status: 'pending'|'running'|'done'|'skipped', output: string }
-  const [engineerCmdStates, setEngineerCmdStates] = useState({});
+  // =============================================
+  // HELPER: Dapatkan AssistantService dari Kernel
+  // =============================================
+  const getAssistantService = () => kernel.serviceManager?.get('AssistantService');
 
-  // Engineer Rollback: simpan checkpointRef dari patch terakhir
-  const [lastCheckpoint, setLastCheckpoint] = useState(null); // { ref, patchId, appliedAt }
-  const [rollbackState, setRollbackState] = useState('idle'); // 'idle'|'loading'|'done'|'error'
+  // =============================================
+  // HELPER: Buka Lifecycle Inspector di Right Workbench
+  // =============================================
+  const openLifecycleInspector = (stepName, logs) => {
+    workspaceManager.openWidgetInWorkbench('right', 'widget:maef-monitor', {
+      focusStep: stepName,
+      logs
+    });
+  };
 
-  // Auto-grow textarea
+  // =============================================
+  // AUTO-GROW TEXTAREA
+  // =============================================
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -81,64 +101,49 @@ export default function ConversationEngine({ sessionId }) {
     }
   }, [input]);
 
-  // Auto-scroll
+  // =============================================
+  // AUTO-SCROLL
+  // =============================================
   useEffect(() => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
     }
   }, [messages]);
 
-  // Update browser window layout when chat history toggles
+  // =============================================
+  // LAYOUT RESIZE ON SIDEBAR TOGGLE
+  // =============================================
   useEffect(() => {
     window.dispatchEvent(new Event('resize'));
   }, [isSidebarOpen]);
 
   // =============================================
-  // PERSISTENSI CHAT KE SUPABASE + LOCALSTORAGE
+  // PERSISTENSI: Auto-save messages (debounced)
   // =============================================
-  const saveChatToDB = useCallback(async (msgs, chatId = currentChatId) => {
-    if (!msgs || msgs.length === 0) return;
-
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user?.id) return;
-
-    const title = msgs[0]?.content?.substring(0, 50) || 'Percakapan Baru';
-    const payload = {
-      user_id: session.user.id,
-      title: title,
-      messages: msgs,
-      updated_at: new Date().toISOString(),
-      workspace_type: osState?.workspaceId || 'ws-assistant'
-    };
-
-    let result;
-    if (chatId) {
-      result = await supabase.from('chats').update(payload).eq('id', chatId);
-    } else {
-      result = await supabase.from('chats').insert(payload).select('id').single();
-      if (result.data?.id) {
-        setCurrentChatId(result.data.id);
-        // Simpan ke localStorage setelah INSERT sukses
-        localStorage.setItem('mamet_v4_current_chat_id', result.data.id);
-      }
-    }
-
-    if (result.error) {
-      console.error('[ConversationEngine] Gagal menyimpan chat:', result.error);
-    }
-  }, [currentChatId, osState]);
-
-  // Auto-save setiap kali messages berubah (Debounced untuk mencegah race condition)
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (currentChatId || messages.length > 0) {
-        saveChatToDB(messages);
-      }
+    const timer = setTimeout(async () => {
+      if (!messages || messages.length === 0) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user?.id) return;
+      const assistantService = getAssistantService();
+      if (!assistantService) return;
+      await assistantService.saveChatToDB({
+        messages,
+        chatId: currentChatId,
+        userId: session.user.id,
+        workspaceId: osState?.workspaceId || 'ws-assistant',
+        onNewChatId: (newId) => {
+          setCurrentChatId(newId);
+          localStorage.setItem('mamet_v4_current_chat_id', newId);
+        }
+      });
     }, 1000);
     return () => clearTimeout(timer);
-  }, [messages, currentChatId, saveChatToDB]);
+  }, [messages, currentChatId, osState]);
 
-  // Persist currentChatId ke localStorage setiap kali berubah
+  // =============================================
+  // PERSISTENSI: Sync currentChatId ke localStorage
+  // =============================================
   useEffect(() => {
     if (currentChatId) {
       localStorage.setItem('mamet_v4_current_chat_id', currentChatId);
@@ -147,19 +152,24 @@ export default function ConversationEngine({ sessionId }) {
     }
   }, [currentChatId]);
 
-  // Restore chat dari localStorage saat mount
+  // =============================================
+  // RESTORE: Chat dari localStorage saat mount
+  // =============================================
   useEffect(() => {
     if (!initialRestoreDone && currentChatId) {
       const loadSavedChat = async () => {
-        const { data, error } = await supabase
-          .from('chats')
-          .select('*')
-          .eq('id', currentChatId)
-          .single();
-        if (!error && data) {
-          setMessages(data.messages || []);
+        const assistantService = getAssistantService();
+        // Fallback ke supabase langsung jika service belum ready (boot delay)
+        let msgs = null;
+        if (assistantService) {
+          msgs = await assistantService.loadChat(currentChatId);
         } else {
-          // Chat ID tidak valid di DB, reset
+          const { data, error } = await supabase.from('chats').select('*').eq('id', currentChatId).single();
+          if (!error && data) msgs = data.messages;
+        }
+        if (msgs !== null) {
+          setMessages(msgs || []);
+        } else {
           console.warn('[ConversationEngine] Saved chatId not found in DB, resetting');
           setCurrentChatId(null);
           localStorage.removeItem('mamet_v4_current_chat_id');
@@ -172,48 +182,73 @@ export default function ConversationEngine({ sessionId }) {
     }
   }, []); // Hanya sekali saat mount
 
-  // Sinkronasi sessionId: jika sessionId berubah, jangan reset chat
-  // tapi pastikan kita tidak membuat chat baru otomatis
+  // =============================================
+  // SESSION ID SYNC
+  // =============================================
   useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
+    if (isInitialMount.current) { isInitialMount.current = false; return; }
     prevSessionIdRef.current = sessionId;
   }, [sessionId]);
 
+  // =============================================
+  // NEW CHAT
+  // =============================================
   const handleNewChat = () => {
-    // Hanya user action yang bisa memicu ini
     isNewChatInitiatedByUser.current = true;
     setMessages([]);
     setCurrentChatId(null);
     localStorage.removeItem('mamet_v4_current_chat_id');
   };
 
-  // Listen for Engineer patch completion to update UI
+  // =============================================
+  // LOAD CHAT (dari ChatHistory sidebar)
+  // =============================================
+  const handleLoadChat = async (chatId) => {
+    const assistantService = getAssistantService();
+    let msgs = null;
+    if (assistantService) {
+      msgs = await assistantService.loadChat(chatId);
+    } else {
+      const { data, error } = await supabase.from('chats').select('*').eq('id', chatId).single();
+      if (error) { console.error(error); return; }
+      msgs = data?.messages;
+    }
+    if (msgs !== null) setMessages(msgs || []);
+    setCurrentChatId(chatId);
+    if (window.innerWidth < 768) setIsSidebarOpen(false);
+  };
+
+  // =============================================
+  // COPY TO CLIPBOARD
+  // =============================================
+  const handleCopy = async (text, index) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedIndex(index);
+      setTimeout(() => setCopiedIndex(null), 2000);
+    } catch (err) {
+      console.warn('[ConversationEngine] Gagal menyalin:', err);
+    }
+  };
+
+  // =============================================
+  // EVENTBUS LISTENERS — Engineer Events
+  // =============================================
   useEffect(() => {
     const eventBus = kernel.serviceManager?.get('EventBus');
     if (!eventBus) return;
 
     const handler = (wrappedPayload) => {
-      // EventBus membungkus payload dalam { source, timestamp, data }
       const rec = wrappedPayload?.data || wrappedPayload;
       if (rec.type === 'PATCH_APPLIED') {
         setMessages(prev => {
-          // Ganti pesan "sedang menyiapkan..." yang terakhir dengan hasil ini
           const newMsgs = [...prev];
           const lastIndex = newMsgs.length - 1;
           if (lastIndex >= 0 && newMsgs[lastIndex].content.includes('Engineer sedang menyiapkan patch')) {
-            newMsgs[lastIndex] = {
-              role: 'model',
-              content: `✅ **Patch Berhasil Diterapkan!**\n\n${rec.message}\n\n_File telah dimodifikasi sesuai instruksi Anda._`
-            };
+            newMsgs[lastIndex] = { role: 'model', content: `✅ **Patch Berhasil Diterapkan!**\n\n${rec.message}\n\n_File telah dimodifikasi sesuai instruksi Anda._` };
             return newMsgs;
           }
-          return [...prev, {
-            role: 'model',
-            content: `✅ **Patch Berhasil Diterapkan!**\n\n${rec.message}\n\n_File telah dimodifikasi sesuai instruksi Anda._`
-          }];
+          return [...prev, { role: 'model', content: `✅ **Patch Berhasil Diterapkan!**\n\n${rec.message}\n\n_File telah dimodifikasi sesuai instruksi Anda._` }];
         });
       } else if (rec.type === 'PATCH_REJECTED') {
         setMessages(prev => {
@@ -235,240 +270,139 @@ export default function ConversationEngine({ sessionId }) {
           }
           return [...prev, { role: 'model', content: `⚠️ **Patch Gagal**\n\n${rec.message || 'Terjadi kesalahan.'}` }];
         });
-      }
-      // === FASE 3: REASONING LOCK HANDLERS ===
-      else if (rec.type === 'CAPABILITY_BLOCKED') {
+      } else if (rec.type === 'CAPABILITY_BLOCKED') {
         setMessages(prev => [...prev, { role: 'model', content: rec.message, isReasoningBlock: false }]);
       } else if (rec.type === 'REASONING_REJECTED') {
         setMessages(prev => [...prev, { role: 'model', content: rec.message, isReasoningBlock: false }]);
       } else if (rec.type === 'ASK_CLARIFICATION') {
         setMessages(prev => [...prev, { role: 'model', content: rec.message, isReasoningBlock: false }]);
-      }
-      // === READ_REPO HANDLERS ===
-      else if ([
-        'READ_REPO_RESULT', 'READ_REPO_LISTING', 'READ_REPO_SEARCH_RESULT',
-        'READ_REPO_CLARIFICATION', 'READ_REPO_NOT_FOUND', 'READ_REPO_ERROR',
-        'READ_REPO_EMPTY'
-      ].includes(rec.type)) {
+      } else if (['READ_REPO_RESULT', 'READ_REPO_LISTING', 'READ_REPO_SEARCH_RESULT', 'READ_REPO_CLARIFICATION', 'READ_REPO_NOT_FOUND', 'READ_REPO_ERROR', 'READ_REPO_EMPTY'].includes(rec.type)) {
         setMessages(prev => [...prev, { role: 'model', content: rec.message }]);
       }
     };
 
     const unsubscribe = eventBus.on('Engineer:Recommendation', handler);
-    return unsubscribe; // EventBus.on() sudah mengembalikan cleanup function yang benar
+    return unsubscribe;
   }, []);
 
-  // =============================================
   // ENGINEER ROLLBACK: Listen Engineer:PatchApplied
-  // Simpan checkpointRef, tampilkan tombol Rollback
-  // =============================================
   useEffect(() => {
     const eventBus = kernel.serviceManager?.get('EventBus');
     if (!eventBus) return;
-
     const patchAppliedHandler = (result) => {
       const data = result?.data || result;
-      // Simpan checkpoint untuk tombol rollback
       if (data?.checkpointRef) {
-        setLastCheckpoint({
-          ref: data.checkpointRef,
-          patchId: data.patchId,
-          appliedAt: new Date().toLocaleTimeString('id-ID')
-        });
+        setLastCheckpoint({ ref: data.checkpointRef, patchId: data.patchId, appliedAt: new Date().toLocaleTimeString('id-ID') });
         setRollbackState('idle');
       }
-      // Append pesan sukses ke chat
       const files = data?.files?.filter(f => f.status === 'APPLIED').map(f => f.path) || [];
       const successMsg = data?.successCount > 0
         ? `✅ **Patch Berhasil!** ${data.successCount} file diubah${data.skippedCount > 0 ? `, ${data.skippedCount} dilewati` : ''}.${files.length > 0 ? '\n\n📁 ' + files.join('\n📁 ') : ''}${data.checkpointRef ? '\n\n💾 Checkpoint dibuat — Anda bisa rollback.' : ''}`
         : `⚠️ Patch selesai tapi ${data?.failCount || 0} file gagal.`;
-      setMessages(prev => [...prev, {
-        role: 'model',
-        content: successMsg,
-        isPatchResult: true,
-        checkpointRef: data?.checkpointRef || null
-      }]);
+      setMessages(prev => [...prev, { role: 'model', content: successMsg, isPatchResult: true, checkpointRef: data?.checkpointRef || null }]);
     };
-
     const unsubPatch = eventBus.on('Engineer:PatchApplied', patchAppliedHandler);
-    return unsubPatch; // EventBus.on() sudah mengembalikan cleanup function yang benar
+    return unsubPatch;
   }, []);
 
-  // =============================================
-  // PERSISTENT PATCH: Tampilkan notifikasi saat ada patch tersimpan dari sesi sebelumnya
-  // =============================================
+  // PERSISTENT PATCH
   useEffect(() => {
     const eventBus = kernel.serviceManager?.get('EventBus');
     if (!eventBus) return;
-
     const persistedHandler = (wrappedPayload) => {
-      // EventBus membungkus payload dalam { source, timestamp, data }
       const data = wrappedPayload?.data || wrappedPayload;
-      setMessages(prev => [...prev, {
-        role: 'model',
-        content: data.message || `📋 Ada patch pending dari sesi sebelumnya (ID: ${data.patchId}).`,
-        isPatchPersisted: true,
-        patchId: data.patchId
-      }]);
+      setMessages(prev => [...prev, { role: 'model', content: data.message || `📋 Ada patch pending dari sesi sebelumnya (ID: ${data.patchId}).`, isPatchPersisted: true, patchId: data.patchId }]);
     };
-
     const unsubPersisted = eventBus.on('Engineer:PatchPersisted', persistedHandler);
-    return unsubPersisted; // EventBus.on() sudah mengembalikan cleanup function yang benar
+    return unsubPersisted;
   }, []);
 
-  // READ_REPO: Listen for Engineer:FileContent events
+  // READ_REPO: File Content
   useEffect(() => {
     const eventBus = kernel.serviceManager?.get('EventBus');
     if (!eventBus) return;
-
     const fileContentHandler = (payload) => {
       const data = payload?.data || payload;
       const { path, content, size, backend } = data;
-
-      // Deteksi bahasa dari ekstensi untuk syntax highlight
       const ext = path?.split('.').pop()?.toLowerCase() || '';
-      const langMap = {
-        js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript',
-        css: 'css', scss: 'scss', html: 'html', json: 'json', md: 'markdown',
-        py: 'python', yaml: 'yaml', yml: 'yaml', sh: 'bash', txt: 'text'
-      };
+      const langMap = { js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript', css: 'css', scss: 'scss', html: 'html', json: 'json', md: 'markdown', py: 'python', yaml: 'yaml', yml: 'yaml', sh: 'bash', txt: 'text' };
       const lang = langMap[ext] || ext || 'text';
       const backendLabel = backend === 'github-raw' ? '🌐 GitHub' : backend === 'electron' ? '💻 Electron' : '📦 Cache';
-
-      const header = `📄 **${path}** — ${size?.toLocaleString() || 0} chars | ${backendLabel}`;
-      const codeBlock = `\`\`\`${lang}\n${content}\n\`\`\``;
-      const message = `${header}\n\n${codeBlock}`;
-
+      const message = `📄 **${path}** — ${size?.toLocaleString() || 0} chars | ${backendLabel}\n\n\`\`\`${lang}\n${content}\n\`\`\``;
       setMessages(prev => [...prev, { role: 'model', content: message, isFileContent: true, filePath: path }]);
     };
-
     const unsubFileContent = eventBus.on('Engineer:FileContent', fileContentHandler);
-    return unsubFileContent; // EventBus.on() sudah mengembalikan cleanup function yang benar
+    return unsubFileContent;
   }, []);
 
-  // FASE 3: Listen for Reasoning Report events (Engineer:ReasoningReport & Engineer:RequestConfirmation)
+  // REASONING REPORT
   useEffect(() => {
     const eventBus = kernel.serviceManager?.get('EventBus');
     if (!eventBus) return;
-
     const reasoningReportHandler = (wrappedPayload) => {
-      // EventBus membungkus payload dalam { source, timestamp, data }
       const report = wrappedPayload?.data || wrappedPayload;
-      console.log('[ConversationEngine] 🧠 Received Reasoning Report:', report?.taskId);
-
-      // Format findings sebagai string terformat
-      let findingsText = '';
-      if (report.findings && report.findings.length > 0) {
-        findingsText = '\n\n📋 **Temuan Analisis:**\n' + report.findings.join('\n');
-      }
-
-      // Format compliance summary
+      const findingsText = report.findings?.length > 0 ? '\n\n📋 **Temuan Analisis:**\n' + report.findings.join('\n') : '';
       const violationsCount = report.compliance?.violations?.length || 0;
       const warningsCount = report.compliance?.warnings?.length || 0;
-      let complianceText = '';
-      if (violationsCount > 0 || warningsCount > 0) {
-        complianceText = `\n\n🛡️ **MAEF Compliance:** ${violationsCount} pelanggaran, ${warningsCount} peringatan`;
-      }
-
-      // Format confidence
+      const complianceText = (violationsCount > 0 || warningsCount > 0) ? `\n\n🛡️ **MAEF Compliance:** ${violationsCount} pelanggaran, ${warningsCount} peringatan` : '';
       const confLevel = report.confidence?.level || 'UNKNOWN';
       const confEmoji = confLevel === 'HIGH' ? '🟢' : confLevel === 'MEDIUM' ? '🟡' : '🔴';
       const confidenceText = `\n\n${confEmoji} **Confidence:** ${confLevel} (coverage: ${report.confidence?.coverage || 0}%, evidence: ${report.confidence?.evidence || 0}/100)`;
-
-      // Format files analyzed
-      const filesText = report.filesAnalyzed?.length > 0
-        ? `\n\n📁 **File Dianalisis:** ${report.filesAnalyzed.join(', ')}`
-        : '';
-
-      // Format model info
+      const filesText = report.filesAnalyzed?.length > 0 ? `\n\n📁 **File Dianalisis:** ${report.filesAnalyzed.join(', ')}` : '';
       const modelText = `\n\n🤖 **Model:** ${report.modelName || 'unknown'}`;
-
-      // Format recommendation
-      const recText = report.recommendation
-        ? `\n\n💡 **Rekomendasi:** ${report.recommendation}`
-        : '';
-
-      // ADR referenced
-      const adrText = report.adrReferenced && report.adrReferenced !== 'None'
-        ? `\n\n📐 **ADR Dirujuk:** ${report.adrReferenced}`
-        : '';
-
+      const recText = report.recommendation ? `\n\n💡 **Rekomendasi:** ${report.recommendation}` : '';
+      const adrText = report.adrReferenced && report.adrReferenced !== 'None' ? `\n\n📐 **ADR Dirujuk:** ${report.adrReferenced}` : '';
       const fullMessage = `🧠 **Engineer Reasoning Report**${findingsText}${complianceText}${confidenceText}${filesText}${modelText}${recText}${adrText}\n\n⏳ _Menunggu konfirmasi Anda untuk melanjutkan ke pembuatan patch..._`;
-
-      setMessages(prev => [
-        ...prev,
-        {
-          role: 'model',
-          content: fullMessage,
-          isReasoningBlock: true,
-          reasoningReport: report
-        }
-      ]);
+      setMessages(prev => [...prev, { role: 'model', content: fullMessage, isReasoningBlock: true, reasoningReport: report }]);
     };
-
     const unsubscribeReasoning = eventBus.on('Engineer:ReasoningReport', reasoningReportHandler);
-    return unsubscribeReasoning; // EventBus.on() sudah mengembalikan cleanup function yang benar
+    return unsubscribeReasoning;
   }, []);
 
-  // FASE 3: Listen for User Confirmation request (Engineer:RequestConfirmation)
+  // REQUEST CONFIRMATION
   useEffect(() => {
     const eventBus = kernel.serviceManager?.get('EventBus');
     if (!eventBus) return;
-
     const confirmationHandler = (wrappedPayload) => {
-      // EventBus membungkus payload dalam { source, timestamp, data }
       const request = wrappedPayload?.data || wrappedPayload;
-      console.log('[ConversationEngine] 🔔 Received confirmation request:', request?.confirmationId);
-
-      // Tambahkan tombol konfirmasi sebagai pesan dengan action buttons
-      setMessages(prev => [
-        ...prev,
-        {
-          role: 'model',
-          content: `🔔 **Konfirmasi Diperlukan**\n\nRingkasan: ${request.summary || 'Analisis selesai.'}\n\nApakah Anda ingin melanjutkan ke pembuatan patch?`,
-          isConfirmationRequest: true,
-          confirmationId: request.confirmationId,
-          _reportForConfirmation: request
-        }
-      ]);
+      setMessages(prev => [...prev, {
+        role: 'model',
+        content: `🔔 **Konfirmasi Diperlukan**\n\nRingkasan: ${request.summary || 'Analisis selesai.'}\n\nApakah Anda ingin melanjutkan ke pembuatan patch?`,
+        isConfirmationRequest: true,
+        confirmationId: request.confirmationId,
+        _reportForConfirmation: request
+      }]);
     };
-
     const unsubscribeConfirm = eventBus.on('Engineer:RequestConfirmation', confirmationHandler);
-    return unsubscribeConfirm; // EventBus.on() sudah mengembalikan cleanup function yang benar
+    return unsubscribeConfirm;
   }, []);
 
-  // =============================================
-  // PANEL MEMORY CONTEXT (Fitur #2)
-  // Listen event 'Memory:Retrieved' dari MemoryService
-  // untuk mengisi panel secara otomatis tanpa menyentuh
-  // logika inti handleSend / streaming / persistensi.
-  // =============================================
+  // MEMORY RETRIEVED
   useEffect(() => {
     const eventBus = kernel.serviceManager?.get('EventBus');
     if (!eventBus) return;
-
     const memoryRetrievedHandler = (payload) => {
       const data = payload?.result || payload;
       const query = payload?.query || '';
-      console.log('[ConversationEngine] 🧠 Memory:Retrieved event diterima:', query, data?.length || 0, 'memori');
       setLastMemoryQuery(query || '');
       setActiveMemories(Array.isArray(data) ? data : []);
       setIsMemoryLoading(false);
     };
-
     const unsubscribeMemory = eventBus.on('Memory:Retrieved', memoryRetrievedHandler);
-    return unsubscribeMemory; // EventBus.on() sudah mengembalikan cleanup function yang benar
+    return unsubscribeMemory;
   }, []);
 
-  // Handler manual refresh memori (memanggil ulang getMemory untuk query terakhir)
+  // =============================================
+  // HANDLE REFRESH MEMORY (manual)
+  // =============================================
   const handleRefreshMemory = useCallback(async () => {
     if (!lastMemoryQuery) return;
     setIsMemoryLoading(true);
     try {
-      const memoryService = kernel.serviceManager?.get('MemoryService');
-      if (memoryService) {
-        const memories = await memoryService.getMemory(lastMemoryQuery);
-        setActiveMemories(Array.isArray(memories) ? memories : []);
+      const assistantService = getAssistantService();
+      if (assistantService) {
+        const memories = await assistantService.refreshMemory(lastMemoryQuery);
+        setActiveMemories(memories);
       }
     } catch (err) {
       console.warn('[ConversationEngine] Refresh memori gagal:', err);
@@ -477,62 +411,9 @@ export default function ConversationEngine({ sessionId }) {
     }
   }, [lastMemoryQuery]);
 
-  const handleLoadChat = async (chatId) => {
-    const { data, error } = await supabase
-      .from('chats')
-      .select('*')
-      .eq('id', chatId)
-      .single();
-    if (error) { console.error(error); return; }
-    setMessages(data.messages || []);
-    setCurrentChatId(chatId);
-    if (window.innerWidth < 768) {
-      setIsSidebarOpen(false);
-    }
-  };
-
-  /**
-   * Extract file path dari pesan user untuk Engineer mode
-   * Contoh: "Tambahkan console.log di file ConversationEngine.jsx" → "ConversationEngine.jsx"
-   */
-  const _extractFilePathFromMessage = (message) => {
-    if (!message) return null;
-
-    // Pattern 1: "di file [path]"
-    const pattern1 = /(?:di\s+)?(?:file|berkas)\s+([a-zA-Z0-9_\-\/\.]+\.(jsx?|tsx?|ts|js))/i;
-    const match1 = message.match(pattern1);
-    if (match1) return match1[1];
-
-    // Pattern 2: "[filename]" langsung
-    const pattern2 = /([a-zA-Z0-9_\-\/]+\.(jsx?|tsx?))/g;
-    const match2 = message.match(pattern2);
-    if (match2 && match2.length > 0) {
-      // Ambil yang paling spesifik (mengandung /)
-      const withSlash = match2.find(m => m.includes('/'));
-      return withSlash || match2[0];
-    }
-
-    return null;
-  };
-
-  // Handle Event Flow (Integrasi UI Event ke Right Workbench)
-  const openLifecycleInspector = (stepName, logs) => {
-    workspaceManager.openWidgetInWorkbench('right', 'widget:maef-monitor', {
-      focusStep: stepName,
-      logs: logs
-    });
-  };
-
-  const handleCopy = async (text, index) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedIndex(index);
-      setTimeout(() => setCopiedIndex(null), 2000);
-    } catch (err) {
-      console.warn('[ConversationEngine] Gagal menyalin:', err);
-    }
-  };
-
+  // =============================================
+  // HANDLE SEND — delegasi ke AssistantService
+  // =============================================
   const handleSend = async (e, autoOverrideMsg = null) => {
     if (e) e.preventDefault();
     const userMsg = autoOverrideMsg || input.trim();
@@ -541,487 +422,161 @@ export default function ConversationEngine({ sessionId }) {
     if (!autoOverrideMsg) setInput('');
     const newMessages = [...messages, { role: 'user', content: userMsg }];
     setMessages(newMessages);
-    console.log("[LIFECYCLE] Chat request sent");
     setIsLoading(true);
 
-    // ✅ DEKLARASI formattedModel DULU (sebelum delegasi)
-    let formattedModel = '';
-    try {
-      const brainService = kernel.serviceManager.get('BrainService');
-      if (brainService) {
-        const context = await brainService.getActiveBrainContext();
-        formattedModel = context.model || '';
-      }
-    } catch (e) {
-      console.warn('[ConversationEngine] BrainService not available:', e);
-    }
-
-    // =============================================
-    // ENGINEER MODE — Alur ke LLM Supabase (seperti Antigravity)
-    // Engineer ngobrol dulu via LLM, patch hanya ketika LLM propose + user klik Apply
-    // =============================================
-    const activeWorkspace = workspaceManager?.activeWorkspaceId || 'ws-assistant';
-    const isEngineerMode = activeWorkspace === 'ws-engineer' || activeWorkspace === 'ENGINEER';
-
-    console.log(`[ConversationEngine] Mode check: workspace=${activeWorkspace}, isEngineerMode=${isEngineerMode}`);
-
-    // =============================================
-    // FALLBACK: Normal backend flow (untuk ASSISTANT & LITE)
-    // =============================================
-
-    // --- Natural Language Memory Trigger ---
-    const memoryKeywords = ['ingat', 'simpan', 'catat', 'remember', 'save', 'store'];
-    const lowerMsg = userMsg.toLowerCase();
-    const hasMemoryKeyword = memoryKeywords.some(keyword => lowerMsg.includes(keyword));
-
-    if (hasMemoryKeyword && kernel.status === 'RUNNING') {
-      try {
-        const memoryService = kernel.serviceManager.get('MemoryService');
-        if (memoryService) {
-          const contentToRemember = userMsg
-            .replace(/(ingat|simpan|catat|remember|save|store)/gi, '')
-            .trim();
-
-          if (contentToRemember.length > 0) {
-            console.log('[ConversationEngine] Memory trigger detected, storing:', contentToRemember);
-            const stored = await memoryService.storeMemory(contentToRemember, contentToRemember);
-            if (stored) {
-              setMessages(prev => [...prev, {
-                role: 'model',
-                content: `✅ Saya telah menyimpan: "${contentToRemember}" ke memori.`
-              }]);
-              setIsLoading(false);
-              return;
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('[ConversationEngine] Memory trigger failed:', err);
-      }
-    }
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
-      const endpoint = 'https://uuyzdjifhdfyyvpxsofu.supabase.co/functions/v1/agent-process';
-
-      let aiProvider = 'gemini';
-      // let formattedModel = '';  // SUDAH dideklarasikan di atas (ENGINEER DELEGATION)
-      let aiKey = '';
-      let localContext = '';
-      let semanticContext = '';
-      let memoryService = null;
-
-      const activeWorkspace = workspaceManager?.activeWorkspaceId || 'ws-assistant';
-
-      let resolvedMode = 'ASSISTANT';
-      let resolvedAppSource = 'assistant';
-
-      if (activeWorkspace === 'ws-engineer' || activeWorkspace === 'ENGINEER') {
-        resolvedMode = 'ENGINEER';
-        resolvedAppSource = 'engineer';
-      } else if (activeWorkspace === 'ws-lite' || activeWorkspace === 'MAMETLITE' || activeWorkspace === 'LITE') {
-        resolvedMode = 'LITE';
-        resolvedAppSource = 'mametlite';
-      } else {
-        // ws-assistant, ASSISTANT — semua fallback ke ASSISTANT
-        resolvedMode = 'ASSISTANT';
-        resolvedAppSource = 'assistant';
-      }
-
-      if (kernel.status !== 'RUNNING') {
-        console.warn('[ConversationEngine] Kernel belum siap, skip service injection');
-      } else {
-        const brainService = kernel.serviceManager.get('BrainService');
-        if (brainService) {
-          const context = await brainService.getActiveBrainContext();
-          aiProvider = context.provider || 'gemini';
-          formattedModel = context.model || '';
-          aiKey = context.key || '';
-        }
-
-        // --- Memory Injection (Layer 2) — dilewati untuk mode LITE ---
-        if (resolvedMode !== 'LITE') {
-          try {
-            memoryService = kernel.serviceManager.get('MemoryService');
-            console.log('[ConversationEngine] MemoryService tersedia?', !!memoryService);
-            console.log('[ConversationEngine] Kernel status:', kernel?.status);
-            console.log('[ConversationEngine] ServiceManager ada?', !!kernel?.serviceManager);
-
-            if (!memoryService) {
-              await new Promise(r => setTimeout(r, 1000));
-              const memoryServiceRetry = kernel.serviceManager.get('MemoryService');
-              console.log('[ConversationEngine] Setelah retry:', !!memoryServiceRetry);
-              memoryService = memoryServiceRetry;
-            }
-          } catch (err) {
-            console.warn('[ConversationEngine] ⚠️ Gagal mengakses ServiceManager:', err);
-          }
-
-          if (memoryService) {
-            try {
-              console.log('[ConversationEngine] 🔍 Mencari memori untuk:', userMsg);
-              const memories = await memoryService.getMemory(userMsg);
-              console.log('[ConversationEngine] 📋 Hasil memori:', JSON.stringify(memories));
-              if (memories && memories.length > 0) {
-                localContext = memories.map(m => m.summary || m.content || '').filter(Boolean).join('\n');
-              }
-              console.log('[ConversationEngine] 📝 GlobalMemory yang dikirim:', localContext);
-            } catch (e) {
-              console.warn('[ConversationEngine] MemoryService query failed:', e);
-            }
-          }
-
-          // --- Semantic Context Injection (Layer 2) ---
-          try {
-            const semanticContextService = kernel.serviceManager.get('SemanticContextService');
-            if (semanticContextService) {
-              console.log('[ConversationEngine] 🔍 Parsing semantic intent untuk:', userMsg);
-              const intentResult = semanticContextService.parseIntent(userMsg);
-              console.log('[ConversationEngine] 📋 Intent result:', intentResult);
-
-              if (intentResult.entities && intentResult.entities.length > 0) {
-                const { data: { session } } = await supabase.auth.getSession();
-                const userId = session?.user?.id;
-
-                if (userId) {
-                  semanticContextService.updateGraph(userId, intentResult.entities);
-                  const contextResult = semanticContextService.getContext(userId, userMsg);
-                  semanticContext = contextResult.context;
-                  console.log('[ConversationEngine] 📝 SemanticContext yang dikirim:', semanticContext);
-                }
-              }
-            }
-          } catch (e) {
-            console.warn('[ConversationEngine] SemanticContextService failed:', e);
-          }
-        } else {
-          console.log('[ConversationEngine] Mode LITE — Memory & Semantic injection dilewati.');
-        }
-      }
-
-      const isLiteMode = resolvedMode === 'LITE';
-
-      // Proses file attachment jika ada
-      let fileData = null;
-      if (attachedFile) {
-        // Konversi file ke format base64
-        const buffer = await attachedFile.arrayBuffer();
-        const base64String = btoa(
-          new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-        );
-        fileData = {
-          name: attachedFile.name,
-          type: attachedFile.type,
-          size: attachedFile.size,
-          data: base64String
-        };
-      }
-
-      const payload = {
-        message: userMsg,
-        mode: resolvedMode,
-        appSource: resolvedAppSource,
-        workspaceTarget: workspaceManager.activeWorkspaceId,
-        history: newMessages.slice(isLiteMode ? -5 : -10),
-        globalMemory: localContext,
-        semanticContext: semanticContext,
-        stream: false, // Stream false
-        ragEnabled: true, // AKTIFKAN RAG untuk semua mode, termasuk LITE
-        tools: isLiteMode ? ['rag_search', 'web_search', 'deep_research'] : undefined, // LITE: tools terbatas
-        model: formattedModel || undefined,
-        file: fileData, // Sertakan file attachment jika ada
-        // ✅ TAMBAHKAN: Target file untuk Engineer mode
-        requestedFilePath: resolvedMode === 'ENGINEER' ? _extractFilePathFromMessage(userMsg) : undefined
-      };
-
-      // Reset file attachment setelah dikirim
-      setAttachedFile(null);
-
-      // Hapus key undefined agar payload bersih
-      if (payload.tools === undefined) delete payload.tools;
-      if (payload.model === undefined) delete payload.model;
-
-      console.log('[ConversationEngine] Workspace:', activeWorkspace, 'Mode:', resolvedMode, 'AppSource:', resolvedAppSource);
-
-      // Headers dengan pembersihan karakter non-ASCII
-      const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token.replace(/[^\x00-\x7F]/g, '')}`
-      };
-
-      if (aiKey) {
-        const cleanKey = aiKey.replace(/[^\x00-\x7F]/g, '');
-        if (aiProvider === 'openrouter') headers['x-byok-openrouter'] = cleanKey;
-        else if (aiProvider === 'openai') headers['x-byok-openai'] = cleanKey;
-        else if (aiProvider === 'groq') headers['x-byok-groq'] = cleanKey;
-        else if (aiProvider === 'gemini') headers['x-byok-gemini'] = cleanKey;
-      }
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify(payload)
-      });
-
-      console.log(`[LIFECYCLE] LLM response received (HTTP Status: ${response.status})`);
-
-      if (!response.ok) {
-        let errorText = `HTTP error! status: ${response.status}`;
-        try { const errorData = await response.json(); errorText = errorData.error || errorText; } catch (_) {
-          errorText = await response.text() || errorText;
-        }
-        console.error("[LIFECYCLE] Edge Function Error:", errorText);
-        setMessages(prev => [...prev, { role: 'model', content: `⚠️ Error: ${errorText}` }]);
-        setIsLoading(false);
-        return;
-      }
-
-      const contentType = response.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        console.log("[LIFECYCLE] Received JSON response (DIRECT mode)");
-        const jsonData = await response.json();
-        const rawContent = typeof (jsonData.message || jsonData) === 'string'
-          ? (jsonData.message || jsonData)
-          : JSON.stringify(jsonData.message || jsonData);
-
-        // Deteksi patch proposal dari Engineer LLM
-        const hasPatch = isEngineerMode && rawContent.includes('[MAMET_PATCH_READY]');
-        const cleanContent = hasPatch ? rawContent.replace('[MAMET_PATCH_READY]', '').trim() : rawContent;
-
-        setMessages(prev => [...prev, {
-          role: 'model',
-          content: cleanContent,
-          steps: jsonData.processingSteps || [],
-          metadata: jsonData,
-          hasPatchProposal: hasPatch,
-          patchOriginalTask: hasPatch ? userMsg : undefined
-        }]);
-
-        openLifecycleInspector('execution', jsonData);
-        setIsLoading(false);
-        return;
-      }
-
-      let reader;
-      let decoder;
-      try {
-        reader = response.body.getReader();
-        decoder = new TextDecoder('utf-8');
-      } catch (streamErr) {
-        console.error("[LIFECYCLE] Failed to get stream reader:", streamErr);
-        setMessages(prev => [...prev, { role: 'model', content: `⚠️ Error: Gagal membaca aliran data.` }]);
-        setIsLoading(false);
-        return;
-      }
-      let done = false;
-      let aiResponseText = '';
-      let processingSteps = [];
-      let buffer = '';
-
-      console.log("[LIFECYCLE] Stream started");
-      setMessages(prev => [...prev, { role: 'model', content: '', steps: [], isStreaming: true }]);
-
-      while (!done) {
-        const { value, done: readerDone } = await reader.read();
-        done = readerDone;
-        if (value) {
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const dataStr = line.substring(6).trim();
-              if (dataStr === '[DONE]') continue;
-              try {
-                const parsed = JSON.parse(dataStr);
-                if (parsed.step) processingSteps.push(parsed.step);
-                let chunkText = '';
-                if (parsed.text) { chunkText = parsed.text; }
-                else if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) {
-                  chunkText = parsed.choices[0].delta.content;
-                }
-                if (chunkText) aiResponseText += chunkText;
-                console.log("[LIFECYCLE] Stream chunk received:", dataStr, "Extracted text:", chunkText);
-                setMessages(prev => { const next = [...prev]; next[next.length - 1] = { role: 'model', content: aiResponseText, steps: [...processingSteps], isStreaming: !done }; return next; });
-                console.log("[LIFECYCLE] Bubble updated");
-              } catch (err) {
-                console.error("[LIFECYCLE] Exception during chunk processing:", err);
-                aiResponseText += `\n\n[System Error: Gagal memproses aliran data. Root Cause: ${err.message}]`;
-                setMessages(prev => { const next = [...prev]; next[next.length - 1] = { role: 'model', content: aiResponseText, steps: [...processingSteps], isStreaming: false }; return next; });
-                done = true;
-              }
-            }
-          }
-        }
-      }
-
-      console.log("[LIFECYCLE] Stream completed");
-
-      // Deteksi patch proposal dari Engineer LLM (streaming path)
-      if (isEngineerMode && aiResponseText.includes('[MAMET_PATCH_READY]')) {
-        const cleanText = aiResponseText.replace('[MAMET_PATCH_READY]', '').trim();
-        setMessages(prev => {
-          const next = [...prev];
-          next[next.length - 1] = {
-            ...next[next.length - 1],
-            content: cleanText,
-            isStreaming: false,
-            hasPatchProposal: true,
-            patchOriginalTask: userMsg
-          };
-          return next;
-        });
-      } else {
-        setMessages(prev => { const next = [...prev]; next[next.length - 1].isStreaming = false; return next; });
-      }
-
-      const finalAiResponseText = aiResponseText;
-
-      // === OS EXECUTION INTERCEPTOR (Local Sandbox Execution) ===
-      if (window.electronAPI && osState.capabilities.includes('cap:code-execution')) {
-        let interceptHit = false;
-        let autoReply = '';
-
-        const termMatch = finalAiResponseText.match(/<terminal>([\s\S]*?)<\/terminal>/i);
-        const mdTermMatch = finalAiResponseText.match(/```(?:bash|sh|cmd|powershell|ps1)?\n([\s\S]*?)```/i);
-        let rawCmd = null;
-
-        if (termMatch) { rawCmd = termMatch[1].trim(); }
-        else if (mdTermMatch) {
-          const cmdCandidate = mdTermMatch[1].trim();
-          if (cmdCandidate && !cmdCandidate.includes('import ') && !cmdCandidate.includes('function ') && cmdCandidate.length < 200) {
-            rawCmd = cmdCandidate;
-          }
-        }
-
-        if (rawCmd) {
-          interceptHit = true;
-          rawCmd = rawCmd.split('\n').map(l => l.replace(/^\$\s*/, '').replace(/^>\s*/, '').trim()).filter(l => l && !l.startsWith('#')).join(' && ');
-          try {
-            const res = await window.electronAPI.runTerminalCommand(rawCmd);
-            autoReply += `\n[SYSTEM: TERMINAL RESULT for "${rawCmd}"]\n${res.output || 'Sukses (Tidak ada output)'}\n`;
-          } catch (err) { autoReply += `\n[SYSTEM: TERMINAL ERROR]\n${err.message}\n`; }
-        }
-
-        const fileMatch = finalAiResponseText.match(/<edit_file\s+path=["']([^"']+)["'][^>]*>([\s\S]*?)<\/edit_file>/i);
-        if (fileMatch) {
-          interceptHit = true;
-          const filePath = fileMatch[1].trim();
-          const fileContent = fileMatch[2].trim();
-          try {
-            const res = await window.electronAPI.editFileSurgical(filePath, fileContent);
-            autoReply += `\n[SYSTEM: FILE EDIT RESULT for "${filePath}"]\n${res.success ? 'Berhasil disimpan' : 'Gagal: ' + (res.error || res.message)}\n`;
-          } catch (err) { autoReply += `\n[SYSTEM: FILE EDIT ERROR]\n${err.message}\n`; }
-        }
-
-        if (window.electronAPI.runDockerSandbox && !interceptHit) {
-          const codeBlockMatch = finalAiResponseText.match(/```(python|py|javascript|js)\n([\s\S]*?)```/i);
-          if (codeBlockMatch) {
-            try {
-              const dockerStatus = await window.electronAPI.checkDockerStatus();
-              if (dockerStatus.available) {
-                const codeLang = codeBlockMatch[1].toLowerCase();
-                const codeContent = codeBlockMatch[2].trim();
-                const language = (codeLang === 'py' || codeLang === 'python') ? 'python' : 'javascript';
-                if (codeContent.length > 10 && codeContent.length < 50000 && (codeContent.includes('print(') || codeContent.includes('console.log'))) {
-                  console.log(`[Docker Sandbox] Mengeksekusi ulang kode ${language} via Docker...`);
-                  const dockerResult = await window.electronAPI.runDockerSandbox(codeContent, language);
-                  if (dockerResult.success) {
-                    interceptHit = true;
-                    autoReply += `\n[SYSTEM: DOCKER SANDBOX EXECUTION (${language.toUpperCase()})]\nStatus: ✅ Berhasil\nOutput:\n${dockerResult.output}\n`;
-                  } else if (dockerResult.error && !dockerResult.error.includes('DOCKER_NOT_AVAILABLE') && !dockerResult.error.includes('DITOLAK')) {
-                    interceptHit = true;
-                    autoReply += `\n[SYSTEM: DOCKER SANDBOX EXECUTION (${language.toUpperCase()})]\nStatus: ❌ Gagal\nError:\n${dockerResult.error}\n`;
-                  }
-                }
-              }
-            } catch (dockerErr) { console.warn('[Docker Sandbox] Interceptor error:', dockerErr.message); }
-          }
-        }
-
-        if (interceptHit) {
-          setTimeout(() => handleSend(null, `[OS EXECUTION REPORT]\nBerikut adalah hasil eksekusi dari tindakan otomatis Anda di sistem operasi lokal user.\n${autoReply}`), 1000);
-        }
-      }
-
-    } catch (err) {
-      console.error("Engine error:", err);
-      setMessages(prev => [...prev, { role: 'model', content: `⚠️ Error: ${err.message}` }]);
-    } finally {
+    const assistantService = getAssistantService();
+    if (!assistantService) {
+      setMessages(prev => [...prev, { role: 'model', content: '⚠️ AssistantService belum siap. Coba lagi dalam beberapa saat.' }]);
       setIsLoading(false);
-    }
-  };
-
-  // =============================================
-  // ENGINEER AUTONOMOUS: Run terminal command + auto-feed output ke LLM
-  // ponytail: pakai electronAPI yang sudah ada, tidak ada IPC baru
-  // =============================================
-  const handleRunCommand = async (cmd, cmdKey) => {
-    if (!window.electronAPI) {
-      setEngineerCmdStates(prev => ({ ...prev, [cmdKey]: { status: 'error', output: 'Electron API tidak tersedia (bukan desktop mode).' } }));
       return;
     }
-    setEngineerCmdStates(prev => ({ ...prev, [cmdKey]: { status: 'running', output: '' } }));
 
-    // Helper: emit audit trail ke Engineer SessionArtifact
-    const auditCommand = (status, output = '') => {
-      try {
-        const eventBus = kernel.serviceManager?.get('EventBus');
-        eventBus?.emit('Engineer:CommandExecuted', { command: cmd, status, output });
-      } catch (_) {}
-    };
+    // Ambil auth session
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const userId = session?.user?.id || null;
+
+    // Tambah placeholder streaming
+    let streamingStarted = false;
 
     try {
-      const result = await window.electronAPI.runTerminalCommand(cmd);
-      const output = result?.output || result?.error || 'Command selesai (tidak ada output).';
-      const status = result?.success ? 'success' : 'error';
-      setEngineerCmdStates(prev => ({ ...prev, [cmdKey]: { status: status === 'success' ? 'done' : 'error', output } }));
-      auditCommand(status, output);
-      // Opsi A: Auto-feed output ke Engineer LLM untuk analisis lanjutan
-      setTimeout(() => handleSend(null, `[TERMINAL OUTPUT for: ${cmd}]\n${output}`), 300);
+      await assistantService.processMessage({
+        userMsg,
+        history: newMessages,
+        workspaceId: workspaceManager?.activeWorkspaceId || 'ws-assistant',
+        userId,
+        token,
+        attachedFile,
+        workspaceManager: { ...workspaceManager, osState, openWidgetInWorkbench: workspaceManager?.openWidgetInWorkbench },
+
+        onChunk: (chunkText, allText, steps) => {
+          if (!streamingStarted) {
+            streamingStarted = true;
+            setMessages(prev => [...prev, { role: 'model', content: '', steps: [], isStreaming: true }]);
+          }
+          setMessages(prev => {
+            const next = [...prev];
+            next[next.length - 1] = { role: 'model', content: allText, steps: [...steps], isStreaming: true };
+            return next;
+          });
+        },
+
+        onDone: (finalText, steps, jsonMetadata, extras = {}) => {
+          const { hasPatch, patchOriginalTask } = extras;
+          if (streamingStarted) {
+            setMessages(prev => {
+              const next = [...prev];
+              next[next.length - 1] = {
+                role: 'model',
+                content: finalText,
+                steps,
+                isStreaming: false,
+                hasPatchProposal: hasPatch || false,
+                patchOriginalTask: hasPatch ? patchOriginalTask : undefined,
+                metadata: jsonMetadata
+              };
+              return next;
+            });
+          } else {
+            // JSON/direct mode — tidak ada streaming frame
+            setMessages(prev => [...prev, {
+              role: 'model',
+              content: finalText,
+              steps,
+              isStreaming: false,
+              hasPatchProposal: hasPatch || false,
+              patchOriginalTask: hasPatch ? patchOriginalTask : undefined,
+              metadata: jsonMetadata
+            }]);
+          }
+          setIsLoading(false);
+          if (jsonMetadata && workspaceManager?.openWidgetInWorkbench) {
+            openLifecycleInspector('execution', jsonMetadata);
+          }
+        },
+
+        onError: (errorMsg) => {
+          if (streamingStarted) {
+            setMessages(prev => {
+              const next = [...prev];
+              next[next.length - 1] = { role: 'model', content: errorMsg, isStreaming: false };
+              return next;
+            });
+          } else {
+            setMessages(prev => [...prev, { role: 'model', content: errorMsg }]);
+          }
+          setIsLoading(false);
+        }
+      });
     } catch (err) {
-      const errMsg = err?.message || String(err);
-      setEngineerCmdStates(prev => ({ ...prev, [cmdKey]: { status: 'error', output: errMsg } }));
-      auditCommand('error', errMsg);
-      setTimeout(() => handleSend(null, `[TERMINAL ERROR for: ${cmd}]\n${errMsg}`), 300);
+      console.error('[ConversationEngine] handleSend error:', err);
+      setMessages(prev => [...prev, { role: 'model', content: `⚠️ Error: ${err.message}` }]);
+      setIsLoading(false);
     }
+
+    // Reset file attachment
+    setAttachedFile(null);
   };
 
   // =============================================
-  // ENGINEER ROLLBACK: Undo patch via git stash pop
+  // HANDLE RUN COMMAND (Engineer Autonomous)
+  // Delegasi ke AssistantService.runCommand()
+  // =============================================
+  const handleRunCommand = async (cmd, cmdKey) => {
+    const assistantService = getAssistantService();
+    if (!assistantService) {
+      setEngineerCmdStates(prev => ({ ...prev, [cmdKey]: { status: 'error', output: 'AssistantService tidak tersedia.' } }));
+      return;
+    }
+
+    setEngineerCmdStates(prev => ({ ...prev, [cmdKey]: { status: 'running', output: '' } }));
+
+    const { output, success } = await assistantService.runCommand(cmd, (status, out) => {
+      // audit callback sudah dihandle di dalam AssistantService
+    });
+
+    setEngineerCmdStates(prev => ({
+      ...prev,
+      [cmdKey]: { status: success ? 'done' : 'error', output }
+    }));
+
+    // Auto-feed output ke LLM
+    setTimeout(() => handleSend(null, `[TERMINAL OUTPUT for: ${cmd}]\n${output}`), 300);
+  };
+
+  // =============================================
+  // HANDLE ROLLBACK (Engineer)
+  // Delegasi ke AssistantService.rollback()
   // =============================================
   const handleRollback = async () => {
-    if (!window.electronAPI?.gitRollback) {
-      alert('Rollback tidak tersedia (bukan desktop mode).');
+    const assistantService = getAssistantService();
+    if (!assistantService) {
+      alert('AssistantService tidak tersedia.');
       return;
     }
     setRollbackState('loading');
     try {
-      const result = await window.electronAPI.gitRollback(lastCheckpoint?.ref);
+      const result = await assistantService.rollback(lastCheckpoint?.ref);
       if (result?.cancelled) { setRollbackState('idle'); return; }
       if (result?.success) {
         setRollbackState('done');
         setLastCheckpoint(null);
-        setMessages(prev => [...prev, {
-          role: 'model',
-          content: `↩️ **Rollback Berhasil!** Semua perubahan patch telah dikembalikan.\n\nOutput: ${result.output || 'selesai.'}`
-        }]);
+        setMessages(prev => [...prev, { role: 'model', content: `↩️ **Rollback Berhasil!** Semua perubahan patch telah dikembalikan.\n\nOutput: ${result.output || 'selesai.'}` }]);
       } else {
         setRollbackState('error');
-        setMessages(prev => [...prev, {
-          role: 'model',
-          content: `❌ **Rollback Gagal:** ${result?.error || 'Unknown error'}\n\nCoba jalankan git stash pop secara manual.`
-        }]);
+        setMessages(prev => [...prev, { role: 'model', content: `❌ **Rollback Gagal:** ${result?.error || 'Unknown error'}\n\nCoba jalankan git stash pop secara manual.` }]);
       }
     } catch (err) {
       setRollbackState('error');
     }
   };
 
+  // =============================================
+  // RENDER
+  // =============================================
   return (
     <div className="flex flex-1 min-w-0 min-h-0 h-full w-full bg-background font-body-base text-on-surface">
-      {/* Sidebar Riwayat Chat (Toggleable) */}
+      {/* Sidebar Riwayat Chat */}
       <div className={`transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'w-0 overflow-hidden'} shrink-0 z-50 md:relative absolute left-0 top-0 h-full bg-background border-r border-outline-variant`}>
         <ChatHistory
           onSelectChat={handleLoadChat}
@@ -1032,7 +587,7 @@ export default function ConversationEngine({ sessionId }) {
         />
       </div>
 
-      {/* Overlay Backdrop for Mobile */}
+      {/* Mobile Overlay */}
       {isSidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden"
@@ -1040,10 +595,10 @@ export default function ConversationEngine({ sessionId }) {
         />
       )}
 
-      {/* Area Chat Utama (Outer Wrapper, No Overflow) */}
+      {/* Area Chat Utama */}
       <div className="flex-1 flex flex-col relative min-w-0 min-h-0">
 
-        {/* SessionToolbar Layer (Absolute to Outer Wrapper) */}
+        {/* Session Toolbar */}
         <div className="absolute top-6 left-6 z-50 flex items-center gap-2">
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -1052,7 +607,6 @@ export default function ConversationEngine({ sessionId }) {
           >
             <span className="material-symbols-outlined text-[20px]">{isSidebarOpen ? 'keyboard_double_arrow_left' : 'menu'}</span>
           </button>
-
           <button
             onClick={handleNewChat}
             className="w-10 h-10 flex items-center justify-center bg-surface-container-low border border-outline-variant rounded-xl hover:bg-surface-variant text-on-surface transition-all shadow-sm"
@@ -1062,7 +616,7 @@ export default function ConversationEngine({ sessionId }) {
           </button>
         </div>
 
-        {/* ENGINEER ROLLBACK BANNER — muncul setelah patch berhasil */}
+        {/* Engineer Rollback Banner */}
         {lastCheckpoint && (
           <div className="mx-3 mt-14 mb-0 flex items-center gap-2 px-3 py-2 rounded-xl border border-amber-500/30 bg-amber-950/20 text-amber-300 text-xs z-40 shrink-0">
             <span className="material-symbols-outlined text-[15px] text-amber-400 shrink-0">history</span>
@@ -1097,11 +651,11 @@ export default function ConversationEngine({ sessionId }) {
           </div>
         )}
 
-        {/* Chat + Memory Context Panel (Fitur #2) */}
+        {/* Chat + Memory Context Panel */}
         <div className="flex-1 flex flex-col md:flex-row relative min-h-0 min-w-0">
-          {/* Inner Wrapper (Holds overflow-hidden and glows) */}
           <div className="flex-1 flex flex-col relative overflow-hidden pt-4 min-h-0 min-w-0">
             <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto p-3 md:p-4 space-y-3 custom-scrollbar relative z-10">
+
               {messages.length === 0 && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center opacity-20 pointer-events-none gap-1">
                   <span className="material-symbols-outlined text-[28px] text-primary">chat_bubble</span>
@@ -1117,7 +671,7 @@ export default function ConversationEngine({ sessionId }) {
                   <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     <div className={`relative group max-w-[85%] lg:max-w-[75%] rounded-2xl px-5 py-4 ${m.role === 'user' ? 'bg-primary-container/20 text-on-surface border border-primary/30' : 'glass-panel rim-light text-on-surface border border-outline-variant'}`}>
                       <div className="text-body-base leading-relaxed">
-                        {/* Deep Link 1: AI Reasoning / Thinking */}
+                        {/* AI Reasoning Deep Link */}
                         {parsed.thinking && (
                           <div
                             onClick={() => openLifecycleInspector('AI_REASONING', parsed.thinking)}
@@ -1132,54 +686,37 @@ export default function ConversationEngine({ sessionId }) {
                         {/* Render konten dengan parser marker Engineer */}
                         {(() => {
                           if (!displayText) return null;
-
-                          // Split semua marker sekaligus: MAMET_CMD, MAMET_CRITICAL, OS REPORT, SYSTEM
                           const MARKER_RE = /(\[MAMET_CMD:[^\]]+\]|\[MAMET_CRITICAL:[^\]]*\]|\[OS EXECUTION REPORT\]|\[SYSTEM:[^\]]+\])/g;
                           const parts = displayText.split(MARKER_RE);
                           const isEngineer = (workspaceManager?.activeWorkspaceId === 'ws-engineer');
 
                           return parts.map((part, i) => {
-                            // --- MAMET_CMD: terminal command approval button ---
                             if (isEngineer && part.startsWith('[MAMET_CMD:')) {
                               const cmd = part.replace('[MAMET_CMD:', '').replace(']', '').trim();
                               const cmdKey = `${idx}_${cmd}`;
                               const state = engineerCmdStates[cmdKey];
-
                               return (
                                 <div key={i} className="my-2 flex items-center gap-2 flex-wrap">
                                   <code className="px-2 py-1 rounded bg-surface-container-high border border-outline-variant text-body-sm font-mono text-primary">{cmd}</code>
                                   {!state || state.status === 'pending' ? (
                                     <>
-                                      <button
-                                        onClick={() => handleRunCommand(cmd, cmdKey)}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-sm active:scale-95"
-                                      >
-                                        <span className="material-symbols-outlined text-[14px]">terminal</span>
-                                        🖥️ Jalankan
+                                      <button onClick={() => handleRunCommand(cmd, cmdKey)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-sm active:scale-95">
+                                        <span className="material-symbols-outlined text-[14px]">terminal</span>🖥️ Jalankan
                                       </button>
-                                      <button
-                                        onClick={() => setEngineerCmdStates(prev => ({ ...prev, [cmdKey]: { status: 'skipped', output: '' } }))}
-                                        className="px-3 py-1.5 rounded-lg border border-outline-variant text-on-surface-variant text-xs hover:bg-surface-variant transition-all"
-                                      >Lewati</button>
+                                      <button onClick={() => setEngineerCmdStates(prev => ({ ...prev, [cmdKey]: { status: 'skipped', output: '' } }))} className="px-3 py-1.5 rounded-lg border border-outline-variant text-on-surface-variant text-xs hover:bg-surface-variant transition-all">Lewati</button>
                                     </>
                                   ) : state.status === 'running' ? (
-                                    <span className="flex items-center gap-1.5 text-xs text-amber-400 animate-pulse">
-                                      <span className="material-symbols-outlined text-[14px]">hourglass_empty</span>Menjalankan...
-                                    </span>
+                                    <span className="flex items-center gap-1.5 text-xs text-amber-400 animate-pulse"><span className="material-symbols-outlined text-[14px]">hourglass_empty</span>Menjalankan...</span>
                                   ) : state.status === 'done' ? (
                                     <details className="inline">
-                                      <summary className="flex items-center gap-1.5 text-xs text-emerald-400 cursor-pointer">
-                                        <span className="material-symbols-outlined text-[14px]">check_circle</span>Selesai — lihat output
-                                      </summary>
+                                      <summary className="flex items-center gap-1.5 text-xs text-emerald-400 cursor-pointer"><span className="material-symbols-outlined text-[14px]">check_circle</span>Selesai — lihat output</summary>
                                       <pre className="mt-1 p-2 rounded bg-surface-container text-[11px] font-mono text-on-surface-variant overflow-x-auto max-h-40 custom-scrollbar">{state.output}</pre>
                                     </details>
                                   ) : state.status === 'skipped' ? (
                                     <span className="text-xs text-on-surface-variant italic">Dilewati</span>
                                   ) : (
                                     <details className="inline">
-                                      <summary className="flex items-center gap-1.5 text-xs text-red-400 cursor-pointer">
-                                        <span className="material-symbols-outlined text-[14px]">error</span>Error — lihat detail
-                                      </summary>
+                                      <summary className="flex items-center gap-1.5 text-xs text-red-400 cursor-pointer"><span className="material-symbols-outlined text-[14px]">error</span>Error — lihat detail</summary>
                                       <pre className="mt-1 p-2 rounded bg-red-900/20 text-[11px] font-mono text-red-300 overflow-x-auto max-h-40 custom-scrollbar">{state.output}</pre>
                                     </details>
                                   )}
@@ -1187,22 +724,17 @@ export default function ConversationEngine({ sessionId }) {
                               );
                             }
 
-                            // --- MAMET_CRITICAL: critical warning card ---
                             if (isEngineer && part.startsWith('[MAMET_CRITICAL:')) {
                               const msg = part.replace('[MAMET_CRITICAL:', '').replace(/\]$/, '').trim();
                               return (
                                 <div key={i} className="my-3 p-3 rounded-xl border border-red-500/50 bg-red-950/30 text-red-300">
-                                  <div className="flex items-center gap-2 font-bold text-sm mb-1">
-                                    <span className="material-symbols-outlined text-[18px] text-red-400">warning</span>
-                                    ⚠️ CRITICAL — Perlu Analisis User
-                                  </div>
+                                  <div className="flex items-center gap-2 font-bold text-sm mb-1"><span className="material-symbols-outlined text-[18px] text-red-400">warning</span>⚠️ CRITICAL — Perlu Analisis User</div>
                                   <p className="text-sm whitespace-pre-wrap">{msg}</p>
                                   <p className="mt-2 text-xs text-red-400 italic">Ketik di chat untuk modifikasi plan atau berikan instruksi lanjutan.</p>
                                 </div>
                               );
                             }
 
-                            // --- OS Execution Report ---
                             if (part === '[OS EXECUTION REPORT]') {
                               return (
                                 <div key={i} className="my-2 block w-max items-center px-3 py-2 bg-primary/10 border border-primary/30 text-primary text-body-sm font-bold rounded-lg cursor-pointer hover:bg-primary/20 transition-colors shadow-sm"
@@ -1213,7 +745,6 @@ export default function ConversationEngine({ sessionId }) {
                               );
                             }
 
-                            // --- System report ---
                             if (part.startsWith('[SYSTEM:')) {
                               const title = part.replace('[SYSTEM: ', '').replace(']', '');
                               return (
@@ -1232,82 +763,53 @@ export default function ConversationEngine({ sessionId }) {
                         {m.isStreaming && parsed.isThinkingComplete && <span className="animate-pulse text-primary"> ▍</span>}
                       </div>
 
-                      {/* FASE 5: Reasoning Block — Confirmation Buttons */}
+                      {/* Confirmation Buttons */}
                       {m.isConfirmationRequest && (
                         <div className="mt-4 flex items-center gap-3 border-t border-outline-variant pt-3">
                           <button
                             onClick={() => {
                               const eventBus = kernel.serviceManager?.get('EventBus');
                               if (eventBus && m.confirmationId) {
-                                eventBus.emit('Engineer:UserConfirmation', {
-                                  confirmationId: m.confirmationId,
-                                  confirmed: true
-                                });
-                                // Update message to show confirmed state
-                                setMessages(prev => {
-                                  const next = [...prev];
-                                  next[idx] = { ...next[idx], content: `✅ **Konfirmasi Diterima**\n\nMelanjutkan ke pembuatan patch...`, isConfirmationRequest: false };
-                                  return next;
-                                });
+                                eventBus.emit('Engineer:UserConfirmation', { confirmationId: m.confirmationId, confirmed: true });
+                                setMessages(prev => { const next = [...prev]; next[idx] = { ...next[idx], content: `✅ **Konfirmasi Diterima**\n\nMelanjutkan ke pembuatan patch...`, isConfirmationRequest: false }; return next; });
                               }
                             }}
                             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold transition-colors shadow-lg shadow-emerald-500/20"
                           >
-                            <span className="material-symbols-outlined text-[18px]">check_circle</span>
-                            ✅ Lanjutkan ke Patch
+                            <span className="material-symbols-outlined text-[18px]">check_circle</span>✅ Lanjutkan ke Patch
                           </button>
                           <button
                             onClick={() => {
                               const eventBus = kernel.serviceManager?.get('EventBus');
                               if (eventBus && m.confirmationId) {
-                                eventBus.emit('Engineer:UserConfirmation', {
-                                  confirmationId: m.confirmationId,
-                                  confirmed: false
-                                });
-                                setMessages(prev => {
-                                  const next = [...prev];
-                                  next[idx] = { ...next[idx], content: `❌ **Konfirmasi Ditolak**\n\nPembuatan patch dibatalkan.`, isConfirmationRequest: false };
-                                  return next;
-                                });
+                                eventBus.emit('Engineer:UserConfirmation', { confirmationId: m.confirmationId, confirmed: false });
+                                setMessages(prev => { const next = [...prev]; next[idx] = { ...next[idx], content: `❌ **Konfirmasi Ditolak**\n\nPembuatan patch dibatalkan.`, isConfirmationRequest: false }; return next; });
                               }
                             }}
                             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 text-sm font-medium transition-colors"
                           >
-                            <span className="material-symbols-outlined text-[18px]">cancel</span>
-                            ❌ Batalkan
+                            <span className="material-symbols-outlined text-[18px]">cancel</span>❌ Batalkan
                           </button>
                         </div>
                       )}
 
-                      {/* FASE 5: Reasoning Block — Detail Expand Button */}
+                      {/* Reasoning Block Detail */}
                       {m.isReasoningBlock && m.reasoningReport && (
                         <div className="mt-3 border-t border-outline-variant pt-3">
                           <button
                             onClick={() => {
                               const report = m.reasoningReport;
-                              const detail = `🧠 **Reasoning Report Detail**\n\n` +
-                                `**Task ID:** ${report.taskId}\n` +
-                                `**Summary:** ${report.summary}\n` +
-                                `**Intent:** ${report.intent}\n` +
-                                `**Model:** ${report.modelName}\n` +
-                                `**Confidence:** ${report.confidence?.level} (${report.confidence?.coverage}% coverage, ${report.confidence?.evidence}/100 evidence)\n` +
-                                `**ADR Referenced:** ${report.adrReferenced}\n` +
-                                `**Files Analyzed:** ${(report.filesAnalyzed || []).join(', ')}\n` +
-                                `**Recommendation:** ${report.recommendation}\n` +
-                                `**Compliance:** ${report.compliance?.violations?.length || 0} violations, ${report.compliance?.warnings?.length || 0} warnings\n` +
-                                `**Timestamp:** ${report.timestamp}`;
-
+                              const detail = `🧠 **Reasoning Report Detail**\n\n**Task ID:** ${report.taskId}\n**Summary:** ${report.summary}\n**Intent:** ${report.intent}\n**Model:** ${report.modelName}\n**Confidence:** ${report.confidence?.level} (${report.confidence?.coverage}% coverage, ${report.confidence?.evidence}/100 evidence)\n**ADR Referenced:** ${report.adrReferenced}\n**Files Analyzed:** ${(report.filesAnalyzed || []).join(', ')}\n**Recommendation:** ${report.recommendation}\n**Compliance:** ${report.compliance?.violations?.length || 0} violations, ${report.compliance?.warnings?.length || 0} warnings\n**Timestamp:** ${report.timestamp}`;
                               openLifecycleInspector('REASONING_DETAIL', detail);
                             }}
                             className="inline-flex items-center gap-2 px-3 py-2 bg-surface-container border border-outline-variant text-on-surface-variant text-body-sm rounded-lg hover:bg-surface-variant hover:text-on-surface transition-all shadow-sm"
                           >
-                            <span className="material-symbols-outlined text-[16px]">description</span>
-                            📋 Lihat Detail Reasoning
+                            <span className="material-symbols-outlined text-[16px]">description</span>📋 Lihat Detail Reasoning
                           </button>
                         </div>
                       )}
 
-                      {/* Engineer Patch Proposal — Apply Patch Button */}
+                      {/* Patch Proposal — Apply Button */}
                       {m.hasPatchProposal && (
                         <div className="mt-4 flex items-center gap-3 border-t border-primary/20 pt-3">
                           <button
@@ -1321,23 +823,18 @@ export default function ConversationEngine({ sessionId }) {
                                   files: [],
                                   llmProposedContent: m.content
                                 });
-                                setMessages(prev => {
-                                  const next = [...prev];
-                                  next[idx] = { ...next[idx], hasPatchProposal: false, content: next[idx].content + '\n\n_⚙️ Engineer patch pipeline dimulai — Reasoning Lock aktif..._' };
-                                  return next;
-                                });
+                                setMessages(prev => { const next = [...prev]; next[idx] = { ...next[idx], hasPatchProposal: false, content: next[idx].content + '\n\n_⚙️ Engineer patch pipeline dimulai — Reasoning Lock aktif..._' }; return next; });
                               }
                             }}
                             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary hover:bg-primary-fixed text-on-primary text-sm font-bold transition-all shadow-lg shadow-primary/20 active:scale-95"
                           >
-                            <span className="material-symbols-outlined text-[18px]">build</span>
-                            ⚙️ Apply Patch
+                            <span className="material-symbols-outlined text-[18px]">build</span>⚙️ Apply Patch
                           </button>
                           <span className="text-body-sm text-on-surface-variant italic">Reasoning Lock akan aktif sebelum eksekusi</span>
                         </div>
                       )}
 
-                      {/* Tombol Copy */}
+                      {/* Copy Button */}
                       {m.role === 'model' && !m.isStreaming && displayText && (
                         <button
                           onClick={() => handleCopy(displayText, idx)}
@@ -1355,6 +852,7 @@ export default function ConversationEngine({ sessionId }) {
                   </div>
                 );
               })}
+
               {isLoading && messages[messages.length - 1]?.role !== 'model' && (
                 <div className="flex justify-start">
                   <div className="glass-panel rim-light px-5 py-3 rounded-2xl border border-outline-variant text-on-surface-variant text-body-sm flex items-center gap-3">
@@ -1365,7 +863,7 @@ export default function ConversationEngine({ sessionId }) {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Compact Input Area */}
+            {/* Input Area */}
             <div className="px-3 pt-3 pb-2 bg-gradient-to-t from-background via-background to-transparent z-10 flex flex-col items-center w-full">
               {(workspaceManager?.activeWorkspaceId === 'ws-engineer' || workspaceManager?.activeWorkspaceId === 'ws-assistant') && (
                 <div className="w-full max-w-3xl mb-2 flex justify-start">
@@ -1384,6 +882,7 @@ export default function ConversationEngine({ sessionId }) {
                   </button>
                 </div>
               )}
+
               <form onSubmit={handleSend} className="w-full max-w-3xl relative flex items-end gap-2 bg-surface-container-low border border-outline-variant rounded-2xl p-2 focus-within:border-primary transition-all shadow-lg pulse-focus">
                 <textarea
                   ref={textareaRef}
@@ -1396,18 +895,8 @@ export default function ConversationEngine({ sessionId }) {
                 />
                 {workspaceManager?.activeWorkspaceId === 'ws-lite' && (
                   <>
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      className="hidden"
-                      onChange={(e) => { if (e.target.files && e.target.files[0]) setAttachedFile(e.target.files[0]); }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="p-3 mb-1 mr-1 rounded-xl bg-surface-container-high hover:bg-surface-variant text-on-surface-variant transition-all"
-                      title="Upload Dokumen RAG"
-                    >
+                    <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => { if (e.target.files?.[0]) setAttachedFile(e.target.files[0]); }} />
+                    <button type="button" onClick={() => fileInputRef.current?.click()} className="p-3 mb-1 mr-1 rounded-xl bg-surface-container-high hover:bg-surface-variant text-on-surface-variant transition-all" title="Upload Dokumen RAG">
                       <span className="material-symbols-outlined text-[20px]">attach_file</span>
                     </button>
                   </>
@@ -1417,11 +906,11 @@ export default function ConversationEngine({ sessionId }) {
                 </button>
               </form>
               <div className="text-center mt-1 text-[9px] text-on-surface-variant tracking-widest uppercase opacity-50">
-                CE v2.0 • {workspaceManager.activeWorkspaceId}
+                CE v3.0 • {workspaceManager.activeWorkspaceId}
               </div>
             </div>
 
-            {/* Atmospheric Background Glow */}
+            {/* Atmospheric Glow */}
             <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-primary/5 blur-[120px] rounded-full pointer-events-none z-0"></div>
             <div className="absolute -top-32 -left-32 w-96 h-96 bg-secondary/5 blur-[120px] rounded-full pointer-events-none z-0"></div>
           </div>

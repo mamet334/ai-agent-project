@@ -21,6 +21,11 @@ import { SemanticContextService } from './services/SemanticContextService.js';
 import { MetadataService } from '../metadata/MetadataService.js';
 import { NavigationService } from '../metadata/NavigationService.js';
 import { RepositoryReaderService } from './services/RepositoryReaderService.js';
+import { AssistantService } from './services/AssistantService.js';
+import { CommandRegistry } from './services/CommandRegistry.js';
+import { AuditLogService } from './services/AuditLogService.js';
+import { RetrievalStrategyService } from './services/RetrievalStrategyService.js';
+import { ModuleDiscoveryService } from './services/ModuleDiscoveryService.js';
 
 /**
  * MAEF Kernel v2.0
@@ -256,6 +261,39 @@ class Kernel {
     const toolRegistry = new ToolRegistryService(serviceManager);
     await toolRegistry.initialize();
     serviceManager.register('ToolRegistryService', toolRegistry);
+
+    // Assistant Service — rumah arsitektur resmi untuk kapabilitas Assistant
+    // Prasyarat: BrainService, MemoryService, SemanticContextService sudah terdaftar di atas
+    const assistantService = new AssistantService(serviceManager);
+    await assistantService.initialize();
+    serviceManager.register('AssistantService', assistantService);
+    this.log('INFO', 'AssistantService Initialized & Registered');
+
+    // Command Registry (PR#1) — Whitelist-first safe command execution
+    // Harus setelah AssistantService agar AssistantService.runCommand() bisa mengaksesnya
+    const commandRegistry = new CommandRegistry(serviceManager);
+    await commandRegistry.initialize();
+    serviceManager.register('CommandRegistry', commandRegistry);
+
+    // Audit Log Service (PR#1) — Log narasi terstruktur aksi AI ke Supabase
+    const auditLogService = new AuditLogService(serviceManager);
+    await auditLogService.initialize();
+    serviceManager.register('AuditLogService', auditLogService);
+    this.log('INFO', 'CommandRegistry & AuditLogService Initialized & Registered');
+
+    // Retrieval Strategy Service (PR#5) — Adaptive RAG retrieval (Kasus A & B)
+    // Prasyarat: PR#4 (source attribution) sudah ada di schema DB
+    const retrievalStrategyService = new RetrievalStrategyService(serviceManager);
+    await retrievalStrategyService.initialize();
+    serviceManager.register('RetrievalStrategyService', retrievalStrategyService);
+    this.log('INFO', 'RetrievalStrategyService Initialized & Registered');
+
+    // Module Discovery Service (PR#7) — Scan /modules/ Fase 1
+    // Di-run setelah ToolRegistryService tersedia sebagai target registrasi
+    const moduleDiscoveryService = new ModuleDiscoveryService(serviceManager);
+    await moduleDiscoveryService.initialize(); // Scan otomatis saat initialize()
+    serviceManager.register('ModuleDiscoveryService', moduleDiscoveryService);
+    this.log('INFO', 'ModuleDiscoveryService Initialized & Registered');
 
     // 3. Initialize Adapter Registry stub
     const adapterRegistry = {
