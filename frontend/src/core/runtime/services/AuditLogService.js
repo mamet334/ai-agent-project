@@ -68,7 +68,7 @@ export class AuditLogService {
     if (!mustLog) return; // Read-only ringan tidak wajib disimpan
 
     try {
-      const { supabase } = await import('../../supabase.js');
+      const { supabase } = await import('../../../supabase.js');
       const { error } = await supabase.from(this._tableName).insert(logEntry);
       if (error) {
         // Jika tabel belum ada, log ke konsol saja — jangan throw
@@ -130,7 +130,7 @@ export class AuditLogService {
    */
   async getRecentLogs(limit = 20, userId = null) {
     try {
-      const { supabase } = await import('../../supabase.js');
+      const { supabase } = await import('../../../supabase.js');
       let query = supabase
         .from(this._tableName)
         .select('*')

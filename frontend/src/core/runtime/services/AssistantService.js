@@ -317,7 +317,7 @@ export class AssistantService {
       try {
         // Dynamic import — governor ada di lib/ (Node/Deno), bukan frontend bundle
         // Untuk sementara: import via relative path (akan di-resolve oleh bundler)
-        const { runCognitiveMemoryGovernor, LEGACY_COGNITION_ENABLED } = await import('../../../../lib/cognitiveMemoryGovernor.js').catch(() => ({
+        const { runCognitiveMemoryGovernor, LEGACY_COGNITION_ENABLED } = await import(/* @vite-ignore */ '../../../../../lib/cognitiveMemoryGovernor.js').catch(() => ({
           runCognitiveMemoryGovernor: null,
           LEGACY_COGNITION_ENABLED: false
         }));
@@ -520,7 +520,7 @@ export class AssistantService {
 
     // Import runDesktopInterceptors — sudah diekstrak di useDesktopInterceptor.js
     try {
-      const { runDesktopInterceptors } = await import('../../components/AIAgent/hooks/useDesktopInterceptor.js');
+      const { runDesktopInterceptors } = await import('../../../components/AIAgent/hooks/useDesktopInterceptor.js');
       const { interceptHit, autoReply } = await runDesktopInterceptors(finalAiResponseText);
 
       if (interceptHit && autoReply) {
@@ -563,9 +563,8 @@ export class AssistantService {
     if (!messages || messages.length === 0) return;
     if (!userId) return;
 
-    const { createClient } = await import('@supabase/supabase-js');
     // Gunakan supabase client dari modul yang sudah ada
-    const { supabase } = await import('../../supabase.js');
+    const { supabase } = await import('../../../supabase.js');
 
     const title = messages[0]?.content?.substring(0, 50) || 'Percakapan Baru';
     const payload = {
@@ -598,7 +597,7 @@ export class AssistantService {
    */
   async loadChat(chatId) {
     if (!chatId) return null;
-    const { supabase } = await import('../../supabase.js');
+    const { supabase } = await import('../../../supabase.js');
     const { data, error } = await supabase
       .from('chats')
       .select('*')
