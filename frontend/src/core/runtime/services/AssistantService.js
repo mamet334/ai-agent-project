@@ -20,6 +20,12 @@
 
 const AGENT_ENDPOINT = 'https://uuyzdjifhdfyyvpxsofu.supabase.co/functions/v1/agent-process';
 
+// PR#2: Import governor dari versi JS lokal (bukan cross-boundary ke lib/ TypeScript)
+import {
+  runCognitiveMemoryGovernor,
+  LEGACY_COGNITION_ENABLED
+} from './CognitiveMemoryGovernorService.js';
+
 export class AssistantService {
   constructor(serviceManager) {
     this.serviceManager = serviceManager;
@@ -312,37 +318,25 @@ export class AssistantService {
     }
 
     // 4c. PR#2: Cognitive Memory Governor — validasi memory sebelum dikirim ke LLM
-    // Governor hanya aktif jika ada memory context yang perlu divalidasi
-    if (enhancedRagContext) {
+    // runCognitiveMemoryGovernor di-import secara static dari CognitiveMemoryGovernorService.js
+    if (enhancedRagContext && LEGACY_COGNITION_ENABLED) {
       try {
-        // Dynamic import — governor ada di lib/ (Node/Deno), bukan frontend bundle
-        // Untuk sementara: import via relative path (akan di-resolve oleh bundler)
-        const { runCognitiveMemoryGovernor, LEGACY_COGNITION_ENABLED } = await import(/* @vite-ignore */ '../../../../../lib/cognitiveMemoryGovernor.js').catch(() => ({
-          runCognitiveMemoryGovernor: null,
-          LEGACY_COGNITION_ENABLED: false
-        }));
+        const governorResult = runCognitiveMemoryGovernor({
+          final_decision_context: { memory: { active: { content: enhancedRagContext } }, confidence_score: 0.8 },
+          memory_context: { tgml_nodes: [], conflict_edges: [] },
+          truth_score_bundle: null,
+          behavior_profile: null,
+          global_loop_result: null
+        });
 
-        if (LEGACY_COGNITION_ENABLED && runCognitiveMemoryGovernor) {
-          const governorResult = runCognitiveMemoryGovernor({
-            final_decision_context: { memory: { active: { content: enhancedRagContext } }, confidence_score: 0.8 },
-            memory_context: { tgml_nodes: [], conflict_edges: [] },
-            truth_score_bundle: null,
-            behavior_profile: null,
-            global_loop_result: null
-          });
-
-          if (governorResult.status === 'REJECT') {
-            // Memory ditolak — kirim tanpa context memori
-            console.warn('[AssistantService] CMG REJECT — mengirim tanpa memory context');
-            enhancedRagContext = '';
-          } else if (governorResult.status === 'REWRITE') {
-            console.warn('[AssistantService] CMG REWRITE — memory dipertahankan tapi confidence diturunkan');
-            // Untuk sekarang tetap kirim context — REWRITE handling penuh menyusul
-          }
+        if (governorResult.status === 'REJECT') {
+          console.warn('[AssistantService] CMG REJECT — mengirim tanpa memory context');
+          enhancedRagContext = '';
+        } else if (governorResult.status === 'REWRITE') {
+          console.warn('[AssistantService] CMG REWRITE — confidence diturunkan');
         }
       } catch (e) {
-        // Governor tidak tersedia (TypeScript belum transpile) — skip, tidak blocking
-        console.log('[AssistantService] CMG skip (import gagal):', e.message);
+        console.warn('[AssistantService] CMG error (skip):', e.message);
       }
     }
 
