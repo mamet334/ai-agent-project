@@ -637,8 +637,19 @@ export class AssistantService {
     }
 
     if (preparation.needsConfirmation) {
-      // Kembalikan ke caller — UI yang akan tampilkan dialog
-      // Setelah user konfirmasi, caller memanggil confirmAndRunCommand()
+      // Emit ke EventBus — UI yang menampilkan dialog, bukan service
+      // Setelah user konfirmasi, UI memanggil assistantService.confirmAndRunCommand()
+      const eventBus = this.serviceManager.get('EventBus');
+      if (eventBus) {
+        eventBus.emit('Command:ConfirmationRequired', {
+          commandName,
+          args,
+          isDestructive: preparation.isDestructive,
+          inWorkspace: preparation.inWorkspace,
+          reason: preparation.reason,
+          context
+        });
+      }
       return {
         output: '',
         success: false,
@@ -646,7 +657,6 @@ export class AssistantService {
         isDestructive: preparation.isDestructive,
         inWorkspace: preparation.inWorkspace,
         confirmationReason: preparation.reason,
-        // Payload untuk dipakai setelah konfirmasi
         _pendingCommand: { commandName, args }
       };
     }

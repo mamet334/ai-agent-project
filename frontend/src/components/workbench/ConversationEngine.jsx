@@ -67,6 +67,10 @@ export default function ConversationEngine({ sessionId }) {
   const [lastCheckpoint, setLastCheckpoint] = useState(null);
   const [rollbackState, setRollbackState] = useState('idle');
 
+  // --- PR#1: Command Confirmation Dialog State ---
+  // null = tidak ada dialog; objek = dialog aktif
+  const [commandConfirmation, setCommandConfirmation] = useState(null);
+
   // --- Refs ---
   const messagesEndRef = useRef(null);
   const scrollContainerRef = useRef(null);
@@ -392,6 +396,54 @@ export default function ConversationEngine({ sessionId }) {
     return unsubscribeMemory;
   }, []);
 
+  // PR#1: COMMAND CONFIRMATION REQUIRED
+  // Listener ini menangkap event dari AssistantService.runCommand() saat command butuh konfirmasi user.
+  // UI bertanggung jawab menampilkan dialog yang sesuai berdasarkan tipe command.
+  useEffect(() => {
+    const eventBus = kernel.serviceManager?.get('EventBus');
+    if (!eventBus) return;
+    const commandConfirmHandler = (payload) => {
+      // Simpan detail command pending — dialog akan render berdasarkan ini
+      setCommandConfirmation({
+        commandName: payload.commandName,
+        args: payload.args || {},
+        isDestructive: payload.isDestructive || false,
+        inWorkspace: payload.inWorkspace !== false, // default true jika tidak ada
+        reason: payload.reason || 'Konfirmasi diperlukan untuk melanjutkan.',
+        context: payload.context || {}
+      });
+    };
+    const unsubscribeCmd = eventBus.on('Command:ConfirmationRequired', commandConfirmHandler);
+    return unsubscribeCmd;
+  }, []);
+
+  // PR#1: Handle konfirmasi (user klik "Izinkan" / "Jalankan")
+  const handleCommandConfirm = useCallback(async () => {
+    if (!commandConfirmation) return;
+    const { commandName, args, context } = commandConfirmation;
+    setCommandConfirmation(null); // tutup dialog dulu
+
+    const assistantService = getAssistantService();
+    if (!assistantService) return;
+
+    const result = await assistantService.confirmAndRunCommand(commandName, args, context);
+    const msg = result?.success
+      ? `✅ **Command Berhasil:** \`${commandName}\`\n\n${result.output || ''}`
+      : `❌ **Command Gagal:** \`${commandName}\`\n\n${result?.output || 'Terjadi kesalahan.'}`;
+    setMessages(prev => [...prev, { role: 'model', content: msg }]);
+  }, [commandConfirmation]);
+
+  // PR#1: Handle batal (user klik "Batalkan")
+  const handleCommandCancel = useCallback(() => {
+    if (!commandConfirmation) return;
+    const { commandName } = commandConfirmation;
+    setCommandConfirmation(null);
+    setMessages(prev => [...prev, {
+      role: 'model',
+      content: `🚫 **Command Dibatalkan:** \`${commandName}\`\n\n_Tidak ada perubahan yang dilakukan._`
+    }]);
+  }, [commandConfirmation]);
+
   // =============================================
   // HANDLE REFRESH MEMORY (manual)
   // =============================================
@@ -576,6 +628,92 @@ export default function ConversationEngine({ sessionId }) {
   // =============================================
   return (
     <div className="flex flex-1 min-w-0 min-h-0 h-full w-full bg-background font-body-base text-on-surface">
+
+      {/* =============================================
+          PR#1: COMMAND CONFIRMATION DIALOG
+          Tampil sebagai overlay modal ketika AI meminta
+          eksekusi command yang butuh persetujuan Owner.
+          Tiga varian visual sesuai tingkat risiko.
+          ============================================= */}
+      {commandConfirmation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className={`w-full max-w-md mx-4 rounded-2xl shadow-2xl border-2 p-6 ${
+            commandConfirmation.isDestructive
+              ? 'bg-red-950 border-red-500'
+              : !commandConfirmation.inWorkspace
+              ? 'bg-yellow-950 border-yellow-500'
+              : 'bg-surface border-primary'
+          }`}>
+            {/* Header */}
+            <div className="flex items-start gap-3 mb-4">
+              <span className="text-2xl">
+                {commandConfirmation.isDestructive ? '⚠️' : !commandConfirmation.inWorkspace ? '🔒' : '🖥️'}
+              </span>
+              <div>
+                <h3 className={`font-bold text-lg leading-tight ${
+                  commandConfirmation.isDestructive ? 'text-red-300'
+                  : !commandConfirmation.inWorkspace ? 'text-yellow-300'
+                  : 'text-on-surface'
+                }`}>
+                  {commandConfirmation.isDestructive
+                    ? 'TINDAKAN BERBAHAYA — Konfirmasi Tegas Diperlukan'
+                    : !commandConfirmation.inWorkspace
+                    ? 'Di Luar Workspace — Izinkan Sekali?'
+                    : 'Konfirmasi Command'}
+                </h3>
+                {!commandConfirmation.inWorkspace && (
+                  <p className="text-yellow-400 text-xs mt-1">
+                    ⚠️ Izin ini hanya berlaku untuk permintaan ini saja — tidak di-cache.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Detail Command */}
+            <div className="bg-black/30 rounded-lg p-3 mb-4 font-mono text-sm">
+              <span className="text-on-surface-variant">Command: </span>
+              <span className="text-primary font-semibold">{commandConfirmation.commandName}</span>
+              {Object.keys(commandConfirmation.args).length > 0 && (
+                <div className="mt-1 text-on-surface-variant text-xs">
+                  {JSON.stringify(commandConfirmation.args, null, 2)}
+                </div>
+              )}
+            </div>
+
+            {/* Alasan */}
+            <p className="text-on-surface-variant text-sm mb-5">
+              {commandConfirmation.reason}
+            </p>
+
+            {/* Tombol — destruktif butuh extra langkah konfirmasi visual */}
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={handleCommandCancel}
+                className="px-4 py-2 rounded-lg bg-surface-variant text-on-surface-variant hover:bg-surface-variant/80 text-sm font-medium transition-colors"
+              >
+                Batalkan
+              </button>
+              <button
+                onClick={handleCommandConfirm}
+                className={`px-5 py-2 rounded-lg text-sm font-bold transition-colors ${
+                  commandConfirmation.isDestructive
+                    ? 'bg-red-600 hover:bg-red-500 text-white ring-2 ring-red-400'
+                    : !commandConfirmation.inWorkspace
+                    ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
+                    : 'bg-primary hover:bg-primary/90 text-on-primary'
+                }`}
+              >
+                {commandConfirmation.isDestructive
+                  ? '⚠️ Ya, Saya Yakin — Jalankan'
+                  : !commandConfirmation.inWorkspace
+                  ? '🔓 Izinkan Sekali'
+                  : '✅ Jalankan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sidebar Riwayat Chat */}
       <div className={`transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'w-0 overflow-hidden'} shrink-0 z-50 md:relative absolute left-0 top-0 h-full bg-background border-r border-outline-variant`}>
         <ChatHistory
