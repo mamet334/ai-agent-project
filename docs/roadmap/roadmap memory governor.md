@@ -3,6 +3,16 @@
 
 ---
 
+> ⚠️ **CATATAN DISAMBIGUASI (wajib dibaca sebelum eksekusi Fase 1):**
+> `MemoryGovernorService.js` pada Fase 1 di bawah ini adalah modul **BARU, BELUM DIBUAT**, dan **BERBEDA** dari `lib/cognitiveMemoryGovernor.ts` yang sudah diimplementasikan dan aktif pada PR#2 (ASSISTANT-CAPABILITY-ROADMAP.md, selesai 2026-08-28).
+>
+> - `cognitiveMemoryGovernor.ts` (sudah ada) — beroperasi di level Assistant/percakapan: menghitung `truth_score` berdasarkan sumber memori & frekuensi konfirmasi, dipakai saat `AssistantService.processMessage()` retrieval memori untuk chat.
+> - `MemoryGovernorService.js` (Fase 1, direncanakan) — beroperasi di level data/knowledge base: menjaga integritas ringkasan vs raw content (Golden Source Rule), retrieval dua-tahap, conflict resolution, access tier, dan soft-delete lifecycle untuk tabel `mamet_memory`.
+>
+> Kedua modul independen dan TIDAK boleh disatukan atau dianggap saling menggantikan tanpa keputusan eksplisit dari Owner. Jangan asumsikan Fase 1 sudah selesai karena PR#2 sudah selesai.
+
+---
+
 ### ✅ FASE 1: Membangun `MemoryGovernorService` (Anti-Bias & Pemelihara Memori)
 - **Tujuan:** Mencegah AI menjadi bias akibat "ringkasan dari ringkasan" (seperti pengalaman gagal pada PDF).
 - **Tindakan:**
