@@ -26,6 +26,17 @@ import {
   LEGACY_COGNITION_ENABLED
 } from './CognitiveMemoryGovernorService.js';
 
+// PR#6: Token estimator sederhana (~4 chars per token, standar Anthropic/OpenAI approximation)
+// Dipakai untuk logging before/after context optimization
+function estimateTokens(text = '') {
+  return Math.ceil(text.length / 4);
+}
+
+// PR#6: Batas maksimal karakter untuk RAG/memory context yang dikirim ke Edge Function
+// Cegah bloat — context besar tidak selalu = jawaban lebih baik
+const MAX_RAG_CONTEXT_CHARS = 4000;   // ~1000 token
+const MAX_SEMANTIC_CONTEXT_CHARS = 2000; // ~500 token
+
 export class AssistantService {
   constructor(serviceManager) {
     this.serviceManager = serviceManager;
@@ -343,19 +354,45 @@ export class AssistantService {
     // 5. Build file data
     const fileData = await this.buildFileData(attachedFile);
 
-    // 6. Build payload
+    // 6. PR#6: Context trimming sebelum build payload
+    // (b) Delegasi operasi berat — pastikan context tidak bloat sebelum ke Edge Function
+    const rawRagLen = (enhancedRagContext || '').length;
+    const rawSemLen = (semanticContext || '').length;
+    const rawHistLen = JSON.stringify(history.slice(isLiteMode ? -5 : -10)).length;
+
+    // Trim RAG context jika melebihi batas
+    let trimmedRagContext = enhancedRagContext || '';
+    if (trimmedRagContext.length > MAX_RAG_CONTEXT_CHARS) {
+      trimmedRagContext = trimmedRagContext.slice(0, MAX_RAG_CONTEXT_CHARS) +
+        '\n[...konteks RAG dipotong untuk efisiensi token...]';
+    }
+
+    // Trim semantic context jika melebihi batas
+    let trimmedSemanticContext = semanticContext || '';
+    if (trimmedSemanticContext.length > MAX_SEMANTIC_CONTEXT_CHARS) {
+      trimmedSemanticContext = trimmedSemanticContext.slice(0, MAX_SEMANTIC_CONTEXT_CHARS) +
+        '\n[...konteks semantik dipotong...]';
+    }
+
+    // Log perbandingan token (exit criteria PR#6)
+    const tokensBefore = estimateTokens(enhancedRagContext) + estimateTokens(semanticContext) + estimateTokens(userMsg);
+    const tokensAfter  = estimateTokens(trimmedRagContext) + estimateTokens(trimmedSemanticContext) + estimateTokens(userMsg);
+    const tokensSaved  = tokensBefore - tokensAfter;
+    console.log(`[PR#6 TokenEfficiency] RAG: ${rawRagLen}→${trimmedRagContext.length} chars | Semantic: ${rawSemLen}→${trimmedSemanticContext.length} chars | History: ${rawHistLen} chars`);
+    console.log(`[PR#6 TokenEfficiency] Estimasi token: ${tokensBefore} → ${tokensAfter} (hemat ~${tokensSaved} token)`);
+
+    // 7. Build payload
     // PR#6: Token efficiency
-    //   (a) Prompt caching: provider-specific cache breakpoint ditandai di system prompt
-    //       (dikelola di Edge Function — AssistantService mengirim flag cache_hint)
-    //   (b) Delegasi operasi berat: webSearch result hanya kirim summary, bukan raw HTML
+    //   (a) Prompt caching: dikelola di Edge Function dengan flag cache_hint
+    //   (b) Delegasi operasi berat: sudah di-trim di atas + researcher.ts
     const payload = {
       message: userMsg,
       mode: resolvedMode,
       appSource: resolvedAppSource,
       workspaceTarget: workspaceId,
       history: history.slice(isLiteMode ? -5 : -10),
-      globalMemory: enhancedRagContext,        // PR#5: mungkin sudah diproses RetrievalStrategy
-      semanticContext: semanticContext,
+      globalMemory: trimmedRagContext,         // PR#6: sudah di-trim, max 4000 chars
+      semanticContext: trimmedSemanticContext, // PR#6: sudah di-trim, max 2000 chars
       stream: false,
       ragEnabled: true,
       model: formattedModel || undefined,
@@ -363,7 +400,9 @@ export class AssistantService {
       requestedFilePath: isEngineerMode ? this.extractFilePathFromMessage(userMsg) : undefined,
       tools: isLiteMode ? ['rag_search', 'web_search', 'deep_research'] : undefined,
       // PR#6: hint untuk Edge Function agar mengaktifkan prompt caching
-      cache_hint: true
+      cache_hint: true,
+      // PR#6: kirim token estimate ke Edge Function untuk monitoring
+      _token_meta: { estimated_before: tokensBefore, estimated_after: tokensAfter, saved: tokensSaved }
     };
 
     // Bersihkan key undefined
