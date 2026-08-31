@@ -26,6 +26,7 @@ import { CommandRegistry } from './services/CommandRegistry.js';
 import { AuditLogService } from './services/AuditLogService.js';
 import { RetrievalStrategyService } from './services/RetrievalStrategyService.js';
 import { ModuleDiscoveryService } from './services/ModuleDiscoveryService.js';
+import { RequestClassifierService } from './services/RequestClassifierService.js';
 
 /**
  * MAEF Kernel v2.0
@@ -294,6 +295,14 @@ class Kernel {
     await moduleDiscoveryService.initialize(); // Scan otomatis saat initialize()
     serviceManager.register('ModuleDiscoveryService', moduleDiscoveryService);
     this.log('INFO', 'ModuleDiscoveryService Initialized & Registered');
+
+    // Request Classifier Service (PR#8) — Linux-style Request Dispatcher
+    // Klasifikasi tipe request (LOOKUP/CONVERSATION/COMMAND/ENGINEER) sebelum pipeline berat.
+    // Deterministik, 0 LLM cost, 0 DB call — harus setelah AssistantService terdaftar.
+    const requestClassifierService = new RequestClassifierService(serviceManager);
+    await requestClassifierService.initialize();
+    serviceManager.register('RequestClassifierService', requestClassifierService);
+    this.log('INFO', 'RequestClassifierService Initialized & Registered');
 
     // 3. Initialize Adapter Registry stub
     const adapterRegistry = {

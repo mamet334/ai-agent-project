@@ -243,22 +243,9 @@ export class AssistantService {
   // =============================================
 
   /**
-   * Proses pesan user — entry point utama dari ConversationEngine.
-   *
-   * @param {Object} params
-   * @param {string} params.userMsg - pesan user
-   * @param {Array}  params.history - riwayat pesan sebelumnya (sudah termasuk pesan user baru)
-   * @param {string} params.workspaceId - workspace aktif
-   * @param {string} params.userId - user ID dari Supabase session
-   * @param {string} params.token - Supabase access token
-   * @param {File|null} params.attachedFile - file attachment (opsional)
-   * @param {Object} params.workspaceManager - untuk openWidgetInWorkbench
-   *
-   * @param {Function} params.onChunk - callback(chunkText, allText, steps) dipanggil tiap chunk stream
-   * @param {Function} params.onDone - callback(finalText, steps, jsonMetadata) dipanggil saat selesai
-   * @param {Function} params.onError - callback(errorMessage) dipanggil saat error
-   *
-   * @returns {Promise<void>}
+   * Proses pesan user — PR#8: Thin dispatcher (Linux-style).
+   * Hanya: resolve mode → memory trigger → classify → dispatch.
+   * Logic berat ada di _handleLookup() dan _handleConversation().
    */
   async processMessage({
     userMsg,
@@ -281,10 +268,6 @@ export class AssistantService {
 
     // 1. Resolve mode
     const { resolvedMode, resolvedAppSource } = this.resolveMode(workspaceId);
-    const isEngineerMode = resolvedMode === 'ENGINEER';
-    const isLiteMode = resolvedMode === 'LITE';
-
-    console.log(`[AssistantService] Mode check: workspace=${workspaceId}, resolvedMode=${resolvedMode}`);
 
     // 2. Memory trigger check (keyword: ingat/simpan/catat)
     const memoryResult = await this.handleMemoryTrigger(userMsg);
@@ -293,11 +276,126 @@ export class AssistantService {
       return;
     }
 
+    // 3. PR#8: Classify request type (deterministic, 0 LLM cost)
+    const classifier = this.serviceManager.has('RequestClassifierService')
+      ? this.serviceManager.get('RequestClassifierService')
+      : null;
+    const { type: requestType } = classifier?.classify(userMsg, history, resolvedMode)
+      || { type: 'CONVERSATION' };
+
+    // 4. Dispatch ke handler yang sesuai
+    const handlerParams = {
+      userMsg, history, workspaceId, userId, token,
+      attachedFile, workspaceManager, onChunk, onDone, onError,
+      resolvedMode, resolvedAppSource
+    };
+
+    if (requestType === 'LOOKUP') {
+      return this._handleLookup(handlerParams);
+    }
+
+    // COMMAND, ENGINEER, CONVERSATION, SKILL (future) → semua lewat ConversationHandler
+    // CommandRegistry dipanggil downstream setelah LLM respond (via PR#1 flow)
+    return this._handleConversation(handlerParams);
+  }
+
+  // =============================================
+  // PR#8 — LOOKUP HANDLER (ringan, cepat, murah)
+  // =============================================
+
+  /**
+   * Handle pesan tipe LOOKUP — pertanyaan faktual singkat.
+   * SKIP: memory retrieval, RAG, semantic context, CMG validation.
+   * Hanya: get AI provider → build minimal payload → fetch → handle response.
+   *
+   * @private
+   */
+  async _handleLookup({
+    userMsg, history, userId, token, workspaceManager,
+    resolvedMode, resolvedAppSource, onChunk, onDone, onError
+  }) {
+    console.log('[AssistantService] PR#8 → _handleLookup (skip memory/RAG/semantic)');
+
+    // Get AI provider config
+    let aiProvider = 'gemini';
+    let formattedModel = '';
+    let aiKey = '';
+    try {
+      const brainService = this.serviceManager.get('BrainService');
+      if (brainService) {
+        const context = await brainService.getActiveBrainContext();
+        aiProvider = context.provider || 'gemini';
+        formattedModel = context.model || '';
+        aiKey = context.key || '';
+      }
+    } catch (e) {
+      console.warn('[AssistantService] BrainService not available:', e);
+    }
+
+    // Payload minimal — tidak ada globalMemory atau semanticContext
+    const payload = {
+      message: userMsg,
+      mode: 'LOOKUP',              // flag ke Edge Function
+      appSource: resolvedAppSource,
+      workspaceTarget: null,
+      history: history.slice(-3),  // hanya 3 pesan terakhir (bukan 10)
+      globalMemory: '',            // sengaja kosong — tidak butuh RAG
+      semanticContext: '',         // sengaja kosong
+      stream: false,
+      ragEnabled: false,
+      model: formattedModel || undefined,
+      cache_hint: true,
+      _request_type: 'LOOKUP'
+    };
+    Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
+
+    const headers = this.buildHeaders(token, aiProvider, aiKey);
+
+    let response;
+    try {
+      response = await fetch(AGENT_ENDPOINT, { method: 'POST', headers, body: JSON.stringify(payload) });
+    } catch (fetchErr) {
+      onError?.(`Gagal menghubungi server: ${fetchErr.message}`);
+      return;
+    }
+
+    console.log(`[LIFECYCLE] LOOKUP response received (HTTP ${response.status})`);
+
+    if (!response.ok) {
+      let errorText = `HTTP error! status: ${response.status}`;
+      try { const e = await response.json(); errorText = e.error || errorText; } catch (_) { errorText = (await response.text()) || errorText; }
+      onError?.(`⚠️ Error: ${errorText}`);
+      return;
+    }
+
+    // Reuse response handler yang sama dengan ConversationHandler
+    await this._handleResponseStream(response, { userMsg, isEngineerMode: false, workspaceManager, onChunk, onDone, onError });
+  }
+
+  // =============================================
+  // PR#8 — CONVERSATION HANDLER (alur penuh)
+  // =============================================
+
+  /**
+   * Handle pesan tipe CONVERSATION/ENGINEER/COMMAND — alur lengkap.
+   * Ini adalah logika yang sebelumnya ada di processMessage().
+   *
+   * @private
+   */
+  async _handleConversation({
+    userMsg, history, workspaceId, userId, token,
+    attachedFile, workspaceManager, resolvedMode, resolvedAppSource,
+    onChunk, onDone, onError
+  }) {
+    const isEngineerMode = resolvedMode === 'ENGINEER';
+    const isLiteMode = resolvedMode === 'LITE';
+
+    console.log(`[AssistantService] Mode check: workspace=${workspaceId}, resolvedMode=${resolvedMode}`);
+
     // 3. Get AI provider config dari BrainService
     let aiProvider = 'gemini';
     let formattedModel = '';
     let aiKey = '';
-
     try {
       const brainService = this.serviceManager.get('BrainService');
       if (brainService) {
@@ -315,21 +413,14 @@ export class AssistantService {
       userMsg, resolvedMode, userId
     );
 
-    // 4b. PR#5: Adaptive Retrieval — jika ada RAG context, proses lewat RetrievalStrategy
+    // 4b. PR#5: Adaptive Retrieval — integration point (inactive, menunggu KnowledgeService refactor)
     let enhancedRagContext = localContext;
     const retrievalService = this.serviceManager.get('RetrievalStrategyService');
     if (retrievalService && localContext) {
-      // Jika localContext berupa array of chunks (dari MemoryService), apply strategy
-      // Jika sudah string biasa, lewati (backward compat)
-      // RetrievalStrategyService.formatAsContext() akan dipakai jika ada chunk object
-      // Untuk sekarang: localContext tetap dipakai langsung karena MemoryService
-      // mengembalikan array of memory objects bukan raw chunk DB
-      // → Integration point ini akan diaktifkan penuh saat KnowledgeService di-refactor
       console.log('[AssistantService] PR#5 RetrievalStrategy: ready, waiting for full RAG chunk integration');
     }
 
     // 4c. PR#2: Cognitive Memory Governor — validasi memory sebelum dikirim ke LLM
-    // runCognitiveMemoryGovernor di-import secara static dari CognitiveMemoryGovernorService.js
     if (enhancedRagContext && LEGACY_COGNITION_ENABLED) {
       try {
         const governorResult = runCognitiveMemoryGovernor({
@@ -339,7 +430,6 @@ export class AssistantService {
           behavior_profile: null,
           global_loop_result: null
         });
-
         if (governorResult.status === 'REJECT') {
           console.warn('[AssistantService] CMG REJECT — mengirim tanpa memory context');
           enhancedRagContext = '';
@@ -354,71 +444,54 @@ export class AssistantService {
     // 5. Build file data
     const fileData = await this.buildFileData(attachedFile);
 
-    // 6. PR#6: Context trimming sebelum build payload
-    // (b) Delegasi operasi berat — pastikan context tidak bloat sebelum ke Edge Function
+    // 6. PR#6: Context trimming
     const rawRagLen = (enhancedRagContext || '').length;
     const rawSemLen = (semanticContext || '').length;
-    const rawHistLen = JSON.stringify(history.slice(isLiteMode ? -5 : -10)).length;
 
-    // Trim RAG context jika melebihi batas
     let trimmedRagContext = enhancedRagContext || '';
     if (trimmedRagContext.length > MAX_RAG_CONTEXT_CHARS) {
       trimmedRagContext = trimmedRagContext.slice(0, MAX_RAG_CONTEXT_CHARS) +
         '\n[...konteks RAG dipotong untuk efisiensi token...]';
     }
 
-    // Trim semantic context jika melebihi batas
     let trimmedSemanticContext = semanticContext || '';
     if (trimmedSemanticContext.length > MAX_SEMANTIC_CONTEXT_CHARS) {
       trimmedSemanticContext = trimmedSemanticContext.slice(0, MAX_SEMANTIC_CONTEXT_CHARS) +
         '\n[...konteks semantik dipotong...]';
     }
 
-    // Log perbandingan token (exit criteria PR#6)
     const tokensBefore = estimateTokens(enhancedRagContext) + estimateTokens(semanticContext) + estimateTokens(userMsg);
     const tokensAfter  = estimateTokens(trimmedRagContext) + estimateTokens(trimmedSemanticContext) + estimateTokens(userMsg);
     const tokensSaved  = tokensBefore - tokensAfter;
-    console.log(`[PR#6 TokenEfficiency] RAG: ${rawRagLen}→${trimmedRagContext.length} chars | Semantic: ${rawSemLen}→${trimmedSemanticContext.length} chars | History: ${rawHistLen} chars`);
+    console.log(`[PR#6 TokenEfficiency] RAG: ${rawRagLen}→${trimmedRagContext.length} chars | Semantic: ${rawSemLen}→${trimmedSemanticContext.length} chars`);
     console.log(`[PR#6 TokenEfficiency] Estimasi token: ${tokensBefore} → ${tokensAfter} (hemat ~${tokensSaved} token)`);
 
     // 7. Build payload
-    // PR#6: Token efficiency
-    //   (a) Prompt caching: dikelola di Edge Function dengan flag cache_hint
-    //   (b) Delegasi operasi berat: sudah di-trim di atas + researcher.ts
     const payload = {
       message: userMsg,
       mode: resolvedMode,
       appSource: resolvedAppSource,
       workspaceTarget: workspaceId,
       history: history.slice(isLiteMode ? -5 : -10),
-      globalMemory: trimmedRagContext,         // PR#6: sudah di-trim, max 4000 chars
-      semanticContext: trimmedSemanticContext, // PR#6: sudah di-trim, max 2000 chars
+      globalMemory: trimmedRagContext,
+      semanticContext: trimmedSemanticContext,
       stream: false,
       ragEnabled: true,
       model: formattedModel || undefined,
       file: fileData || undefined,
       requestedFilePath: isEngineerMode ? this.extractFilePathFromMessage(userMsg) : undefined,
       tools: isLiteMode ? ['rag_search', 'web_search', 'deep_research'] : undefined,
-      // PR#6: hint untuk Edge Function agar mengaktifkan prompt caching
       cache_hint: true,
-      // PR#6: kirim token estimate ke Edge Function untuk monitoring
-      _token_meta: { estimated_before: tokensBefore, estimated_after: tokensAfter, saved: tokensSaved }
+      _token_meta: { estimated_before: tokensBefore, estimated_after: tokensAfter, saved: tokensSaved },
+      _request_type: 'CONVERSATION'
     };
-
-    // Bersihkan key undefined
     Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
 
-    // 7. Build headers
+    // 8. Build headers & fetch
     const headers = this.buildHeaders(token, aiProvider, aiKey);
-
-    // 8. Fetch
     let response;
     try {
-      response = await fetch(AGENT_ENDPOINT, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload)
-      });
+      response = await fetch(AGENT_ENDPOINT, { method: 'POST', headers, body: JSON.stringify(payload) });
     } catch (fetchErr) {
       onError?.(`Gagal menghubungi server: ${fetchErr.message}`);
       return;
@@ -428,18 +501,26 @@ export class AssistantService {
 
     if (!response.ok) {
       let errorText = `HTTP error! status: ${response.status}`;
-      try {
-        const errorData = await response.json();
-        errorText = errorData.error || errorText;
-      } catch (_) {
-        errorText = (await response.text()) || errorText;
-      }
+      try { const errorData = await response.json(); errorText = errorData.error || errorText; }
+      catch (_) { errorText = (await response.text()) || errorText; }
       console.error('[LIFECYCLE] Edge Function Error:', errorText);
       onError?.(`⚠️ Error: ${errorText}`);
       return;
     }
 
-    // 9. Handle JSON vs Stream response
+    await this._handleResponseStream(response, { userMsg, isEngineerMode, workspaceManager, onChunk, onDone, onError });
+  }
+
+  // =============================================
+  // SHARED — Response Stream Handler
+  // =============================================
+
+  /**
+   * Handle JSON/streaming response dari Edge Function.
+   * Dipakai bersama oleh _handleLookup dan _handleConversation.
+   * @private
+   */
+  async _handleResponseStream(response, { userMsg, isEngineerMode, workspaceManager, onChunk, onDone, onError }) {
     const contentType = response.headers.get('content-type') || '';
 
     if (contentType.includes('application/json')) {
@@ -454,14 +535,13 @@ export class AssistantService {
 
       onDone?.(cleanContent, jsonData.processingSteps || [], jsonData, { hasPatch, patchOriginalTask: hasPatch ? userMsg : undefined });
 
-      // Open lifecycle inspector
       if (workspaceManager?.openWidgetInWorkbench) {
         workspaceManager.openWidgetInWorkbench('right', 'widget:maef-monitor', { focusStep: 'execution', logs: jsonData });
       }
       return;
     }
 
-    // 10. Streaming path
+    // Streaming path
     let reader, decoder;
     try {
       reader = response.body.getReader();
@@ -478,7 +558,7 @@ export class AssistantService {
     let buffer = '';
 
     console.log('[LIFECYCLE] Stream started');
-    onChunk?.('', '', []); // Signal streaming started (empty first frame)
+    onChunk?.('', '', []);
 
     while (!done) {
       const { value, done: readerDone } = await reader.read();
@@ -518,7 +598,6 @@ export class AssistantService {
 
     console.log('[LIFECYCLE] Stream completed');
 
-    // 11. Detect patch proposal (streaming path)
     const hasPatch = isEngineerMode && aiResponseText.includes('[MAMET_PATCH_READY]');
     const finalText = hasPatch
       ? aiResponseText.replace('[MAMET_PATCH_READY]', '').trim()
@@ -529,7 +608,7 @@ export class AssistantService {
       patchOriginalTask: hasPatch ? userMsg : undefined
     });
 
-    // 12. OS Execution Interceptor (Electron only)
+    // OS Execution Interceptor (Electron only)
     await this._runOSInterceptor(finalText, userMsg, workspaceManager, onChunk, onDone, onError);
   }
 
