@@ -1,7 +1,7 @@
 # 🗺️ INIT.md - MAMET ECOSYSTEM MASTER INDEX
 
 ## 📌 1. DIREKTIF UTAMA (Wajib dipatuhi AI/Engineer)
-Proyek ini memiliki **27 dokumen di folder `constitution/`** dan beberapa dokumen di root.
+Proyek ini memiliki **28 dokumen di folder `constitution/`** dan beberapa dokumen di root.
 Anda **TIDAK DIIZINKAN** membaca seluruh dokumen sekaligus.
 1. Identifikasi tugas Anda berdasarkan **Peta Navigasi Tugas (Poin 4)**.
 2. **HANYA** buka dokumen yang ditunjuk di folder `constitution/`.
@@ -10,7 +10,7 @@ Anda **TIDAK DIIZINKAN** membaca seluruh dokumen sekaligus.
 
 ---
 
-## 📂 2. INDEKS LENGKAP CONSTITUTION (27 Dokumen) & ROOT
+## 📂 2. INDEKS LENGKAP CONSTITUTION (28 Dokumen) & ROOT
 *(Referensi struktur file asli di GitHub)*
 
 **Root Dokumen Filosofi:** `README.md`, `AGENTS.md`.
@@ -47,6 +47,7 @@ Anda **TIDAK DIIZINKAN** membaca seluruh dokumen sekaligus.
 | **3** | `24_ANTI_HALLUCINATION_PROTOCOL.md` | Protokol disiplin anti-halusinasi & Reality Classification wajib. |
 | **3** | `25_DESIGN_PHILOSOPHY.md` | Maxim teknis: Simple beats complex, Root Cause First, Observability Mandatory. |
 | **3** | `26_MENTAL_MODEL.md` | Peta konsep ringkas lintas komponen (Owner→Mamet→Capability→LLM→Infra). |
+| **3** | `27_DECISION_HEURISTICS.md` | Strategic Decision Matrix, Engineer/Assistant Principle, tie-breaker konkret untuk keputusan strategis. |
 | **3** | `ENGINEERING_CONTRACT.md` | Kontrak teknis mengikat antara MAEF dan Engineer. |
 
 ---
@@ -58,6 +59,7 @@ Anda **TIDAK DIIZINKAN** membaca seluruh dokumen sekaligus.
 | :--- | :--- |
 | **Memahami Arah Sistem / Filosofi Owner** | `constitution/00_CONSTITUTION.md` + `constitution/01_VISION.md` + `constitution/04_OWNER_SOVEREIGNTY.md` |
 | **Onboarding Cepat / Peta Konsep Ringkas** | `constitution/26_MENTAL_MODEL.md` |
+| **Keputusan Strategis / Trade-off Sulit** | `constitution/27_DECISION_HEURISTICS.md` |
 | **Buat / Ganti Capability (Modul/Adapter)** | `constitution/03_CAPABILITY_PORT.md` + `constitution/12_CAPABILITY_ADAPTER_SPEC.md` |
 | **Membuat Alur Eksekusi / Workflow** | `constitution/14_MAEF_ORCHESTRATOR_SPEC.md` + `constitution/11_MAEF_EVENT_SYSTEM.md` |
 | **Menulis Skema DB / Menyimpan Data** | `constitution/06_MEMORY_SYSTEM.md` + `docs/adr/ADR-0011.md` |
@@ -118,4 +120,4 @@ Simple beats complex. Root Cause First. Permanent Solution First. Build systems,
 
 ---
 
-*Catatan revisi: dokumen ini diperbarui untuk mencerminkan struktur `constitution/` per Agustus 2026 (27 dokumen, termasuk penambahan 23-26). Versi sebelumnya sempat tersimpan di `_knowledge_archive/` dan menyebut struktur lama (24 dokumen, root filosofi berbeda) — sudah usang dan digantikan oleh dokumen ini.*
+*Catatan revisi: dokumen ini diperbarui untuk mencerminkan struktur `constitution/` per Agustus 2026 (28 dokumen, termasuk penambahan 23-27). Versi sebelumnya sempat tersimpan di `_knowledge_archive/` dan menyebut struktur lama (24 dokumen, root filosofi berbeda) — sudah usang dan digantikan oleh dokumen ini. `27_DECISION_HEURISTICS.md` diekstrak dari `NORTH_STAR.md` (diarsipkan ke `docs/project-memory/history-archive/`) karena berisi Strategic Decision Matrix dan Engineer/Assistant Principle yang belum tercakup di dokumen constitution lain.*
