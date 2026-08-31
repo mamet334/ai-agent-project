@@ -1,2 +1,0 @@
-selalu gunakakan ini di awal :
-#file:mantra_realita.md @workspace
