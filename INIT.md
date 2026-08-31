@@ -1,8 +1,8 @@
 # 🗺️ INIT.md - MAMET ECOSYSTEM MASTER INDEX
 
 ## 📌 1. DIREKTIF UTAMA (Wajib dipatuhi AI/Engineer)
-Proyek ini memiliki **24 dokumen di folder `constitution/`** dan beberapa dokumen di root.
-Anda **TIDAK DIIZINKAN** membaca seluruh 24 dokumen sekaligus. 
+Proyek ini memiliki **27 dokumen di folder `constitution/`** dan beberapa dokumen di root.
+Anda **TIDAK DIIZINKAN** membaca seluruh dokumen sekaligus.
 1. Identifikasi tugas Anda berdasarkan **Peta Navigasi Tugas (Poin 4)**.
 2. **HANYA** buka dokumen yang ditunjuk di folder `constitution/`.
 3. Jangan membuka folder `src/` atau menulis kode sebelum dokumen tersebut selesai Anda baca.
@@ -10,11 +10,13 @@ Anda **TIDAK DIIZINKAN** membaca seluruh 24 dokumen sekaligus.
 
 ---
 
-## 📂 2. INDEKS LENGKAP CONSTITUTION (24 Dokumen) & ROOT
+## 📂 2. INDEKS LENGKAP CONSTITUTION (27 Dokumen) & ROOT
 *(Referensi struktur file asli di GitHub)*
 
-**Root Dokumen Filosofi:** `README.md`, `AGENTS.md`, `NORTH_STAR.md`, `OWNER_MANIFESTO.md`, `DESIGN_PHILOSOPHY.md`, `MENTAL_MODEL.md`.
+**Root Dokumen Filosofi:** `README.md`, `AGENTS.md`.
 **Root Panduan Teknis:** `docs/adr/ADR-0011.md` (Project Memory Canonical Source).
+**Arsip Historis (bukan rujukan aktif):** `docs/project-memory/history-archive/` — berisi `mantra.txt`, `mantra-realita-ringkas.md`, `OWNER_MANIFESTO.md` (versi awal, sudah sepenuhnya tergantikan oleh `04_OWNER_SOVEREIGNTY.md`).
+**Dokumentasi Arsitektur Aktif:** `docs/architecture/` — berisi `universal-roadmap-evidence-gate.md` dan `phase2-knowledge-governance.md` (Evidence Gate & Knowledge Governance, terverifikasi masih berjalan di production Supabase).
 
 | Level | Path File Constitution (di `/constitution/`) | Fungsi Inti |
 | :--- | :--- | :--- |
@@ -38,9 +40,13 @@ Anda **TIDAK DIIZINKAN** membaca seluruh 24 dokumen sekaligus.
 | **2** | `17_MAEF_BOOTSTRAP_SYSTEM.md` | Mekanisme startup (Zero State ke Active dalam 10 Fase). |
 | **2** | `18_DEPLOYMENT_ARCHITECTURE.md` | Infrastruktur runtime (Local, Cloud, Hybrid). |
 | **2** | `19_REFERENCE_IMPLEMENTATION.md` | Contoh implementasi kode nyata. |
-| **3** | `20_ENGINEERING_POLICY.md` | Kebijakan operasional, izin Engineer (Default Deny, Least Privilege). |
-| **3** | `21_Engineer_Capability.md` | Kemampuan, batasan, dan tanggung jawab Engineer. |
+| **3** | `20_ENGINEERING POLICY.md` | Kebijakan operasional, izin Engineer (Default Deny, Least Privilege). |
+| **3** | `21 Engineer Capability.md` | Kemampuan, batasan, dan tanggung jawab Engineer. |
 | **3** | `22_MUS_UI_SPECIFICATION.md` | Spesifikasi tampilan dashboard dan Workspace (Metadata-Driven). |
+| **3** | `23_HOME_DASHBOARD_SPEC.md` | Spesifikasi HomeDashboard (force-directed graph aktivitas AI agent). |
+| **3** | `24_ANTI_HALLUCINATION_PROTOCOL.md` | Protokol disiplin anti-halusinasi & Reality Classification wajib. |
+| **3** | `25_DESIGN_PHILOSOPHY.md` | Maxim teknis: Simple beats complex, Root Cause First, Observability Mandatory. |
+| **3** | `26_MENTAL_MODEL.md` | Peta konsep ringkas lintas komponen (Owner→Mamet→Capability→LLM→Infra). |
 | **3** | `ENGINEERING_CONTRACT.md` | Kontrak teknis mengikat antara MAEF dan Engineer. |
 
 ---
@@ -51,18 +57,19 @@ Anda **TIDAK DIIZINKAN** membaca seluruh 24 dokumen sekaligus.
 | 🔹 **Jenis Tugas AI/Engineer** | 🎯 **Dokumen Wajib Dibuka (Path Asli)** |
 | :--- | :--- |
 | **Memahami Arah Sistem / Filosofi Owner** | `constitution/00_CONSTITUTION.md` + `constitution/01_VISION.md` + `constitution/04_OWNER_SOVEREIGNTY.md` |
+| **Onboarding Cepat / Peta Konsep Ringkas** | `constitution/26_MENTAL_MODEL.md` |
 | **Buat / Ganti Capability (Modul/Adapter)** | `constitution/03_CAPABILITY_PORT.md` + `constitution/12_CAPABILITY_ADAPTER_SPEC.md` |
 | **Membuat Alur Eksekusi / Workflow** | `constitution/14_MAEF_ORCHESTRATOR_SPEC.md` + `constitution/11_MAEF_EVENT_SYSTEM.md` |
 | **Menulis Skema DB / Menyimpan Data** | `constitution/06_MEMORY_SYSTEM.md` + `docs/adr/ADR-0011.md` |
-| **Validasi Output / Cegah Halusinasi** | `constitution/13_VERIFICATION_ENGINE_SPEC.md` |
+| **Validasi Output / Cegah Halusinasi** | `constitution/13_VERIFICATION_ENGINE_SPEC.md` + `constitution/24_ANTI_HALLUCINATION_PROTOCOL.md` |
 | **Memulai Sistem / Inisialisasi** | `constitution/17_MAEF_BOOTSTRAP_SYSTEM.md` (Ikuti 10 Fase!) |
-| **Debugging / Analisis Root Cause** | `constitution/07_ENGINEERING_SYSTEM.md` + `constitution/15_LOGGING_OBSERVABILITY_SYSTEM.md` |
+| **Debugging / Analisis Root Cause** | `constitution/07_ENGINEERING_SYSTEM.md` + `constitution/15_LOGGING_OBSERVABILITY_SYSTEM.md` + `constitution/25_DESIGN_PHILOSOPHY.md` |
 | **Membuat Logging / Observability** | `constitution/15_LOGGING_OBSERVABILITY_SYSTEM.md` |
 | **Mengukur Kinerja / Metrics (SHI)** | `constitution/16_ENGINEERING_METRICS_SYSTEM.md` |
-| **Membuat Dashboard / UI / Workspace** | `constitution/22_MUS_UI_SPECIFICATION.md` (Wajib metadata-driven) |
+| **Membuat Dashboard / UI / Workspace** | `constitution/22_MUS_UI_SPECIFICATION.md` + `constitution/23_HOME_DASHBOARD_SPEC.md` |
 | **Membuat Keputusan Arsitektur Baru** | `constitution/10_ADR_SYSTEM.md` (Tulis ADR dulu!) |
 | **Deployment / Infrastruktur** | `constitution/18_DEPLOYMENT_ARCHITECTURE.md` (Jangan terkunci vendor) |
-| **Memahami Batasan & Izin Engineer** | `constitution/20_ENGINEERING_POLICY.md` + `constitution/21_Engineer_Capability.md` |
+| **Memahami Batasan & Izin Engineer** | `constitution/20_ENGINEERING POLICY.md` + `constitution/21 Engineer Capability.md` |
 
 ---
 
@@ -93,12 +100,22 @@ Setiap perubahan arsitektur WAJIB buat ADR baru. Jangan hapus ADR lama.
 **H. DNA & Filosofi (Dari `09_DNA`):**
 *Owner adalah pusat. MAEF adalah kernel. Capability bisa diganti. Vendor bukan identitas.*
 
+**I. Anti-Halusinasi (Dari `24_ANTI_HALLUCINATION_PROTOCOL`):**
+Wajib gunakan format Reality Classification. Dilarang klaim "100% selesai" tanpa qualifier.
+
+**J. Prinsip Desain (Dari `25_DESIGN_PHILOSOPHY`):**
+Simple beats complex. Root Cause First. Permanent Solution First. Build systems, not features.
+
 ---
 
 ## 🚫 5. LARANGAN MUTLAK (Pelanggaran = Hentikan Tugas & Laporkan Owner)
-1. **DILARANG** buat *patch* instan tanpa cari Root Cause (`07_ENGINEERING`).
+1. **DILARANG** buat *patch* instan tanpa cari Root Cause (`07_ENGINEERING` + `25_DESIGN_PHILOSOPHY`).
 2. **DILARANG** panggil OpenAI/Google langsung tanpa `Adapter Layer`.
 3. **DILARANG** edit `docs/project-memory/*.md` manual. Fakta harus lewat DB (`ADR-0011`).
 4. **DILARANG** ubah `00_CONSTITUTION.md`, `01_VISION.md`, `09_DNA.md`, atau `AGENTS.md` tanpa persetujuan Owner.
 5. **DILARANG** ubah/hapus Log/Metrics (Sistem jadi buta).
 6. **DILARANG** mengambil keputusan akhir atas nama Owner.
+
+---
+
+*Catatan revisi: dokumen ini diperbarui untuk mencerminkan struktur `constitution/` per Agustus 2026 (27 dokumen, termasuk penambahan 23-26). Versi sebelumnya sempat tersimpan di `_knowledge_archive/` dan menyebut struktur lama (24 dokumen, root filosofi berbeda) — sudah usang dan digantikan oleh dokumen ini.*
