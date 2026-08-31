@@ -14,7 +14,7 @@
 | `ASSISTANT-CAPABILITY-ROADMAP.md` | ✅ Selesai (PR#1–#7 Fase 1) — ⚠️ PR#5 parsial | Assistant capability, 7 PR |
 | `roadmap memory governor.md` | ✅ Fase 1 Selesai (Addendum: Two-Stage, Conflict, Access Tier, Soft-Delete) | `MemoryGovernorService.js` |
 | `PR8-linux-style-dispatch.md` | ✅ Selesai — `RequestClassifierService` + thin dispatcher + `_handleLookup` | `RequestClassifierService`, `LookupHandler`, `ConversationHandler` |
-| `teknis-skil-implementasi.md` | 🔜 Tech-spec siap — belum diimplementasikan | `SkillRegistry`, `SkillGuardService`, `SkillHandler` |
+| `teknis-skil-implementasi.md` | ✅ Selesai — SkillRegistry + SkillGuardService + SkillHandler + contoh skill | `SkillRegistry`, `SkillGuardService`, `SkillHandler` |
 | `SPESIFIKASI-TEKNIS-MAMET-OS-v2.md` | 📋 Referensi — `SystemGovernorService.js` belum dikerjakan | Monitoring/observability daemon |
 | `MAMET-AI-ROADMAP.md`, `engineer-autonomous-mode.md`, `engineer-chat-upgrade.md`, `fix-log.md`, `rencana.md`, `roadmap-lanjutan.md` | 📋 Belum direview ulang dalam sesi ini | — |
 
@@ -29,12 +29,11 @@
     ↓
 [SELESAI] PR#8 — Linux-style Dispatch (PR8-linux-style-dispatch.md)
     ↓
-[BERIKUTNYA] Skill Implementation (teknis-skil-implementasi.md)  ← POSISI SEKARANG
-    → Tech-spec sudah disusun, siap diimplementasikan
-    → 3 komponen: SkillRegistry + SkillGuardService + SkillHandler
+[SELESAI] Skill Implementation (teknis-skil-implementasi.md)
     ↓
-[BELUM DIJADWALKAN] SystemGovernorService (SPESIFIKASI-TEKNIS-MAMET-OS-v2.md)
-    → independen, bisa disisipkan kapan saja
+[BERIKUTNYA] SystemGovernorService (SPESIFIKASI-TEKNIS-MAMET-OS-v2.md)  ← POSISI SEKARANG
+    → Independen dari semua item di atas
+    → Monitoring/anomali/audit untuk Engineer self-maintenance
 ```
 
 **Alasan urutan:** MemoryGovernorService paling independen sehingga dikerjakan lebih dulu. PR#8 harus ada sebelum Skill Implementation karena skill matching (Stage 2) secara eksplisit bergantung pada `RequestClassifierService`. Mengerjakan Skill Implementation sebelum PR#8 akan memaksa asumsi/stub yang berisiko rombak ulang.
