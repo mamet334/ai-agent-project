@@ -13,8 +13,8 @@
 |---|---|---|
 | `ASSISTANT-CAPABILITY-ROADMAP.md` | ✅ Selesai (PR#1–#7 Fase 1) — ⚠️ PR#5 parsial | Assistant capability, 7 PR |
 | `roadmap memory governor.md` | ✅ Fase 1 Selesai (Addendum: Two-Stage, Conflict, Access Tier, Soft-Delete) | `MemoryGovernorService.js` |
-| `PR8-linux-style-dispatch.md` | 🔜 Tech-spec siap — belum diimplementasikan | `RequestClassifierService`, `LookupHandler`, `ConversationHandler` |
-| `teknis-skil-implementasi.md` | ⏳ Belum dibuat — menunggu PR#8 selesai dulu | `SkillGuardService`, skill loading system |
+| `PR8-linux-style-dispatch.md` | ✅ Selesai — `RequestClassifierService` + thin dispatcher + `_handleLookup` | `RequestClassifierService`, `LookupHandler`, `ConversationHandler` |
+| `teknis-skil-implementasi.md` | 🔜 Tech-spec siap — belum diimplementasikan | `SkillRegistry`, `SkillGuardService`, `SkillHandler` |
 | `SPESIFIKASI-TEKNIS-MAMET-OS-v2.md` | 📋 Referensi — `SystemGovernorService.js` belum dikerjakan | Monitoring/observability daemon |
 | `MAMET-AI-ROADMAP.md`, `engineer-autonomous-mode.md`, `engineer-chat-upgrade.md`, `fix-log.md`, `rencana.md`, `roadmap-lanjutan.md` | 📋 Belum direview ulang dalam sesi ini | — |
 
@@ -27,16 +27,14 @@
     ↓
 [SELESAI] MemoryGovernorService — Fase 1 Addendum (roadmap memory governor.md)
     ↓
-[BERIKUTNYA] PR#8 — Linux-style Dispatch (PR8-linux-style-dispatch.md)  ← POSISI SEKARANG
-    → Tech-spec sudah disusun, siap diimplementasikan
+[SELESAI] PR#8 — Linux-style Dispatch (PR8-linux-style-dispatch.md)
     ↓
-[LALU] Skill Implementation (teknis-skil-implementasi.md)
-    → bergantung pada RequestClassifierService dari PR#8 (lihat Section 3 dokumen PR#8)
-    → dokumen teknis-skil-implementasi.md belum dibuat
+[BERIKUTNYA] Skill Implementation (teknis-skil-implementasi.md)  ← POSISI SEKARANG
+    → Tech-spec sudah disusun, siap diimplementasikan
+    → 3 komponen: SkillRegistry + SkillGuardService + SkillHandler
     ↓
 [BELUM DIJADWALKAN] SystemGovernorService (SPESIFIKASI-TEKNIS-MAMET-OS-v2.md)
-    → independen, bisa disisipkan kapan saja karena tidak bergantung pada item di atas,
-      tapi didahulukan yang lain karena urgensi lebih tinggi (fondasi Assistant & Memory dulu)
+    → independen, bisa disisipkan kapan saja
 ```
 
 **Alasan urutan:** MemoryGovernorService paling independen sehingga dikerjakan lebih dulu. PR#8 harus ada sebelum Skill Implementation karena skill matching (Stage 2) secara eksplisit bergantung pada `RequestClassifierService`. Mengerjakan Skill Implementation sebelum PR#8 akan memaksa asumsi/stub yang berisiko rombak ulang.
