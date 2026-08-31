@@ -2,7 +2,7 @@
 
 **Tujuan dokumen ini:** Titik masuk pertama untuk Antigravity (atau AI mana pun) sebelum membaca dokumen lain di folder `docs/roadmap/`. Berisi status, urutan pengerjaan, dan ringkasan tiap dokumen — bukan pengganti isi dokumen aslinya.
 
-**Update terakhir:** 2026-08-28
+**Update terakhir:** 2026-08-31
 **Prinsip folder ini:** Satu file, satu tanggung jawab. Dokumen ini HANYA index — jangan tambahkan detail teknis di sini, cukup rujukan ke file terkait.
 
 ---
@@ -11,9 +11,10 @@
 
 | Dokumen | Status | Scope |
 |---|---|---|
-| `ASSISTANT-CAPABILITY-ROADMAP.md` | ✅ Selesai (PR#1, #2, #3, #4, #6, #7 Fase 1) — ⚠️ PR#5 parsial, PR#8 belum dikerjakan | Assistant capability, 8 PR |
-| `raodmap memory governor.md` | 🔜 Siap dikerjakan — belum mulai | `MemoryGovernorService.js` (data/knowledge layer) |
-| `teknis-skil-implementasi.md` | 🔜 Siap dikerjakan — menunggu PR#8 selesai dulu | `SkillGuardService`, skill loading system |
+| `ASSISTANT-CAPABILITY-ROADMAP.md` | ✅ Selesai (PR#1–#7 Fase 1) — ⚠️ PR#5 parsial | Assistant capability, 7 PR |
+| `roadmap memory governor.md` | ✅ Fase 1 Selesai (Addendum: Two-Stage, Conflict, Access Tier, Soft-Delete) | `MemoryGovernorService.js` |
+| `PR8-linux-style-dispatch.md` | 🔜 Tech-spec siap — belum diimplementasikan | `RequestClassifierService`, `LookupHandler`, `ConversationHandler` |
+| `teknis-skil-implementasi.md` | ⏳ Belum dibuat — menunggu PR#8 selesai dulu | `SkillGuardService`, skill loading system |
 | `SPESIFIKASI-TEKNIS-MAMET-OS-v2.md` | 📋 Referensi — `SystemGovernorService.js` belum dikerjakan | Monitoring/observability daemon |
 | `MAMET-AI-ROADMAP.md`, `engineer-autonomous-mode.md`, `engineer-chat-upgrade.md`, `fix-log.md`, `rencana.md`, `roadmap-lanjutan.md` | 📋 Belum direview ulang dalam sesi ini | — |
 
@@ -24,13 +25,14 @@
 ```
 [SELESAI] PR#1, PR#2, PR#3, PR#4, PR#6, PR#7 Fase 1 (Assistant Capability)
     ↓
-[BERIKUTNYA] MemoryGovernorService — Fase 1 (raodmap memory governor.md)
+[SELESAI] MemoryGovernorService — Fase 1 Addendum (roadmap memory governor.md)
     ↓
-[LALU] PR#8 — Linux-style Dispatch (RequestClassifierService, LookupHandler, ConversationHandler)
-    → belum ada dokumen TECH-SPEC terpisah untuk PR#8, masih perlu disusun
+[BERIKUTNYA] PR#8 — Linux-style Dispatch (PR8-linux-style-dispatch.md)  ← POSISI SEKARANG
+    → Tech-spec sudah disusun, siap diimplementasikan
     ↓
 [LALU] Skill Implementation (teknis-skil-implementasi.md)
-    → bergantung pada RequestClassifierService dari PR#8 (lihat Section 3.2 dokumen tsb)
+    → bergantung pada RequestClassifierService dari PR#8 (lihat Section 3 dokumen PR#8)
+    → dokumen teknis-skil-implementasi.md belum dibuat
     ↓
 [BELUM DIJADWALKAN] SystemGovernorService (SPESIFIKASI-TEKNIS-MAMET-OS-v2.md)
     → independen, bisa disisipkan kapan saja karena tidak bergantung pada item di atas,
