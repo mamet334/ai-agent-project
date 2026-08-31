@@ -99,12 +99,27 @@ export class RequestClassifierService {
     }
 
     // -----------------------------------------------------------------------
-    // 3. SKILL — slot disiapkan untuk Skill Implementation (belum diisi)
-    // Ketika SkillRegistry tersedia:
-    //   const skillMatch = this.skillRegistry?.matchTrigger(userMsg);
-    //   if (skillMatch) return { type: 'SKILL', ... }
-    // TODO: implementasi setelah teknis-skil-implementasi.md selesai disusun
+    // 3. SKILL — cocokkan trigger dengan skill yang terdaftar di SkillRegistry
+    //    Dicek sebelum LOOKUP agar trigger eksplisit ("buat laporan harian")
+    //    tidak salah diklasifikasi sebagai LOOKUP
     // -----------------------------------------------------------------------
+    const skillRegistry = this.serviceManager.has('SkillRegistry')
+      ? this.serviceManager.get('SkillRegistry')
+      : null;
+    const skillMatch = skillRegistry?.matchTrigger(msgLower);
+    if (skillMatch) {
+      const result = {
+        type: 'SKILL',
+        confidence: skillMatch.confidence,
+        metadata: {
+          skillId: skillMatch.skill.id,
+          skillName: skillMatch.skill.name,
+          matchedTrigger: skillMatch.matchedTrigger
+        }
+      };
+      this._emitClassified(result, msgLen);
+      return result;
+    }
 
     // -----------------------------------------------------------------------
     // 4. LOOKUP — pertanyaan faktual singkat, tidak butuh memory/RAG

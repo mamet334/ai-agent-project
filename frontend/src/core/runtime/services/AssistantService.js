@@ -294,7 +294,21 @@ export class AssistantService {
       return this._handleLookup(handlerParams);
     }
 
-    // COMMAND, ENGINEER, CONVERSATION, SKILL (future) → semua lewat ConversationHandler
+    // Dispatch SKILL → _handleSkill()
+    if (requestType === 'SKILL') {
+      const { metadata } = classifier.classify(userMsg, history, resolvedMode);
+      const skillReg = this.serviceManager.has('SkillRegistry')
+        ? this.serviceManager.get('SkillRegistry')
+        : null;
+      const skill = skillReg?.getSkill(metadata?.skillId);
+      if (skill) {
+        return this._handleSkill({ ...handlerParams, skill });
+      }
+      // Fallback ke CONVERSATION jika skill tidak ditemukan
+      console.warn(`[processMessage] Skill "${metadata?.skillId}" tidak ditemukan — fallback ke CONVERSATION`);
+    }
+
+    // COMMAND, ENGINEER, CONVERSATION → semua lewat ConversationHandler
     // CommandRegistry dipanggil downstream setelah LLM respond (via PR#1 flow)
     return this._handleConversation(handlerParams);
   }
@@ -370,6 +384,219 @@ export class AssistantService {
 
     // Reuse response handler yang sama dengan ConversationHandler
     await this._handleResponseStream(response, { userMsg, isEngineerMode: false, workspaceManager, onChunk, onDone, onError });
+  }
+
+  // =============================================
+  // PR#8 / Skill Impl — SKILL HANDLER
+  // =============================================
+
+  /**
+   * Handle pesan tipe SKILL — eksekusi prosedur multi-step yang didefinisikan Owner.
+   *
+   * Alur:
+   * 1. Ambil skill dari SkillRegistry
+   * 2. Validasi via SkillGuardService
+   * 3. Eksekusi steps berurutan:
+   *    - 'ask'      → kirim prompt sebagai pesan AI, tunggu jawaban Owner
+   *    - 'generate' → kirim ke Edge Function dengan context dari jawaban sebelumnya
+   *    - 'write'    → emit ke CommandRegistry (PR#1 confirmation)
+   *    - 'read'     → baca file (stub, dikembangkan berikutnya)
+   * 4. Log ke AuditLogService
+   *
+   * @private
+   */
+  async _handleSkill({
+    skill, userMsg, history, userId, token, workspaceManager,
+    resolvedMode, resolvedAppSource, onChunk, onDone, onError
+  }) {
+    console.log(`[AssistantService] Skill → _handleSkill("${skill.id}")`);
+
+    // 1. Validasi via SkillGuardService
+    const guard = this.serviceManager.has('SkillGuardService')
+      ? this.serviceManager.get('SkillGuardService')
+      : null;
+
+    const validation = guard ? guard.validate(skill) : { allowed: true, stepPolicies: [] };
+
+    if (!validation.allowed) {
+      const msg = `⚠️ Skill "${skill.name}" tidak bisa dijalankan: ${validation.reason}`;
+      console.warn('[SkillHandler]', msg);
+      onDone?.(msg, [], null);
+      return;
+    }
+
+    this.eventBus.emit('Skill:Started', { skillId: skill.id, skillName: skill.name });
+    const startedAt = Date.now();
+
+    // 2. Context yang diakumulasi selama eksekusi multi-step
+    const skillContext = {
+      skillId: skill.id,
+      skillName: skill.name,
+      answers: [],    // Jawaban dari Owner untuk step 'ask'
+      outputs: [],    // Output generate dari setiap step
+      currentStep: 0
+    };
+
+    // 3. Eksekusi steps berurutan
+    for (let i = 0; i < skill.steps.length; i++) {
+      const step = skill.steps[i];
+      const stepPolicy = validation.stepPolicies?.[i]?.policy || 'ALLOW';
+      skillContext.currentStep = i + 1;
+
+      console.log(`[SkillHandler] Step ${i + 1}/${skill.steps.length}: action=${step.action}`);
+
+      // — STEP: ask — kirim prompt, tunggu jawaban di pesan berikutnya
+      if (step.action === 'ask') {
+        // Format pesan tanya yang jelas — sertakan progress step
+        const askMsg = `**[Skill: ${skill.name} — Langkah ${i + 1}/${skill.steps.length}]**\n\n${step.prompt}`;
+
+        // Simpan jawaban dari history jika sudah ada (multi-turn skill)
+        // Untuk sekarang: kirim pertanyaan pertama, berikutnya lewat history
+        if (i === 0) {
+          // Step pertama: kirim pertanyaan ke Owner
+          onDone?.(askMsg, [], null, { isSkillStep: true, skillId: skill.id, stepIndex: i });
+          this.eventBus.emit('Skill:StepDone', { skillId: skill.id, step: i + 1, action: 'ask' });
+          // Skill multi-turn akan dilanjutkan di pesan berikutnya via history
+          // Untuk versi ini, selesaikan skill sampai di sini dan beri tahu Owner
+          const continueMsg = `\n\n_Jawab pertanyaan di atas, kemudian saya akan melanjutkan ke langkah berikutnya._`;
+          // Simpan state skill ke EventBus untuk dilanjutkan
+          this.eventBus.emit('Skill:AwaitingAnswer', {
+            skillId: skill.id,
+            stepIndex: i,
+            remainingSteps: skill.steps.slice(i + 1)
+          });
+          return;
+        } else {
+          // Step berikutnya: ambil jawaban dari history terakhir
+          const lastUserMsg = history.slice().reverse().find(m => m.role === 'user')?.content || '';
+          skillContext.answers.push({ step: i + 1, answer: lastUserMsg });
+        }
+      }
+
+      // — STEP: generate — kirim ke LLM dengan context terkumpul
+      if (step.action === 'generate') {
+        // Bangun prompt yang menyertakan semua jawaban yang terkumpul
+        let contextSummary = '';
+        if (skillContext.answers.length > 0) {
+          contextSummary = skillContext.answers
+            .map(a => `Jawaban langkah ${a.step}: ${a.answer}`)
+            .join('\n');
+        }
+
+        const generatePrompt = contextSummary
+          ? `${step.prompt}\n\nKonteks dari jawaban sebelumnya:\n${contextSummary}`
+          : step.prompt;
+
+        // Kirim ke Edge Function dengan payload minimal
+        const { aiProvider, formattedModel, aiKey } = await this._resolveAIProvider();
+        const payload = {
+          message: generatePrompt,
+          mode: resolvedMode || 'STANDARD',
+          appSource: resolvedAppSource,
+          history: history.slice(-5),
+          globalMemory: '',
+          semanticContext: '',
+          stream: false,
+          ragEnabled: false,
+          model: formattedModel || undefined,
+          cache_hint: true,
+          _request_type: 'SKILL',
+          _skill_id: skill.id
+        };
+        Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
+
+        const headers = this.buildHeaders(token, aiProvider, aiKey);
+        let response;
+        try {
+          response = await fetch(AGENT_ENDPOINT, { method: 'POST', headers, body: JSON.stringify(payload) });
+        } catch (fetchErr) {
+          onError?.(`Gagal menghubungi server saat eksekusi skill: ${fetchErr.message}`);
+          this.eventBus.emit('Skill:Error', { skillId: skill.id, step: i + 1, reason: fetchErr.message });
+          return;
+        }
+
+        if (!response.ok) {
+          onError?.(`⚠️ Skill error HTTP ${response.status}`);
+          this.eventBus.emit('Skill:Error', { skillId: skill.id, step: i + 1, reason: `HTTP ${response.status}` });
+          return;
+        }
+
+        await this._handleResponseStream(response, {
+          userMsg: generatePrompt,
+          isEngineerMode: false,
+          workspaceManager,
+          onChunk,
+          onDone,
+          onError
+        });
+
+        skillContext.outputs.push({ step: i + 1, done: true });
+        this.eventBus.emit('Skill:StepDone', { skillId: skill.id, step: i + 1, action: 'generate' });
+      }
+
+      // — STEP: write — butuh konfirmasi (PR#1 flow)
+      if (step.action === 'write') {
+        if (stepPolicy === 'REQUIRE_CONFIRMATION') {
+          const confirmMsg = `⚠️ Skill "${skill.name}" ingin menulis file. Konfirmasi diperlukan via CommandRegistry.`;
+          onDone?.(confirmMsg, [], null);
+          this.eventBus.emit('Skill:StepDone', { skillId: skill.id, step: i + 1, action: 'write', requiresConfirmation: true });
+        }
+      }
+
+      // — STEP: read — stub (belum implementasi penuh)
+      if (step.action === 'read') {
+        console.log(`[SkillHandler] Step read — stub, path: ${step.path || '(tidak ada)'}`);
+        skillContext.answers.push({ step: i + 1, answer: `[read: ${step.path || 'tidak ada path'}]` });
+        this.eventBus.emit('Skill:StepDone', { skillId: skill.id, step: i + 1, action: 'read' });
+      }
+    }
+
+    // 4. Skill selesai
+    const duration = Date.now() - startedAt;
+    this.eventBus.emit('Skill:Completed', {
+      skillId: skill.id,
+      totalSteps: skill.steps.length,
+      duration
+    });
+    console.log(`[SkillHandler] Skill "${skill.id}" selesai dalam ${duration}ms`);
+
+    // 5. Log ke AuditLogService jika tersedia
+    const auditLog = this.serviceManager.has('AuditLogService')
+      ? this.serviceManager.get('AuditLogService')
+      : null;
+    if (auditLog) {
+      auditLog.log({
+        type: 'SKILL_EXECUTED',
+        skillId: skill.id,
+        skillName: skill.name,
+        steps: skill.steps.length,
+        duration,
+        triggeredBy: userMsg
+      });
+    }
+  }
+
+  /**
+   * Helper: resolve AI provider dari BrainService.
+   * Dipakai oleh _handleSkill dan _handleLookup.
+   * @private
+   */
+  async _resolveAIProvider() {
+    let aiProvider = 'gemini';
+    let formattedModel = '';
+    let aiKey = '';
+    try {
+      const brainService = this.serviceManager.get('BrainService');
+      if (brainService) {
+        const context = await brainService.getActiveBrainContext();
+        aiProvider = context.provider || 'gemini';
+        formattedModel = context.model || '';
+        aiKey = context.key || '';
+      }
+    } catch (e) {
+      console.warn('[AssistantService] BrainService not available:', e);
+    }
+    return { aiProvider, formattedModel, aiKey };
   }
 
   // =============================================

@@ -1,0 +1,8 @@
+# Folder ini berisi skill definitions milik Owner.
+# Setiap skill adalah satu file JSON dengan format yang didefinisikan di:
+# docs/roadmap/teknis-skil-implementasi.md
+#
+# Contoh: daily-report.json, code-review.json, debug-session.json
+#
+# File ini (.gitkeep) hanya untuk memastikan folder ini masuk ke git.
+# Hapus file ini jika sudah ada minimal satu file skill.

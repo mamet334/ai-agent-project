@@ -1,0 +1,39 @@
+{
+  "id": "daily-report",
+  "name": "Buat Laporan Harian",
+  "version": "1.0.0",
+  "description": "Prosedur membuat laporan harian kerja Owner. Dipanggil saat Owner ingin merangkum apa yang sudah dikerjakan hari ini.",
+  "triggers": [
+    "buat laporan harian",
+    "laporan hari ini",
+    "daily report",
+    "rangkum hari ini",
+    "recap hari ini"
+  ],
+  "type": "conversation",
+  "steps": [
+    {
+      "order": 1,
+      "action": "ask",
+      "prompt": "Apa saja yang sudah dikerjakan hari ini? (boleh poin-poin singkat)"
+    },
+    {
+      "order": 2,
+      "action": "ask",
+      "prompt": "Ada hambatan atau blocker yang perlu dicatat?"
+    },
+    {
+      "order": 3,
+      "action": "ask",
+      "prompt": "Apa rencana untuk besok?"
+    },
+    {
+      "order": 4,
+      "action": "generate",
+      "prompt": "Buat laporan harian dalam format markdown yang rapi berdasarkan jawaban dari langkah sebelumnya. Sertakan: tanggal hari ini, pekerjaan selesai, hambatan (jika ada), dan rencana besok."
+    }
+  ],
+  "active": true,
+  "createdAt": "2026-08-31",
+  "author": "owner"
+}

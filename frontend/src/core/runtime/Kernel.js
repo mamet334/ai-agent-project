@@ -27,6 +27,8 @@ import { AuditLogService } from './services/AuditLogService.js';
 import { RetrievalStrategyService } from './services/RetrievalStrategyService.js';
 import { ModuleDiscoveryService } from './services/ModuleDiscoveryService.js';
 import { RequestClassifierService } from './services/RequestClassifierService.js';
+import { SkillRegistry } from './services/SkillRegistry.js';
+import { SkillGuardService } from './services/SkillGuardService.js';
 
 /**
  * MAEF Kernel v2.0
@@ -296,9 +298,22 @@ class Kernel {
     serviceManager.register('ModuleDiscoveryService', moduleDiscoveryService);
     this.log('INFO', 'ModuleDiscoveryService Initialized & Registered');
 
+    // Skill Registry (Skill Implementation) — scan /skills/, bangun trigger index
+    // Harus sebelum RequestClassifierService agar classify() bisa matchTrigger()
+    const skillRegistry = new SkillRegistry(serviceManager);
+    await skillRegistry.initialize();
+    serviceManager.register('SkillRegistry', skillRegistry);
+    this.log('INFO', 'SkillRegistry Initialized & Registered');
+
+    // Skill Guard Service (Skill Implementation) — validasi keamanan skill
+    const skillGuardService = new SkillGuardService(serviceManager);
+    await skillGuardService.initialize();
+    serviceManager.register('SkillGuardService', skillGuardService);
+    this.log('INFO', 'SkillGuardService Initialized & Registered');
+
     // Request Classifier Service (PR#8) — Linux-style Request Dispatcher
-    // Klasifikasi tipe request (LOOKUP/CONVERSATION/COMMAND/ENGINEER) sebelum pipeline berat.
-    // Deterministik, 0 LLM cost, 0 DB call — harus setelah AssistantService terdaftar.
+    // Klasifikasi tipe request (LOOKUP/CONVERSATION/COMMAND/ENGINEER/SKILL) sebelum pipeline berat.
+    // Deterministik, 0 LLM cost, 0 DB call — harus setelah SkillRegistry terdaftar.
     const requestClassifierService = new RequestClassifierService(serviceManager);
     await requestClassifierService.initialize();
     serviceManager.register('RequestClassifierService', requestClassifierService);
