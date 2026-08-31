@@ -1061,6 +1061,15 @@ export default function ConversationEngine({ sessionId }) {
               loading={isMemoryLoading}
               onClose={() => setIsMemoryPanelOpen(false)}
               onRefresh={handleRefreshMemory}
+              onResolveConflict={async (memoryId, resolution) => {
+                // Addendum Fase 1: resolve konflik via MemoryGovernorService
+                const governor = kernel.serviceManager?.get('MemoryGovernorService');
+                if (governor) {
+                  await governor.resolveConflict(memoryId, resolution);
+                  // Refresh panel setelah resolve agar item hilang dari tampilan
+                  if (lastMemoryQuery) handleRefreshMemory();
+                }
+              }}
             />
           )}
         </div>

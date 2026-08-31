@@ -24,39 +24,95 @@ export class MemoryService {
 
   /**
    * Mengambil memori berdasarkan query.
-   * @param {string} query 
+   * Prioritas: MemoryGovernorService.retrieveMemory() (two-stage filter + ranking)
+   * Fallback: keyword ilike search (backward compatible)
+   *
+   * @param {string} query
+   * @param {Object} [options]
+   * @param {string[]} [options.categories] - Kategori untuk two-stage filter. Default: ['general']
+   * @param {boolean} [options.includeSensitive] - Hanya true jika flag eksplisit dari user
    */
-  async getMemory(query) {
+  async getMemory(query, options = {}) {
     if (!this.isInitialized) throw new Error('MemoryService not initialized');
-    
-    console.log('[MemoryService] 🔍 Query ke Supabase untuk:', query);
+
+    console.log('[MemoryService] 🔍 Query memori untuk:', query);
     let result = [];
+
     try {
-      const stopwords = ['hai', 'halo', 'saya', 'aku', 'adalah', 'apa', 'siapa', 'bagaimana', 'dimana', 'kapan', 'mengapa', 'coba', 'tolong', 'bisa', 'kan', 'dong', 'ya', 'yg', 'yang', 'ini', 'itu', 'dan', 'atau', 'ke', 'di', 'dari', 'untuk', 'dengan'];
-      const keywords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2 && !stopwords.includes(w));
-      
-      let memoryQuery = supabase.from('user_memories').select('*');
-      if (keywords.length > 0) {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+
+      // === PATH UTAMA: Two-Stage Retrieval via MemoryGovernorService ===
+      const governor = this.serviceManager.has('MemoryGovernorService')
+        ? this.serviceManager.get('MemoryGovernorService')
+        : null;
+
+      if (governor && typeof governor.retrieveMemory === 'function' && userId) {
+        // Tentukan kategori dari query jika tidak disediakan
+        const categories = options.categories || this._inferCategories(query);
+        result = await governor.retrieveMemory({
+          userId,
+          categories,
+          includeSensitive: options.includeSensitive || false,
+          topK: 10
+        });
+        console.log(`[MemoryService] Two-Stage retrieval: ${result.length} memori`);
+
+      } else {
+        // === FALLBACK: keyword ilike (backward compatible) ===
+        // Selalu exclude status non-active jika kolom status ada
+        console.log('[MemoryService] Fallback ke keyword search (MemoryGovernorService tidak tersedia)');
+        const stopwords = ['hai', 'halo', 'saya', 'aku', 'adalah', 'apa', 'siapa', 'bagaimana', 'dimana', 'kapan', 'mengapa', 'coba', 'tolong', 'bisa', 'kan', 'dong', 'ya', 'yg', 'yang', 'ini', 'itu', 'dan', 'atau', 'ke', 'di', 'dari', 'untuk', 'dengan'];
+        const keywords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2 && !stopwords.includes(w));
+
+        let memoryQuery = supabase.from('user_memories').select('*');
+        if (keywords.length > 0) {
           const filterString = keywords.map(k => `summary.ilike.%${k}%`).join(',');
           memoryQuery = memoryQuery.or(filterString);
-      } else {
+        } else {
           memoryQuery = memoryQuery.ilike('summary', `%${query}%`);
+        }
+        // Exclude archived/pending_purge/conflict
+        memoryQuery = memoryQuery.not('status', 'in', '("archived","pending_purge","CONFLICT_PENDING_REVIEW")');
+        const { data, error } = await memoryQuery.order('created_at', { ascending: false }).limit(10);
+
+        if (error) {
+          // status kolom belum ada (data lama) → retry tanpa filter status
+          const { data: data2 } = await supabase
+            .from('user_memories')
+            .select('*')
+            .ilike('summary', `%${query}%`)
+            .order('created_at', { ascending: false })
+            .limit(10);
+          result = data2 || [];
+        } else {
+          result = data || [];
+        }
       }
-      const { data, error } = await memoryQuery.order('created_at', { ascending: false }).limit(10);
-        
-      console.log('[MemoryService] 📋 Data mentah dari Supabase:', JSON.stringify(data));
-      if (error) {
-        console.log('[MemoryService] ⚠️ Error jika ada:', error);
-        throw error;
-      }
-      result = data || [];
+
     } catch (err) {
       console.error('[MemoryService] Error fetching memory:', err);
     }
-    
+
     this.eventBus.emit('Memory:Retrieved', { query, result });
     return result;
   }
+
+  /**
+   * Infer kategori dari query text — mapping sederhana untuk Two-Stage Filter.
+   * Kategori default 'general' selalu disertakan.
+   * @private
+   */
+  _inferCategories(query = '') {
+    const q = query.toLowerCase();
+    const categories = ['general'];
+    if (q.includes('engineer') || q.includes('file') || q.includes('kode') || q.includes('code')) categories.push('engineering');
+    if (q.includes('preferens') || q.includes('suka') || q.includes('ingin')) categories.push('preference');
+    if (q.includes('lokasi') || q.includes('alamat') || q.includes('tempat')) categories.push('location');
+    if (q.includes('proyek') || q.includes('project') || q.includes('fitur')) categories.push('project');
+    return [...new Set(categories)];
+  }
+
 
 /**
    * Menyimpan memori baru.

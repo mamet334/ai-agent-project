@@ -312,6 +312,319 @@ export class MemoryGovernorService {
     const content = typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent);
     return content.substring(0, 200);
   }
+
+  // ===========================================================================
+  // ADDENDUM FASE 1 — Two-Stage Retrieval
+  // ===========================================================================
+
+  /**
+   * Ambil memori dengan Two-Stage Filter sesuai kontrak Addendum Fase 1.
+   *
+   * Tahap 1 — Category + status + access_tier filter (SQL, bukan vector search)
+   *   → Batasi candidate pool terlebih dahulu, WAJIB sebelum Tahap 2.
+   * Tahap 2 — Ranking dalam candidate pool berdasarkan recency + confidence.
+   *
+   * @param {Object} params
+   * @param {string} params.userId
+   * @param {string[]} [params.categories] - Kategori relevan berdasarkan task context. Default: ['general']
+   * @param {boolean} [params.includeSensitive=false] - Hanya true jika ada flag eksplisit dari user
+   * @param {number} [params.candidatePoolSize=30] - Batas Tahap 1
+   * @param {number} [params.topK=10] - Hasil akhir setelah ranking Tahap 2
+   * @returns {Promise<Array>} Memori yang sudah di-ranking
+   */
+  async retrieveMemory({ userId, categories = ['general'], includeSensitive = false, candidatePoolSize = 30, topK = 10 }) {
+    if (!this.isInitialized) throw new Error('MemoryGovernorService not initialized');
+    if (!userId) throw new Error('MemoryGovernorService.retrieveMemory: userId required');
+
+    try {
+      // TAHAP 1: Category + status + access_tier filter
+      // Tidak boleh full-table scan — candidate pool dibatasi
+      let query = supabase
+        .from('user_memories')
+        .select('id, summary, memory_type, category, confidence, access_tier, status, updated_at, source_reference, last_verified_at')
+        .eq('user_id', userId)
+        .in('category', categories)
+        .eq('status', 'active')
+        .order('updated_at', { ascending: false })
+        .limit(candidatePoolSize);
+
+      // Access tier: default exclude sensitive — hanya include jika flag eksplisit
+      if (!includeSensitive) {
+        query = query.eq('access_tier', 'generic');
+      }
+
+      const { data: candidates, error } = await query;
+
+      if (error) {
+        console.error('[MemoryGovernorService] retrieveMemory Tahap 1 error:', error.message);
+        return [];
+      }
+
+      if (!candidates || candidates.length === 0) {
+        console.log('[MemoryGovernorService] Two-Stage Tahap 1: 0 kandidat untuk categories:', categories);
+        return [];
+      }
+
+      // TAHAP 2: Ranking dalam candidate pool
+      // Formula: recency_score (0–1) + confidence_score (0–1), dinormalisasi
+      const now = Date.now();
+      const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 hari = recency_score 0
+
+      const ranked = candidates
+        .map(mem => {
+          const ageMs = now - new Date(mem.updated_at).getTime();
+          const recencyScore = Math.max(0, 1 - ageMs / MAX_AGE_MS);
+          const confidenceScore = typeof mem.confidence === 'number' ? mem.confidence : 0.5;
+          const totalScore = recencyScore * 0.4 + confidenceScore * 0.6; // bobot: confidence lebih berat
+          return { ...mem, _score: totalScore };
+        })
+        .sort((a, b) => b._score - a._score)
+        .slice(0, topK);
+
+      console.log(`[MemoryGovernorService] Two-Stage: Tahap 1 → ${candidates.length} kandidat, Tahap 2 → ${ranked.length} teratas`);
+      return ranked;
+
+    } catch (err) {
+      console.error('[MemoryGovernorService] retrieveMemory error:', err);
+      return [];
+    }
+  }
+
+  // ===========================================================================
+  // ADDENDUM FASE 1 — Conflict Resolution
+  // ===========================================================================
+
+  /**
+   * Deteksi konflik untuk source_file tertentu.
+   * Jika ada record lain dengan source_reference sama tapi content berbeda
+   * dan version_sequence tidak sekuensial → tandai sebagai CONFLICT_PENDING_REVIEW.
+   *
+   * Aturan wajib: DILARANG auto-resolve. Hanya user yang bisa resolve.
+   *
+   * @param {Object} params
+   * @param {string} params.userId
+   * @param {string} params.sourceFile - path/identifier sumber
+   * @param {string} params.newContent - content baru yang akan disimpan
+   * @param {number} params.newVersionSeq - version sequence yang diklaim
+   * @returns {Promise<{ hasConflict: boolean, conflictedIds: string[] }>}
+   */
+  async detectAndMarkConflict({ userId, sourceFile, newContent, newVersionSeq }) {
+    if (!this.isInitialized) throw new Error('MemoryGovernorService not initialized');
+
+    try {
+      // Cari semua memori aktif dengan source_reference yang sama
+      const { data: existing, error } = await supabase
+        .from('user_memories')
+        .select('id, summary, version_sequence, status')
+        .eq('user_id', userId)
+        .eq('source_reference', sourceFile)
+        .eq('status', 'active');
+
+      if (error || !existing || existing.length === 0) {
+        return { hasConflict: false, conflictedIds: [] };
+      }
+
+      // Cek konflik: content berbeda DAN version tidak sekuensial
+      const newHash = this._computeHash(newContent);
+      const conflictedIds = [];
+
+      for (const mem of existing) {
+        const existingHash = this._computeHash(mem.summary || '');
+        const versionBroken = newVersionSeq !== (mem.version_sequence + 1);
+
+        if (existingHash !== newHash && versionBroken) {
+          // Tandai sebagai CONFLICT_PENDING_REVIEW — exclude dari retrieval normal
+          const { error: updateErr } = await supabase
+            .from('user_memories')
+            .update({ status: 'CONFLICT_PENDING_REVIEW' })
+            .eq('id', mem.id);
+
+          if (!updateErr) {
+            conflictedIds.push(mem.id);
+          }
+        }
+      }
+
+      if (conflictedIds.length > 0) {
+        this.eventBus.emit('MemoryGovernor:ConflictDetected', {
+          sourceFile,
+          conflictedIds,
+          timestamp: new Date().toISOString()
+        });
+        console.warn(`[MemoryGovernorService] Conflict detected for "${sourceFile}" → ${conflictedIds.length} record(s) ditandai CONFLICT_PENDING_REVIEW`);
+      }
+
+      return { hasConflict: conflictedIds.length > 0, conflictedIds };
+
+    } catch (err) {
+      console.error('[MemoryGovernorService] detectAndMarkConflict error:', err);
+      return { hasConflict: false, conflictedIds: [] };
+    }
+  }
+
+  /**
+   * Resolve konflik — HANYA dipanggil via aksi eksplisit user, tidak ada jalur otomatis.
+   *
+   * @param {string} memoryId - ID memori yang berstatus CONFLICT_PENDING_REVIEW
+   * @param {'keep'|'discard'} resolution - Keputusan user
+   * @returns {Promise<{ success: boolean, newStatus: string }>}
+   */
+  async resolveConflict(memoryId, resolution) {
+    if (!this.isInitialized) throw new Error('MemoryGovernorService not initialized');
+    if (!['keep', 'discard'].includes(resolution)) {
+      throw new Error('resolveConflict: resolution harus "keep" atau "discard"');
+    }
+
+    const newStatus = resolution === 'keep' ? 'active' : 'archived';
+
+    try {
+      const { error } = await supabase
+        .from('user_memories')
+        .update({ status: newStatus })
+        .eq('id', memoryId)
+        .eq('status', 'CONFLICT_PENDING_REVIEW'); // Hanya resolve yang memang berkonflik
+
+      if (error) {
+        console.error('[MemoryGovernorService] resolveConflict error:', error.message);
+        return { success: false, newStatus: null };
+      }
+
+      this.eventBus.emit('MemoryGovernor:ConflictResolved', {
+        memoryId,
+        resolution,
+        newStatus,
+        timestamp: new Date().toISOString()
+      });
+
+      console.log(`[MemoryGovernorService] Conflict resolved: ${memoryId} → ${newStatus}`);
+      return { success: true, newStatus };
+
+    } catch (err) {
+      console.error('[MemoryGovernorService] resolveConflict error:', err);
+      return { success: false, newStatus: null };
+    }
+  }
+
+  // ===========================================================================
+  // ADDENDUM FASE 1 — Soft-Delete Lifecycle
+  // ===========================================================================
+
+  /**
+   * Soft-delete: set status memori dari 'active' ke 'archived'.
+   * Record tetap ada di database (fungsi kotak sampah).
+   * Di-exclude dari retrieval normal (retrieveMemory hanya ambil status='active').
+   *
+   * @param {string} memoryId
+   * @returns {Promise<{ success: boolean }>}
+   */
+  async archiveMemory(memoryId) {
+    if (!this.isInitialized) throw new Error('MemoryGovernorService not initialized');
+
+    try {
+      const { error } = await supabase
+        .from('user_memories')
+        .update({ status: 'archived' })
+        .eq('id', memoryId)
+        .eq('status', 'active'); // Hanya archive yang masih active
+
+      if (error) {
+        console.error('[MemoryGovernorService] archiveMemory error:', error.message);
+        return { success: false };
+      }
+
+      this.eventBus.emit('MemoryGovernor:Archived', {
+        memoryId,
+        timestamp: new Date().toISOString()
+      });
+
+      console.log('[MemoryGovernorService] Memory archived:', memoryId);
+      return { success: true };
+
+    } catch (err) {
+      console.error('[MemoryGovernorService] archiveMemory error:', err);
+      return { success: false };
+    }
+  }
+
+  /**
+   * Tandai memori untuk dihapus permanen (tahap 1 dari 2).
+   * Hanya bisa dari status 'archived'. Hard-delete via executePurge().
+   * Tidak ada jalur otomatis ke hard-delete.
+   *
+   * @param {string} memoryId
+   * @returns {Promise<{ success: boolean }>}
+   */
+  async requestPurge(memoryId) {
+    if (!this.isInitialized) throw new Error('MemoryGovernorService not initialized');
+
+    try {
+      const { error } = await supabase
+        .from('user_memories')
+        .update({ status: 'pending_purge' })
+        .eq('id', memoryId)
+        .eq('status', 'archived'); // Hanya bisa dari archived, bukan langsung dari active
+
+      if (error) {
+        console.error('[MemoryGovernorService] requestPurge error:', error.message);
+        return { success: false };
+      }
+
+      console.log('[MemoryGovernorService] Purge requested for memory:', memoryId);
+      return { success: true };
+
+    } catch (err) {
+      console.error('[MemoryGovernorService] requestPurge error:', err);
+      return { success: false };
+    }
+  }
+
+  /**
+   * Hard-delete permanen (tahap 2 dari 2). Hanya bisa setelah requestPurge().
+   * HANYA dipanggil via command eksplisit owner — tidak ada cron/background job.
+   *
+   * @param {string} memoryId
+   * @returns {Promise<{ success: boolean }>}
+   */
+  async executePurge(memoryId) {
+    if (!this.isInitialized) throw new Error('MemoryGovernorService not initialized');
+
+    try {
+      // Pastikan record benar-benar di status pending_purge sebelum hard-delete
+      const { data: mem, error: checkErr } = await supabase
+        .from('user_memories')
+        .select('id, status')
+        .eq('id', memoryId)
+        .eq('status', 'pending_purge')
+        .single();
+
+      if (checkErr || !mem) {
+        console.error('[MemoryGovernorService] executePurge: record tidak ditemukan atau belum pending_purge');
+        return { success: false };
+      }
+
+      const { error: deleteErr } = await supabase
+        .from('user_memories')
+        .delete()
+        .eq('id', memoryId);
+
+      if (deleteErr) {
+        console.error('[MemoryGovernorService] executePurge: delete gagal', deleteErr.message);
+        return { success: false };
+      }
+
+      this.eventBus.emit('MemoryGovernor:Purged', {
+        memoryId,
+        timestamp: new Date().toISOString()
+      });
+
+      console.log('[MemoryGovernorService] Memory hard-deleted (purged):', memoryId);
+      return { success: true };
+
+    } catch (err) {
+      console.error('[MemoryGovernorService] executePurge error:', err);
+      return { success: false };
+    }
+  }
 }
 
 export default MemoryGovernorService;

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Brain, Loader2, RefreshCw, X, Search, Database, BookOpen } from 'lucide-react';
+import { Brain, Loader2, RefreshCw, X, Search, Database, BookOpen, AlertTriangle } from 'lucide-react';
 
 /**
  * MemoryContextPanel - Panel "Memory Context" yang menampilkan daftar memori
@@ -15,15 +15,18 @@ import { Brain, Loader2, RefreshCw, X, Search, Database, BookOpen } from 'lucide
  * @param {boolean} props.loading - Status loading saat memori di-retrieve
  * @param {Function} props.onClose - Callback untuk menutup panel
  * @param {Function} props.onRefresh - Callback untuk me-refresh memori (opsional)
+ * @param {Function} props.onResolveConflict - Callback resolve konflik: (memoryId, 'keep'|'discard') => void
  */
 export default function MemoryContextPanel({
   memories = [],
   query = '',
   loading = false,
   onClose,
-  onRefresh
+  onRefresh,
+  onResolveConflict
 }) {
   const [filter, setFilter] = useState('ALL');
+  const [resolvingId, setResolvingId] = useState(null); // ID yang sedang di-resolve
 
   // === Helper untuk menentukan tipe & label memori ===
   const getMemoryType = (m) => {
@@ -180,19 +183,29 @@ export default function MemoryContextPanel({
           filteredMemories.map((m, idx) => {
             const content = m.summary || m.content || m.title || '';
             const type = getMemoryType(m);
+            const isConflict = m.status === 'CONFLICT_PENDING_REVIEW';
+
             return (
               <div
                 key={m.id || idx}
-                className="flex items-start gap-2 bg-surface-container-low border border-outline-variant/60 rounded-lg p-2.5 hover:border-primary/30 transition-all group"
+                className={`flex items-start gap-2 border rounded-lg p-2.5 transition-all group ${
+                  isConflict
+                    ? 'bg-red-950/30 border-red-500/50 hover:border-red-400'
+                    : 'bg-surface-container-low border-outline-variant/60 hover:border-primary/30'
+                }`}
               >
-                <div className={`mt-0.5 p-1 rounded-md border shrink-0 ${getTypeColor(m)}`}>
-                  {getTypeIcon(m)}
+                <div className={`mt-0.5 p-1 rounded-md border shrink-0 ${isConflict ? 'border-red-500/40 bg-red-500/10 text-red-400' : getTypeColor(m)}`}>
+                  {isConflict ? <AlertTriangle size={12} /> : getTypeIcon(m)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-[11px] text-on-surface break-words leading-snug">{content}</p>
-                  <div className={`flex items-center gap-2 mt-1.5 text-[9px] font-medium ${type === 'PERSONAL_KNOWLEDGE' ? 'text-blue-400' : 'text-emerald-400'}`}>
+
+                  <div className={`flex items-center gap-2 mt-1.5 text-[9px] font-medium ${
+                    isConflict ? 'text-red-400' : type === 'PERSONAL_KNOWLEDGE' ? 'text-blue-400' : 'text-emerald-400'
+                  }`}>
+                    {/* Badge tipe / konflik */}
                     <span className="px-1 py-0.5 rounded border border-current/20 bg-current/10">
-                      {getTypeLabel(m)}
+                      {isConflict ? '⚠️ KONFLIK' : getTypeLabel(m)}
                     </span>
                     {typeof m.confidence === 'number' && (
                       <span className="text-on-surface-variant">conf {Math.round(m.confidence * 100)}%</span>
@@ -202,6 +215,35 @@ export default function MemoryContextPanel({
                     )}
                     <span className="text-on-surface-variant opacity-70">{formatDate(m.created_at)}</span>
                   </div>
+
+                  {/* Tombol resolve konflik — hanya tampil untuk item CONFLICT_PENDING_REVIEW */}
+                  {isConflict && onResolveConflict && (
+                    <div className="flex gap-1.5 mt-2">
+                      <p className="text-[9px] text-red-300 mr-1 self-center">Konflik terdeteksi. Pilih tindakan:</p>
+                      <button
+                        disabled={resolvingId === m.id}
+                        onClick={async () => {
+                          setResolvingId(m.id);
+                          await onResolveConflict(m.id, 'keep');
+                          setResolvingId(null);
+                        }}
+                        className="px-2 py-0.5 rounded text-[9px] font-semibold bg-emerald-700/80 hover:bg-emerald-600 text-white transition-colors disabled:opacity-50"
+                      >
+                        {resolvingId === m.id ? '...' : 'Simpan'}
+                      </button>
+                      <button
+                        disabled={resolvingId === m.id}
+                        onClick={async () => {
+                          setResolvingId(m.id);
+                          await onResolveConflict(m.id, 'discard');
+                          setResolvingId(null);
+                        }}
+                        className="px-2 py-0.5 rounded text-[9px] font-semibold bg-red-800/80 hover:bg-red-700 text-white transition-colors disabled:opacity-50"
+                      >
+                        {resolvingId === m.id ? '...' : 'Buang'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             );
