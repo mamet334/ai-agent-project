@@ -2,7 +2,7 @@
 
 **Tujuan dokumen ini:** Titik masuk pertama untuk Antigravity (atau AI mana pun) sebelum membaca dokumen lain di folder `docs/roadmap/`. Berisi status, urutan pengerjaan, dan ringkasan tiap dokumen — bukan pengganti isi dokumen aslinya.
 
-**Update terakhir:** 2026-08-31
+**Update terakhir:** 2026-09-01  
 **Prinsip folder ini:** Satu file, satu tanggung jawab. Dokumen ini HANYA index — jangan tambahkan detail teknis di sini, cukup rujukan ke file terkait.
 
 ---
@@ -12,45 +12,53 @@
 | Dokumen | Status | Scope |
 |---|---|---|
 | `ASSISTANT-CAPABILITY-ROADMAP.md` | ✅ Selesai (PR#1–#7 Fase 1) — ⚠️ PR#5 parsial | Assistant capability, 7 PR |
-| `roadmap memory governor.md` | ✅ Fase 1 Selesai (Addendum: Two-Stage, Conflict, Access Tier, Soft-Delete) | `MemoryGovernorService.js` |
+| `roadmap memory governor.md` | ⚠️ Fase 1 Pondasi Saja (Service & Addendum method siap; integrasi Assistant & UI belum; Fase 2–5 belum) | `MemoryGovernorService.js` |
 | `PR8-linux-style-dispatch.md` | ✅ Selesai — `RequestClassifierService` + thin dispatcher + `_handleLookup` | `RequestClassifierService`, `LookupHandler`, `ConversationHandler` |
 | `teknis-skil-implementasi.md` | ✅ Selesai — SkillRegistry + SkillGuardService + SkillHandler + contoh skill | `SkillRegistry`, `SkillGuardService`, `SkillHandler` |
+| `PENDING-live-verification-runtime-gaps.md` | 📋 Backlog Temuan Live (5 gap runtime, observabilitas, dan RAG) | `agent-process` Edge Function & RAG |
 | `SPESIFIKASI-TEKNIS-MAMET-OS-v2.md` | 📋 Referensi — `SystemGovernorService.js` belum dikerjakan | Monitoring/observability daemon |
 | `MAMET-AI-ROADMAP.md`, `engineer-autonomous-mode.md`, `engineer-chat-upgrade.md`, `fix-log.md`, `rencana.md`, `roadmap-lanjutan.md` | 📋 Belum direview ulang dalam sesi ini | — |
 
 ---
 
-## 2. Urutan Pengerjaan yang Disepakati
+## 2. Urutan Pengerjaan & Status Eksekusi
 
 ```
 [SELESAI] PR#1, PR#2, PR#3, PR#4, PR#6, PR#7 Fase 1 (Assistant Capability)
     ↓
-[SELESAI] MemoryGovernorService — Fase 1 Addendum (roadmap memory governor.md)
+[PONDASI SIAP] MemoryGovernorService — Fase 1 (Service core & Addendum method dibuat; integrasi penuh & Fase 2–5 pending)
     ↓
 [SELESAI] PR#8 — Linux-style Dispatch (PR8-linux-style-dispatch.md)
     ↓
 [SELESAI] Skill Implementation (teknis-skil-implementasi.md)
     ↓
-[BERIKUTNYA] SystemGovernorService (SPESIFIKASI-TEKNIS-MAMET-OS-v2.md)  ← POSISI SEKARANG
-    → Independen dari semua item di atas
-    → Monitoring/anomali/audit untuk Engineer self-maintenance
+[SELESAI] Cost Ledger Instrumentation & Guardrail Enforcement (ADR-015 Phase 1, commit 86beabe / 676a211)
+    ↓
+[BERIKUTNYA] Penentuan Prioritas Owner:
+    Option A: Penuntasan Integrasi MemoryGovernorService (Tutup gap Assistant trigger + UI Conflict/Purge)
+    Option B: SystemGovernorService (SPESIFIKASI-TEKNIS-MAMET-OS-v2.md)
+    Option C: Remediasi Backlog Temuan Runtime Live (PENDING-live-verification-runtime-gaps.md)
 ```
 
-**Alasan urutan:** MemoryGovernorService paling independen sehingga dikerjakan lebih dulu. PR#8 harus ada sebelum Skill Implementation karena skill matching (Stage 2) secara eksplisit bergantung pada `RequestClassifierService`. Mengerjakan Skill Implementation sebelum PR#8 akan memaksa asumsi/stub yang berisiko rombak ulang.
+**Catatan status MemoryGovernorService:** 
+File `MemoryGovernorService.js` sudah ada dan terdaftar di `Kernel.js`. Method core Golden Source (`storeGoldenMemory`, `verifyMemorySummary`, `verifyEngineeringSession`) dan Addendum (`retrieveMemory`, `detectAndMarkConflict`, `resolveConflict`, `archiveMemory`, `requestPurge`, `executePurge`) sudah diimplementasikan. Namun, integrasi menyeluruh masih berstatus pondasi karena:
+1. `AssistantService.handleMemoryTrigger()` masih menyimpan memori secara standar tanpa metadata Golden Source (`hasGoldenMeta = false`), sehingga bypass `storeGoldenMemory`.
+2. Verifikasi memori otomatis (`verifyMemorySummary`) hanya dipanggil di akhir sesi Engineer (`_finalizeSession`), belum ada jalur untuk memori Assistant biasa.
+3. Fungsi Conflict Resolution & Purge Lifecycle belum memiliki UI / user action hook.
+4. Fase 2 (UI MemoryContextPanel) sampai Fase 5 belum dikerjakan.
 
 ---
 
 ## 3. Catatan Disambiguasi Penting
 
-**`cognitiveMemoryGovernor.ts` (PR#2, sudah aktif) ≠ `MemoryGovernorService.js` (Fase 1, belum dibuat).**
-Nama mirip, tujuan beda. Detail lengkap ada di catatan disambiguasi di awal file `raodmap memory governor.md` — WAJIB dibaca sebelum eksekusi Fase 1 memory governor, supaya tidak dianggap sudah selesai atau tumpang tindih.
+**`CognitiveMemoryGovernorService.js` (PR#2, sudah aktif) ≠ `MemoryGovernorService.js` (Fase 1, pondasi siap).**
+- `CognitiveMemoryGovernorService.js` (port dari `cognitiveMemoryGovernor.ts`) — beroperasi di level Assistant/percakapan: memfilter memori untuk prompt injection berdasarkan `truth_score`.
+- `MemoryGovernorService.js` (Fase 1) — beroperasi di level database/knowledge base: menjaga integritas ringkasan vs raw content (Golden Source Rule), two-stage retrieval, conflict resolution, dan lifecycle tabel memori.
 
-**Tiga "governor/guard" service berbeda, saling independen tapi saling mereferensikan pola desain:**
-- `SystemGovernorService.js` — monitoring/anomali kode (escalation ladder 4 level)
-- `MemoryGovernorService.js` — integritas data/ringkasan (Golden Source, retrieval 2-tahap)
-- `SkillGuardService` (rencana) — validasi keamanan skill sebelum aktif
-
-Jangan gabungkan ketiganya jadi satu file. One file, one responsibility.
+**Tiga "governor/guard" service independen:**
+- `SystemGovernorService.js` — monitoring/anomali kode & escalations (belum dibuat)
+- `MemoryGovernorService.js` — integritas data/ringkasan memori (pondasi siap)
+- `SkillGuardService.js` — validasi keamanan skill sebelum dieksekusi (sudah aktif via Skill Implementation)
 
 ---
 
