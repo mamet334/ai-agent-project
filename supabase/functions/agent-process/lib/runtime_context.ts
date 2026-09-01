@@ -177,6 +177,9 @@ export interface RuntimeContext {
   /** Logger untuk API usage dan agent events */
   logger: RequestLogger;
 
+  /** Identitas User */
+  userId?: string;
+
   /** Mutable runtime state */
   state: RuntimeState;
 
