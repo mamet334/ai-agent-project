@@ -189,6 +189,7 @@ export async function executeRequestPipeline(
     stream: { isStream: !!parsed.stream, extractedImage: parsed.extractedImage, desktopOSMode: !!parsed.desktopOSMode, auditMode: parsed.auditMode || 'OFF' },
     env: runtimeEnv,
     logger: createRuntimeLogger(ctx.auth.userId, backgroundTasks, !!parsed.stream, runtimeEnv),
+    userId: ctx.auth?.userId || 'anonymous',
     state: { explicitModelErrors: '' },
     tasks: backgroundTasks
   };

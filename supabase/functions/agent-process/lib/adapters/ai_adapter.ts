@@ -1,5 +1,6 @@
 import { CapabilityAdapter, AdapterContext, AdapterResult } from './capability_adapter.ts';
 import { RuntimeContext } from '../runtime_context.ts';
+import { checkGuardrails, recordUsage } from '../cost/costTracker.ts';
 
 async function* processOpenAIStream(res: Response): AsyncGenerator<string, void, unknown> {
   const reader = res.body?.getReader();
@@ -54,6 +55,16 @@ export class GroqAdapter implements CapabilityAdapter {
       groqModel = 'llama-3.1-8b-instant';
     }
 
+    const userId = this.rctx.userId || 'anonymous';
+    await checkGuardrails(
+      this.rctx.env.supabaseUrl || '',
+      this.rctx.env.supabaseServiceKey || '',
+      userId,
+      groqModel,
+      'groq',
+      context.trace_id
+    );
+
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${this.rctx.keys.groq}`, 'Content-Type': 'application/json' },
@@ -62,6 +73,22 @@ export class GroqAdapter implements CapabilityAdapter {
     if (!res.ok) throw new Error(`Groq API Error: ${res.status} ${await res.text()}`);
     const data = await res.json();
     const answer = data.choices?.[0]?.message?.content || '';
+    
+    const usage = data.usage || {};
+    const promptTokens = usage.prompt_tokens || Math.ceil(JSON.stringify(messages || []).length / 4);
+    const completionTokens = usage.completion_tokens || Math.ceil(answer.length / 4);
+    
+    this.rctx.tasks.fire('RecordUsage', recordUsage({
+      userId,
+      adapter: 'groq',
+      model: groqModel,
+      promptTokens,
+      completionTokens,
+      callerContext: context.trace_id,
+      traceId: context.trace_id,
+      supabaseUrl: this.rctx.env.supabaseUrl || '',
+      supabaseServiceKey: this.rctx.env.supabaseServiceKey || ''
+    }));
     
     return {
       result: answer,
@@ -85,6 +112,17 @@ export class GroqAdapter implements CapabilityAdapter {
 
     const aborter = new AbortController();
     const id = setTimeout(() => aborter.abort(), 15000);
+    
+    const userId = this.rctx.userId || 'anonymous';
+    await checkGuardrails(
+      this.rctx.env.supabaseUrl || '',
+      this.rctx.env.supabaseServiceKey || '',
+      userId,
+      groqModel,
+      'groq',
+      context.trace_id
+    );
+
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${this.rctx.keys.groq}`, 'Content-Type': 'application/json' },
@@ -93,7 +131,27 @@ export class GroqAdapter implements CapabilityAdapter {
     });
     clearTimeout(id);
     if (!res.ok) throw new Error(`Groq HTTP ${res.status}: ${await res.text()}`);
-    yield* processOpenAIStream(res);
+    
+    let accumulatedText = '';
+    for await (const chunk of processOpenAIStream(res)) {
+      accumulatedText += chunk;
+      yield chunk;
+    }
+    
+    const promptTokens = Math.ceil(JSON.stringify(messages || []).length / 4);
+    const completionTokens = Math.ceil(accumulatedText.length / 4);
+    
+    this.rctx.tasks.fire('RecordUsageStream', recordUsage({
+      userId,
+      adapter: 'groq',
+      model: groqModel,
+      promptTokens,
+      completionTokens,
+      callerContext: (context.trace_id || 'stream') + '_estimated',
+      traceId: context.trace_id,
+      supabaseUrl: this.rctx.env.supabaseUrl || '',
+      supabaseServiceKey: this.rctx.env.supabaseServiceKey || ''
+    }));
   }
 
   async healthCheck() {
@@ -156,6 +214,16 @@ export class OpenRouterAdapter implements CapabilityAdapter {
       openRouterModel = modelMap[rawModel] || rawModel;
     }
 
+    const userId = this.rctx.userId || 'anonymous';
+    await checkGuardrails(
+      this.rctx.env.supabaseUrl || '',
+      this.rctx.env.supabaseServiceKey || '',
+      userId,
+      openRouterModel,
+      'openrouter',
+      context.trace_id
+    );
+
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -169,6 +237,22 @@ export class OpenRouterAdapter implements CapabilityAdapter {
     if (!res.ok) throw new Error(`OpenRouter API Error: ${res.status} ${await res.text()}`);
     const data = await res.json();
     const answer = data.choices?.[0]?.message?.content || '';
+
+    const usage = data.usage || {};
+    const promptTokens = usage.prompt_tokens || Math.ceil(JSON.stringify(messages || []).length / 4);
+    const completionTokens = usage.completion_tokens || Math.ceil(answer.length / 4);
+
+    this.rctx.tasks.fire('RecordUsage', recordUsage({
+      userId,
+      adapter: 'openrouter',
+      model: openRouterModel,
+      promptTokens,
+      completionTokens,
+      callerContext: context.trace_id,
+      traceId: context.trace_id,
+      supabaseUrl: this.rctx.env.supabaseUrl || '',
+      supabaseServiceKey: this.rctx.env.supabaseServiceKey || ''
+    }));
 
     return {
       result: answer,
@@ -212,6 +296,17 @@ export class OpenRouterAdapter implements CapabilityAdapter {
 
     const aborter = new AbortController();
     const id = setTimeout(() => aborter.abort(), 15000);
+    
+    const userId = this.rctx.userId || 'anonymous';
+    await checkGuardrails(
+      this.rctx.env.supabaseUrl || '',
+      this.rctx.env.supabaseServiceKey || '',
+      userId,
+      orModel,
+      'openrouter',
+      context.trace_id
+    );
+
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${this.rctx.keys.openRouter}`, 'HTTP-Referer': 'https://ai-agent-project.vercel.app', 'X-Title': 'Mamet AI Agent', 'Content-Type': 'application/json' },
@@ -220,7 +315,27 @@ export class OpenRouterAdapter implements CapabilityAdapter {
     });
     clearTimeout(id);
     if (!res.ok) throw new Error(`OpenRouter HTTP ${res.status}: ${await res.text()}`);
-    yield* processOpenAIStream(res);
+    
+    let accumulatedText = '';
+    for await (const chunk of processOpenAIStream(res)) {
+      accumulatedText += chunk;
+      yield chunk;
+    }
+    
+    const promptTokens = Math.ceil(JSON.stringify(messages || []).length / 4);
+    const completionTokens = Math.ceil(accumulatedText.length / 4);
+    
+    this.rctx.tasks.fire('RecordUsageStream', recordUsage({
+      userId,
+      adapter: 'openrouter',
+      model: orModel,
+      promptTokens,
+      completionTokens,
+      callerContext: (context.trace_id || 'stream') + '_estimated',
+      traceId: context.trace_id,
+      supabaseUrl: this.rctx.env.supabaseUrl || '',
+      supabaseServiceKey: this.rctx.env.supabaseServiceKey || ''
+    }));
   }
 
   async healthCheck() {
@@ -251,11 +366,22 @@ export class GeminiAdapter implements CapabilityAdapter {
     let seenRateLimit = false;
     let lastError = 'Unknown error';
 
+    const userId = this.rctx.userId || 'anonymous';
+    const targetModel = model || 'gemini-2.0-flash';
+    await checkGuardrails(
+      this.rctx.env.supabaseUrl || '',
+      this.rctx.env.supabaseServiceKey || '',
+      userId,
+      targetModel,
+      'gemini',
+      context.trace_id
+    );
+
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       for (let ki = 0; ki < allKeys.length; ki++) {
         const key = allKeys[(GeminiAdapter.keyIndex + ki) % allKeys.length];
         try {
-          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model || 'gemini-2.0-flash'}:generateContent?key=${key}`, {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${key}`, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify(payload)
@@ -265,6 +391,23 @@ export class GeminiAdapter implements CapabilityAdapter {
             GeminiAdapter.keyIndex = (GeminiAdapter.keyIndex + ki + 1) % allKeys.length;
             const data = await res.json();
             const answer = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            
+            const usage = data.usageMetadata || {};
+            const promptTokens = usage.promptTokenCount || Math.ceil(JSON.stringify(payload).length / 4);
+            const completionTokens = usage.candidatesTokenCount || Math.ceil(answer.length / 4);
+            
+            this.rctx.tasks.fire('RecordUsage', recordUsage({
+              userId,
+              adapter: 'gemini',
+              model: targetModel,
+              promptTokens,
+              completionTokens,
+              callerContext: context.trace_id,
+              traceId: context.trace_id,
+              supabaseUrl: this.rctx.env.supabaseUrl || '',
+              supabaseServiceKey: this.rctx.env.supabaseServiceKey || ''
+            }));
+
             const grounding = data.candidates?.[0]?.groundingMetadata;
             const metadata: any = {};
             if (grounding?.groundingChunks) {
@@ -330,6 +473,16 @@ export class GeminiAdapter implements CapabilityAdapter {
     let res: Response | null = null;
     let lastErr = '';
 
+    const userId = this.rctx.userId || 'anonymous';
+    await checkGuardrails(
+      this.rctx.env.supabaseUrl || '',
+      this.rctx.env.supabaseServiceKey || '',
+      userId,
+      model,
+      'gemini',
+      context.trace_id
+    );
+
     for (let ki = 0; ki < allKeys.length; ki++) {
       const key = allKeys[(GeminiAdapter.keyIndex + ki) % allKeys.length];
       const aborter = new AbortController();
@@ -361,6 +514,8 @@ export class GeminiAdapter implements CapabilityAdapter {
     if (!reader) throw new Error("No body");
     let buffer = '';
     let isThinking = false;
+    let accumulatedText = '';
+    
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -377,13 +532,32 @@ export class GeminiAdapter implements CapabilityAdapter {
             if (content) {
               if (partIsThought && !isThinking) { content = '<think>\n' + content; isThinking = true; }
               else if (!partIsThought && isThinking) { content = '\n</think>\n\n' + content; isThinking = false; }
+              accumulatedText += content;
               yield content;
             }
           } catch(e) {}
         }
       }
     }
-    if (isThinking) yield '\n</think>\n\n';
+    if (isThinking) {
+      accumulatedText += '\n</think>\n\n';
+      yield '\n</think>\n\n';
+    }
+    
+    const promptTokens = Math.ceil(JSON.stringify(geminiPayload).length / 4);
+    const completionTokens = Math.ceil(accumulatedText.length / 4);
+    
+    this.rctx.tasks.fire('RecordUsageStream', recordUsage({
+      userId,
+      adapter: 'gemini',
+      model,
+      promptTokens,
+      completionTokens,
+      callerContext: (context.trace_id || 'stream') + '_estimated',
+      traceId: context.trace_id,
+      supabaseUrl: this.rctx.env.supabaseUrl || '',
+      supabaseServiceKey: this.rctx.env.supabaseServiceKey || ''
+    }));
   }
 
   async healthCheck() {
@@ -416,6 +590,17 @@ export class OpenAIAdapter implements CapabilityAdapter {
     messages.push({ role: 'user', content: promptText });
     
     const selectedModel = this.rctx.model.model || 'gpt-4o-mini';
+    
+    const userId = this.rctx.userId || 'anonymous';
+    await checkGuardrails(
+      this.rctx.env.supabaseUrl || '',
+      this.rctx.env.supabaseServiceKey || '',
+      userId,
+      selectedModel,
+      'openai',
+      context.trace_id
+    );
+
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${this.rctx.keys.openAI}`, 'Content-Type': 'application/json' },
@@ -424,6 +609,22 @@ export class OpenAIAdapter implements CapabilityAdapter {
     if (!res.ok) throw new Error(`OpenAI API Error: ${res.status} ${await res.text()}`);
     const data = await res.json();
     const answer = data.choices?.[0]?.message?.content || '';
+
+    const usage = data.usage || {};
+    const promptTokens = usage.prompt_tokens || Math.ceil(JSON.stringify(messages || []).length / 4);
+    const completionTokens = usage.completion_tokens || Math.ceil(answer.length / 4);
+
+    this.rctx.tasks.fire('RecordUsage', recordUsage({
+      userId,
+      adapter: 'openai',
+      model: selectedModel,
+      promptTokens,
+      completionTokens,
+      callerContext: context.trace_id,
+      traceId: context.trace_id,
+      supabaseUrl: this.rctx.env.supabaseUrl || '',
+      supabaseServiceKey: this.rctx.env.supabaseServiceKey || ''
+    }));
 
     return {
       result: answer,
@@ -444,15 +645,47 @@ export class OpenAIAdapter implements CapabilityAdapter {
 
     const aborter = new AbortController();
     const id = setTimeout(() => aborter.abort(), 15000);
+    const selectedModel = this.rctx.model.model || 'gpt-4o-mini';
+    
+    const userId = this.rctx.userId || 'anonymous';
+    await checkGuardrails(
+      this.rctx.env.supabaseUrl || '',
+      this.rctx.env.supabaseServiceKey || '',
+      userId,
+      selectedModel,
+      'openai',
+      context.trace_id
+    );
+
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${this.rctx.keys.openAI}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: this.rctx.model.model || 'gpt-4o-mini', messages, temperature: 0.1, max_tokens: 8192, stream: true }),
+      body: JSON.stringify({ model: selectedModel, messages, temperature: 0.1, max_tokens: 8192, stream: true }),
       signal: aborter.signal
     });
     clearTimeout(id);
     if (!res.ok) throw new Error(`OpenAI HTTP ${res.status}: ${await res.text()}`);
-    yield* processOpenAIStream(res);
+    
+    let accumulatedText = '';
+    for await (const chunk of processOpenAIStream(res)) {
+      accumulatedText += chunk;
+      yield chunk;
+    }
+    
+    const promptTokens = Math.ceil(JSON.stringify(messages || []).length / 4);
+    const completionTokens = Math.ceil(accumulatedText.length / 4);
+    
+    this.rctx.tasks.fire('RecordUsageStream', recordUsage({
+      userId,
+      adapter: 'openai',
+      model: selectedModel,
+      promptTokens,
+      completionTokens,
+      callerContext: (context.trace_id || 'stream') + '_estimated',
+      traceId: context.trace_id,
+      supabaseUrl: this.rctx.env.supabaseUrl || '',
+      supabaseServiceKey: this.rctx.env.supabaseServiceKey || ''
+    }));
   }
 
   async healthCheck() {
