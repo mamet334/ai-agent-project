@@ -72,19 +72,43 @@ export class MemoryGovernorService {
    * @param {string} params.user_id
    * @param {string} params.content     - Raw content (golden source)
    * @param {string} [params.summary]   - Ringkasan (opsional, default dari content)
-   * @param {string} [params.source_type] - 'fact' | 'preference' | 'location' | 'engineer_session'
+   * @param {string} [params.source_type] - 'fact' | 'preference' | 'location' | 'engineer_session' | 'assistant_chat'
    * @param {string} [params.source_reference] - Reference ke file/sumber asli
    * @param {string} [params.chat_id]   - Chat ID terkait
    * @param {string} [params.version_code] - Kode versi
+   * @param {string} [params.category='general'] - Kategori memori ('general' | 'engineering' | 'preference')
+   * @param {'generic'|'sensitive'} [params.access_tier] - Access tier (auto-detect fallback: 'generic')
+   * @param {'active'|'archived'|'pending_purge'|'CONFLICT_PENDING_REVIEW'} [params.status='active'] - Status lifecycle
+   * @param {number} [params.version_sequence=1] - Nomor urutan versi
    * @returns {Promise<Object|null>} inserted memory row atau null
    */
-  async storeGoldenMemory({ user_id, content, summary, source_type = 'fact', source_reference, chat_id, version_code }) {
+  async storeGoldenMemory({
+    user_id,
+    content,
+    summary,
+    source_type = 'fact',
+    source_reference,
+    chat_id,
+    version_code,
+    category = 'general',
+    access_tier,
+    status = 'active',
+    version_sequence = 1
+  }) {
     if (!this.isInitialized) throw new Error('MemoryGovernorService not initialized');
     if (!user_id) throw new Error('MemoryGovernorService: user_id required');
     if (!content) throw new Error('MemoryGovernorService: content required');
 
     const contentHash = this._computeHash(content);
     const resolvedSummary = summary || (typeof content === 'string' ? content.substring(0, 500) : JSON.stringify(content));
+
+    // Auto-detect access tier jika tidak dikirim eksplisit
+    let resolvedAccessTier = access_tier;
+    if (!resolvedAccessTier) {
+      const contentStr = (typeof content === 'string' ? content : JSON.stringify(content)).toLowerCase();
+      const hasSensitivePattern = /password|token|secret|api[_-]?key|kredensial|credential|bearer|private[_-]?key/i.test(contentStr);
+      resolvedAccessTier = hasSensitivePattern ? 'sensitive' : 'generic';
+    }
 
     try {
       // 1. INSERT raw content ke tabel golden source
@@ -107,13 +131,17 @@ export class MemoryGovernorService {
         return null;
       }
 
-      // 2. INSERT / UPDATE summary di user_memories dengan metadata
+      // 2. INSERT summary di user_memories dengan metadata lengkap
       const { data: memRow, error: memError } = await supabase
         .from('user_memories')
         .insert([{
           user_id,
           summary: resolvedSummary,
           memory_type: source_type,
+          category: category || 'general',
+          access_tier: resolvedAccessTier,
+          status: status || 'active',
+          version_sequence: version_sequence || 1,
           confidence: 1.0,
           source: 'MemoryGovernorService',
           raw_content_id: rawRow.id,
@@ -283,6 +311,63 @@ export class MemoryGovernorService {
 
     console.log(`[MemoryGovernorService] Sesi diverifikasi: ${results.length} memori, ${regenerated} regenerated`);
     return { status: 'DONE', verified: results.length, regenerated, unchanged };
+  }
+
+  /**
+   * Memverifikasi memori sesi Assistant (golden source alignment).
+   * Dipanggil saat sesi Assistant disimpan/diakhiri.
+   *
+   * @param {Object} params
+   * @param {string} params.userId
+   * @param {string} [params.chatId]
+   * @returns {Promise<Object>} hasil verifikasi
+   */
+  async verifyAssistantSession({ userId, chatId }) {
+    if (!this.isInitialized) throw new Error('MemoryGovernorService not initialized');
+    if (!userId) return { status: 'NO_USER', verified: 0, regenerated: 0, unchanged: 0 };
+
+    try {
+      let query = supabase
+        .from('user_memories')
+        .select('id, summary, source_reference, raw_content_id')
+        .eq('user_id', userId)
+        .not('raw_content_id', 'is', null);
+
+      if (chatId) {
+        query = query.eq('chat_id', chatId);
+      } else {
+        query = query.eq('source_reference', 'assistant_chat_trigger');
+      }
+
+      const { data: memories, error } = await query.limit(10);
+      if (error || !memories || memories.length === 0) {
+        return { status: 'NO_MEMORIES', verified: 0, regenerated: 0, unchanged: 0 };
+      }
+
+      const results = [];
+      for (const mem of memories) {
+        const result = await this.verifyMemorySummary(mem.id);
+        results.push(result);
+      }
+
+      const regenerated = results.filter(r => r.status === 'REGENERATED').length;
+      const unchanged = results.filter(r => r.status === 'UNCHANGED').length;
+
+      this.eventBus.emit('MemoryGovernor:AssistantSessionVerified', {
+        userId,
+        chatId,
+        verified: results.length,
+        regenerated,
+        unchanged,
+        timestamp: new Date().toISOString()
+      });
+
+      console.log(`[MemoryGovernorService] Sesi Assistant diverifikasi: ${results.length} memori, ${regenerated} regenerated`);
+      return { status: 'DONE', verified: results.length, regenerated, unchanged };
+    } catch (err) {
+      console.warn('[MemoryGovernorService] verifyAssistantSession error:', err.message);
+      return { status: 'ERROR', error: err.message, verified: 0, regenerated: 0, unchanged: 0 };
+    }
   }
 
   /**

@@ -157,9 +157,9 @@ export class MemoryService {
       const summary = key.length > 100 ? key.substring(0, 100) + '...' : key;
 
       // === GOLDEN SOURCE PATH (MemoryGovernorService) ===
-      // Jika metadata golden source disediakan, delegasikan ke MemoryGovernorService
-      // agar raw content disimpan + ringkasan mendapat metadata wajib.
-      const hasGoldenMeta = options.source_reference || options.chat_id || options.version_code;
+      // Jika metadata golden source disediakan atau useGovernor diaktifkan,
+      // delegasikan ke MemoryGovernorService agar raw content disimpan + ringkasan mendapat metadata wajib.
+      const hasGoldenMeta = options.source_reference || options.chat_id || options.version_code || options.useGovernor;
       if (hasGoldenMeta) {
         const governor = this.serviceManager.has('MemoryGovernorService')
           ? this.serviceManager.get('MemoryGovernorService')
@@ -173,7 +173,11 @@ export class MemoryService {
             source_type: options.source_type || 'fact',
             source_reference: options.source_reference || null,
             chat_id: options.chat_id || null,
-            version_code: options.version_code || null
+            version_code: options.version_code || null,
+            category: options.category || 'general',
+            access_tier: options.access_tier,
+            status: options.status || 'active',
+            version_sequence: options.version_sequence || 1
           });
           success = !!result;
           this.eventBus.emit('Memory:Stored', { key, success });

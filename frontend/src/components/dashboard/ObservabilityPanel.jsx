@@ -282,6 +282,32 @@ export default function ObservabilityPanel({
             return <div className={`text-3xl font-light font-mono ${colorClass}`}>{cc}</div>;
           })()}
         </div>
+
+        {/* Memory Governance Conflicts */}
+        <div className="group pt-4 border-t border-white/5" title="Memories with status CONFLICT_PENDING_REVIEW requiring user resolution.">
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-[10px] text-slate-500 uppercase tracking-wider font-mono">Memory Conflicts</div>
+            {(stats.memoryConflicts || 0) > 0 && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse">
+                ACTION REQUIRED
+              </span>
+            )}
+          </div>
+          {(() => {
+            const mc = stats.memoryConflicts || 0;
+            const colorClass = mc > 0
+              ? 'text-[#ff4444] drop-shadow-[0_0_15px_rgba(255,68,68,0.4)]'
+              : 'text-[#00ff88] drop-shadow-[0_0_15px_rgba(0,255,136,0.4)]';
+            return (
+              <div>
+                <div className={`text-3xl font-light font-mono ${colorClass}`}>{mc}</div>
+                {mc > 0 && (
+                  <p className="text-[9px] text-red-300 mt-1">Buka Memory Context Panel di Chat untuk resolusi konflik.</p>
+                )}
+              </div>
+            );
+          })()}
+        </div>
       </div>
     </div>
   );

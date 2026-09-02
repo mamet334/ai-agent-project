@@ -12,7 +12,7 @@
 | Dokumen | Status | Scope |
 |---|---|---|
 | `ASSISTANT-CAPABILITY-ROADMAP.md` | ✅ Selesai (PR#1–#7 Fase 1) — ⚠️ PR#5 parsial | Assistant capability, 7 PR |
-| `roadmap memory governor.md` | ⚠️ Fase 1 Pondasi Saja (Service & Addendum method siap; integrasi Assistant & UI belum; Fase 2–5 belum) | `MemoryGovernorService.js` |
+| `roadmap memory governor.md` | ✅ **Selesai Fase 1 & Integrasi** (Service core, Addendum, integrasi Assistant & Engineer, observabilitas konflik di HomeDashboard; UI Purge deferred) | `MemoryGovernorService.js` |
 | `PR8-linux-style-dispatch.md` | ✅ Selesai — `RequestClassifierService` + thin dispatcher + `_handleLookup` | `RequestClassifierService`, `LookupHandler`, `ConversationHandler` |
 | `teknis-skil-implementasi.md` | ✅ Selesai — SkillRegistry + SkillGuardService + SkillHandler + contoh skill | `SkillRegistry`, `SkillGuardService`, `SkillHandler` |
 | `PR9-retrieval-tier-architecture.md` | ✅ **Selesai Fase 1** (Tier 1 lokal via Edge Function & client, mode Assistant & Engineer, `RetrievalOrchestrator.js` terpasang; Fase 2–3 pending) | `RetrievalStrategyService.js`, `KnowledgeService.js`, `context_builder.ts`, `RetrievalOrchestrator.js`, *(fase berikutnya)* `InternalKnowledgeFallbackService.js`, `WebComparisonService.js` |
@@ -28,7 +28,7 @@
 ```
 [SELESAI] PR#1, PR#2, PR#3, PR#4, PR#6, PR#7 Fase 1 (Assistant Capability)
     ↓
-[PONDASI SIAP] MemoryGovernorService — Fase 1 (Service core & Addendum method dibuat; integrasi penuh & Fase 2–5 pending)
+[SELESAI] MemoryGovernorService — Fase 1 & Integrasi (Service core, Addendum, integrasi Assistant/Engineer, Conflict UI badge; UI Purge deferred)
     ↓
 [SELESAI] PR#8 — Linux-style Dispatch (PR8-linux-style-dispatch.md)
     ↓

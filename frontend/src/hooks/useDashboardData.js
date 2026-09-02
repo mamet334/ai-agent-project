@@ -24,7 +24,7 @@ function safeLink(links, nodes, source, target, extra = {}) {
 
 export default function useDashboardData() {
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
-  const [stats, setStats] = useState({ memories: 0, documents: 0, chats: 0, orphans: 0, connected: 0 });
+  const [stats, setStats] = useState({ memories: 0, documents: 0, chats: 0, orphans: 0, connected: 0, memoryConflicts: 0 });
   const [vitals, setVitals] = useState({
     supabase: 'UNKNOWN',
     auth: 'UNKNOWN',
@@ -74,7 +74,7 @@ export default function useDashboardData() {
     async function fetchData() {
       try {
         const [memRes, docRes, chatRes, chunkRes] = await Promise.all([
-          supabase.from('user_memories').select('id, summary, created_at, memory_hits, metadata').limit(500),
+          supabase.from('user_memories').select('id, summary, created_at, memory_hits, metadata, status').limit(500),
           supabase.from('documents').select('id, title, created_at').limit(500),
           supabase.from('chats').select('id, title, workspace_type, created_at').limit(500),
           supabase.from('document_chunks').select('id, document_id').limit(5000)
@@ -567,13 +567,15 @@ export default function useDashboardData() {
         const orphanCount = nodes.filter(n => !n.isCategory && n.data && n.data.relations === 0).length;
         const totalDataNodes = nodes.filter(n => !n.isCategory && n.data).length;
         const connectedCount = totalDataNodes - orphanCount;
+        const memoryConflicts = memories.filter(m => m.status === 'CONFLICT_PENDING_REVIEW').length;
 
         setStats({
           memories: memories.length,
           documents: documents.length,
           chats: chats.length,
           orphans: orphanCount,
-          connected: connectedCount
+          connected: connectedCount,
+          memoryConflicts
         });
 
         // ---- Execution Trace ----

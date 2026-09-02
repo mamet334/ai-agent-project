@@ -100,16 +100,19 @@ export class AssistantService {
    * @param {string} userMsg
    * @returns {Promise<{ handled: boolean, responseContent: string }>}
    */
-  async handleMemoryTrigger(userMsg) {
+  async handleMemoryTrigger(userMsg, context = {}) {
     const memoryKeywords = ['ingat', 'simpan', 'catat', 'remember', 'save', 'store'];
     const lowerMsg = userMsg.toLowerCase();
     const hasMemoryKeyword = memoryKeywords.some(k => lowerMsg.includes(k));
 
     if (!hasMemoryKeyword) return { handled: false, responseContent: '' };
 
-    const kernel = this.serviceManager?.get ? null : null; // serviceManager is already the manager
     const memoryService = this.serviceManager.get('MemoryService');
-    if (!memoryService) return { handled: false, responseContent: '' };
+    const governor = this.serviceManager.has('MemoryGovernorService')
+      ? this.serviceManager.get('MemoryGovernorService')
+      : null;
+
+    if (!memoryService && !governor) return { handled: false, responseContent: '' };
 
     const contentToRemember = userMsg
       .replace(/(ingat|simpan|catat|remember|save|store)/gi, '')
@@ -118,12 +121,62 @@ export class AssistantService {
     if (contentToRemember.length === 0) return { handled: false, responseContent: '' };
 
     try {
-      const stored = await memoryService.storeMemory(contentToRemember, contentToRemember);
-      if (stored) {
-        return {
-          handled: true,
-          responseContent: `✅ Saya telah menyimpan: "${contentToRemember}" ke memori.`
-        };
+      const { supabase } = await import('../../../supabase.js');
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+
+      // Infer category
+      let category = 'general';
+      const cLower = contentToRemember.toLowerCase();
+      if (/suka|ingin|favorit|preferensi|nama saya|panggil/i.test(cLower)) {
+        category = 'preference';
+      } else if (/kode|file|fungsi|class|repo|bug|error|endpoint|script/i.test(cLower)) {
+        category = 'engineering';
+      }
+
+      const goldenMeta = {
+        source_type: 'assistant_chat',
+        source_reference: 'assistant_chat_trigger',
+        chat_id: context.chatId || null,
+        version_code: `AST-${Date.now()}`,
+        category,
+        useGovernor: true
+      };
+
+      if (governor && userId && typeof governor.storeGoldenMemory === 'function') {
+        // Cek deteksi konflik sebelum store agar memori bertentangan ditandai CONFLICT_PENDING_REVIEW
+        await governor.detectAndMarkConflict({
+          userId,
+          sourceFile: goldenMeta.source_reference,
+          newContent: contentToRemember,
+          newVersionSeq: 1
+        });
+
+        const stored = await governor.storeGoldenMemory({
+          user_id: userId,
+          content: contentToRemember,
+          summary: contentToRemember,
+          source_type: goldenMeta.source_type,
+          source_reference: goldenMeta.source_reference,
+          chat_id: goldenMeta.chat_id,
+          version_code: goldenMeta.version_code,
+          category: goldenMeta.category
+        });
+
+        if (stored) {
+          return {
+            handled: true,
+            responseContent: `✅ Saya telah menyimpan: "${contentToRemember}" ke memori (kategori: ${category}).`
+          };
+        }
+      } else if (memoryService) {
+        const stored = await memoryService.storeMemory(contentToRemember, contentToRemember, goldenMeta);
+        if (stored) {
+          return {
+            handled: true,
+            responseContent: `✅ Saya telah menyimpan: "${contentToRemember}" ke memori.`
+          };
+        }
       }
     } catch (err) {
       console.warn('[AssistantService] Memory trigger failed:', err);
@@ -270,7 +323,7 @@ export class AssistantService {
     const { resolvedMode, resolvedAppSource } = this.resolveMode(workspaceId);
 
     // 2. Memory trigger check (keyword: ingat/simpan/catat)
-    const memoryResult = await this.handleMemoryTrigger(userMsg);
+    const memoryResult = await this.handleMemoryTrigger(userMsg, { chatId: workspaceId });
     if (memoryResult.handled) {
       onDone?.(memoryResult.responseContent, [], null);
       return;
@@ -944,7 +997,35 @@ export class AssistantService {
 
     if (result?.error) {
       console.error('[AssistantService] Gagal menyimpan chat:', result.error);
+    } else {
+      // Verifikasi integritas memori sesi Assistant (golden source alignment)
+      const effectiveChatId = chatId || result?.data?.id;
+      await this.finalizeAssistantSession({ userId, chatId: effectiveChatId });
     }
+  }
+
+  /**
+   * Finalisasi sesi Assistant: memverifikasi integritas golden memory yang disimpan selama sesi.
+   * @param {Object} params
+   * @param {string} params.userId
+   * @param {string} [params.chatId]
+   * @returns {Promise<Object|null>}
+   */
+  async finalizeAssistantSession({ userId, chatId }) {
+    try {
+      const governor = this.serviceManager.has('MemoryGovernorService')
+        ? this.serviceManager.get('MemoryGovernorService')
+        : null;
+
+      if (governor && typeof governor.verifyAssistantSession === 'function' && userId) {
+        const res = await governor.verifyAssistantSession({ userId, chatId });
+        console.log('[AssistantService] Sesi Assistant difinalisasi:', res);
+        return res;
+      }
+    } catch (e) {
+      console.warn('[AssistantService] Finalisasi sesi error:', e.message);
+    }
+    return null;
   }
 
   /**
