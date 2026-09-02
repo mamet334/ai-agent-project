@@ -640,12 +640,30 @@ export class AssistantService {
       userMsg, resolvedMode, userId
     );
 
-    // 4b. PR#5: Adaptive Retrieval — integration point (inactive, menunggu KnowledgeService refactor)
-    let enhancedRagContext = localContext;
-    const retrievalService = this.serviceManager.get('RetrievalStrategyService');
-    if (retrievalService && localContext) {
-      console.log('[AssistantService] PR#5 RetrievalStrategy: ready, waiting for full RAG chunk integration');
+    // 4b. PR#9: 3-Tier Retrieval Orchestrator — ambil knowledge/RAG context (terpisah dari memory)
+    let knowledgeContext = '';
+    const retrievalOrchestrator = this.serviceManager?.get('RetrievalOrchestrator');
+    if (retrievalOrchestrator && !isLiteMode) {
+      try {
+        const retrievalResult = await retrievalOrchestrator.retrieve(userMsg, { limit: 5 });
+        if (retrievalResult && retrievalResult.formattedContext) {
+          knowledgeContext = retrievalResult.formattedContext;
+          console.log(`[AssistantService] PR#9 RetrievalOrchestrator: Tier ${retrievalResult.tier}, strategy=${retrievalResult.strategy}, sufficiency=${retrievalResult.sufficiency}`);
+        }
+      } catch (err) {
+        console.warn('[AssistantService] RetrievalOrchestrator query error (fallback):', err.message);
+      }
     }
+
+    // Gabungkan localContext (Memory) + knowledgeContext (RAG Knowledge)
+    let combinedContext = '';
+    if (localContext && knowledgeContext) {
+      combinedContext = `${localContext}\n\n${knowledgeContext}`;
+    } else {
+      combinedContext = knowledgeContext || localContext || '';
+    }
+
+    let enhancedRagContext = combinedContext;
 
     // 4c. PR#2: Cognitive Memory Governor — validasi memory sebelum dikirim ke LLM
     if (enhancedRagContext && LEGACY_COGNITION_ENABLED) {

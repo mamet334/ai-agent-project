@@ -25,6 +25,7 @@ import { AssistantService } from './services/AssistantService.js';
 import { CommandRegistry } from './services/CommandRegistry.js';
 import { AuditLogService } from './services/AuditLogService.js';
 import { RetrievalStrategyService } from './services/RetrievalStrategyService.js';
+import { RetrievalOrchestrator } from './services/RetrievalOrchestrator.js';
 import { ModuleDiscoveryService } from './services/ModuleDiscoveryService.js';
 import { RequestClassifierService } from './services/RequestClassifierService.js';
 import { SkillRegistry } from './services/SkillRegistry.js';
@@ -290,6 +291,12 @@ class Kernel {
     await retrievalStrategyService.initialize();
     serviceManager.register('RetrievalStrategyService', retrievalStrategyService);
     this.log('INFO', 'RetrievalStrategyService Initialized & Registered');
+
+    // Retrieval Orchestrator (PR#9) — 3-Tier Knowledge Retrieval Orchestrator
+    const retrievalOrchestrator = new RetrievalOrchestrator(serviceManager);
+    await retrievalOrchestrator.initialize();
+    serviceManager.register('RetrievalOrchestrator', retrievalOrchestrator);
+    this.log('INFO', 'RetrievalOrchestrator Initialized & Registered');
 
     // Module Discovery Service (PR#7) — Scan /modules/ Fase 1
     // Di-run setelah ToolRegistryService tersedia sebagai target registrasi

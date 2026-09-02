@@ -93,11 +93,16 @@ export const searchDocuments = async (
     doc.hybrid_score = (vector_similarity * 0.7) + (position_weight * 0.2) + (query_coverage_score * 0.1);
   });
 
-  deduplicatedDocs.sort((a: any, b: any) => b.hybrid_score - a.hybrid_score);
-
   return deduplicatedDocs.map((doc: any) => ({
     type: 'rag',
-    content: `[Dari file "${doc.title}"]: "${doc.content}"`,
-    score: doc.hybrid_score
+    id: doc.id,
+    document_id: doc.document_id || doc.title || 'unknown_doc',
+    title: doc.title,
+    content: `[Dari file "${doc.title || 'dokumen'}"]: "${doc.content}"`,
+    raw_content: doc.content,
+    score: doc.hybrid_score,
+    similarity: doc.similarity ?? (doc.hybrid_score || 0.5),
+    source_url: doc.source_url || null,
+    source_type: doc.source_type || 'local'
   }));
 };

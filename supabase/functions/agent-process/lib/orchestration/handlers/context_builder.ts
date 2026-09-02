@@ -12,6 +12,9 @@ import { PolicyEngine } from '../../verification/policy_engine.ts';
 import { getActiveConflictsCount } from '../../verification/verification_service.ts';
 import { eventBus } from '../../event/event_bus.ts';
 
+import { KnowledgeService } from '../../../../../../frontend/src/core/runtime/services/KnowledgeService.js';
+import { RetrievalStrategyService } from '../../../../../../frontend/src/core/runtime/services/RetrievalStrategyService.js';
+
 export const ContextBuilderHandler = {
   async handle(ctx: any, rctx: any, maef: any): Promise<any> {
     const stream = ctx.request.stream;
@@ -31,64 +34,40 @@ export const ContextBuilderHandler = {
     }
 
     // 2. SCATTER: Trigger independent services in parallel (Phase 1 Event-Driven Gatherer)
+    const TIER1_RETRIEVAL_TIMEOUT_MS = 5000;
     const ragPromise = (async () => {
         if (!ctx.auth.userId || !ctx.request.isRagEnabled) return [];
-        
-        // For ASSISTANT/LITE modes, use lightweight keyword-based text search to avoid vector embedding quota.
-        // For ENGINEER mode, use full vector embedding (semantic similarity).
-        // Ref: MAEF 4.5 — Capability-Based RAG Access.
-        if (ctx.policy.mode === 'ASSISTANT' || ctx.policy.mode === 'LITE') {
-            try {
-                console.log('[RAG] Mode:', ctx.policy.mode, '— using keyword text search (no embedding).');
+
+        const executeTier1 = async () => {
+            // For ASSISTANT/LITE modes: PR#9 Tier 1 — KnowledgeService query + RetrievalStrategyService (Case A/B adaptive)
+            // For ENGINEER mode, use full vector embedding (semantic similarity).
+            // Ref: MAEF 4.5 — Capability-Based RAG Access & PR#9 Tier 1.
+            if (ctx.policy.mode === 'ASSISTANT' || ctx.policy.mode === 'LITE') {
+                console.log('[RAG] Mode:', ctx.policy.mode, '— using KnowledgeService + RetrievalStrategyService (PR#9 Tier 1).');
                 const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.39.3');
                 const supabase = createClient(rctx.env.supabaseUrl, rctx.env.supabaseServiceKey);
                 
-                // Extract meaningful keywords (length > 2, skip stopwords)
-                const stopwords = new Set(['dan', 'yang', 'ini', 'itu', 'atau', 'ke', 'di', 'dari', 'untuk', 'dengan', 'adalah', 'ada', 'apa', 'saya', 'the', 'and', 'for', 'with']);
-                const keywords = (ctx.request.finalMessage || '')
-                    .toLowerCase()
-                    .split(/\s+/)
-                    .filter(w => w.length > 2 && !stopwords.has(w))
-                    .slice(0, 5); // limit to top 5 keywords
-                
-                if (keywords.length === 0) return [];
-                
-                // Build OR filter: match any keyword in the content column
-                const filterStr = keywords.map(k => `content.ilike.%${k}%`).join(',');
-                
-                const { data, error } = await supabase
-                    .from('document_chunks')
-                    .select('content, document_id')
-                    .or(filterStr)
-                    .limit(ctx.request.effectiveRagMatchCount || 5);
-                
-                if (error) {
-                    console.warn('[RAG] Keyword search error:', error.message);
-                    return [];
-                }
-                
-                if (!data || data.length === 0) return [];
-                
-                console.log(`[RAG] Keyword search found ${data.length} chunks.`);
-                return data.map((chunk: any) => ({
-                    type: 'rag',
-                    content: chunk.content,
-                    score: 0.5 // static score for keyword results
-                }));
-            } catch (err: any) {
-                console.warn('[RAG] Keyword search failed, skipping:', err.message);
-                return [];
+                const knowledgeService = new KnowledgeService({ supabaseClient: supabase });
+                const rawChunks = await knowledgeService.queryKnowledge(ctx.request.finalMessage || '', {
+                    supabaseClient: supabase,
+                    limit: ctx.request.effectiveRagMatchCount || 10
+                });
+
+                if (!rawChunks || rawChunks.length === 0) return { chunks: [], strategy: 'empty', sufficiency: 0.0, caseType: 'NONE' };
+
+                const retrievalStrategy = new RetrievalStrategyService();
+                const adaptiveResult = await retrievalStrategy.apply(rawChunks, supabase);
+                return adaptiveResult;
             }
-        }
-        
-        try {
-            console.log('[RAG] Attempting embedding generation...');
+            
+            // Mode ENGINEER: Vector search via document_search.ts + RetrievalStrategyService
+            console.log('[RAG] Mode: ENGINEER — attempting embedding generation + vector search...');
             const queryEmbedding = await generateEmbedding(ctx.request.finalMessage, rctx);
             if (queryEmbedding.length === 0) {
-                console.warn('[RAG] Embedding generation returned empty, falling back to empty array');
-                return [];
+                console.warn('[RAG] Embedding generation returned empty');
+                return { chunks: [], strategy: 'empty', sufficiency: 0.0, caseType: 'NONE' };
             }
-            return await searchDocuments(
+            const vectorDocs = await searchDocuments(
                 queryEmbedding,
                 ctx.request.finalMessage,
                 ctx.request.effectiveRagThreshold,
@@ -97,17 +76,55 @@ export const ContextBuilderHandler = {
                 ctx.auth.userId,
                 rctx
             );
+
+            if (!vectorDocs || vectorDocs.length === 0) return { chunks: [], strategy: 'empty', sufficiency: 0.0, caseType: 'NONE' };
+
+            const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.39.3');
+            const supabase = createClient(rctx.env.supabaseUrl, rctx.env.supabaseServiceKey);
+            const retrievalStrategy = new RetrievalStrategyService();
+            const adaptiveResult = await retrievalStrategy.apply(vectorDocs, supabase);
+            return adaptiveResult;
+        };
+
+        try {
+            // Terapkan Timeout 5 Detik eksplisit
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error(`Tier 1 RAG timeout after ${TIER1_RETRIEVAL_TIMEOUT_MS}ms`)), TIER1_RETRIEVAL_TIMEOUT_MS);
+            });
+
+            const adaptiveResult: any = await Promise.race([executeTier1(), timeoutPromise]);
+            const finalChunks = adaptiveResult?.chunks || [];
+
+            ctx.state.tier1Retrieval = {
+                success: true,
+                tier: 1,
+                strategy: adaptiveResult.strategy,
+                sufficiency: adaptiveResult.sufficiency,
+                chunksCount: finalChunks.length
+            };
+            ctx.state.processingSteps.push(`✅ [RAG TIER 1 OK] ${finalChunks.length} chunks (strategy: ${adaptiveResult.strategy}, sufficiency: ${adaptiveResult.sufficiency})`);
+
+            return finalChunks.map((chunk: any) => ({
+                type: 'rag',
+                content: chunk.content,
+                score: chunk.similarity ?? chunk.score ?? 0.5,
+                source_url: chunk.source_url || null,
+                source_type: chunk.source_type || 'local',
+                _strategy: adaptiveResult.strategy,
+                _caseType: adaptiveResult.caseType,
+                _sufficiency: adaptiveResult.sufficiency
+            }));
         } catch (err: any) {
-            console.error("[RAG Search Error]:", err);
-            console.error("[RAG Error Details]:", err.message);
-            // Fallback: return empty array instead of throwing error
-            // This allows the system to continue without RAG context
-            if (err.message && err.message.includes("RAG_DB_FAIL")) {
-                console.warn('[RAG] RAG_DB_FAIL detected, returning empty array');
-                return [];
-            }
-            // Log but don't throw - allow system to continue
-            console.warn('[RAG] Embedding failed, continuing without RAG context');
+            // Mekanisme Fallback Eksplisit — tandai kegagalan di processingSteps & state (bukan silent fail)
+            console.warn('[RAG] Tier 1 Retrieval failed or timed out:', err.message);
+            ctx.state.tier1Retrieval = {
+                success: false,
+                tier: 1,
+                error: err.message,
+                sufficiency: 0.0,
+                chunksCount: 0
+            };
+            ctx.state.processingSteps.push(`⚠️ [RAG TIER 1 FALLBACK] ${err.message}`);
             return [];
         }
     })();
