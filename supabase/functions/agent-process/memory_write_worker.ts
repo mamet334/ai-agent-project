@@ -62,6 +62,11 @@ export const processMemoryWriteQueue = async (
 
     const msgLower = userMessage.trim().toLowerCase();
     
+    // Defense-in-depth: validasi format UUID untuk workspaceId
+    const validWorkspaceId = (workspaceId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(workspaceId).trim()))
+      ? String(workspaceId).trim()
+      : null;
+
     let extractedFact = userMessage.trim();
     let memoryType = detectorResult.memory_type || detectorResult.tier; // Uses Semantic Types or fallback to T1, T2, T3
 
@@ -74,8 +79,8 @@ export const processMemoryWriteQueue = async (
           .eq('memory_type', memoryType)
           .neq('memory_state', 'HISTORICAL');
           
-        if (workspaceId) {
-          updateQuery = updateQuery.eq('workspace_id', workspaceId);
+        if (validWorkspaceId) {
+          updateQuery = updateQuery.eq('workspace_id', validWorkspaceId);
         } else {
           updateQuery = updateQuery.is('workspace_id', null);
         }
@@ -83,14 +88,18 @@ export const processMemoryWriteQueue = async (
     }
 
     // 2. DEDUPLICATION LAYER
+    const sanitizedFact = (extractedFact || '').replace(/[%_"'(),\\]/g, ' ').replace(/\s+/g, ' ').trim();
     let existingQuery = supabase
       .from('user_memories')
       .select('id, summary, confidence')
-      .eq('user_id', userId)
-      .ilike('summary', `%${extractedFact}%`);
+      .eq('user_id', userId);
+
+    if (sanitizedFact.length > 0) {
+      existingQuery = existingQuery.ilike('summary', `%${sanitizedFact}%`);
+    }
       
-    if (workspaceId) {
-      existingQuery = existingQuery.eq('workspace_id', workspaceId);
+    if (validWorkspaceId) {
+      existingQuery = existingQuery.eq('workspace_id', validWorkspaceId);
     } else {
       existingQuery = existingQuery.is('workspace_id', null);
     }
@@ -112,7 +121,7 @@ export const processMemoryWriteQueue = async (
       confidence: detectorResult.score,
       source: 'rule_based_async_worker',
       memory_state: 'ACTIVE',
-      workspace_id: workspaceId || null
+      workspace_id: validWorkspaceId || null
     }, supabaseUrl, supabaseKey);
 
     await logAudit('STORED', 'FACT', detectorResult.score, detectorResult.reason);

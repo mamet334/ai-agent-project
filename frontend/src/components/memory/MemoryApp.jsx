@@ -20,8 +20,9 @@ let query = supabase
                 .select('id, summary, memory_type, memory_state, memory_hits, created_at, last_used_at, source_reference, version_code, chat_id')
                 .eq('user_id', session.user.id);
 
-            if (searchQuery.trim()) {
-                query = query.ilike('summary', `%${searchQuery.trim()}%`);
+            const sanitizedSearch = (searchQuery || '').replace(/[%_"'(),\\]/g, ' ').replace(/\s+/g, ' ').trim();
+            if (sanitizedSearch) {
+                query = query.ilike('summary', `%${sanitizedSearch}%`);
             }
 
             const { data, error } = await query.order('created_at', { ascending: false }).limit(50);

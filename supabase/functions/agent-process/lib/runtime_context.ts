@@ -141,6 +141,7 @@ export interface RuntimeState {
  * Menggantikan `safeFireAndTrack` closure.
  */
 export interface BackgroundTaskTracker {
+  traceId?: string;
   fire: (taskName: string, promise: Promise<any>) => void;
   awaitAll: () => Promise<void>;
 }
@@ -162,6 +163,9 @@ export interface BackgroundTaskTracker {
  * ADR-0009 Phase 5.1
  */
 export interface RuntimeContext {
+  /** Trace ID untuk observability & cost tracking */
+  traceId: string;
+
   /** Provider API keys — immutable per request */
   keys: ProviderKeys;
 
@@ -198,10 +202,11 @@ export interface RuntimeContext {
  * Factory untuk membuat BackgroundTaskTracker.
  * Menggantikan `pendingBackgroundTasks` array + `safeFireAndTrack` closure.
  */
-export function createBackgroundTaskTracker(): BackgroundTaskTracker {
+export function createBackgroundTaskTracker(traceId?: string): BackgroundTaskTracker {
   const pending: Promise<any>[] = [];
 
   return {
+    traceId,
     fire(taskName: string, promise: Promise<any>): void {
       const start = Date.now();
       const tracked = promise

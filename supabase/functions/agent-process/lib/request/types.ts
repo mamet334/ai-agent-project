@@ -14,6 +14,7 @@ export interface UnifiedExecutionContext {
     globalMemory?: any; 
     localWorkspaceEnabled?: boolean; 
     workspaceTarget?: string; 
+    storageTarget?: string; 
     desktopOSMode?: boolean; 
     auditMode?: string; 
     extractedImage?: any; 

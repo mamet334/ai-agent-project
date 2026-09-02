@@ -63,14 +63,17 @@ export class MemoryService {
         // Selalu exclude status non-active jika kolom status ada
         console.log('[MemoryService] Fallback ke keyword search (MemoryGovernorService tidak tersedia)');
         const stopwords = ['hai', 'halo', 'saya', 'aku', 'adalah', 'apa', 'siapa', 'bagaimana', 'dimana', 'kapan', 'mengapa', 'coba', 'tolong', 'bisa', 'kan', 'dong', 'ya', 'yg', 'yang', 'ini', 'itu', 'dan', 'atau', 'ke', 'di', 'dari', 'untuk', 'dengan'];
-        const keywords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2 && !stopwords.includes(w));
+        const sanitizedFull = (query || '').replace(/[%_"'(),\\]/g, ' ').replace(/\s+/g, ' ').trim();
+        const keywords = sanitizedFull.toLowerCase().split(/\s+/).map(w => w.replace(/[^\w\s-]/g, '').trim()).filter(w => w.length > 2 && !stopwords.includes(w));
 
         let memoryQuery = supabase.from('user_memories').select('*');
         if (keywords.length > 0) {
           const filterString = keywords.map(k => `summary.ilike.%${k}%`).join(',');
           memoryQuery = memoryQuery.or(filterString);
+        } else if (sanitizedFull.length > 0) {
+          memoryQuery = memoryQuery.ilike('summary', `%${sanitizedFull}%`);
         } else {
-          memoryQuery = memoryQuery.ilike('summary', `%${query}%`);
+          return [];
         }
         // Exclude archived/pending_purge/conflict
         memoryQuery = memoryQuery.not('status', 'in', '("archived","pending_purge","CONFLICT_PENDING_REVIEW")');
@@ -81,7 +84,7 @@ export class MemoryService {
           const { data: data2 } = await supabase
             .from('user_memories')
             .select('*')
-            .ilike('summary', `%${query}%`)
+            .ilike('summary', `%${sanitizedFull}%`)
             .order('created_at', { ascending: false })
             .limit(10);
           result = data2 || [];

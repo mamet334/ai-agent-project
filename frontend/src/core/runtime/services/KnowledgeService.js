@@ -111,10 +111,13 @@ export class KnowledgeService {
       if (keywords.length > 0) {
         const filterStr = keywords.map(k => `content.ilike.%${k}%`).join(',');
         dbQuery = dbQuery.or(filterStr);
-      } else if (query && query.trim().length > 0) {
-        dbQuery = dbQuery.ilike('content', `%${query.trim()}%`);
       } else {
-        return [];
+        const sanitizedQuery = (query || '').replace(/[%_"'(),\\]/g, ' ').replace(/\s+/g, ' ').trim();
+        if (sanitizedQuery.length > 0) {
+          dbQuery = dbQuery.ilike('content', `%${sanitizedQuery}%`);
+        } else {
+          return [];
+        }
       }
 
       const { data, error } = await dbQuery.limit(limit);

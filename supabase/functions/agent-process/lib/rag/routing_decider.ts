@@ -17,24 +17,25 @@ export const executeRoutingDecision = async (query: string, userId: string, rctx
     if (!userId) return routingDecision;
 
     // Use explicit workspace ID from UI if provided
-    if (explicitWorkspaceId && explicitWorkspaceId.trim() !== '' && explicitWorkspaceId !== 'global') {
-        const allowedWorkspaces = ['ws-lite', 'ws-assistant', 'ws-engineer'];
+    if (explicitWorkspaceId && typeof explicitWorkspaceId === 'string' && explicitWorkspaceId.trim() !== '' && explicitWorkspaceId !== 'global') {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(explicitWorkspaceId.trim());
         
-        // Jika UI mengirimkan string environment (bukan UUID), abaikan filter workspace_id
-        if (allowedWorkspaces.includes(explicitWorkspaceId)) {
+        if (isUuid) {
+            return {
+                scope: "WORKSPACE",
+                workspace_id: explicitWorkspaceId.trim(),
+                reason_code: "EXPLICIT_UI_WORKSPACE_SELECTION"
+            };
+        } else {
+            // Jika UI mengirimkan string environment/target storage (misal 'AUTO', 'SUPABASE', 'LOCAL', 'ENGINEER', 'ws-*'),
+            // fallback ke Core dan pastikan workspace_id null (bukan string non-UUID)
+            const envTag = explicitWorkspaceId.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
             return {
                 scope: "CORE",
                 workspace_id: null,
-                reason_code: `EXPLICIT_UI_ENVIRONMENT_${explicitWorkspaceId.toUpperCase().replace('-', '_')}`
+                reason_code: `EXPLICIT_UI_ENVIRONMENT_${envTag}`
             };
         }
-        
-        // Jika bukan environment string, asumsikan itu adalah UUID workspace sungguhan
-        return {
-            scope: "WORKSPACE",
-            workspace_id: explicitWorkspaceId,
-            reason_code: "EXPLICIT_UI_WORKSPACE_SELECTION"
-        };
     }
 
     try {

@@ -173,10 +173,13 @@ export const retrieveMemories = async (userPrompt: string, userId: string, supab
     // Safe select to avoid missing column PostgREST errors (PGRST204)
     let memoryQuery = supabase.from('user_memories').select('*').eq('user_id', userId);
     
+    const isUuid = Boolean(workspaceId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(workspaceId).trim()));
+    const validWorkspaceId = isUuid ? String(workspaceId).trim() : null;
+
     try {
-        if (workspaceId) {
+        if (validWorkspaceId) {
            // Fetch memories that belong to this workspace OR are global
-           memoryQuery = memoryQuery.or(`workspace_id.eq.${workspaceId},workspace_id.is.null`);
+           memoryQuery = memoryQuery.or(`workspace_id.eq.${validWorkspaceId},workspace_id.is.null`);
         } else {
            // If no workspace is specified (or global context), fetch global memories only
            memoryQuery = memoryQuery.is('workspace_id', null);

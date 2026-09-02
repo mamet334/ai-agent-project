@@ -163,7 +163,7 @@ export async function executeRequestPipeline(
 
   console.log("[L1] auth binding", { actualAuthId: ctx.auth.userId, appSource: ctx.auth.appSource, message: parsed.message ? parsed.message.substring(0, 50) + '...' : null });
 
-  ctx.request = { ...ctx.request, tools: parsed.tools, model: parsed.model, stream: parsed.stream, history: parsed.history, globalMemory: parsed.globalMemory, semanticContext: parsed.semanticContext || '', extractedImage: parsed.extractedImage, guardianPromptDirective: parsed.guardianPromptDirective, desktopOSMode: parsed.desktopOSMode, auditMode: parsed.auditMode, ragEnabled: parsed.ragEnabled, localWorkspaceEnabled: parsed.localWorkspaceEnabled, workspaceTarget: parsed.storageTarget, finalMessage: parsed.finalMessage };
+  ctx.request = { ...ctx.request, tools: parsed.tools, model: parsed.model, stream: parsed.stream, history: parsed.history, globalMemory: parsed.globalMemory, semanticContext: parsed.semanticContext || '', extractedImage: parsed.extractedImage, guardianPromptDirective: parsed.guardianPromptDirective, desktopOSMode: parsed.desktopOSMode, auditMode: parsed.auditMode, ragEnabled: parsed.ragEnabled, localWorkspaceEnabled: parsed.localWorkspaceEnabled, workspaceTarget: parsed.workspaceTarget, storageTarget: parsed.storageTarget, finalMessage: parsed.finalMessage };
 
   const policyResponse = enforcePolicy(ctx, !!parsed.stream, corsHeaders);
   if (policyResponse) return { ctx: {} as any, rctx: {} as any, response: policyResponse };
@@ -171,9 +171,11 @@ export async function executeRequestPipeline(
   const quotaResponse = await checkQuota(ctx.auth.userId, runtimeEnv.supabaseUrl, runtimeEnv.supabaseServiceKey, !!parsed.stream, corsHeaders);
   if (quotaResponse) return { ctx: {} as any, rctx: {} as any, response: quotaResponse };
 
-  const backgroundTasks = createBackgroundTaskTracker();
+  const traceId = crypto.randomUUID();
+  const backgroundTasks = createBackgroundTaskTracker(traceId);
   
   const rctx: RuntimeContext = {
+    traceId,
     keys: {
       [finalProvider]: finalApiKey,
       openRouter: finalProvider === 'openrouter' ? finalApiKey : (Deno.env.get('OPENROUTER_API_KEY') || ''),

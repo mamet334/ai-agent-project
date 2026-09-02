@@ -17,7 +17,7 @@
 | `teknis-skil-implementasi.md` | ✅ Selesai — SkillRegistry + SkillGuardService + SkillHandler + contoh skill | `SkillRegistry`, `SkillGuardService`, `SkillHandler` |
 | `PR9-retrieval-tier-architecture.md` | ✅ **Selesai Fase 1** (Tier 1 lokal via Edge Function & client, mode Assistant & Engineer, `RetrievalOrchestrator.js` terpasang; Fase 2–3 pending) | `RetrievalStrategyService.js`, `KnowledgeService.js`, `context_builder.ts`, `RetrievalOrchestrator.js`, *(fase berikutnya)* `InternalKnowledgeFallbackService.js`, `WebComparisonService.js` |
 | `PENDING-supabase-security-advisor-findings.md` | ✅ **Selesai Remediasi RPC (8/9) — 1 item deferred: upgrade plan** (8 fungsi `SECURITY DEFINER` aman via migrasi; Leaked Password ditunda keputusan Owner karena batasan Pro plan) | Supabase RPC Permissions & Security |
-| `PENDING-live-verification-runtime-gaps.md` | 📋 Backlog Temuan Live (5 gap runtime, observabilitas, dan RAG) | `agent-process` Edge Function & RAG |
+| `PENDING-live-verification-runtime-gaps.md` | ✅ **Selesai Remediasi Gap Runtime (4/5)** — 1 backlog terbuka: format prompt Source Trace | `agent-process` Edge Function & RAG |
 | `SPESIFIKASI-TEKNIS-MAMET-OS-v2.md` | 📋 Referensi — `SystemGovernorService.js` belum dikerjakan | Monitoring/observability daemon |
 | `MAMET-AI-ROADMAP.md`, `engineer-autonomous-mode.md`, `engineer-chat-upgrade.md`, `fix-log.md`, `rencana.md`, `roadmap-lanjutan.md` | 📋 Belum direview ulang dalam sesi ini — **catatan:** `MAMET-AI-ROADMAP.md` memakai skema penomoran (`TASK-000x`, `ADR-000x`, istilah "MametLite"/"BRAIN 1-2") yang berbeda dari skema PR# di dokumen lain — perlu direkonsiliasi sebelum dipakai sebagai rujukan aktif | — |
 

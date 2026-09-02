@@ -88,7 +88,7 @@ export const callLLMWithMetadata = async (
         model: rctx.model.model
       };
 
-        const result = await adapter.execute(adapterInput, { trace_id: (rctx?.tasks as any)?.traceId || 'unknown' });
+        const result = await adapter.execute(adapterInput, { trace_id: rctx.traceId || rctx.tasks?.traceId || 'unknown' });
       
       if (result && result.result) {
         if (!rctx.stream.isStream) {
@@ -233,7 +233,7 @@ export const runStreamLLM = async function*(promptText: string, systemPromptText
   for (const adapter of availableAdapters) {
      try {
        console.log(`📍 Streaming via Capability Adapter: ${adapter.name}`);
-       const streamIter = adapter.stream(input, { trace_id: (rctx?.tasks as any)?.traceId || 'unknown' });
+       const streamIter = adapter.stream(input, { trace_id: rctx.traceId || rctx.tasks?.traceId || 'unknown' });
        // Peek the first chunk to catch connection errors early
        const firstResult = await streamIter.next();
        
