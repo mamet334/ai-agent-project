@@ -72,8 +72,12 @@ Empat file migrasi historis (`20260829133308_remote.sql`, `20260829133338_remote
 
 ---
 
-## 5. Status Temuan Auth: Leaked Password Protection
+## 5. Ringkasan Akhir & Status Temuan Auth (Leaked Password Protection)
 
-* **Status:** ⚠️ **Pending Keputusan Bisnis**
-* **Keterangan:** Fitur *Leaked Password Protection* di Supabase dibatasi khusus untuk plan **Pro Tier** ($25/bulan) dan tidak dapat diaktifkan pada plan Free. Item ini ditandai belum selesai, menunggu keputusan bisnis Owner mengenai rencana upgrade plan.
+* **Skor Penyelesaian Teknis:** **8 dari 9 item selesai tuntas 100%** (seluruh fungsi RPC `SECURITY DEFINER` aman dan terverifikasi via `db lint`).
+* **Item ke-9 (Leaked Password Protection):** ⏸️ **Deferred — Keputusan Bisnis Owner (Bukan Kegagalan Teknis)**.
+  * **Fakta:** Upaya aktivasi fitur ini pada dashboard Supabase Auth telah dilakukan, namun diblokir oleh sistem karena fitur *Leaked Password Protection* adalah fitur eksklusif **Pro Plan ($25/bulan)**.
+  * **Keputusan:** Owner secara sadar memutuskan menunda upgrade plan untuk saat ini demi pertimbangan efisiensi biaya dan menerima risiko ini sementara.
+  * **Kesimpulan:** Item ini telah ditutup dari antrian backlog teknis Antigravity dan murni menjadi domain keputusan bisnis Owner di masa depan.
+
 
