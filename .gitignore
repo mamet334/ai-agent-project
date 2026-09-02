@@ -30,6 +30,7 @@ logs/
 .cache/
 .tmp/
 temp/
+supabase/.temp/
 
 # OS
 Thumbs.db
