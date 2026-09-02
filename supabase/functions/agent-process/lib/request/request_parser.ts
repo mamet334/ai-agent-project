@@ -7,7 +7,8 @@ export async function parseRequestParams(req: Request, user: any) {
   } catch(e) {
     reqJson = {};
   }
-  let { message, tools, model, userId: _clientUserId, userName, file, history, globalMemory, semanticContext, stream, desktopOSMode, ragEnabled, appSource: clientAppSource = 'assistant', workspaceTarget = 'AUTO', localWorkspaceEnabled = false, auditMode = 'OFF', mode: clientMode, provider } = reqJson;
+  let { message, tools, model, userId: _clientUserId, userName, file, history, globalMemory, semanticContext, stream, desktopOSMode, ragEnabled, appSource: clientAppSource = 'assistant', workspaceTarget = 'AUTO', localWorkspaceEnabled = false, auditMode = 'OFF', mode: clientMode, provider, traceId: clientTraceId, requestId } = reqJson;
+  const traceId = clientTraceId || requestId || null;
   const mode = clientMode || 'ASSISTANT';
   console.log('[RequestParser] Mode diterima:', mode);
 
@@ -68,6 +69,6 @@ export async function parseRequestParams(req: Request, user: any) {
   }
 
   return {
-    message, finalMessage, tools, model, userName, history, globalMemory, semanticContext, stream, desktopOSMode, ragEnabled, appSource, auditMode, extractedImage, guardianPromptDirective, storageTarget, workspaceTarget, mode, provider
+    message, finalMessage, tools, model, userName, history, globalMemory, semanticContext, stream, desktopOSMode, ragEnabled, appSource, auditMode, extractedImage, guardianPromptDirective, storageTarget, workspaceTarget, mode, provider, traceId
   };
 }

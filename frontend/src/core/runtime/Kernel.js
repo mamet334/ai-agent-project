@@ -25,11 +25,13 @@ import { AssistantService } from './services/AssistantService.js';
 import { CommandRegistry } from './services/CommandRegistry.js';
 import { AuditLogService } from './services/AuditLogService.js';
 import { RetrievalStrategyService } from './services/RetrievalStrategyService.js';
+import { InternalKnowledgeFallbackService } from './services/InternalKnowledgeFallbackService.js';
 import { RetrievalOrchestrator } from './services/RetrievalOrchestrator.js';
 import { ModuleDiscoveryService } from './services/ModuleDiscoveryService.js';
 import { RequestClassifierService } from './services/RequestClassifierService.js';
 import { SkillRegistry } from './services/SkillRegistry.js';
 import { SkillGuardService } from './services/SkillGuardService.js';
+import { supabase } from '../../supabase.js';
 
 /**
  * MAEF Kernel v2.0
@@ -165,6 +167,9 @@ class Kernel {
       this.log('INFO', 'Event System Registered');
     }
 
+    // SupabaseClient Core Service
+    serviceManager.register('SupabaseClient', supabase);
+
     // StorageManager (evolusi dari FileSystem)
     const storageManager = new StorageManager();
     serviceManager.register('StorageManager', storageManager);
@@ -285,12 +290,18 @@ class Kernel {
     serviceManager.register('AuditLogService', auditLogService);
     this.log('INFO', 'CommandRegistry & AuditLogService Initialized & Registered');
 
-    // Retrieval Strategy Service (PR#5) — Adaptive RAG retrieval (Kasus A & B)
+    // Retrieval Strategy Service (PR#5 / PR#9) — Kasus A/B Adaptive Retrieval
     // Prasyarat: PR#4 (source attribution) sudah ada di schema DB
     const retrievalStrategyService = new RetrievalStrategyService(serviceManager);
     await retrievalStrategyService.initialize();
     serviceManager.register('RetrievalStrategyService', retrievalStrategyService);
     this.log('INFO', 'RetrievalStrategyService Initialized & Registered');
+
+    // Internal Knowledge Fallback Service (PR#9 Fase 2) — Tier 2 Fallback
+    const internalKnowledgeFallbackService = new InternalKnowledgeFallbackService(serviceManager);
+    await internalKnowledgeFallbackService.initialize();
+    serviceManager.register('InternalKnowledgeFallbackService', internalKnowledgeFallbackService);
+    this.log('INFO', 'InternalKnowledgeFallbackService Initialized & Registered');
 
     // Retrieval Orchestrator (PR#9) — 3-Tier Knowledge Retrieval Orchestrator
     const retrievalOrchestrator = new RetrievalOrchestrator(serviceManager);

@@ -66,15 +66,8 @@ export class KnowledgeService {
   async _resolveSupabaseClient(options = {}) {
     if (options.supabaseClient) return options.supabaseClient;
     if (this.supabaseClient) return this.supabaseClient;
-
-    // Fallback khusus lingkungan browser jika serviceManager tersedia
-    if (typeof window !== 'undefined') {
-      try {
-        const { supabase } = await import('../../../supabase.js');
-        return supabase;
-      } catch (e) {
-        console.warn('[KnowledgeService] Browser supabase import fallback failed:', e.message);
-      }
+    if (this.serviceManager?.has('SupabaseClient')) {
+      return this.serviceManager.get('SupabaseClient');
     }
     return null;
   }

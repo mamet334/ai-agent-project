@@ -60,6 +60,8 @@ export interface VerificationAuditRecord {
 export interface VerificationContext {
   responseText: string;
   sourceTrace?: string;
+  sourceType?: string;    // 'local' | 'llm_internal' | 'web'
+  retrievalTier?: number; // 1 | 2 | 3
   confidenceReport?: any;
   evidenceReport?: any;
   runtimeContext?: any;
@@ -153,6 +155,29 @@ export class VerificationEngine {
     checks.push(check002);
     if (check002.status === "FAIL") failures.push(check002);
     else if (check002.status === "WARN") warnings.push(check002);
+
+    // CHECK 002B: INTERNAL_KNOWLEDGE_DISCLAIMER (PR#9 Fase 2 — Tier 2 Fallback)
+    // Jika retrieval berasal dari pengetahuan internal LLM (Tier 2), pastikan respon mengakui keterbatasan
+    const isTier2Internal = context.sourceType === 'llm_internal' || context.retrievalTier === 2 || (context.sourceTrace && context.sourceTrace.includes('[Sumber: Pengetahuan internal model]'));
+    if (isTier2Internal) {
+      const check002b: VerificationCheck = {
+        id: "CHECK_002B_INTERNAL_KNOWLEDGE_DISCLAIMER",
+        name: "Internal Knowledge Limitation Acknowledged",
+        status: "PASS",
+        severity: "WARNING",
+        message: "Response acknowledges that answer is based on general/internal model knowledge."
+      };
+
+      const disclaimerRegex = /pengetahuan umum|pengetahuan internal|tidak ditemukan di dokumen|bawaan model|unverified|tidak ada data lokal|data lokal tidak ditemukan/i;
+      const hasDisclaimer = disclaimerRegex.test(context.responseText || '');
+
+      if (!hasDisclaimer) {
+        check002b.status = "WARN";
+        check002b.message = "Response uses Tier 2 internal LLM knowledge but does not explicitly acknowledge general/parametric knowledge limitation.";
+        warnings.push(check002b);
+      }
+      checks.push(check002b);
+    }
 
     // CHECK 003: SOURCE_TRACE_FORMAT
     const check003: VerificationCheck = {
@@ -396,6 +421,22 @@ export class VerificationEngine {
         ? 'Runtime context object is present.'
         : 'Runtime context is missing.'
     });
+
+    // CHECK 6: Disclaimer pengetahuan internal (PR#9 Fase 2 — Tier 2 Fallback)
+    const isTier2Internal = context.sourceType === 'llm_internal' || context.retrievalTier === 2 || (context.sourceTrace && context.sourceTrace.includes('[Sumber: Pengetahuan internal model]'));
+    if (isTier2Internal) {
+      const disclaimerRegex = /pengetahuan umum|pengetahuan internal|tidak ditemukan di dokumen|bawaan model|unverified|tidak ada data lokal|data lokal tidak ditemukan/i;
+      const hasDisclaimer = disclaimerRegex.test(context.responseText || '');
+      checks.push({
+        id: 'CHECK_002B_INTERNAL_KNOWLEDGE_DISCLAIMER',
+        name: 'Internal Knowledge Limitation Acknowledged',
+        status: hasDisclaimer ? 'PASS' : 'WARN',
+        severity: 'WARNING',
+        message: hasDisclaimer
+          ? 'Response acknowledges that answer is based on general/internal model knowledge.'
+          : 'Response uses Tier 2 internal LLM knowledge but does not explicitly acknowledge general/parametric knowledge limitation.'
+      });
+    }
 
     // Hitung skor
     const failedChecks = checks.filter(c => c.status === 'FAIL');

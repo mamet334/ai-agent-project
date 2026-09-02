@@ -15,7 +15,7 @@
 | `roadmap memory governor.md` | ✅ **Selesai Fase 1 & Integrasi** (Service core, Addendum, integrasi Assistant & Engineer, observabilitas konflik di HomeDashboard; UI Purge deferred) | `MemoryGovernorService.js` |
 | `PR8-linux-style-dispatch.md` | ✅ Selesai — `RequestClassifierService` + thin dispatcher + `_handleLookup` | `RequestClassifierService`, `LookupHandler`, `ConversationHandler` |
 | `teknis-skil-implementasi.md` | ✅ Selesai — SkillRegistry + SkillGuardService + SkillHandler + contoh skill | `SkillRegistry`, `SkillGuardService`, `SkillHandler` |
-| `PR9-retrieval-tier-architecture.md` | ✅ **Selesai Fase 1** (Tier 1 lokal via Edge Function & client, mode Assistant & Engineer, `RetrievalOrchestrator.js` terpasang; Fase 2–3 pending) | `RetrievalStrategyService.js`, `KnowledgeService.js`, `context_builder.ts`, `RetrievalOrchestrator.js`, *(fase berikutnya)* `InternalKnowledgeFallbackService.js`, `WebComparisonService.js` |
+| `PR9-retrieval-tier-architecture.md` | ✅ **Selesai Fase 1 & 2** (Tier 1 lokal & Tier 2 internal LLM fallback aktif, `InternalKnowledgeFallbackService.js` + `RetrievalOrchestrator.js` + `CHECK_002B`; Fase 3 Web Comparison pending) | `RetrievalStrategyService.js`, `KnowledgeService.js`, `context_builder.ts`, `RetrievalOrchestrator.js`, `InternalKnowledgeFallbackService.js`, *(fase berikutnya)* `WebComparisonService.js` |
 | `PENDING-supabase-security-advisor-findings.md` | ✅ **Selesai Remediasi RPC (8/9) — 1 item deferred: upgrade plan** (8 fungsi `SECURITY DEFINER` aman via migrasi; Leaked Password ditunda keputusan Owner karena batasan Pro plan) | Supabase RPC Permissions & Security |
 | `PENDING-live-verification-runtime-gaps.md` | ✅ **Selesai Remediasi Gap Runtime (4/5)** — 1 backlog terbuka: format prompt Source Trace | `agent-process` Edge Function & RAG |
 | `SPESIFIKASI-TEKNIS-MAMET-OS-v2.md` | 📋 Referensi — `SystemGovernorService.js` belum dikerjakan | Monitoring/observability daemon |
@@ -36,13 +36,10 @@
     ↓
 [SELESAI] Cost Ledger Instrumentation & Guardrail Enforcement (ADR-015 Phase 1, commit 86beabe / 676a211)
     ↓
-[SELESAI FASE 1] PR#9 — Retrieval Tier Architecture (PR9-retrieval-tier-architecture.md)
-    Menuntaskan gap PR#5 (Adaptive Retrieval Strategy) sekaligus membangun Tier 1 lokal untuk mode Assistant/Lite dan Engineer:
-    - KnowledgeService.js refactor (universal Deno/Browser, DI supabaseClient)
-    - RetrievalStrategyService.js (Case A/B adaptive + sufficiency scoring + source attribution)
-    - context_builder.ts (Edge Function Tier 1 RAG untuk kedua mode + 5s timeout + explicit fallback)
-    - RetrievalOrchestrator.js (Client-side 3-tier wrapper terdaftar di Kernel.js)
-    - AssistantService.js integrasi (pintu masuk tunggal ke RetrievalOrchestrator)
+[SELESAI FASE 1 & 2] PR#9 — Retrieval Tier Architecture (PR9-retrieval-tier-architecture.md)
+    Menuntaskan gap PR#5 (Adaptive Retrieval Strategy) dan membangun 2 Tier utama:
+    - Tier 1 Lokal: KnowledgeService.js, RetrievalStrategyService.js, context_builder.ts (Edge Function)
+    - Tier 2 Internal: InternalKnowledgeFallbackService.js, auto-switching di RetrievalOrchestrator.js, CHECK_002B di verification_engine.ts
     ↓
 [BERIKUTNYA] Penentuan Prioritas Owner:
     Option A: Penuntasan Integrasi MemoryGovernorService (Tutup gap Assistant trigger + UI Conflict/Purge)

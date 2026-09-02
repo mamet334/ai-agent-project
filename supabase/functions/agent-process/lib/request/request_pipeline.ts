@@ -171,7 +171,7 @@ export async function executeRequestPipeline(
   const quotaResponse = await checkQuota(ctx.auth.userId, runtimeEnv.supabaseUrl, runtimeEnv.supabaseServiceKey, !!parsed.stream, corsHeaders);
   if (quotaResponse) return { ctx: {} as any, rctx: {} as any, response: quotaResponse };
 
-  const traceId = crypto.randomUUID();
+  const traceId = parsed.traceId || crypto.randomUUID();
   const backgroundTasks = createBackgroundTaskTracker(traceId);
   
   const rctx: RuntimeContext = {

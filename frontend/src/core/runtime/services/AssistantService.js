@@ -20,6 +20,9 @@
 
 const AGENT_ENDPOINT = 'https://uuyzdjifhdfyyvpxsofu.supabase.co/functions/v1/agent-process';
 
+import { supabase } from '../../../supabase.js';
+import { runDesktopInterceptors } from '../../../components/AIAgent/hooks/useDesktopInterceptor.js';
+
 // PR#2: Import governor dari versi JS lokal (bukan cross-boundary ke lib/ TypeScript)
 import {
   runCognitiveMemoryGovernor,
@@ -121,7 +124,6 @@ export class AssistantService {
     if (contentToRemember.length === 0) return { handled: false, responseContent: '' };
 
     try {
-      const { supabase } = await import('../../../supabase.js');
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
 
@@ -694,11 +696,12 @@ export class AssistantService {
     );
 
     // 4b. PR#9: 3-Tier Retrieval Orchestrator — ambil knowledge/RAG context (terpisah dari memory)
+    const requestTraceId = crypto.randomUUID();
     let knowledgeContext = '';
     const retrievalOrchestrator = this.serviceManager?.get('RetrievalOrchestrator');
     if (retrievalOrchestrator && !isLiteMode) {
       try {
-        const retrievalResult = await retrievalOrchestrator.retrieve(userMsg, { limit: 5 });
+        const retrievalResult = await retrievalOrchestrator.retrieve(userMsg, { limit: 5, traceId: requestTraceId });
         if (retrievalResult && retrievalResult.formattedContext) {
           knowledgeContext = retrievalResult.formattedContext;
           console.log(`[AssistantService] PR#9 RetrievalOrchestrator: Tier ${retrievalResult.tier}, strategy=${retrievalResult.strategy}, sufficiency=${retrievalResult.sufficiency}`);
@@ -770,6 +773,7 @@ export class AssistantService {
       mode: resolvedMode,
       appSource: resolvedAppSource,
       workspaceTarget: workspaceId,
+      traceId: requestTraceId,
       history: history.slice(isLiteMode ? -5 : -10),
       globalMemory: trimmedRagContext,
       semanticContext: trimmedSemanticContext,
@@ -928,9 +932,7 @@ export class AssistantService {
     const osState = workspaceManager?.osState;
     if (!osState?.capabilities?.includes('cap:code-execution')) return;
 
-    // Import runDesktopInterceptors — sudah diekstrak di useDesktopInterceptor.js
     try {
-      const { runDesktopInterceptors } = await import('../../../components/AIAgent/hooks/useDesktopInterceptor.js');
       const { interceptHit, autoReply } = await runDesktopInterceptors(finalAiResponseText);
 
       if (interceptHit && autoReply) {
@@ -973,9 +975,7 @@ export class AssistantService {
     if (!messages || messages.length === 0) return;
     if (!userId) return;
 
-    // Gunakan supabase client dari modul yang sudah ada
-    const { supabase } = await import('../../../supabase.js');
-
+    // Gunakan supabase client statis
     const title = messages[0]?.content?.substring(0, 50) || 'Percakapan Baru';
     const payload = {
       user_id: userId,
@@ -1035,7 +1035,6 @@ export class AssistantService {
    */
   async loadChat(chatId) {
     if (!chatId) return null;
-    const { supabase } = await import('../../../supabase.js');
     const { data, error } = await supabase
       .from('chats')
       .select('*')
