@@ -426,11 +426,11 @@ export class MemoryGovernorService {
       // Tidak boleh full-table scan — candidate pool dibatasi
       let query = supabase
         .from('user_memories')
-        .select('id, summary, memory_type, category, confidence, access_tier, status, updated_at, source_reference, last_verified_at')
+        .select('id, summary, memory_type, category, confidence, access_tier, status, created_at, source_reference, last_verified_at')
         .eq('user_id', userId)
         .in('category', categories)
         .eq('status', 'active')
-        .order('updated_at', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(candidatePoolSize);
 
       // Access tier: default exclude sensitive — hanya include jika flag eksplisit
@@ -457,7 +457,8 @@ export class MemoryGovernorService {
 
       const ranked = candidates
         .map(mem => {
-          const ageMs = now - new Date(mem.updated_at).getTime();
+          const timestamp = mem.last_verified_at || mem.created_at;
+          const ageMs = timestamp ? Math.max(0, now - new Date(timestamp).getTime()) : MAX_AGE_MS;
           const recencyScore = Math.max(0, 1 - ageMs / MAX_AGE_MS);
           const confidenceScore = typeof mem.confidence === 'number' ? mem.confidence : 0.5;
           const totalScore = recencyScore * 0.4 + confidenceScore * 0.6; // bobot: confidence lebih berat
