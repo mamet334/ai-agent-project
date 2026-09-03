@@ -816,6 +816,38 @@ export class MemoryGovernorService {
       return [];
     }
   }
+
+  /**
+   * Ambil daftar memori aktif untuk keperluan tampilan Memory Context Panel (Display Only).
+   * Menampilkan top-N memori aktif lintas seluruh kategori tanpa penyempitan heuristik retrieval.
+   * @param {string} userId
+   * @param {Object} [options]
+   * @param {number} [options.limit=50]
+   * @returns {Promise<Array>}
+   */
+  async getActiveMemories(userId, { limit = 50 } = {}) {
+    if (!this.isInitialized) throw new Error('MemoryGovernorService not initialized');
+    if (!userId) return [];
+
+    try {
+      const { data, error } = await supabase
+        .from('user_memories')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (error) {
+        console.error('[MemoryGovernorService] getActiveMemories error:', error.message);
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      console.error('[MemoryGovernorService] getActiveMemories error:', err);
+      return [];
+    }
+  }
 }
 
 export default MemoryGovernorService;

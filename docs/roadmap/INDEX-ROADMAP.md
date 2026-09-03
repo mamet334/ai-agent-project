@@ -20,7 +20,7 @@
 | `PENDING-live-verification-runtime-gaps.md` | ✅ **Selesai Remediasi Gap Runtime (5/5 — 100%)** (Trace ID, Match Memories schema, Escaped ilike, UUID storage target, CHECK_002/003 Source Trace) | `agent-process` Edge Function & RAG |
 | `CHECK-P02-json-patch-schema-alignment.md` | ✅ **Selesai & Tervalidasi (Live Production Confirmed)** (Defensive Unwrap Layer di `_extractJSONPatch` + Standardisasi Prompt Engineer) | `verification_engine.ts`, `request_pipeline.ts` |
 | `FIX-assistant-session-finalization-and-autosave-throttle.md` | ✅ **Selesai & Tervalidasi (Confirmed Desktop + Unit Test)** (Pemisahan `finalizeAssistantSession` dari auto-save loop & throttling DB I/O) | `AssistantService.js`, `ConversationEngine.jsx` |
-| `TAHAP1-memory-system-finalization.md` | 🟡 **Sedang Berjalan (Sub A & Sub B Selesai, Menuju Sub C)** (Integrasi Assistant Golden Memory, UI Conflict Resolution & Purge CP4b, Category Alignment) | `MemoryGovernorService.js`, `MemoryService.js`, `MemoryContextPanel.jsx`, `ConversationEngine.jsx` |
+| `TAHAP1-memory-system-finalization.md` | ✅ **Selesai Penuh (Sub A + Sub B + Sub C — 2026-09-03)** (Integrasi Assistant Golden Memory, UI Conflict Resolution & Purge CP4b, Category Alignment) | `MemoryGovernorService.js`, `MemoryService.js`, `MemoryContextPanel.jsx`, `ConversationEngine.jsx` |
 | `SPESIFIKASI-TEKNIS-MAMET-OS-v2.md` | 📋 Referensi — `SystemGovernorService.js` belum dikerjakan | Monitoring/observability daemon |
 | `MAMET-AI-ROADMAP.md`, `engineer-autonomous-mode.md`, `engineer-chat-upgrade.md`, `fix-log.md`, `rencana.md`, `roadmap-lanjutan.md` | 📋 Belum direview ulang dalam sesi ini — **catatan:** `MAMET-AI-ROADMAP.md` memakai skema penomoran (`TASK-000x`, `ADR-000x`, istilah "MametLite"/"BRAIN 1-2") yang berbeda dari skema PR# di dokumen lain — perlu direkonsiliasi sebelum dipakai sebagai rujukan aktif | — |
 
@@ -44,12 +44,12 @@
     - Tier 1 Lokal: KnowledgeService.js, RetrievalStrategyService.js, context_builder.ts (Edge Function)
     - Tier 2 Internal: InternalKnowledgeFallbackService.js, auto-switching di RetrievalOrchestrator.js, CHECK_002B di verification_engine.ts
     ↓
-[TAHAP 1 - BERIKUTNYA] Memory System Finalization
-    Gabungan: Opsi A (integrasi MemoryGovernorService ke Assistant trigger) + CP4b (UI Purge & Conflict Resolution + payload metadata.conflict_info) + Backlog #7 (Memory Context Panel Category Alignment)
-    - Alasan penggabungan: menyentuh 4 file yang identik (MemoryGovernorService.js, MemoryService.js, MemoryContextPanel.jsx, ConversationEngine.jsx); Opsi A sudah ~70% selesai via fix intent classification (2026-09-03); menghemat siklus pengujian.
-    - Risiko: Rendah | Kompleksitas: Sedang | Kohesi File: Sangat Tinggi
+[SELESAI] TAHAP 1 — Memory System Finalization (2026-09-03)
+    - Sub A: Integrasi penuh MemoryGovernorService ke Assistant Trigger (secure-by-default storeGoldenMemory)
+    - Sub B (CP4b): UI Purge Lifecycle & Conflict Resolution + atomic metadata.conflict_info
+    - Sub C (Backlog #7): Memory Context Panel Category Alignment (Display Layer terisolasi)
     ↓
-[TAHAP 2] SystemGovernorService.js
+[TAHAP 2 - BERIKUTNYA] SystemGovernorService.js (Opsi B)
     Pembangunan daemon Codebase Governance & File Integrity dari nol sesuai SPESIFIKASI-TEKNIS-MAMET-OS-v2.md.
     - Dikonfirmasi TIDAK punya dependensi data ke skema user_memories/metadata.conflict_info — aman dikerjakan setelah Tahap 1 tanpa risiko rework. Urutan ini dipilih agar modul greenfield berbobot tinggi dikerjakan setelah fondasi Memory System stabil 100%.
     - Risiko: Sedang | Kompleksitas: Tinggi
@@ -131,9 +131,7 @@ Setiap kali sebuah dokumen di folder ini selesai dikerjakan (Exit Criteria terpe
 6. **Audit & Penyelarasan Persona Kesadaran Memori pada System Prompt:**
    - **Isu:** Respons LLM untuk kalimat negasi (misal *"jangan simpan info ini ya"*) mengklaim *"saya tidak menyimpan informasi pribadi... bersifat sementara"* — bertentangan dengan arsitektur sistem yang memiliki `MemoryGovernorService` aktif.
    - **Status:** ✅ **Selesai Diimplementasikan** ([`2026-09-03-fix-persona-memory-awareness-wording.md`](../project-memory/changelog/2026-09-03-fix-persona-memory-awareness-wording.md)) via penambahan blok `KESADARAN SISTEM MEMORI` di `request_pipeline.ts`.
-7. **Fase 2 — Memory Context Panel Category Alignment:**
-   - **Prioritas:** Sedang
-   - **Masalah:** Heuristik `MemoryService._inferCategories()` menyempitkan kategori ke `['general']` untuk chat umum, menyebabkan panel UI `MemoryContextPanel` salah menampilkan *"0 memori aktif"* / *"Belum ada memori ter-retrieve"* padahal backend Edge Function memakai memori aktif secara benar.
-   - **Solusi yang Diusulkan:** Perluas default kategori retrieval untuk keperluan tampilan UI (bukan filter kaku, melainkan default lebih inklusif — misal `['general', 'preference', 'location']` sebagai baseline, atau ambil top-N memori aktif lintas semua kategori tanpa filter ketat khusus untuk keperluan display panel).
-   - **Catatan Penting:** Solusi ini **HARUS dipisahkan scope-nya** dari heuristik retrieval yang dipakai backend LLM (yang sudah bekerja benar) — jangan sampai perbaikan tampilan UI ini tidak sengaja mengubah logic retrieval penentu konteks yang dikirim ke LLM.
+7. **Fase 2 — Memory Context Panel Category Alignment (Backlog #7):**
+   - **Status:** ✅ **Selesai Diimplementasikan (Tahap 1 Sub C — 2026-09-03)** ([`2026-09-03-tahap1-sub-c-memory-context-panel-category-alignment.md`](../project-memory/changelog/2026-09-03-tahap1-sub-c-memory-context-panel-category-alignment.md)).
+   - **Solusi Terisolasi:** Menambahkan `getActiveMemories` di `MemoryGovernorService.js` khusus untuk tampilan panel UI tanpa menyentuh heuristik retrieval backend `MemoryService._inferCategories()`. Panel kini menampilkan seluruh memori aktif lintas kategori saat idle/generik dan tidak lagi keliru menampilkan "0 memori aktif".
 

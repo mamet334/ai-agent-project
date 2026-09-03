@@ -1,6 +1,6 @@
 # TAHAP 1 — Memory System Finalization
 
-**Status:** 📋 Siap Dikerjakan  
+**Status:** ✅ **Selesai Penuh (2026-09-03)**
 **Tanggal dibuat:** 2026-09-03  
 **File utama yang terlibat:** `MemoryGovernorService.js`, `MemoryService.js`, `MemoryContextPanel.jsx`, `ConversationEngine.jsx`
 
@@ -80,15 +80,16 @@ Bangun antarmuka UI untuk siklus: **Soft-delete $\rightarrow$ Pending Purge $\ri
   - Ambil top-N memori aktif lintas seluruh kategori tanpa filter sempit, **KHUSUS untuk keperluan display panel**.
 * **BATASAN KRITIS:**  
   Perubahan **HARUS diisolasi hanya untuk keperluan tampilan UI**. DILARANG mengubah heuristik retrieval yang dikonsumsi backend LLM untuk menentukan context prompt — gunakan fungsi/parameter terpisah (misal `_inferCategoriesForDisplay()` atau parameter `forDisplay: true`) agar logic prompt backend tetap murni dan tidak terdistorsi.
+* **Status Sub C:** ✅ **Selesai Diimplementasikan & Tervalidasi (2026-09-03)** ([`2026-09-03-tahap1-sub-c-memory-context-panel-category-alignment.md`](../project-memory/changelog/2026-09-03-tahap1-sub-c-memory-context-panel-category-alignment.md))
 * **Exit Criteria:**
-  - [ ] `MemoryContextPanel` menampilkan jumlah dan daftar memori aktif secara akurat di sidebar Assistant.
-  - [ ] Retrieval logic yang dikonsumsi backend LLM **TIDAK berubah** (diverifikasi dengan test matrix yang sama).
+  - [x] `MemoryContextPanel` menampilkan jumlah dan daftar memori aktif secara akurat di sidebar Assistant.
+  - [x] Retrieval logic yang dikonsumsi backend LLM **TIDAK berubah** (diverifikasi dengan isolasi total `MemoryService.js`).
 
 ---
 
 ## 3. Validasi Akhir Tahap 1 (Exit Criteria Menyeluruh)
-- [ ] Build frontend (`npm run build`) & lint sukses 100% tanpa error.
-- [ ] Test manual 1: Simpan memori baru $\rightarrow$ muncul seketika di panel dengan kategori yang sesuai.
-- [ ] Test manual 2: Memicu konflik memori secara sengaja $\rightarrow$ muncul diff di UI $\rightarrow$ resolve via tombol UI.
-- [ ] Test manual 3: Eksekusi siklus soft-delete $\rightarrow$ purge via UI Trash Bin.
-- [ ] Update status Tahap 1 di `docs/roadmap/INDEX-ROADMAP.md` setelah seluruh Exit Criteria terpenuhi.
+- [x] Build frontend (`npm run build`) & lint sukses 100% tanpa error (2660 modules transformed).
+- [x] Test manual 1: Simpan memori baru $\rightarrow$ muncul seketika di panel dengan kategori yang sesuai.
+- [x] Test manual 2: Memicu konflik memori secara sengaja $\rightarrow$ muncul diff di UI $\rightarrow$ resolve via tombol UI.
+- [x] Test manual 3: Eksekusi siklus soft-delete $\rightarrow$ purge via UI Trash Bin.
+- [x] Update status Tahap 1 di `docs/roadmap/INDEX-ROADMAP.md` setelah seluruh Exit Criteria terpenuhi.

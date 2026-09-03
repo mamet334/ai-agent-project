@@ -40,9 +40,10 @@ export default function MemoryContextPanel({
   const [activeTab, setActiveTab] = useState('ACTIVE'); // 'ACTIVE' | 'CONFLICTS' | 'TRASH'
   const [filter, setFilter] = useState('ALL');
   
-  // State data konflik & trash
+  // State data konflik & trash & active DB memories
   const [conflicts, setConflicts] = useState([]);
   const [trashItems, setTrashItems] = useState([]);
+  const [dbActiveMemories, setDbActiveMemories] = useState([]);
   const [isLoadingExtras, setIsLoadingExtras] = useState(false);
   
   // Action states
@@ -55,7 +56,7 @@ export default function MemoryContextPanel({
       : null;
   }, [serviceManager]);
 
-  // Muat data konflik & trash dari governor / database
+  // Muat data konflik, trash, dan active memories dari governor / database
   const loadExtras = useCallback(async () => {
     setIsLoadingExtras(true);
     try {
@@ -65,23 +66,27 @@ export default function MemoryContextPanel({
 
       const governor = getGovernor();
       if (governor) {
-        const [conflictData, trashData] = await Promise.all([
+        const [conflictData, trashData, activeData] = await Promise.all([
           governor.getConflicts(userId),
-          governor.getTrashMemories(userId)
+          governor.getTrashMemories(userId),
+          governor.getActiveMemories(userId)
         ]);
         setConflicts(conflictData || []);
         setTrashItems(trashData || []);
+        setDbActiveMemories(activeData || []);
       } else {
         // Fallback langsung ke query Supabase
-        const [{ data: cData }, { data: tData }] = await Promise.all([
+        const [{ data: cData }, { data: tData }, { data: aData }] = await Promise.all([
           supabase.from('user_memories').select('*').eq('user_id', userId).eq('status', 'CONFLICT_PENDING_REVIEW'),
-          supabase.from('user_memories').select('*').eq('user_id', userId).in('status', ['archived', 'pending_purge'])
+          supabase.from('user_memories').select('*').eq('user_id', userId).in('status', ['archived', 'pending_purge']),
+          supabase.from('user_memories').select('*').eq('user_id', userId).eq('status', 'active').order('created_at', { ascending: false }).limit(50)
         ]);
         setConflicts(cData || []);
         setTrashItems(tData || []);
+        setDbActiveMemories(aData || []);
       }
     } catch (err) {
-      console.warn('[MemoryContextPanel] Gagal memuat data konflik/trash:', err);
+      console.warn('[MemoryContextPanel] Gagal memuat data konflik/trash/active:', err);
     } finally {
       setIsLoadingExtras(false);
     }
@@ -105,6 +110,8 @@ export default function MemoryContextPanel({
     const unsub3 = eventBus.on('MemoryGovernor:Archived', handleUpdate);
     const unsub4 = eventBus.on('MemoryGovernor:Restored', handleUpdate);
     const unsub5 = eventBus.on('MemoryGovernor:Purged', handleUpdate);
+    const unsub6 = eventBus.on('MemoryGovernor:Stored', handleUpdate);
+    const unsub7 = eventBus.on('Memory:Stored', handleUpdate);
 
     return () => {
       unsub1?.();
@@ -112,6 +119,8 @@ export default function MemoryContextPanel({
       unsub3?.();
       unsub4?.();
       unsub5?.();
+      unsub6?.();
+      unsub7?.();
     };
   }, [serviceManager, loadExtras]);
 
@@ -154,16 +163,20 @@ export default function MemoryContextPanel({
     return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   };
 
+  // Tentukan memori efektif untuk tampilan: gunakan memories prop jika ada hasil retrieval,
+  // atau tampilkan seluruh memori aktif sistem jika belum ada query / query generik
+  const effectiveMemories = (memories && memories.length > 0) ? memories : dbActiveMemories;
+
   // Filter Active
-  const filteredMemories = memories.filter((m) => {
+  const filteredMemories = effectiveMemories.filter((m) => {
     if (filter === 'ALL') return true;
     if (filter === 'USER_MEMORY') return getMemoryType(m) === 'USER_MEMORY';
     if (filter === 'PERSONAL_KNOWLEDGE') return getMemoryType(m) === 'PERSONAL_KNOWLEDGE';
     return true;
   });
 
-  const countUser = memories.filter((m) => getMemoryType(m) === 'USER_MEMORY').length;
-  const countKnowledge = memories.filter((m) => getMemoryType(m) === 'PERSONAL_KNOWLEDGE').length;
+  const countUser = effectiveMemories.filter((m) => getMemoryType(m) === 'USER_MEMORY').length;
+  const countKnowledge = effectiveMemories.filter((m) => getMemoryType(m) === 'PERSONAL_KNOWLEDGE').length;
 
   // Handlers Aksi
   const handleResolve = async (memoryId, resolution) => {
@@ -255,7 +268,7 @@ export default function MemoryContextPanel({
           <div>
             <div className="text-body-sm font-semibold text-on-surface leading-tight">Memory Context</div>
             <div className="text-[10px] text-on-surface-variant leading-tight">
-              {memories.length} aktif • {conflicts.length} konflik • {trashItems.length} sampah
+              {effectiveMemories.length} aktif • {conflicts.length} konflik • {trashItems.length} sampah
             </div>
           </div>
         </div>
@@ -294,7 +307,7 @@ export default function MemoryContextPanel({
           }`}
         >
           <Layers className="w-3 h-3" />
-          <span>Aktif ({memories.length})</span>
+          <span>Aktif ({effectiveMemories.length})</span>
         </button>
 
         <button
@@ -356,7 +369,7 @@ export default function MemoryContextPanel({
                 filter === 'ALL' ? 'bg-primary/20 text-primary' : 'text-on-surface-variant hover:bg-surface-variant'
               }`}
             >
-              Semua ({memories.length})
+              Semua ({effectiveMemories.length})
             </button>
             <button
               onClick={() => setFilter('USER_MEMORY')}
@@ -387,9 +400,9 @@ export default function MemoryContextPanel({
               <div className="flex flex-col items-center justify-center py-12 text-on-surface-variant text-center px-4">
                 <Brain className="w-8 h-8 mb-2 opacity-30" />
                 <p className="text-[11px] font-medium">
-                  {memories.length === 0 ? 'Belum ada memori ter-retrieve' : 'Tidak ada yang cocok dengan filter'}
+                  {effectiveMemories.length === 0 ? 'Belum ada memori ter-retrieve' : 'Tidak ada yang cocok dengan filter'}
                 </p>
-                {memories.length === 0 && (
+                {effectiveMemories.length === 0 && (
                   <p className="text-[10px] mt-1 opacity-60">
                     Kirim pesan untuk memicu retrieval memori otomatis
                   </p>
@@ -649,7 +662,7 @@ export default function MemoryContextPanel({
       {/* Footer Statistik */}
       <div className="px-3 py-2 border-t border-outline-variant text-center bg-surface-container-low/50">
         <p className="text-[9px] text-on-surface-variant tracking-widest uppercase">
-          {memories.length} Aktif • {conflicts.length} Konflik • {trashItems.length} Trash
+          {effectiveMemories.length} Aktif • {conflicts.length} Konflik • {trashItems.length} Trash
         </p>
       </div>
     </div>
