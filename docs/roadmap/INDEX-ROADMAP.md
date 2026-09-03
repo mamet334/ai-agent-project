@@ -117,9 +117,9 @@ Setiap kali sebuah dokumen di folder ini selesai dikerjakan (Exit Criteria terpe
    - **Status:** Desain alur disetujui (Soft-delete $\rightarrow$ Pending Purge $\rightarrow$ Hard Delete), eksekusi kode ditunda menunggu jadwal terpisah dari Owner.
 5. **PR#9 Fase 3 — Tier 3 Web Comparison:**
    - **Status:** Service `WebComparisonService.js` untuk komparasi web search terstruktur dengan gerbang konfirmasi Owner.
-6. **Audit Persona & Kesadaran Kapabilitas Memori pada System Prompt:**
+6. **Audit & Penyelarasan Persona Kesadaran Memori pada System Prompt:**
    - **Isu:** Respons LLM untuk kalimat negasi (misal *"jangan simpan info ini ya"*) mengklaim *"saya tidak menyimpan informasi pribadi... bersifat sementara"* — bertentangan dengan arsitektur sistem yang memiliki `MemoryGovernorService` aktif.
-   - **Rencana Audit:** Audit persona/system prompt di Edge Function (`agent-process`) dan instruksi identity asisten agar respons LLM selaras dengan kapabilitas memori persisten sistem.
+   - **Status:** ✅ **Selesai Diimplementasikan** ([`2026-09-03-fix-persona-memory-awareness-wording.md`](../project-memory/changelog/2026-09-03-fix-persona-memory-awareness-wording.md)) via penambahan blok `KESADARAN SISTEM MEMORI` di `request_pipeline.ts`.
 7. **Fase 2 — Memory Context Panel Category Alignment:**
    - **Prioritas:** Sedang
    - **Masalah:** Heuristik `MemoryService._inferCategories()` menyempitkan kategori ke `['general']` untuk chat umum, menyebabkan panel UI `MemoryContextPanel` salah menampilkan *"0 memori aktif"* / *"Belum ada memori ter-retrieve"* padahal backend Edge Function memakai memori aktif secara benar.
