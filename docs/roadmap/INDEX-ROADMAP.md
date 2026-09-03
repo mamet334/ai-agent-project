@@ -12,7 +12,7 @@
 | Dokumen | Status | Scope |
 |---|---|---|
 | `ASSISTANT-CAPABILITY-ROADMAP.md` | ✅ Selesai (PR#1–#7 Fase 1) — ⚠️ PR#5 parsial | Assistant capability, 7 PR |
-| `roadmap memory governor.md` | ✅ **Selesai Fase 1 & Integrasi** (Service core, Addendum, integrasi Assistant & Engineer, observabilitas konflik di HomeDashboard; UI Purge deferred) | `MemoryGovernorService.js` |
+| `roadmap memory governor.md` | ✅ **Selesai Fase 1 & Integrasi** (Service core, Addendum, integrasi Assistant & Engineer, observabilitas konflik di HomeDashboard; UI Purge & pengayaan metadata.conflict_info deferred to CP4b) | `MemoryGovernorService.js` |
 | `PR8-linux-style-dispatch.md` | ✅ Selesai — `RequestClassifierService` + thin dispatcher + `_handleLookup` | `RequestClassifierService`, `LookupHandler`, `ConversationHandler` |
 | `teknis-skil-implementasi.md` | ✅ Selesai — SkillRegistry + SkillGuardService + SkillHandler + contoh skill | `SkillRegistry`, `SkillGuardService`, `SkillHandler` |
 | `PR9-retrieval-tier-architecture.md` | ✅ **Selesai Fase 1 & 2** (Tier 1 lokal & Tier 2 internal LLM fallback aktif, `InternalKnowledgeFallbackService.js` + `RetrievalOrchestrator.js` + `CHECK_002B`; Fase 3 Web Comparison pending) | `RetrievalStrategyService.js`, `KnowledgeService.js`, `context_builder.ts`, `RetrievalOrchestrator.js`, `InternalKnowledgeFallbackService.js`, *(fase berikutnya)* `WebComparisonService.js` |
@@ -113,8 +113,13 @@ Setiap kali sebuah dokumen di folder ini selesai dikerjakan (Exit Criteria terpe
 3. **Bug Klasifikasi Intent Recall `RequestClassifier`:**
    - **Isu:** Pertanyaan recall (misal *"masih ingat nama saya?"*) tidak dijawab, melainkan disimpan sebagai memori baru dengan teks terpotong (*"ingat"* terhapus menjadi *"masih nama saya?"*).
    - **Status:** ✅ **Selesai & Tervalidasi Penuh (Live Desktop Confirmed — 4/4 Skenario Kunci)** ([`FIX-intent-classification-and-memory-store-unification.md`](./FIX-intent-classification-and-memory-store-unification.md)).
-4. **CP4b Memory Governor — UI Purge Lifecycle:**
+4. **CP4b Memory Governor — UI Purge Lifecycle & Conflict Resolution:**
    - **Status:** Desain alur disetujui (Soft-delete $\rightarrow$ Pending Purge $\rightarrow$ Hard Delete), eksekusi kode ditunda menunggu jadwal terpisah dari Owner.
+   - **Temuan Audit Metadata Konflik (2026-09-03):** Ditemukan bahwa `detectAndMarkConflict()` di `MemoryGovernorService.js` (baris ~523–526) hanya mengupdate kolom `status` ke `CONFLICT_PENDING_REVIEW`, TIDAK menulis konteks/alasan konflik ke kolom `metadata` (jsonb) — gap desain sejak awal, bukan bug query.
+   - **Scope Tambahan CP4b:** Perkaya payload `metadata.conflict_info` dengan struktur (`detected_at`, `reason`, `source_reference`, `incoming_content`, `incoming_version_seq`, `existing_version_seq`, `previous_summary`) agar UI Conflict Resolution dapat menampilkan diff perbandingan yang informatif ke Owner.
+   - **Scope Logging CP4b:** Turunkan log level pada baris terkait (*"Conflict detected for..."*) dari `console.warn` ke `console.log` saat pengerjaan CP4b, karena `console.warn` menampilkan collapsible stack trace yang berpotensi disalahartikan sebagai error padahal event normal.
+   - **Catatan Validasi:** Isolasi fungsional record conflict **SUDAH bekerja 100%** (ter-exclude otomatis dari `retrieveMemory()`) — gap ini murni observabilitas/UI, bukan risiko data atau fungsi.
+   - **Referensi:** Temuan dari sesi audit 2026-09-03 (lihat changelog [`2026-09-03-fix-persona-memory-awareness-wording.md`](../project-memory/changelog/2026-09-03-fix-persona-memory-awareness-wording.md)).
 5. **PR#9 Fase 3 — Tier 3 Web Comparison:**
    - **Status:** Service `WebComparisonService.js` untuk komparasi web search terstruktur dengan gerbang konfirmasi Owner.
 6. **Audit & Penyelarasan Persona Kesadaran Memori pada System Prompt:**
