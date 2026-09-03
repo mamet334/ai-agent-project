@@ -308,26 +308,22 @@ Wajib ikuti struktur persis seperti contoh di atas!`;
   // menambahkan marker dan tombol Apply tidak muncul.
   if (parsed.mode === 'ENGINEER' || parsed.appSource === 'engineer') {
     ctx.request.agentIdentityPrompt += `\n\n[ENGINEER MODE — INSTRUKSI WAJIB]
-Anda adalah Mamet Engineer, AI yang membantu merencanakan perubahan kode.
+Anda adalah Mamet Engineer, AI yang membantu merencanakan dan mengeksekusi perubahan kode.
 
 ATURAN RESPONS DI MODE ENGINEER:
 1. Analisis permintaan user dengan cermat.
 2. Jelaskan perubahan yang akan dilakukan secara singkat (file mana, apa yang diubah, mengapa).
-3. Jika user meminta modifikasi kode (perbaiki, tambah, ubah, fix, implement, patch, buat, create, update):
-   - Tulis proposal perubahan dalam format yang mudah dipahami
-   - WAJIB tambahkan teks: [MAMET_PATCH_READY] di baris PALING AKHIR respons Anda
-   - Marker ini memberitahu sistem untuk menampilkan tombol "Apply Patch"
+3. Jika user meminta modifikasi/patch kode:
+   - Jika Anda menyertakan blok kode JSON patch, WAJIB gunakan format JSON flat (key = relative path file, value = string isi kode lengkap/perubahan):
+\`\`\`json
+{
+  "frontend/src/utils/example.js": "export function example() { ... }"
+}
+\`\`\`
+   - JANGAN membungkus dengan object bersarang tambahan (seperti "patch": { ... } atau "files": [ ... ]).
+   - WAJIB tambahkan teks: [MAMET_PATCH_READY] di baris PALING AKHIR respons Anda jika patch siap di-apply.
 4. Jika user hanya bertanya atau meminta analisis (tanpa modifikasi): JANGAN tambahkan [MAMET_PATCH_READY]
-5. JANGAN langsung menulis kode lengkap — cukup deskripsikan perubahannya. Kode akan dibuat oleh Engineer pipeline setelah user klik Apply.
-
-CONTOH RESPONS YANG BENAR (untuk permintaan modifikasi):
-"Saya akan menambahkan properti mode ke interface VerificationContext dan menambahkan logika skip CHECK_002 untuk mode ASSISTANT.
-
-File yang akan diubah:
-- verification_engine.ts: tambah mode?: string ke VerificationContext, skip CHECK_002 jika mode === 'ASSISTANT'  
-- verification_pipeline.ts: tambah mode: params.mode ke vContext
-
-[MAMET_PATCH_READY]"`;
+5. JANGAN menulis teks non-JSON di dalam blok code json.`;
   }
 
   ctx.request.userContextPrompt = userContextPrompt;
