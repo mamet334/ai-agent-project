@@ -2,7 +2,7 @@
 
 **Tujuan dokumen ini:** Titik masuk pertama untuk Antigravity (atau AI mana pun) sebelum membaca dokumen lain di folder `docs/roadmap/`. Berisi status, urutan pengerjaan, dan ringkasan tiap dokumen — bukan pengganti isi dokumen aslinya.
 
-**Update terakhir:** 2026-09-02
+**Update terakhir:** 2026-09-03
 **Prinsip folder ini:** Satu file, satu tanggung jawab. Dokumen ini HANYA index — jangan tambahkan detail teknis di sini, cukup rujukan ke file terkait.
 
 ---
@@ -21,6 +21,7 @@
 | `CHECK-P02-json-patch-schema-alignment.md` | ✅ **Selesai & Tervalidasi (Live Production Confirmed)** (Defensive Unwrap Layer di `_extractJSONPatch` + Standardisasi Prompt Engineer) | `verification_engine.ts`, `request_pipeline.ts` |
 | `FIX-assistant-session-finalization-and-autosave-throttle.md` | ✅ **Selesai & Tervalidasi (Confirmed Desktop + Unit Test)** (Pemisahan `finalizeAssistantSession` dari auto-save loop & throttling DB I/O) | `AssistantService.js`, `ConversationEngine.jsx` |
 | `FIX-intent-classification-and-memory-store-unification.md` | ✅ **Selesai & Tervalidasi Penuh (Live Desktop Confirmed — 4/4 Skenario Kunci)** (Unifikasi intent classifier, pencegahan false STORE & mutilasi teks recall) | `RequestClassifierService.js`, `AssistantService.js` |
+| Fase 2 — Memory Context Panel Category Alignment | 📋 **Menunggu Penjadwalan (Prioritas Sedang)** (Penyelarasan kategori retrieval UI agar menampilkan memori aktif di MemoryContextPanel) | `MemoryService.js`, `MemoryContextPanel.jsx`, `ConversationEngine.jsx` |
 | `SPESIFIKASI-TEKNIS-MAMET-OS-v2.md` | 📋 Referensi — `SystemGovernorService.js` belum dikerjakan | Monitoring/observability daemon |
 | `MAMET-AI-ROADMAP.md`, `engineer-autonomous-mode.md`, `engineer-chat-upgrade.md`, `fix-log.md`, `rencana.md`, `roadmap-lanjutan.md` | 📋 Belum direview ulang dalam sesi ini — **catatan:** `MAMET-AI-ROADMAP.md` memakai skema penomoran (`TASK-000x`, `ADR-000x`, istilah "MametLite"/"BRAIN 1-2") yang berbeda dari skema PR# di dokumen lain — perlu direkonsiliasi sebelum dipakai sebagai rujukan aktif | — |
 
@@ -119,4 +120,9 @@ Setiap kali sebuah dokumen di folder ini selesai dikerjakan (Exit Criteria terpe
 6. **Audit Persona & Kesadaran Kapabilitas Memori pada System Prompt:**
    - **Isu:** Respons LLM untuk kalimat negasi (misal *"jangan simpan info ini ya"*) mengklaim *"saya tidak menyimpan informasi pribadi... bersifat sementara"* — bertentangan dengan arsitektur sistem yang memiliki `MemoryGovernorService` aktif.
    - **Rencana Audit:** Audit persona/system prompt di Edge Function (`agent-process`) dan instruksi identity asisten agar respons LLM selaras dengan kapabilitas memori persisten sistem.
+7. **Fase 2 — Memory Context Panel Category Alignment:**
+   - **Prioritas:** Sedang
+   - **Masalah:** Heuristik `MemoryService._inferCategories()` menyempitkan kategori ke `['general']` untuk chat umum, menyebabkan panel UI `MemoryContextPanel` salah menampilkan *"0 memori aktif"* / *"Belum ada memori ter-retrieve"* padahal backend Edge Function memakai memori aktif secara benar.
+   - **Solusi yang Diusulkan:** Perluas default kategori retrieval untuk keperluan tampilan UI (bukan filter kaku, melainkan default lebih inklusif — misal `['general', 'preference', 'location']` sebagai baseline, atau ambil top-N memori aktif lintas semua kategori tanpa filter ketat khusus untuk keperluan display panel).
+   - **Catatan Penting:** Solusi ini **HARUS dipisahkan scope-nya** dari heuristik retrieval yang dipakai backend LLM (yang sudah bekerja benar) — jangan sampai perbaikan tampilan UI ini tidak sengaja mengubah logic retrieval penentu konteks yang dikirim ke LLM.
 
