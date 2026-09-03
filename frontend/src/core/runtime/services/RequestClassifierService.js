@@ -40,10 +40,13 @@ export class RequestClassifierService {
     ];
 
     // Kata/frasa yang mengindikasikan pesan butuh konteks (bukan LOOKUP)
+    // Sinkronisasi PR#8: kata ganti orang & identitas wajib masuk CONVERSATION agar Memory terinjeksi
     this._contextDependentPatterns = [
       'tadi', 'sebelumnya', 'yang tadi', 'lanjut', 'lanjutkan', 'sambung',
       'teruskan', 'itu', 'ini', 'tersebut', 'yang kamu', 'yang aku',
-      'continue', 'previous', 'above', 'earlier', 'last'
+      'saya', 'aku', 'gue', 'gua', 'ku', 'punyaku', 'milikku', 'kita', 'kami',
+      'ingat', 'inget', 'remember', 'nama saya', 'proyek kita',
+      'continue', 'previous', 'above', 'earlier', 'last', 'my ', 'our '
     ];
 
     // Referensi file/path (mengindikasikan task engineering, bukan LOOKUP)
@@ -56,6 +59,53 @@ export class RequestClassifierService {
     this.isInitialized = true;
     this.eventBus.emit('RequestClassifier:Ready', { status: 'READY', timestamp: Date.now() });
     console.log('[RequestClassifierService] Initialized and Ready');
+  }
+
+  /**
+   * Helper: Deteksi intent MEMORY_STORE dengan aturan ketat.
+   * Whitelist Imperative Prefix + Blacklist Question & Negation Guards (Evaluasi OR).
+   *
+   * @param {string} msg
+   * @returns {{ contentToStore: string, category: string } | null}
+   */
+  _matchMemoryStore(msg) {
+    const msgTrimmed = msg.trim();
+    const msgLower = msgTrimmed.toLowerCase();
+
+    // Blacklist 1: Question Guard (tanda tanya atau kata tanya)
+    const isQuestion = msgTrimmed.endsWith('?') ||
+      /\b(?:apakah|adakah|bolehkah|bisakah|dapatkah|masih|siapa|apa|kenapa|mengapa|bagaimana|kapan|dimana|di mana|berapa|ingat gak|inget gak|tau gak|tahu gak|can you|could you|would you|do you|is it)\b/i.test(msgLower);
+
+    // Blacklist 2: Negation Guard (perintah negatif)
+    const isNegation = /(?:jangan|tidak usah|tak usah|ga(?:k)? usah|nggak usah|don't|do not|never)\s+(?:di)?(?:ingat|simpan|catat|remember|save|store)/i.test(msgLower);
+
+    // Evaluasi OR: Cukup salah satu blacklist terpenuhi untuk MEMBLOKIR STORE
+    if (isQuestion || isNegation) {
+      return null;
+    }
+
+    // Whitelist: Imperative Prefix regex (hanya di awal kalimat)
+    const prefixRegex = /^(?:tolong |mohon |please )?(?:ingat(?:kan|lah)?|simpan(?:lah)?|catat(?:lah)?|remember|store|save)\s*(?:bahwa|ini:?|kalau|kalo|ya,? bahwa|that)?\s*[:,-]?\s*/i;
+
+    if (!prefixRegex.test(msgTrimmed)) {
+      return null;
+    }
+
+    const contentToStore = msgTrimmed.replace(prefixRegex, '').trim();
+    if (contentToStore.length < 3) {
+      return null;
+    }
+
+    // Infer category
+    let category = 'general';
+    const cLower = contentToStore.toLowerCase();
+    if (/suka|ingin|favorit|preferensi|nama saya|panggil|email saya|alamat saya/i.test(cLower)) {
+      category = 'preference';
+    } else if (/kode|file|fungsi|class|repo|bug|error|endpoint|script|deploy/i.test(cLower)) {
+      category = 'engineering';
+    }
+
+    return { contentToStore, category };
   }
 
   /**
@@ -99,7 +149,24 @@ export class RequestClassifierService {
     }
 
     // -----------------------------------------------------------------------
-    // 3. SKILL — cocokkan trigger dengan skill yang terdaftar di SkillRegistry
+    // 3. MEMORY_STORE — perintah simpan memori eksplisit
+    // -----------------------------------------------------------------------
+    const memoryStoreMatch = this._matchMemoryStore(msg);
+    if (memoryStoreMatch) {
+      const result = {
+        type: 'MEMORY_STORE',
+        confidence: 0.95,
+        metadata: {
+          contentToStore: memoryStoreMatch.contentToStore,
+          category: memoryStoreMatch.category
+        }
+      };
+      this._emitClassified(result, msgLen);
+      return result;
+    }
+
+    // -----------------------------------------------------------------------
+    // 4. SKILL — cocokkan trigger dengan skill yang terdaftar di SkillRegistry
     //    Dicek sebelum LOOKUP agar trigger eksplisit ("buat laporan harian")
     //    tidak salah diklasifikasi sebagai LOOKUP
     // -----------------------------------------------------------------------
@@ -122,12 +189,12 @@ export class RequestClassifierService {
     }
 
     // -----------------------------------------------------------------------
-    // 4. LOOKUP — pertanyaan faktual singkat, tidak butuh memory/RAG
+    // 5. LOOKUP — pertanyaan faktual singkat, tidak butuh memory/RAG
     //    Semua kondisi berikut harus terpenuhi:
     //    a) Panjang pesan ≤ 80 karakter
     //    b) Dimulai dengan kata tanya atau pola faktual
     //    c) Tidak ada referensi ke file/path
-    //    d) Tidak ada pola konteks-dependen ("tadi", "lanjut", dll)
+    //    d) Tidak ada pola konteks-dependen ("tadi", "lanjut", personal pronouns, dll)
     //    e) History tidak dalam kondisi "percakapan aktif dalam" (≤ 2 pesan sebelumnya)
     // -----------------------------------------------------------------------
     if (msgLen <= 80) {
@@ -157,7 +224,7 @@ export class RequestClassifierService {
     }
 
     // -----------------------------------------------------------------------
-    // 5. CONVERSATION — default (alur penuh, perilaku existing)
+    // 6. CONVERSATION — default (alur penuh, perilaku existing)
     // -----------------------------------------------------------------------
     const result = {
       type: 'CONVERSATION',

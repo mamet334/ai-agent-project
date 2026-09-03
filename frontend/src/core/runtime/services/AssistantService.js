@@ -95,69 +95,48 @@ export class AssistantService {
   }
 
   // =============================================
-  // MEMORY: Natural Language Trigger
+  // MEMORY: Store Handler (PR#8 Unification)
   // =============================================
 
   /**
-   * Deteksi keyword memori dan simpan ke MemoryService jika ada.
-   * @param {string} userMsg
-   * @returns {Promise<{ handled: boolean, responseContent: string }>}
+   * Handle intent MEMORY_STORE dari RequestClassifierService.
+   * Menyimpan teks memori bersih ke MemoryGovernorService / MemoryService.
+   * @private
    */
-  async handleMemoryTrigger(userMsg, context = {}) {
-    const memoryKeywords = ['ingat', 'simpan', 'catat', 'remember', 'save', 'store'];
-    const lowerMsg = userMsg.toLowerCase();
-    const hasMemoryKeyword = memoryKeywords.some(k => lowerMsg.includes(k));
+  async _handleMemoryStore({ userMsg, contentToStore, category, workspaceId, userId, onDone }) {
+    if (!contentToStore || contentToStore.length === 0) {
+      onDone?.('⚠️ Konten memori tidak valid atau terlalu pendek.', [], null);
+      return;
+    }
 
-    if (!hasMemoryKeyword) return { handled: false, responseContent: '' };
-
-    const memoryService = this.serviceManager.get('MemoryService');
     const governor = this.serviceManager.has('MemoryGovernorService')
       ? this.serviceManager.get('MemoryGovernorService')
       : null;
+    const memoryService = this.serviceManager.get('MemoryService');
 
-    if (!memoryService && !governor) return { handled: false, responseContent: '' };
-
-    const contentToRemember = userMsg
-      .replace(/(ingat|simpan|catat|remember|save|store)/gi, '')
-      .trim();
-
-    if (contentToRemember.length === 0) return { handled: false, responseContent: '' };
+    const goldenMeta = {
+      source_type: 'assistant_chat',
+      source_reference: 'assistant_chat_trigger',
+      chat_id: workspaceId || null,
+      version_code: `AST-${Date.now()}`,
+      category: category || 'general',
+      useGovernor: true
+    };
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id;
-
-      // Infer category
-      let category = 'general';
-      const cLower = contentToRemember.toLowerCase();
-      if (/suka|ingin|favorit|preferensi|nama saya|panggil/i.test(cLower)) {
-        category = 'preference';
-      } else if (/kode|file|fungsi|class|repo|bug|error|endpoint|script/i.test(cLower)) {
-        category = 'engineering';
-      }
-
-      const goldenMeta = {
-        source_type: 'assistant_chat',
-        source_reference: 'assistant_chat_trigger',
-        chat_id: context.chatId || null,
-        version_code: `AST-${Date.now()}`,
-        category,
-        useGovernor: true
-      };
-
       if (governor && userId && typeof governor.storeGoldenMemory === 'function') {
-        // Cek deteksi konflik sebelum store agar memori bertentangan ditandai CONFLICT_PENDING_REVIEW
+        // Deteksi konflik sebelum menyimpan
         await governor.detectAndMarkConflict({
           userId,
           sourceFile: goldenMeta.source_reference,
-          newContent: contentToRemember,
+          newContent: contentToStore,
           newVersionSeq: 1
         });
 
         const stored = await governor.storeGoldenMemory({
           user_id: userId,
-          content: contentToRemember,
-          summary: contentToRemember,
+          content: contentToStore,
+          summary: contentToStore,
           source_type: goldenMeta.source_type,
           source_reference: goldenMeta.source_reference,
           chat_id: goldenMeta.chat_id,
@@ -166,24 +145,21 @@ export class AssistantService {
         });
 
         if (stored) {
-          return {
-            handled: true,
-            responseContent: `✅ Saya telah menyimpan: "${contentToRemember}" ke memori (kategori: ${category}).`
-          };
+          onDone?.(`✅ Saya telah menyimpan: "${contentToStore}" ke memori (kategori: ${category || 'general'}).`, [], null);
+          return;
         }
       } else if (memoryService) {
-        const stored = await memoryService.storeMemory(contentToRemember, contentToRemember, goldenMeta);
+        const stored = await memoryService.storeMemory(contentToStore, contentToStore, goldenMeta);
         if (stored) {
-          return {
-            handled: true,
-            responseContent: `✅ Saya telah menyimpan: "${contentToRemember}" ke memori.`
-          };
+          onDone?.(`✅ Saya telah menyimpan: "${contentToStore}" ke memori.`, [], null);
+          return;
         }
       }
     } catch (err) {
-      console.warn('[AssistantService] Memory trigger failed:', err);
+      console.warn('[AssistantService] _handleMemoryStore error:', err);
     }
-    return { handled: false, responseContent: '' };
+
+    onDone?.(`⚠️ Gagal menyimpan ke memori. Silakan coba lagi.`, [], null);
   }
 
   // =============================================
@@ -324,26 +300,30 @@ export class AssistantService {
     // 1. Resolve mode
     const { resolvedMode, resolvedAppSource } = this.resolveMode(workspaceId);
 
-    // 2. Memory trigger check (keyword: ingat/simpan/catat)
-    const memoryResult = await this.handleMemoryTrigger(userMsg, { chatId: workspaceId });
-    if (memoryResult.handled) {
-      onDone?.(memoryResult.responseContent, [], null);
-      return;
-    }
-
-    // 3. PR#8: Classify request type (deterministic, 0 LLM cost)
+    // 2. PR#8: Classify request type (deterministic, 0 LLM cost)
     const classifier = this.serviceManager.has('RequestClassifierService')
       ? this.serviceManager.get('RequestClassifierService')
       : null;
-    const { type: requestType } = classifier?.classify(userMsg, history, resolvedMode)
-      || { type: 'CONVERSATION' };
+    const classifiedResult = classifier?.classify(userMsg, history, resolvedMode)
+      || { type: 'CONVERSATION', metadata: {} };
+    const requestType = classifiedResult.type;
+    const classifierMeta = classifiedResult.metadata || {};
 
-    // 4. Dispatch ke handler yang sesuai
+    // 3. Dispatch ke handler yang sesuai
     const handlerParams = {
       userMsg, history, workspaceId, userId, token,
       attachedFile, workspaceManager, onChunk, onDone, onError,
       resolvedMode, resolvedAppSource
     };
+
+    // Dispatch MEMORY_STORE (PR#8 Intent Unification)
+    if (requestType === 'MEMORY_STORE') {
+      return this._handleMemoryStore({
+        ...handlerParams,
+        contentToStore: classifierMeta.contentToStore,
+        category: classifierMeta.category
+      });
+    }
 
     if (requestType === 'LOOKUP') {
       return this._handleLookup(handlerParams);
@@ -351,16 +331,15 @@ export class AssistantService {
 
     // Dispatch SKILL → _handleSkill()
     if (requestType === 'SKILL') {
-      const { metadata } = classifier.classify(userMsg, history, resolvedMode);
       const skillReg = this.serviceManager.has('SkillRegistry')
         ? this.serviceManager.get('SkillRegistry')
         : null;
-      const skill = skillReg?.getSkill(metadata?.skillId);
+      const skill = skillReg?.getSkill(classifierMeta?.skillId);
       if (skill) {
         return this._handleSkill({ ...handlerParams, skill });
       }
       // Fallback ke CONVERSATION jika skill tidak ditemukan
-      console.warn(`[processMessage] Skill "${metadata?.skillId}" tidak ditemukan — fallback ke CONVERSATION`);
+      console.warn(`[processMessage] Skill "${classifierMeta?.skillId}" tidak ditemukan — fallback ke CONVERSATION`);
     }
 
     // COMMAND, ENGINEER, CONVERSATION → semua lewat ConversationHandler
@@ -810,7 +789,7 @@ export class AssistantService {
       return;
     }
 
-    await this._handleResponseStream(response, { userMsg, isEngineerMode, workspaceManager, onChunk, onDone, onError });
+    await this._handleResponseStream(response, { userMsg, isEngineerMode, workspaceManager, onChunk, onDone, onError, userId });
   }
 
   // =============================================
@@ -822,7 +801,7 @@ export class AssistantService {
    * Dipakai bersama oleh _handleLookup dan _handleConversation.
    * @private
    */
-  async _handleResponseStream(response, { userMsg, isEngineerMode, workspaceManager, onChunk, onDone, onError }) {
+  async _handleResponseStream(response, { userMsg, isEngineerMode, workspaceManager, onChunk, onDone, onError, userId }) {
     const contentType = response.headers.get('content-type') || '';
 
     if (contentType.includes('application/json')) {
@@ -839,6 +818,11 @@ export class AssistantService {
 
       if (workspaceManager?.openWidgetInWorkbench) {
         workspaceManager.openWidgetInWorkbench('right', 'widget:maef-monitor', { focusStep: 'execution', logs: jsonData });
+      }
+
+      // Verifikasi integritas memori sesi Assistant (golden source alignment) tepat 1x di akhir turn
+      if (userId) {
+        await this.finalizeAssistantSession({ userId });
       }
       return;
     }
@@ -909,6 +893,11 @@ export class AssistantService {
       hasPatch,
       patchOriginalTask: hasPatch ? userMsg : undefined
     });
+
+    // Verifikasi integritas memori sesi Assistant (golden source alignment) tepat 1x di akhir turn
+    if (userId) {
+      await this.finalizeAssistantSession({ userId });
+    }
 
     // OS Execution Interceptor (Electron only)
     await this._runOSInterceptor(finalText, userMsg, workspaceManager, onChunk, onDone, onError);
@@ -997,10 +986,6 @@ export class AssistantService {
 
     if (result?.error) {
       console.error('[AssistantService] Gagal menyimpan chat:', result.error);
-    } else {
-      // Verifikasi integritas memori sesi Assistant (golden source alignment)
-      const effectiveChatId = chatId || result?.data?.id;
-      await this.finalizeAssistantSession({ userId, chatId: effectiveChatId });
     }
   }
 
