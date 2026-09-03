@@ -156,52 +156,48 @@ export class MemoryService {
       const content = typeof value === 'object' ? JSON.stringify(value) : String(value);
       const summary = key.length > 100 ? key.substring(0, 100) + '...' : key;
 
-      // === GOLDEN SOURCE PATH (MemoryGovernorService) ===
-      // Jika metadata golden source disediakan atau useGovernor diaktifkan,
-      // delegasikan ke MemoryGovernorService agar raw content disimpan + ringkasan mendapat metadata wajib.
-      const hasGoldenMeta = options.source_reference || options.chat_id || options.version_code || options.useGovernor;
-      if (hasGoldenMeta) {
-        const governor = this.serviceManager.has('MemoryGovernorService')
-          ? this.serviceManager.get('MemoryGovernorService')
-          : null;
+      // === GOLDEN SOURCE PATH (MemoryGovernorService - Secure by Default) ===
+      // Selalu delegasikan ke MemoryGovernorService jika tersedia agar raw content disimpan
+      // dan ringkasan selalu mendapat metadata wajib.
+      const governor = this.serviceManager.has('MemoryGovernorService')
+        ? this.serviceManager.get('MemoryGovernorService')
+        : null;
 
-        if (governor && typeof governor.storeGoldenMemory === 'function') {
-          const result = await governor.storeGoldenMemory({
-            user_id: userId,
-            content,
-            summary,
-            source_type: options.source_type || 'fact',
-            source_reference: options.source_reference || null,
-            chat_id: options.chat_id || null,
-            version_code: options.version_code || null,
-            category: options.category || 'general',
-            access_tier: options.access_tier,
-            status: options.status || 'active',
-            version_sequence: options.version_sequence || 1
-          });
-          success = !!result;
-          this.eventBus.emit('Memory:Stored', { key, success });
-          return success;
-        }
-        // Fallback: if governor not available, continue standard insert below
+      if (governor && typeof governor.storeGoldenMemory === 'function') {
+        const result = await governor.storeGoldenMemory({
+          user_id: userId,
+          content,
+          summary,
+          source_type: options.source_type || 'fact',
+          source_reference: options.source_reference || 'memory_service',
+          chat_id: options.chat_id || null,
+          version_code: options.version_code || `MEM-${Date.now()}`,
+          category: options.category || 'general',
+          access_tier: options.access_tier || 'generic',
+          status: options.status || 'active',
+          version_sequence: options.version_sequence || 1
+        });
+        success = !!result;
+        this.eventBus.emit('Memory:Stored', { key, success });
+        return success;
       }
 
-      // === STANDARD PATH (backward compatible) ===
+      // === STANDARD PATH (Safety Net Fallback jika Governor tidak tersedia) ===
       const { error } = await supabase
         .from('user_memories')
         .insert([
           { 
             user_id: userId, 
             summary: content, 
-            memory_type: 'fact', 
+            memory_type: options.source_type || 'fact', 
             confidence: 1.0, 
-            source: 'MemoryService' 
+            source: options.source_reference || 'MemoryService' 
           }
         ]);
         
       if (error) throw error;
       success = true;
-      console.log('[MemoryService] Memory stored successfully');
+      console.log('[MemoryService] Memory stored successfully (Fallback standard path)');
     } catch (err) {
       console.error('[MemoryService] Error storing memory:', err);
     }

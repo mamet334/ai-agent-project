@@ -19,10 +19,11 @@ Menuntaskan 3 gap yang selama ini tertunda di domain Memory System. Ketiganya di
   `AssistantService.handleMemoryTrigger()` sebelumnya menyimpan memori secara standar tanpa metadata Golden Source (`hasGoldenMeta = false`), sehingga bypass `storeGoldenMemory()`.
 * **Catatan Penting:**  
   Audit pada 2026-09-03 menemukan bahwa melalui implementasi `FIX-intent-classification-and-memory-store-unification`, jalur ini sudah **~70% berjalan** — `detectAndMarkConflict()` dan `storeGoldenMemory()` sudah terpanggil via `_handleMemoryStore()` pada skenario `MEMORY_STORE`. Task ini berfokus memverifikasi sisa 30% dan menutup celah pemanggilan yang tersisa, **BUKAN membangun dari nol**.
+* **Status Sub A:** ✅ **Selesai Diimplementasikan & Lolos Uji Integrasi (2026-09-03)** ([`2026-09-03-tahap1-sub-a-memory-governor-integration.md`](../project-memory/changelog/2026-09-03-tahap1-sub-a-memory-governor-integration.md))
 * **Exit Criteria:**
-  - [ ] Audit ulang seluruh jalur pemanggilan memori di runtime Assistant — pastikan SEMUA jalur menyertakan metadata Golden Source yang konsisten (`useGovernor: true`, `source_reference: 'assistant_chat_trigger'`, `version_code`).
-  - [ ] Metadata Golden Source konsisten `true` di seluruh skenario penyimpanan via Assistant chat.
-  - [ ] Verifikasi tidak ada regresi pada intent classification yang sudah bekerja benar (negasi `MEMORY_STORE`, personal pronouns `LOOKUP`, dll).
+  - [x] Audit ulang seluruh jalur pemanggilan memori di runtime Assistant — pastikan SEMUA jalur menyertakan metadata Golden Source yang konsisten (`useGovernor: true`, `source_reference: 'assistant_chat_trigger'`, `version_code`).
+  - [x] Metadata Golden Source konsisten `true` di seluruh skenario penyimpanan via Assistant chat.
+  - [x] Verifikasi tidak ada regresi pada intent classification yang sudah bekerja benar (negasi `MEMORY_STORE`, personal pronouns `LOOKUP`, dll).
 
 ---
 

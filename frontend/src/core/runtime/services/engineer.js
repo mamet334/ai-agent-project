@@ -2736,12 +2736,17 @@ class Engineer {
 
       try {
         const memoryService = this.serviceManager.get('MemoryService');
-        if (memoryService) {
           await memoryService.storeMemory(
             `Patch ${patch.id} applied`,
-            `Patch ${patch.id}: ${successCount} applied, ${skippedCount} skipped, ${failCount} failed.`
+            `Patch ${patch.id}: ${successCount} applied, ${skippedCount} skipped, ${failCount} failed.`,
+            {
+              source_type: 'engineer_patch',
+              source_reference: `patch_${patch.id}`,
+              version_code: `PATCH-${Date.now()}`,
+              category: 'engineering',
+              useGovernor: true
+            }
           );
-        }
       } catch (e) {
         console.warn('[Engineer] Gagal menyimpan ke Project Memory:', e);
       }

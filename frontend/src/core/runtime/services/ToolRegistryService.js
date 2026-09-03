@@ -21,8 +21,13 @@ export class ToolRegistryService {
       description: 'Menyimpan, mencari, dan mengelola User Memory di Supabase',
       category: 'memory',
       execute: async (params) => {
-        const memoryService = this.serviceManager.get('MemoryService');
-        if (params.action === 'store') return await memoryService.storeMemory(params.key, params.value);
+        if (params.action === 'store') return await memoryService.storeMemory(params.key, params.value, {
+          source_type: 'tool_call',
+          source_reference: 'tool_memory_manager',
+          version_code: `TOOL-${Date.now()}`,
+          category: params.category || 'general',
+          useGovernor: true
+        });
         if (params.action === 'get') return await memoryService.getMemory(params.query);
         return { error: 'Unknown action' };
       }
