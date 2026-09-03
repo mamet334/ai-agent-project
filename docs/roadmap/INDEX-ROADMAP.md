@@ -21,7 +21,7 @@
 | `CHECK-P02-json-patch-schema-alignment.md` | ✅ **Selesai & Tervalidasi (Live Production Confirmed)** (Defensive Unwrap Layer di `_extractJSONPatch` + Standardisasi Prompt Engineer) | `verification_engine.ts`, `request_pipeline.ts` |
 | `FIX-assistant-session-finalization-and-autosave-throttle.md` | ✅ **Selesai & Tervalidasi (Confirmed Desktop + Unit Test)** (Pemisahan `finalizeAssistantSession` dari auto-save loop & throttling DB I/O) | `AssistantService.js`, `ConversationEngine.jsx` |
 | `TAHAP1-memory-system-finalization.md` | ✅ **Selesai Penuh & Live-Verified (Sub A + Sub B + Sub C — 2026-09-03)** (Integrasi Assistant Golden Memory, UI Conflict Resolution & Purge CP4b, Category Alignment) | `MemoryGovernorService.js`, `MemoryService.js`, `MemoryContextPanel.jsx`, `ConversationEngine.jsx` |
-| `SPESIFIKASI-TEKNIS-MAMET-OS-v2.md` | 📋 Referensi — `SystemGovernorService.js` belum dikerjakan | Monitoring/observability daemon |
+| `SPESIFIKASI-TEKNIS-MAMET-OS-v2.md` | ✅ **Selesai Penuh (Tahap 2 — 2026-09-03)** (SystemGovernorService.js daemon, 4-Level Escalation Ladder, Session-Relative TTL, MAEF Structural Validation, 3-Mode Notification) | `SystemGovernorService.js`, `Kernel.js`, `ObservabilityPanel.jsx` |
 | `MAMET-AI-ROADMAP.md`, `engineer-autonomous-mode.md`, `engineer-chat-upgrade.md`, `fix-log.md`, `rencana.md`, `roadmap-lanjutan.md` | 📋 Belum direview ulang dalam sesi ini — **catatan:** `MAMET-AI-ROADMAP.md` memakai skema penomoran (`TASK-000x`, `ADR-000x`, istilah "MametLite"/"BRAIN 1-2") yang berbeda dari skema PR# di dokumen lain — perlu direkonsiliasi sebelum dipakai sebagai rujukan aktif | — |
 
 ---
@@ -49,12 +49,12 @@
     - Sub B (CP4b): UI Purge Lifecycle & Conflict Resolution + atomic metadata.conflict_info
     - Sub C (Backlog #7): Memory Context Panel Category Alignment (Display Layer terisolasi)
     ↓
-[TAHAP 2 - BERIKUTNYA] SystemGovernorService.js (Opsi B)
+[SELESAI] TAHAP 2 — SystemGovernorService.js (Opsi B, 2026-09-03)
     Pembangunan daemon Codebase Governance & File Integrity dari nol sesuai SPESIFIKASI-TEKNIS-MAMET-OS-v2.md.
-    - Dikonfirmasi TIDAK punya dependensi data ke skema user_memories/metadata.conflict_info — aman dikerjakan setelah Tahap 1 tanpa risiko rework. Urutan ini dipilih agar modul greenfield berbobot tinggi dikerjakan setelah fondasi Memory System stabil 100%.
-    - Risiko: Sedang | Kompleksitas: Tinggi
+    - Tangga Eskalasi 4 Level, Severity Classification 2D, Caching SHA-256, Session-Relative TTL (7 hari), No Silent State Transitions, MAEF Structural Validation Gate, 3-Mode Notification Strategy, Level 4 Approval Gate.
+    - Didaftarkan resmi di Kernel Phase 3 & Session Digest terintegrasi di ObservabilityPanel.jsx.
     ↓
-[TAHAP 3] PR#9 Fase 3 — Web Comparison (Opsi D)
+[TAHAP 3 - BERIKUTNYA] PR#9 Fase 3 — Web Comparison (Opsi D)
     WebComparisonService.js + Tier 3 di RetrievalOrchestrator.js dengan gerbang konfirmasi Owner (Human-in-Command).
     - Dikonfirmasi 100% independen dari Tahap 1 & 2 — ditempatkan terakhir karena kompleksitas modular paling terisolasi di antara tiga tahap.
     - Risiko: Rendah | Kompleksitas: Sedang

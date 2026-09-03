@@ -1,12 +1,59 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function ObservabilityPanel({
   executionTrace,
   observability,
   vitals,
   stats,
-  lastCheckTime
+  lastCheckTime,
+  serviceManager
 }) {
+  const [digest, setDigest] = useState(null);
+  const [pendingApproval, setPendingApproval] = useState(null);
+
+  useEffect(() => {
+    const sm = serviceManager || (typeof window !== 'undefined' ? window.__serviceManager : null);
+    const governor = sm?.has?.('SystemGovernorService') ? sm.get('SystemGovernorService') : null;
+    const eventBus = sm?.has?.('EventBus') ? sm.get('EventBus') : null;
+
+    if (governor) {
+      setDigest(governor.getSessionDigest());
+    }
+
+    if (!eventBus) return;
+
+    const handleApprovalRequest = (payload) => {
+      setPendingApproval(payload);
+    };
+
+    const handleDigestUpdate = () => {
+      if (governor) setDigest(governor.getSessionDigest());
+    };
+
+    const unsub1 = eventBus.on('SystemGovernor:RequestApproval', handleApprovalRequest);
+    const unsub2 = eventBus.on('SystemGovernor:Warning', handleDigestUpdate);
+    const unsub3 = eventBus.on('SystemGovernor:CriticalViolation', handleDigestUpdate);
+    const unsub4 = eventBus.on('SystemGovernor:ApprovalGranted', () => setPendingApproval(null));
+    const unsub5 = eventBus.on('SystemGovernor:ApprovalRejected', () => setPendingApproval(null));
+
+    return () => {
+      unsub1?.();
+      unsub2?.();
+      unsub3?.();
+      unsub4?.();
+      unsub5?.();
+    };
+  }, [serviceManager]);
+
+  const handleResolveApproval = async (isApproved) => {
+    if (!pendingApproval) return;
+    const sm = serviceManager || (typeof window !== 'undefined' ? window.__serviceManager : null);
+    const governor = sm?.has?.('SystemGovernorService') ? sm.get('SystemGovernorService') : null;
+    if (governor) {
+      await governor.resolveApproval(pendingApproval.auditId, isApproved);
+    }
+    setPendingApproval(null);
+  };
   return (
     <div className="animate-in fade-in duration-300">
       <h2 className="text-xs font-bold text-slate-500 tracking-[0.2em] mb-8 uppercase border-b border-white/5 pb-4">
@@ -307,6 +354,74 @@ export default function ObservabilityPanel({
               </div>
             );
           })()}
+        </div>
+
+        {/* System Governor: Session Digest & Level 4 Approval Gate (Tahap 2) */}
+        <div className="group pt-4 border-t border-white/5">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] text-slate-500 uppercase tracking-wider font-mono">System Governor Digest</div>
+            {digest?.highCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/30">
+                {digest.highCount} HIGH
+              </span>
+            )}
+          </div>
+
+          {/* Level 4 Approval Gate Banner */}
+          {pendingApproval && (
+            <div className="mb-3 p-2.5 rounded-lg bg-red-950/40 border border-red-500/50 space-y-2 animate-in fade-in">
+              <div className="flex items-center justify-between text-[10px] text-red-400 font-bold">
+                <span>🛑 LEVEL 4 DEEP AUDIT APPROVAL</span>
+                <span className="text-[9px] font-normal text-slate-400">~{pendingApproval.tokenEstimate} tokens</span>
+              </div>
+              <p className="text-[10px] text-slate-300 font-mono break-all leading-tight">
+                {pendingApproval.filePath}
+              </p>
+              <p className="text-[9px] text-slate-400 leading-tight">
+                {pendingApproval.reason}
+              </p>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => handleResolveApproval(true)}
+                  className="flex-1 py-1 rounded text-[9px] font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
+                >
+                  Setujui Deep Audit
+                </button>
+                <button
+                  onClick={() => handleResolveApproval(false)}
+                  className="flex-1 py-1 rounded text-[9px] font-bold bg-slate-700 hover:bg-slate-600 text-slate-200 transition-colors"
+                >
+                  Tolak (0 Token)
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Session Digest Grid */}
+          <div className="grid grid-cols-2 gap-2 text-center text-[10px] font-mono">
+            <div className="p-2 rounded bg-white/5 border border-white/5">
+              <div className="text-slate-400 text-[9px] uppercase">LOW Queue</div>
+              <div className="text-sm font-bold text-slate-200 mt-0.5">{digest?.lowCount ?? 0}</div>
+            </div>
+            <div className="p-2 rounded bg-white/5 border border-white/5">
+              <div className="text-slate-400 text-[9px] uppercase">HIGH Priority</div>
+              <div className={`text-sm font-bold mt-0.5 ${digest?.highCount ? 'text-red-400' : 'text-slate-200'}`}>
+                {digest?.highCount ?? 0}
+              </div>
+            </div>
+            <div className="p-2 rounded bg-white/5 border border-white/5">
+              <div className="text-slate-400 text-[9px] uppercase">TTL H-1 Expiry</div>
+              <div className={`text-sm font-bold mt-0.5 ${digest?.approachingTtlCount ? 'text-amber-400' : 'text-slate-200'}`}>
+                {digest?.approachingTtlCount ?? 0}
+              </div>
+            </div>
+            <div className="p-2 rounded bg-white/5 border border-white/5">
+              <div className="text-slate-400 text-[9px] uppercase">Parser Failures</div>
+              <div className={`text-sm font-bold mt-0.5 ${digest?.failedDeterministicCount ? 'text-amber-300' : 'text-slate-200'}`}>
+                {digest?.failedDeterministicCount ?? 0}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

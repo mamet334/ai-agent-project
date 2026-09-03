@@ -31,6 +31,7 @@ import { ModuleDiscoveryService } from './services/ModuleDiscoveryService.js';
 import { RequestClassifierService } from './services/RequestClassifierService.js';
 import { SkillRegistry } from './services/SkillRegistry.js';
 import { SkillGuardService } from './services/SkillGuardService.js';
+import { SystemGovernorService } from './services/SystemGovernorService.js';
 import { supabase } from '../../supabase.js';
 
 /**
@@ -336,6 +337,13 @@ class Kernel {
     await requestClassifierService.initialize();
     serviceManager.register('RequestClassifierService', requestClassifierService);
     this.log('INFO', 'RequestClassifierService Initialized & Registered');
+
+    // System Governor Service (Tahap 2) — Codebase Governance & File Integrity Daemon
+    // Independen dari Engineer, 4-level escalation ladder, session-relative TTL
+    const systemGovernorService = new SystemGovernorService(serviceManager);
+    await systemGovernorService.initialize();
+    serviceManager.register('SystemGovernorService', systemGovernorService);
+    this.log('INFO', 'SystemGovernorService Initialized & Registered');
 
     // 3. Initialize Adapter Registry stub
     const adapterRegistry = {
