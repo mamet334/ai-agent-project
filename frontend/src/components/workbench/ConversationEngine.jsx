@@ -1084,14 +1084,39 @@ export default function ConversationEngine({ sessionId }) {
               memories={activeMemories}
               query={lastMemoryQuery}
               loading={isMemoryLoading}
+              serviceManager={kernel.serviceManager}
               onClose={() => setIsMemoryPanelOpen(false)}
               onRefresh={handleRefreshMemory}
               onResolveConflict={async (memoryId, resolution) => {
-                // Addendum Fase 1: resolve konflik via MemoryGovernorService
                 const governor = kernel.serviceManager?.get('MemoryGovernorService');
                 if (governor) {
                   await governor.resolveConflict(memoryId, resolution);
-                  // Refresh panel setelah resolve agar item hilang dari tampilan
+                  if (lastMemoryQuery) handleRefreshMemory();
+                }
+              }}
+              onArchiveMemory={async (memoryId) => {
+                const governor = kernel.serviceManager?.get('MemoryGovernorService');
+                if (governor) {
+                  await governor.archiveMemory(memoryId);
+                  if (lastMemoryQuery) handleRefreshMemory();
+                }
+              }}
+              onRequestPurge={async (memoryId) => {
+                const governor = kernel.serviceManager?.get('MemoryGovernorService');
+                if (governor) {
+                  await governor.requestPurge(memoryId);
+                }
+              }}
+              onExecutePurge={async (memoryId) => {
+                const governor = kernel.serviceManager?.get('MemoryGovernorService');
+                if (governor) {
+                  await governor.executePurge(memoryId);
+                }
+              }}
+              onRestoreMemory={async (memoryId) => {
+                const governor = kernel.serviceManager?.get('MemoryGovernorService');
+                if (governor) {
+                  await governor.restoreMemory(memoryId);
                   if (lastMemoryQuery) handleRefreshMemory();
                 }
               }}

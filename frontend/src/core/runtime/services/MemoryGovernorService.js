@@ -501,7 +501,7 @@ export class MemoryGovernorService {
       // Cari semua memori aktif dengan source_reference yang sama
       const { data: existing, error } = await supabase
         .from('user_memories')
-        .select('id, summary, version_sequence, status')
+        .select('id, summary, version_sequence, status, metadata')
         .eq('user_id', userId)
         .eq('source_reference', sourceFile)
         .eq('status', 'active');
@@ -519,10 +519,26 @@ export class MemoryGovernorService {
         const versionBroken = newVersionSeq !== (mem.version_sequence + 1);
 
         if (existingHash !== newHash && versionBroken) {
-          // Tandai sebagai CONFLICT_PENDING_REVIEW — exclude dari retrieval normal
+          const updatedMetadata = {
+            ...(mem.metadata || {}),
+            conflict_info: {
+              detected_at: new Date().toISOString(),
+              reason: 'VERSION_SEQUENCE_BROKEN_AND_CONTENT_DIFF',
+              source_reference: sourceFile,
+              incoming_content: newContent,
+              incoming_version_seq: newVersionSeq,
+              existing_version_seq: mem.version_sequence,
+              previous_summary: mem.summary || ''
+            }
+          };
+
+          // Tandai sebagai CONFLICT_PENDING_REVIEW & tulis metadata.conflict_info secara atomik
           const { error: updateErr } = await supabase
             .from('user_memories')
-            .update({ status: 'CONFLICT_PENDING_REVIEW' })
+            .update({
+              status: 'CONFLICT_PENDING_REVIEW',
+              metadata: updatedMetadata
+            })
             .eq('id', mem.id);
 
           if (!updateErr) {
@@ -537,7 +553,7 @@ export class MemoryGovernorService {
           conflictedIds,
           timestamp: new Date().toISOString()
         });
-        console.warn(`[MemoryGovernorService] Conflict detected for "${sourceFile}" → ${conflictedIds.length} record(s) ditandai CONFLICT_PENDING_REVIEW`);
+        console.log(`[MemoryGovernorService] Conflict detected for "${sourceFile}" → ${conflictedIds.length} record(s) ditandai CONFLICT_PENDING_REVIEW`);
       }
 
       return { hasConflict: conflictedIds.length > 0, conflictedIds };
@@ -709,6 +725,95 @@ export class MemoryGovernorService {
     } catch (err) {
       console.error('[MemoryGovernorService] executePurge error:', err);
       return { success: false };
+    }
+  }
+
+  /**
+   * Pulihkan memori dari status 'archived' atau 'pending_purge' kembali ke 'active'.
+   * @param {string} memoryId
+   * @returns {Promise<{ success: boolean }>}
+   */
+  async restoreMemory(memoryId) {
+    if (!this.isInitialized) throw new Error('MemoryGovernorService not initialized');
+
+    try {
+      const { error } = await supabase
+        .from('user_memories')
+        .update({ status: 'active' })
+        .eq('id', memoryId)
+        .in('status', ['archived', 'pending_purge']);
+
+      if (error) {
+        console.error('[MemoryGovernorService] restoreMemory error:', error.message);
+        return { success: false };
+      }
+
+      this.eventBus.emit('MemoryGovernor:Restored', {
+        memoryId,
+        timestamp: new Date().toISOString()
+      });
+
+      console.log('[MemoryGovernorService] Memory restored to active:', memoryId);
+      return { success: true };
+    } catch (err) {
+      console.error('[MemoryGovernorService] restoreMemory error:', err);
+      return { success: false };
+    }
+  }
+
+  /**
+   * Ambil semua record memori yang berstatus CONFLICT_PENDING_REVIEW untuk keperluan UI.
+   * @param {string} userId
+   * @returns {Promise<Array>}
+   */
+  async getConflicts(userId) {
+    if (!this.isInitialized) throw new Error('MemoryGovernorService not initialized');
+    if (!userId) return [];
+
+    try {
+      const { data, error } = await supabase
+        .from('user_memories')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('status', 'CONFLICT_PENDING_REVIEW')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('[MemoryGovernorService] getConflicts error:', error.message);
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      console.error('[MemoryGovernorService] getConflicts error:', err);
+      return [];
+    }
+  }
+
+  /**
+   * Ambil semua record memori yang berstatus 'archived' atau 'pending_purge' untuk Trash Bin UI.
+   * @param {string} userId
+   * @returns {Promise<Array>}
+   */
+  async getTrashMemories(userId) {
+    if (!this.isInitialized) throw new Error('MemoryGovernorService not initialized');
+    if (!userId) return [];
+
+    try {
+      const { data, error } = await supabase
+        .from('user_memories')
+        .select('*')
+        .eq('user_id', userId)
+        .in('status', ['archived', 'pending_purge'])
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('[MemoryGovernorService] getTrashMemories error:', error.message);
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      console.error('[MemoryGovernorService] getTrashMemories error:', err);
+      return [];
     }
   }
 }

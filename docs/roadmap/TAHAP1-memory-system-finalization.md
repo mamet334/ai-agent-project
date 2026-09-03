@@ -61,12 +61,13 @@ Bangun antarmuka UI untuk siklus: **Soft-delete $\rightarrow$ Pending Purge $\ri
 * Tampilkan record berstatus `archived` dan `pending_purge`.
 * Tombol aksi untuk `requestPurge()` dan `executePurge()` yang sudah ada di service (dengan retensi 90 hari sesuai spesifikasi yang disetujui).
 
+* **Status Sub B:** ✅ **Selesai Diimplementasikan & Lolos Uji Integrasi (2026-09-03)** ([`2026-09-03-tahap1-sub-b-ui-purge-and-conflict-resolution.md`](../project-memory/changelog/2026-09-03-tahap1-sub-b-ui-purge-and-conflict-resolution.md))
 * **Exit Criteria:**
-  - [ ] `metadata.conflict_info` terisi otomatis setiap kali `detectAndMarkConflict()` mendeteksi anomali konten/versi.
-  - [ ] Log level conflict detection berubah menjadi `console.log`.
-  - [ ] Owner dapat melihat & meresolusi konflik langsung dari UI tanpa query manual ke database.
-  - [ ] Owner dapat memantau & mengeksekusi purge / trash bin langsung dari UI.
-  - [ ] 3 record `CONFLICT_PENDING_REVIEW` yang saat ini ada di database Supabase dapat di-resolve via UI baru sebagai uji validasi kasus nyata.
+  - [x] `metadata.conflict_info` terisi otomatis setiap kali `detectAndMarkConflict()` mendeteksi anomali konten/versi.
+  - [x] Log level conflict detection berubah menjadi `console.log`.
+  - [x] Owner dapat melihat & meresolusi konflik langsung dari UI tanpa query manual ke database (dengan visual diff).
+  - [x] Owner dapat memantau & mengeksekusi purge / trash bin langsung dari UI (Soft-delete $\rightarrow$ Pending Purge $\rightarrow$ Hard Delete).
+  - [x] 3 record `CONFLICT_PENDING_REVIEW` yang saat ini ada di database Supabase dapat di-resolve via UI baru sebagai uji validasi kasus nyata.
 
 ---
 
