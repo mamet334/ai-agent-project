@@ -26,6 +26,7 @@ import { CommandRegistry } from './services/CommandRegistry.js';
 import { AuditLogService } from './services/AuditLogService.js';
 import { RetrievalStrategyService } from './services/RetrievalStrategyService.js';
 import { InternalKnowledgeFallbackService } from './services/InternalKnowledgeFallbackService.js';
+import { WebComparisonService } from './services/WebComparisonService.js';
 import { RetrievalOrchestrator } from './services/RetrievalOrchestrator.js';
 import { ModuleDiscoveryService } from './services/ModuleDiscoveryService.js';
 import { RequestClassifierService } from './services/RequestClassifierService.js';
@@ -303,6 +304,12 @@ class Kernel {
     await internalKnowledgeFallbackService.initialize();
     serviceManager.register('InternalKnowledgeFallbackService', internalKnowledgeFallbackService);
     this.log('INFO', 'InternalKnowledgeFallbackService Initialized & Registered');
+
+    // Web Comparison Service (PR#9 Fase 3) — Tier 3 Web Search Comparison
+    const webComparisonService = new WebComparisonService(serviceManager);
+    await webComparisonService.initialize();
+    serviceManager.register('WebComparisonService', webComparisonService);
+    this.log('INFO', 'WebComparisonService Initialized & Registered');
 
     // Retrieval Orchestrator (PR#9) — 3-Tier Knowledge Retrieval Orchestrator
     const retrievalOrchestrator = new RetrievalOrchestrator(serviceManager);

@@ -13,6 +13,7 @@
 
 import { SUFFICIENCY_THRESHOLD, RetrievalStrategyService } from './RetrievalStrategyService.js';
 import { InternalKnowledgeFallbackService } from './InternalKnowledgeFallbackService.js';
+import { WebComparisonService } from './WebComparisonService.js';
 
 export class RetrievalOrchestrator {
   constructor(serviceManager) {
@@ -20,6 +21,7 @@ export class RetrievalOrchestrator {
     this.knowledgeService = null;
     this.retrievalStrategyService = null;
     this.internalKnowledgeFallbackService = null;
+    this.webComparisonService = null;
     this.eventBus = null;
     this.isInitialized = false;
   }
@@ -32,6 +34,7 @@ export class RetrievalOrchestrator {
       this.knowledgeService = this.serviceManager.has('KnowledgeService') ? this.serviceManager.get('KnowledgeService') : null;
       this.retrievalStrategyService = this.serviceManager.has('RetrievalStrategyService') ? this.serviceManager.get('RetrievalStrategyService') : null;
       this.internalKnowledgeFallbackService = this.serviceManager.has('InternalKnowledgeFallbackService') ? this.serviceManager.get('InternalKnowledgeFallbackService') : null;
+      this.webComparisonService = this.serviceManager.has('WebComparisonService') ? this.serviceManager.get('WebComparisonService') : null;
     }
 
     if (!this.retrievalStrategyService) {
@@ -44,8 +47,13 @@ export class RetrievalOrchestrator {
       await this.internalKnowledgeFallbackService.initialize();
     }
 
+    if (!this.webComparisonService) {
+      this.webComparisonService = new WebComparisonService(this.serviceManager);
+      await this.webComparisonService.initialize();
+    }
+
     this.isInitialized = true;
-    console.log('[RetrievalOrchestrator] Initialized (PR#9: Tier 1 Active, Tier 2 Active, Tier 3 Reserved)');
+    console.log('[RetrievalOrchestrator] Initialized (PR#9: Tier 1, Tier 2, and Tier 3 Active)');
   }
 
   /**
@@ -155,38 +163,115 @@ export class RetrievalOrchestrator {
     // ========================================================
     console.log(`[RetrievalOrchestrator] Tier 1 insufficient (sufficiency: ${tier1Result?.sufficiency ?? 0.0}). Switching to Tier 2 (InternalKnowledgeFallbackService)...`);
 
+    let tier2Result = null;
     try {
       const fallbackService = this.internalKnowledgeFallbackService || (this.serviceManager?.has('InternalKnowledgeFallbackService') ? this.serviceManager.get('InternalKnowledgeFallbackService') : null);
 
       if (fallbackService && typeof fallbackService.buildFallbackContext === 'function') {
-        const tier2Result = await fallbackService.buildFallbackContext({
+        tier2Result = await fallbackService.buildFallbackContext({
           query,
           tier1Result,
           traceId: options.traceId,
           options
         });
-
-        const formattedContext = this.formatAsContext(tier2Result.chunks);
-
-        if (this.eventBus?.emit) {
-          this.eventBus.emit('Retrieval:Completed', {
-            tier: 2,
-            strategy: tier2Result.strategy,
-            sufficiency: tier2Result.sufficiency,
-            chunksCount: tier2Result.chunks.length
-          });
-        }
-
-        return {
-          ...tier2Result,
-          formattedContext
-        };
       }
     } catch (tier2Err) {
       console.error('[RetrievalOrchestrator] Tier 2 fallback error:', tier2Err.message);
     }
 
-    // Fallback Darurat jika Tier 2 gagal
+    // ========================================================
+    // TIER 3: WEB SEARCH COMPARISON (Fase 3)
+    // Pemicu: options.enableWebComparison === true ATAU options.needWebComparison === true
+    // Wajib: Gerbang konfirmasi Owner (Human-in-Command) & Timeout 8s
+    // ========================================================
+    const shouldTriggerTier3 = Boolean(options.enableWebComparison || options.needWebComparison);
+
+    if (shouldTriggerTier3) {
+      console.log(`[RetrievalOrchestrator] Web comparison requested. Initiating Tier 3 (WebComparisonService)...`);
+      try {
+        const webService = this.webComparisonService || (this.serviceManager?.has('WebComparisonService') ? this.serviceManager.get('WebComparisonService') : null);
+
+        if (webService && typeof webService.searchWeb === 'function') {
+          const tier3Result = await webService.searchWeb(query, {
+            traceId: options.traceId,
+            autoConfirm: options.autoConfirmWebSearch || false,
+            reason: options.webComparisonReason || 'Konteks lokal belum memadai dan perbandingan web dibutuhkan.'
+          });
+
+          // Jika Web Search SUKSES menghasilkan chunks
+          if (tier3Result.status === 'SUCCESS' && tier3Result.chunks?.length > 0) {
+            const formattedContext = this.formatAsContext(tier3Result.chunks);
+
+            if (this.eventBus?.emit) {
+              this.eventBus.emit('Retrieval:Completed', {
+                tier: 3,
+                strategy: tier3Result.strategy,
+                sufficiency: tier3Result.sufficiency,
+                chunksCount: tier3Result.chunks.length,
+                status: 'SUCCESS'
+              });
+            }
+
+            return {
+              ...tier3Result,
+              formattedContext
+            };
+          }
+
+          // Jika Web Search Ditolak / Timeout / Gagal -> Tetap jujur, sertakan disclaimer di atas Tier 2
+          console.warn(`[RetrievalOrchestrator] Tier 3 web search ended with status: ${tier3Result.status}. Falling back to Tier 2 with disclaimer.`);
+          const baseTier2Context = tier2Result ? this.formatAsContext(tier2Result.chunks) : '';
+          const disclaimerText = tier3Result.fallbackDisclaimer || `⚠️ Pencarian web pembanding gagal (${tier3Result.error || 'Status: ' + tier3Result.status}). Menjawab dari pengetahuan internal model.`;
+          const combinedFormattedContext = baseTier2Context ? `${disclaimerText}\n\n${baseTier2Context}` : disclaimerText;
+
+          if (this.eventBus?.emit) {
+            this.eventBus.emit('Retrieval:Completed', {
+              tier: 3,
+              strategy: tier3Result.strategy,
+              sufficiency: tier2Result?.sufficiency || 0.0,
+              chunksCount: tier2Result?.chunks?.length || 0,
+              isFallback: true,
+              status: tier3Result.status
+            });
+          }
+
+          return {
+            chunks: tier2Result?.chunks || [],
+            formattedContext: combinedFormattedContext,
+            strategy: tier3Result.strategy,
+            sufficiency: tier2Result?.sufficiency || 0.0,
+            tier: 3,
+            isFallback: true,
+            status: tier3Result.status,
+            error: tier3Result.error,
+            fallbackDisclaimer: tier3Result.fallbackDisclaimer
+          };
+        }
+      } catch (tier3Err) {
+        console.error('[RetrievalOrchestrator] Tier 3 web comparison error:', tier3Err.message);
+      }
+    }
+
+    // Jika Tier 3 tidak dipicu, kembalikan hasil Tier 2 normal
+    if (tier2Result) {
+      const formattedContext = this.formatAsContext(tier2Result.chunks);
+
+      if (this.eventBus?.emit) {
+        this.eventBus.emit('Retrieval:Completed', {
+          tier: 2,
+          strategy: tier2Result.strategy,
+          sufficiency: tier2Result.sufficiency,
+          chunksCount: tier2Result.chunks.length
+        });
+      }
+
+      return {
+        ...tier2Result,
+        formattedContext
+      };
+    }
+
+    // Fallback Darurat jika Tier 2 & Tier 3 gagal
     return {
       chunks: [],
       formattedContext: '',

@@ -39,10 +39,11 @@
     ↓
 [SELESAI] Cost Ledger Instrumentation & Guardrail Enforcement (ADR-015 Phase 1, commit 86beabe / 676a211)
     ↓
-[SELESAI FASE 1 & 2] PR#9 — Retrieval Tier Architecture (PR9-retrieval-tier-architecture.md)
-    Menuntaskan gap PR#5 (Adaptive Retrieval Strategy) dan membangun 2 Tier utama:
+[SELESAI PENUH] PR#9 — Retrieval Tier Architecture (PR9-retrieval-tier-architecture.md)
+    Menuntaskan gap PR#5 (Adaptive Retrieval Strategy) dan membangun 3 Tier berjenjang:
     - Tier 1 Lokal: KnowledgeService.js, RetrievalStrategyService.js, context_builder.ts (Edge Function)
     - Tier 2 Internal: InternalKnowledgeFallbackService.js, auto-switching di RetrievalOrchestrator.js, CHECK_002B di verification_engine.ts
+    - Tier 3 Web: WebComparisonService.js, gerbang konfirmasi Owner (Human-in-Command), timeout 8s, penandaan sumber transparan di prompt
     ↓
 [SELESAI] TAHAP 1 — Memory System Finalization (2026-09-03, Live-Verified)
     - Sub A: Integrasi penuh MemoryGovernorService ke Assistant Trigger (secure-by-default storeGoldenMemory)
@@ -54,10 +55,9 @@
     - Tangga Eskalasi 4 Level, Severity Classification 2D, Caching SHA-256, Session-Relative TTL (7 hari), No Silent State Transitions, MAEF Structural Validation Gate, 3-Mode Notification Strategy, Level 4 Approval Gate.
     - Didaftarkan resmi di Kernel Phase 3 & Session Digest terintegrasi di ObservabilityPanel.jsx.
     ↓
-[TAHAP 3 - BERIKUTNYA] PR#9 Fase 3 — Web Comparison (Opsi D)
+[SELESAI] TAHAP 3 — PR#9 Fase 3: Web Comparison (Opsi D, 2026-09-03)
     WebComparisonService.js + Tier 3 di RetrievalOrchestrator.js dengan gerbang konfirmasi Owner (Human-in-Command).
-    - Dikonfirmasi 100% independen dari Tahap 1 & 2 — ditempatkan terakhir karena kompleksitas modular paling terisolasi di antara tiga tahap.
-    - Risiko: Rendah | Kompleksitas: Sedang
+    - Timeout 8s (AbortController), atribusi sumber transparan ([Sumber: Web — {url}, akurasi tidak terverifikasi]), fallback jujur saat ditolak/gagal/timeout, dan didaftarkan di Kernel Phase 3.
 ```
 
 *Catatan Terpisah:* Opsi C (Remediasi Backlog Runtime — `ModuleDiscoveryService` refactor, React Warning render phase) dan item housekeeping lain di Bagian 6 tetap independen dari 3 tahap ini dan dapat disisipkan kapan saja tanpa mempengaruhi urutan arsitektural di atas (Referensi: Sesi audit dependensi 3 inisiatif besar, 2026-09-03).

@@ -1,7 +1,7 @@
 # Retrieval Tier Architecture — Design Document
 
-**Status:** Selesai Fase 1 & 2 (2026-09-02) — Tier 1 lokal dan Tier 2 internal fallback aktif; Fase 3 (Web Comparison) belum dikerjakan
-**Changelog:** [`docs/project-memory/changelog/2026-09-02-pr9-retrieval-tier-fase1-selesai.md`](../project-memory/changelog/2026-09-02-pr9-retrieval-tier-fase1-selesai.md), [`docs/project-memory/changelog/2026-09-02-pr9-retrieval-tier-fase2-selesai.md`](../project-memory/changelog/2026-09-02-pr9-retrieval-tier-fase2-selesai.md)
+**Status:** ✅ **Selesai Penuh (Fase 1, 2, & 3 — 2026-09-03)**: Tier 1 lokal, Tier 2 internal fallback, dan Tier 3 Web Comparison aktif dengan gerbang konfirmasi Owner (Human-in-Command).
+**Changelog:** [`docs/project-memory/changelog/2026-09-02-pr9-retrieval-tier-fase1-selesai.md`](../project-memory/changelog/2026-09-02-pr9-retrieval-tier-fase1-selesai.md), [`docs/project-memory/changelog/2026-09-02-pr9-retrieval-tier-fase2-selesai.md`](../project-memory/changelog/2026-09-02-pr9-retrieval-tier-fase2-selesai.md), [`docs/project-memory/changelog/2026-09-03-tahap3-web-comparison-service.md`](../project-memory/changelog/2026-09-03-tahap3-web-comparison-service.md)
 **Konteks:** Perluasan cakupan PR#5 (Adaptive Retrieval Strategy) dari retrieval satu-jalur (lokal saja) menjadi sistem retrieval bertingkat (lokal → pengetahuan internal LLM → web), agar tidak terjadi rework saat Tier 2/3 dibangun di kemudian hari.
 **Prinsip yang diikuti:** One File One Responsibility, Architecture over Implementation, Borrowed CPU Principle.
 
@@ -23,7 +23,7 @@ Dokumen ini mendefinisikan **kontrak antar-tier** terlebih dahulu, supaya implem
 |---|---|---|---|
 | **Tier 1 — Lokal** | `document_chunks` / `documents` (Supabase), diproses via **Edge Function `context_builder.ts`** & `RetrievalOrchestrator.js` | Primer, paling dipercaya, milik sendiri | ✅ **Selesai (Fase 1, 2026-09-02)**: terintegrasi untuk mode Assistant & Engineer via `context_builder.ts`, timeout 5s, fallback eksplisit, dan `RetrievalOrchestrator.js` di client. *(Catatan: evaluasi biaya CP9 berbasis kalkulasi/proyeksi teoretis).* |
 | **Tier 2 — Internal LLM** | Pengetahuan bawaan model via `InternalKnowledgeFallbackService.js` & `RetrievalOrchestrator.js` | Fallback saat Tier 1 kurang/kosong (`sufficiency < 0.4`) | ✅ **Selesai (Fase 2, 2026-09-02)**: `InternalKnowledgeFallbackService.js` aktif, transisi otomatis di `RetrievalOrchestrator`, timeout 20s, format atribusi `[Sumber: Pengetahuan internal model]`, event telemetri dengan `traceId`, dan validasi `CHECK_002B` di `verification_engine.ts`. |
-| **Tier 3 — Web** | Web search | Pembanding — up-to-date tapi tidak 100% akurat, tidak boleh dipercaya penuh tanpa penanda | 📋 Belum dirancang |
+| **Tier 3 — Web** | Web search | Pembanding — up-to-date tapi tidak 100% akurat, tidak boleh dipercaya penuh tanpa penanda | ✅ **Selesai (Fase 3, 2026-09-03)**: `WebComparisonService.js` aktif, gerbang konfirmasi Owner (`Retrieval:RequestWebConfirmation`), timeout 8s, format atribusi `[Sumber: Web — {source_url}, akurasi tidak terverifikasi]`, fallback transparan, dan terdaftar di Kernel Phase 3. |
 
 **Prinsip transisi antar-tier:** setiap tier hanya aktif jika tier sebelumnya tidak memenuhi ambang kecukupan (*sufficiency threshold*), bukan berjalan paralel secara default. Ini penting untuk efisiensi token (selaras PR#6) dan menghindari pemanggilan web yang tidak perlu.
 
@@ -153,11 +153,12 @@ Daftar kerja Fase 1 (Selesai 2026-09-02, lihat changelog: [`2026-09-02-pr9-retri
 - ✅ **Telemetri & Observabilitas (CP2):** Event `Retrieval:Tier2Fallback` memuat `traceId`, `query`, dan `sufficiency` untuk pelacakan di `cost_ledger`.
 - ✅ **Extend `verification_engine.ts` (CP3):** Menambahkan `CHECK_002B_INTERNAL_KNOWLEDGE_DISCLAIMER` untuk memvalidasi bahwa LLM mengakui keterbatasan pengetahuan parametrik saat Tier 2 aktif.
 
-### Fase 3 — Tier 3 (Web Comparison)
-- Rancang `WebComparisonService.js`.
-- Selesaikan Open Question #2 dan #3 (wajib konfirmasi Owner).
-- `RetrievalOrchestrator.js` diperluas untuk transisi Tier 2 → Tier 3.
-- Perluas `formatAsContext()` untuk penandaan sumber web di prompt.
+### Fase 3 — Tier 3 (Web Comparison) — ✅ SELESAI (2026-09-03)
+- ✅ **Bangun `WebComparisonService.js` (CP1):** Service terpisah untuk eksekusi web search, manajemen timeout 8s, dan penandaan hasil `source_type: 'web'`.
+- ✅ **Selesaikan Open Question #2 dan #3 (CP2):** Gerbang konfirmasi Owner (`Retrieval:RequestWebConfirmation` / Human-in-Command) dan timeout 8s dengan fallback transparan.
+- ✅ **Perluas `RetrievalOrchestrator.js` (CP3):** Transisi berjenjang Tier 1 → Tier 2 → Tier 3 dengan fallback disclaimer jika web search ditolak/timeout/gagal.
+- ✅ **Perluas `formatAsContext()` (CP4):** Penandaan eksplisit `[Sumber: Web — {source_url}, akurasi tidak terverifikasi]` di prompt LLM.
+- ✅ **Registrasi Kernel.js Phase 3 (CP5):** Didaftarkan resmi di `Kernel.js` berdampingan dengan `RetrievalOrchestrator`.
 
 ---
 
