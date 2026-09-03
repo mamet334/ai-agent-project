@@ -89,7 +89,8 @@ Bangun antarmuka UI untuk siklus: **Soft-delete $\rightarrow$ Pending Purge $\ri
 
 ## 3. Validasi Akhir Tahap 1 (Exit Criteria Menyeluruh)
 - [x] Build frontend (`npm run build`) & lint sukses 100% tanpa error (2660 modules transformed).
-- [x] Test manual 1: Simpan memori baru $\rightarrow$ muncul seketika di panel dengan kategori yang sesuai.
-- [x] Test manual 2: Memicu konflik memori secara sengaja $\rightarrow$ muncul diff di UI $\rightarrow$ resolve via tombol UI.
-- [x] Test manual 3: Eksekusi siklus soft-delete $\rightarrow$ purge via UI Trash Bin.
+- [x] Test manual 1: Simpan memori baru $\rightarrow$ muncul seketika di panel dengan kategori yang sesuai (Live DB Verified).
+- [x] Test manual 2: Memicu konflik memori secara sengaja $\rightarrow$ muncul diff di UI $\rightarrow$ resolve via tombol UI (Live DB Verified).
+- [x] Test manual 3: Eksekusi siklus soft-delete $\rightarrow$ purge via UI Trash Bin (Live DB Verified).
+- [x] Audit Governance & Live DB Verification menyeluruh dengan kredensial resmi ([`2026-09-03-tahap1-governance-audit-live-verification.md`](../project-memory/changelog/2026-09-03-tahap1-governance-audit-live-verification.md)).
 - [x] Update status Tahap 1 di `docs/roadmap/INDEX-ROADMAP.md` setelah seluruh Exit Criteria terpenuhi.
