@@ -22,6 +22,7 @@
 | `FIX-assistant-session-finalization-and-autosave-throttle.md` | ✅ **Selesai & Tervalidasi (Confirmed Desktop + Unit Test)** (Pemisahan `finalizeAssistantSession` dari auto-save loop & throttling DB I/O) | `AssistantService.js`, `ConversationEngine.jsx` |
 | `TAHAP1-memory-system-finalization.md` | ✅ **Selesai Penuh & Live-Verified (Sub A + Sub B + Sub C — 2026-09-03)** (Integrasi Assistant Golden Memory, UI Conflict Resolution & Purge CP4b, Category Alignment) | `MemoryGovernorService.js`, `MemoryService.js`, `MemoryContextPanel.jsx`, `ConversationEngine.jsx` |
 | `SPESIFIKASI-TEKNIS-MAMET-OS-v2.md` | ✅ **Selesai Penuh (Tahap 2 — 2026-09-03)** (SystemGovernorService.js daemon, 4-Level Escalation Ladder, Session-Relative TTL, MAEF Structural Validation, 3-Mode Notification) | `SystemGovernorService.js`, `Kernel.js`, `ObservabilityPanel.jsx` |
+| `ROADMAP-DASHBOARD-OBSERVABILITY-REALTIME.md` | 🟡 **PROPOSED (Menunggu Persetujuan Eksekusi)** | Status Liveness Zero-Token, Sanitasi [object Object], Auto-Load Trace, Metrik Realtime |
 | `MAMET-AI-ROADMAP.md`, `engineer-autonomous-mode.md`, `engineer-chat-upgrade.md`, `fix-log.md`, `rencana.md`, `roadmap-lanjutan.md` | 📋 Belum direview ulang dalam sesi ini — **catatan:** `MAMET-AI-ROADMAP.md` memakai skema penomoran (`TASK-000x`, `ADR-000x`, istilah "MametLite"/"BRAIN 1-2") yang berbeda dari skema PR# di dokumen lain — perlu direkonsiliasi sebelum dipakai sebagai rujukan aktif | — |
 
 ---

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { kernel } from '../../core/runtime/Kernel';
 
 export default function ObservabilityPanel({
   executionTrace,
@@ -12,7 +13,7 @@ export default function ObservabilityPanel({
   const [pendingApproval, setPendingApproval] = useState(null);
 
   useEffect(() => {
-    const sm = serviceManager || (typeof window !== 'undefined' ? window.__serviceManager : null);
+    const sm = serviceManager || kernel?.serviceManager || (typeof window !== 'undefined' ? window.__serviceManager : null);
     const governor = sm?.has?.('SystemGovernorService') ? sm.get('SystemGovernorService') : null;
     const eventBus = sm?.has?.('EventBus') ? sm.get('EventBus') : null;
 
@@ -47,7 +48,7 @@ export default function ObservabilityPanel({
 
   const handleResolveApproval = async (isApproved) => {
     if (!pendingApproval) return;
-    const sm = serviceManager || (typeof window !== 'undefined' ? window.__serviceManager : null);
+    const sm = serviceManager || kernel?.serviceManager || (typeof window !== 'undefined' ? window.__serviceManager : null);
     const governor = sm?.has?.('SystemGovernorService') ? sm.get('SystemGovernorService') : null;
     if (governor) {
       await governor.resolveApproval(pendingApproval.auditId, isApproved);
@@ -295,13 +296,22 @@ export default function ObservabilityPanel({
             <div className="text-[10px] text-slate-500 font-mono">No known failures in current telemetry.</div>
           ) : (
             <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
-              {observability.recentFailures.map((f, idx) => (
-                <div key={`${f.type}-${idx}`} className="bg-red-500/10 border border-red-500/20 rounded px-3 py-2">
-                  <div className="text-[10px] text-red-300 font-mono uppercase">{f.type}</div>
-                  <div className="text-[10px] text-slate-300 mt-0.5">{String(f.message || 'Unknown').slice(0, 140)}</div>
-                  <div className="text-[9px] text-slate-500 font-mono mt-1">{f.at ? new Date(f.at).toLocaleString('id-ID', { hour12: false }) : 'UNKNOWN'}</div>
-                </div>
-              ))}
+              {observability.recentFailures.map((f, idx) => {
+                let displayMsg = 'Unknown';
+                if (typeof f.message === 'string') displayMsg = f.message;
+                else if (typeof f.message === 'object' && f.message !== null) {
+                  displayMsg = f.message.reason || f.message.message || f.message.rule || JSON.stringify(f.message);
+                } else {
+                  displayMsg = String(f.message || 'Unknown');
+                }
+                return (
+                  <div key={`${f.type}-${idx}`} className="bg-red-500/10 border border-red-500/20 rounded px-3 py-2">
+                    <div className="text-[10px] text-red-300 font-mono uppercase">{f.type}</div>
+                    <div className="text-[10px] text-slate-300 mt-0.5 break-words">{displayMsg.slice(0, 160)}</div>
+                    <div className="text-[9px] text-slate-500 font-mono mt-1">{f.at ? new Date(f.at).toLocaleString('id-ID', { hour12: false }) : 'UNKNOWN'}</div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -349,7 +359,26 @@ export default function ObservabilityPanel({
               <div>
                 <div className={`text-3xl font-light font-mono ${colorClass}`}>{mc}</div>
                 {mc > 0 && (
-                  <p className="text-[9px] text-red-300 mt-1">Buka Memory Context Panel di Chat untuk resolusi konflik.</p>
+                  <div className="mt-1.5 space-y-1">
+                    <p className="text-[9px] text-red-300">Buka Memory Context Panel di Chat untuk resolusi konflik.</p>
+                    <button
+                      onClick={() => {
+                        sessionStorage.setItem('mamet_memory_active_tab', 'CONFLICTS');
+                        const sm = serviceManager || kernel?.serviceManager || (typeof window !== 'undefined' ? window.__serviceManager : null);
+                        const appManager = sm?.has?.('ApplicationManager') ? sm.get('ApplicationManager') : null;
+                        const eventBus = sm?.has?.('EventBus') ? sm.get('EventBus') : null;
+                        if (appManager) {
+                          appManager.activateApp('app:assistant');
+                        }
+                        if (eventBus) {
+                          eventBus.emit('Memory:OpenConflicts', { tab: 'CONFLICTS' });
+                        }
+                      }}
+                      className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/40 text-[9px] font-mono transition-all active:scale-95 cursor-pointer"
+                    >
+                      <span>Resolusi di Chat ➔</span>
+                    </button>
+                  </div>
                 )}
               </div>
             );

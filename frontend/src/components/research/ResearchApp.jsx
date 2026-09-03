@@ -6,7 +6,9 @@ import { Search, Upload, Trash2, FileText, Loader2, Database, PlusCircle } from 
 export default function ResearchApp() {
     const [documents, setDocuments] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [searchQuery, setSearchQuery] = useState('');
+    const [searchQuery, setSearchQuery] = useState(() => {
+        return sessionStorage.getItem('research_search_query') || '';
+    });
     const [uploading, setUploading] = useState(false);
     const [deletingId, setDeletingId] = useState(null);
     const [knowledgeSpaces, setKnowledgeSpaces] = useState([]);
@@ -42,7 +44,8 @@ export default function ResearchApp() {
             if (!session) return;
 
             let query = supabase.from('documents').select('*').eq('user_id', session.user.id);
-            if (selectedSpace) {
+            // Jika ada query pencarian khusus, jangan batasi ke space tertentu agar dokumen selalu ditemukan
+            if (selectedSpace && !searchQuery.trim()) {
                 query = query.eq('space_id', selectedSpace);
             }
             if (searchQuery.trim()) {

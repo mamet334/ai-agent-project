@@ -4,6 +4,7 @@ import {
   Loader2,
   RefreshCw,
   X,
+  Minus,
   Search,
   Database,
   BookOpen,
@@ -17,6 +18,7 @@ import {
   Check
 } from 'lucide-react';
 import { supabase } from '../../supabase';
+import { kernel } from '../../core/runtime/Kernel';
 
 /**
  * MemoryContextPanel - Panel "Memory Context" yang menampilkan:
@@ -30,6 +32,7 @@ export default function MemoryContextPanel({
   loading = false,
   serviceManager,
   onClose,
+  onMinimize,
   onRefresh,
   onResolveConflict,
   onArchiveMemory,
@@ -37,7 +40,16 @@ export default function MemoryContextPanel({
   onExecutePurge,
   onRestoreMemory
 }) {
-  const [activeTab, setActiveTab] = useState('ACTIVE'); // 'ACTIVE' | 'CONFLICTS' | 'TRASH'
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      const requested = sessionStorage.getItem('mamet_memory_active_tab');
+      if (requested) {
+        sessionStorage.removeItem('mamet_memory_active_tab');
+        return requested;
+      }
+    } catch (_) {}
+    return 'ACTIVE';
+  });
   const [filter, setFilter] = useState('ALL');
   
   // State data konflik & trash & active DB memories
@@ -51,8 +63,9 @@ export default function MemoryContextPanel({
   const [confirmPurgeId, setConfirmPurgeId] = useState(null);
 
   const getGovernor = useCallback(() => {
-    return serviceManager?.has?.('MemoryGovernorService')
-      ? serviceManager.get('MemoryGovernorService')
+    const sm = serviceManager || kernel?.serviceManager;
+    return sm?.has?.('MemoryGovernorService')
+      ? sm.get('MemoryGovernorService')
       : null;
   }, [serviceManager]);
 
@@ -98,22 +111,29 @@ export default function MemoryContextPanel({
 
   // Listener event bus untuk update real-time
   useEffect(() => {
-    const eventBus = serviceManager?.get?.('EventBus');
-    if (!eventBus) return;
+    const bus = serviceManager?.get?.('EventBus') || kernel?.serviceManager?.get?.('EventBus');
+    if (!bus) return;
 
     const handleUpdate = () => {
       loadExtras();
     };
 
-    const unsub1 = eventBus.on('MemoryGovernor:ConflictDetected', handleUpdate);
-    const unsub2 = eventBus.on('MemoryGovernor:ConflictResolved', handleUpdate);
-    const unsub3 = eventBus.on('MemoryGovernor:Archived', handleUpdate);
-    const unsub4 = eventBus.on('MemoryGovernor:Restored', handleUpdate);
-    const unsub5 = eventBus.on('MemoryGovernor:Purged', handleUpdate);
-    const unsub6 = eventBus.on('MemoryGovernor:Stored', handleUpdate);
-    const unsub7 = eventBus.on('Memory:Stored', handleUpdate);
+    const handleOpenConflicts = () => {
+      setActiveTab('CONFLICTS');
+      loadExtras();
+    };
+
+    const unsubConflicts = bus.on('Memory:OpenConflicts', handleOpenConflicts);
+    const unsub1 = bus.on('MemoryGovernor:ConflictDetected', handleUpdate);
+    const unsub2 = bus.on('MemoryGovernor:ConflictResolved', handleUpdate);
+    const unsub3 = bus.on('MemoryGovernor:Archived', handleUpdate);
+    const unsub4 = bus.on('MemoryGovernor:Restored', handleUpdate);
+    const unsub5 = bus.on('MemoryGovernor:Purged', handleUpdate);
+    const unsub6 = bus.on('MemoryGovernor:Stored', handleUpdate);
+    const unsub7 = bus.on('Memory:Stored', handleUpdate);
 
     return () => {
+      unsubConflicts?.();
       unsub1?.();
       unsub2?.();
       unsub3?.();
@@ -284,10 +304,19 @@ export default function MemoryContextPanel({
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading || isLoadingExtras ? 'animate-spin' : ''}`} />
           </button>
+          {onMinimize && (
+            <button
+              onClick={onMinimize}
+              className="p-1.5 rounded-lg hover:bg-surface-variant text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+              title="Minimize panel (Luaskan kolom percakapan)"
+            >
+              <Minus className="w-3.5 h-3.5" />
+            </button>
+          )}
           {onClose && (
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg hover:bg-surface-variant text-on-surface-variant hover:text-on-surface transition-colors"
+              className="p-1.5 rounded-lg hover:bg-surface-variant text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
               title="Tutup panel"
             >
               <X className="w-3.5 h-3.5" />

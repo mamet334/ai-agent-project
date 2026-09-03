@@ -18,7 +18,8 @@ export default function FolderSelector({
   onSelect, 
   currentPath = '', 
   showLabel = true, 
-  className = '' 
+  className = '',
+  compact = false
 }) {
   const [selectedPath, setSelectedPath] = useState(currentPath);
   const [isElectron, setIsElectron] = useState(false);
@@ -117,6 +118,41 @@ export default function FolderSelector({
     const parts = path.replace(/\\/g, '/').split('/');
     return parts[parts.length - 1] || path;
   };
+
+  if (compact) {
+    return (
+      <div className={`folder-selector-compact flex items-center gap-1 ${className}`}>
+        <button
+          type="button"
+          onClick={handleSelectFolder}
+          className={`p-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
+            selectedPath
+              ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25'
+              : 'hover:bg-white/5 text-slate-400 hover:text-slate-200'
+          }`}
+          title={selectedPath ? `Folder aktif: ${selectedPath} (Klik untuk ganti)` : 'Pilih Folder Kerja'}
+        >
+          <FolderOpen className="w-4 h-4 text-emerald-400 shrink-0" />
+          {selectedPath && (
+            <span className="text-xs font-mono max-w-[130px] truncate text-emerald-200">
+              {getFolderName(selectedPath)}
+            </span>
+          )}
+        </button>
+
+        {selectedPath && (
+          <button
+            type="button"
+            onClick={handleClearSelection}
+            className="p-1 rounded-lg hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors cursor-pointer"
+            title="Hapus pilihan folder"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={`folder-selector ${className}`}>

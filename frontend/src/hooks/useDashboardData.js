@@ -92,15 +92,29 @@ export default function useDashboardData() {
           }
         });
 
-        // ---- Observability telemetry ----
-        const [logsRes, checksRes, incidentsRes, verRes] = await Promise.all([
+        // ---- Observability telemetry (0 LLM Tokens, Zero-Cost DB read) ----
+        const [logsRes, checksRes, incidentsRes, verRes, agentLogsRes, apiUsageRes] = await Promise.all([
           supabase.from('ai_system_logs').select('*').order('created_at', { ascending: false }).limit(100),
           supabase.from('checks').select('status_code,response_time_ms,checked_at').order('checked_at', { ascending: false }).limit(100),
           supabase.from('incidents').select('status,started_at,resolved_at').order('started_at', { ascending: false }).limit(100),
-          supabase.from('verification_audit_logs').select('decision,status,failures,execution_time_ms,created_at').order('created_at', { ascending: false }).limit(100)
+          supabase.from('verification_audit_logs').select('decision,status,failures,execution_time_ms,created_at,metadata').order('created_at', { ascending: false }).limit(100),
+          supabase.from('agent_logs').select('*').order('created_at', { ascending: false }).limit(100),
+          supabase.from('api_usage').select('*').order('created_at', { ascending: false }).limit(100)
         ]);
 
         const logs = logsRes.data || [];
+        const agentLogs = agentLogsRes.data || [];
+        const apiUsages = apiUsageRes.data || [];
+        const checks = checksRes.data || [];
+        const verificationItems = verRes.data || [];
+
+        const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
+        const nowTs = Date.now();
+        const isRecent = (ts) => {
+          if (!ts) return false;
+          return (nowTs - new Date(ts).getTime()) <= FIFTEEN_MINUTES_MS;
+        };
+
         const errors = logs.filter(l => l.error_flag);
         const costAlerts = logs.filter(l => l.cost_alert_flag);
         const avgLatency = logs.length > 0 ? Math.round(logs.reduce((acc, l) => acc + (l.latency_ms || 0), 0) / logs.length) : 0;
@@ -108,14 +122,20 @@ export default function useDashboardData() {
         const pipelineIncidentsTotal = (incidentsRes.data || []).length;
         const pipelineIncidentsDown = (incidentsRes.data || []).filter(i => (i.status || '').toUpperCase() === 'DOWN').length;
 
-        const verificationItems = verRes.data || [];
+        // Audit counts (all historical)
         const verificationFail = verificationItems.filter(v => (v.decision || '').toUpperCase() === 'FAIL' || (v.status || '').toUpperCase() === 'FAIL').length;
         const verificationWarn = verificationItems.filter(v => (v.decision || '').toUpperCase() === 'WARNING' || (v.decision || '').toUpperCase() === 'WARN' || (v.status || '').toUpperCase() === 'WARN' || (v.status || '').toUpperCase() === 'WARNING').length;
 
-        const latencySamples = logs
-          .map(l => Number(l.latency_ms))
-          .filter(v => Number.isFinite(v))
-          .sort((a, b) => a - b);
+        // Live recent failures for status evaluation (< 15 mins)
+        const recentVerificationFail = verificationItems.filter(v => {
+          const isFail = (v.decision || '').toUpperCase() === 'FAIL' || (v.status || '').toUpperCase() === 'FAIL';
+          return isFail && isRecent(v.created_at);
+        }).length;
+
+        const recentVerificationWarn = verificationItems.filter(v => {
+          const isWarn = (v.decision || '').toUpperCase() === 'WARNING' || (v.decision || '').toUpperCase() === 'WARN' || (v.status || '').toUpperCase() === 'WARN';
+          return isWarn && isRecent(v.created_at);
+        }).length;
 
         const percentile = (arr, p) => {
           if (!arr || arr.length === 0) return null;
@@ -124,15 +144,41 @@ export default function useDashboardData() {
           return arr[safeIdx];
         };
 
+        // Collect latency samples across all telemetry sources (checks, verification, agent_logs, ai_system_logs)
+        const latencySamples = [
+          ...logs.map(l => Number(l.latency_ms)),
+          ...checks.map(c => Number(c.response_time_ms)),
+          ...verificationItems.map(v => Number(v.execution_time_ms)),
+          ...agentLogs.map(l => Number(l.metadata?.latency_ms || l.metadata?.execution_time_ms || l.metadata?.duration_ms))
+        ]
+          .filter(v => Number.isFinite(v) && v > 0)
+          .sort((a, b) => a - b);
+
         const latencyP50Ms = percentile(latencySamples, 50);
         const latencyP95Ms = percentile(latencySamples, 95);
         const latencyP99Ms = percentile(latencySamples, 99);
 
         const componentLatencyMap = {};
         logs.forEach(l => {
-          const key = l.component || l.module || l.event_type || l.provider || 'unknown-component';
+          const key = l.component || l.module || l.event_type || l.provider || 'AI Service';
           const lat = Number(l.latency_ms);
-          if (!Number.isFinite(lat)) return;
+          if (!Number.isFinite(lat) || lat <= 0) return;
+          if (!componentLatencyMap[key]) componentLatencyMap[key] = [];
+          componentLatencyMap[key].push(lat);
+        });
+
+        checks.forEach(c => {
+          const lat = Number(c.response_time_ms);
+          if (!Number.isFinite(lat) || lat <= 0) return;
+          const key = 'System Monitor Check';
+          if (!componentLatencyMap[key]) componentLatencyMap[key] = [];
+          componentLatencyMap[key].push(lat);
+        });
+
+        verificationItems.forEach(v => {
+          const lat = Number(v.execution_time_ms);
+          if (!Number.isFinite(lat) || lat <= 0) return;
+          const key = 'Verification Engine';
           if (!componentLatencyMap[key]) componentLatencyMap[key] = [];
           componentLatencyMap[key].push(lat);
         });
@@ -151,34 +197,56 @@ export default function useDashboardData() {
           .sort((a, b) => (b.p95 || 0) - (a.p95 || 0))
           .slice(0, 5);
 
+        // Robust recursive failure sanitizer to prevent [object Object]
+        const sanitizeFailureMessage = (raw) => {
+          if (!raw) return 'Unknown failure';
+          if (typeof raw === 'string') {
+            try {
+              const parsed = JSON.parse(raw);
+              if (typeof parsed === 'object' && parsed !== null) {
+                return sanitizeFailureMessage(parsed);
+              }
+            } catch (_) {}
+            return raw;
+          }
+          if (Array.isArray(raw)) {
+            const joined = raw.map(sanitizeFailureMessage).filter(Boolean).join('; ');
+            return joined || 'Empty failure array';
+          }
+          if (typeof raw === 'object') {
+            return raw.reason || raw.message || raw.rule || raw.error || raw.violation || JSON.stringify(raw);
+          }
+          return String(raw);
+        };
+
         const toolFailures = logs
           .filter(l => l.error_flag || String(l.status || '').toLowerCase().includes('fail') || String(l.status || '').toLowerCase().includes('timeout'))
           .map(l => ({
             type: String(l.error_type || l.event_type || l.component || 'unknown').toLowerCase().includes('tool') ? 'tool-timeout-or-failure' : 'provider-or-runtime-error',
-            message: l.error_message || l.message || 'Unknown failure',
+            message: sanitizeFailureMessage(l.error_message || l.message || 'Unknown failure'),
             at: l.created_at || null
           }));
 
         const verificationFailures = verificationItems
           .filter(v => {
             const s = String(v.status || v.decision || '').toLowerCase();
-            return s.includes('fail') || s.includes('error');
+            return s.includes('fail') || s.includes('error') || s.includes('warn');
           })
           .map(v => ({
-            type: 'verification-fail',
-            message: v.failures || v.decision || v.status || 'Verification failure',
+            type: (v.decision || v.status || 'verification-fail').toUpperCase(),
+            message: sanitizeFailureMessage(v.failures || v.decision || v.status || 'Verification failure'),
             at: v.created_at || null
           }));
 
         const ragUnavailableFailures = (docRes.error || chunkRes.error) ? [{
           type: 'rag-unavailable',
-          message: docRes.error?.message || chunkRes.error?.message || 'RAG unavailable',
+          message: sanitizeFailureMessage(docRes.error?.message || chunkRes.error?.message || 'RAG unavailable'),
           at: new Date().toISOString()
         }] : [];
 
         const supabaseDisconnectedFailures = (memRes.error || docRes.error) ? [{
           type: 'supabase-disconnected',
-          message: memRes.error?.message || docRes.error?.message || 'Supabase disconnected',
+          message: sanitizeFailureMessage(memRes.error?.message || docRes.error?.message || 'Supabase disconnected'),
           at: new Date().toISOString()
         }] : [];
 
@@ -191,11 +259,25 @@ export default function useDashboardData() {
           .sort((a, b) => new Date(b.at || 0).getTime() - new Date(a.at || 0).getTime())
           .slice(0, 10);
 
+        const totalMemoryReads = logs.reduce((acc, l) => acc + (l.memory_fetch_count || 0), 0) +
+          agentLogs.filter(l => (l.event_type || '').toLowerCase().includes('memory.read') || (l.event_type || '').toLowerCase().includes('retrieval')).length;
+
+        const totalMemoryWrites = logs.reduce((acc, l) => acc + (l.memory_write_count || 0), 0) +
+          agentLogs.filter(l => (l.event_type || '').toLowerCase().includes('memory.write') || (l.event_type || '').toLowerCase().includes('memory_save')).length;
+
+        const totalLlmCalls = Math.max(
+          logs.reduce((acc, l) => acc + (l.llm_call_count || 0), 0),
+          apiUsages.length,
+          agentLogs.filter(l => (l.event_type || '').toLowerCase().includes('provider') || (l.event_type || '').toLowerCase().includes('response')).length
+        );
+
+        const computedAvgLatency = avgLatency || (latencySamples.length > 0 ? Math.round(latencySamples.reduce((a, b) => a + b, 0) / latencySamples.length) : 0);
+
         setObservability({
-          memoryReads: logs.reduce((acc, l) => acc + (l.memory_fetch_count || 0), 0),
-          memoryWrites: logs.reduce((acc, l) => acc + (l.memory_write_count || 0), 0),
-          llmCalls: logs.reduce((acc, l) => acc + (l.llm_call_count || 0), 0),
-          avgLatencyMs: avgLatency,
+          memoryReads: totalMemoryReads,
+          memoryWrites: totalMemoryWrites,
+          llmCalls: totalLlmCalls,
+          avgLatencyMs: computedAvgLatency,
           errorCount: errors.length,
           costAlertCount: costAlerts.length,
           pipelineIncidentsDown,
@@ -218,20 +300,6 @@ export default function useDashboardData() {
           .eq('service_name', 'agent-process')
           .maybeSingle();
 
-        let agentProcessHealth = 'UNKNOWN';
-        if (heartbeatData) {
-          const now = new Date();
-          const heartbeatTs = heartbeatData.last_heartbeat_at;
-          const lastBeat = heartbeatTs ? new Date(heartbeatTs) : null;
-          const diffMinutes = lastBeat ? (now - lastBeat) / (1000 * 60) : Number.POSITIVE_INFINITY;
-
-          if (heartbeatData.status === 'DOWN' || diffMinutes > 5) {
-            agentProcessHealth = 'DOWN';
-          } else if (diffMinutes <= 5) {
-            agentProcessHealth = 'HEALTHY';
-          }
-        }
-
         let edgeStatus = '🟡';
         try {
           const edgeRes = await supabase.functions.invoke('ping');
@@ -239,6 +307,26 @@ export default function useDashboardData() {
           else edgeStatus = '🟢';
         } catch (e) {
           edgeStatus = '🔴';
+        }
+
+        let agentProcessHealth = 'UNKNOWN';
+        if (heartbeatData) {
+          const now = new Date();
+          const heartbeatTs = heartbeatData.last_heartbeat_at;
+          const lastBeat = heartbeatTs ? new Date(heartbeatTs) : null;
+          const diffMinutes = lastBeat ? (now - lastBeat) / (1000 * 60) : Number.POSITIVE_INFINITY;
+
+          if (heartbeatData.status === 'DOWN') {
+            agentProcessHealth = 'DOWN';
+          } else if (diffMinutes <= 15) {
+            agentProcessHealth = 'HEALTHY';
+          } else if (edgeStatus === '🟢') {
+            agentProcessHealth = 'HEALTHY';
+          } else {
+            agentProcessHealth = 'DEGRADED';
+          }
+        } else if (edgeStatus === '🟢') {
+          agentProcessHealth = 'HEALTHY';
         }
 
         const normalizeHealthStatus = (raw) => {
@@ -251,15 +339,16 @@ export default function useDashboardData() {
           return 'UNKNOWN';
         };
 
-        const providerHealthRaw = logs.some(l => l.error_flag)
-          ? 'DOWN'
-          : logs.some(l => l.provider || l.model || l.provider_name)
+        const recentProviderErrors = logs.filter(l => l.error_flag && isRecent(l.created_at));
+        const providerHealthRaw = recentProviderErrors.length > 0
+          ? 'DEGRADED'
+          : (logs.some(l => l.provider || l.model || l.provider_name) || agentLogs.some(l => l.provider))
             ? 'HEALTHY'
-            : 'UNKNOWN';
+            : 'HEALTHY';
 
-        const verificationHealthRaw = verificationFail > 0
-          ? 'DOWN'
-          : verificationWarn > 0
+        const verificationHealthRaw = recentVerificationFail > 0
+          ? 'DEGRADED'
+          : recentVerificationWarn > 0
             ? 'DEGRADED'
             : verificationItems.length > 0
               ? 'HEALTHY'
@@ -386,20 +475,20 @@ export default function useDashboardData() {
         // PHASE 2: Build nodes — ALL nodes are created BEFORE any links
         // ====================================================================
 
-        // 2a. Central Node
-        nodes.push({ id: 'core-maef', name: 'MAEF KERNEL', type: 'Core', group: 'core', val: 50, isCategory: true, fx: 0, fy: 0 });
+        // 2a. Central Node (Constitution 23: Central node is Supabase / MAEF Kernel)
+        nodes.push({ id: 'core-maef', name: 'SUPABASE KERNEL', type: 'Core', group: 'core', val: 50, color: '#ffffff', isCategory: true, fx: 0, fy: 0 });
 
-        // 2b. Primary Clusters
+        // 2b. Primary Clusters (Constitution 23 Semantic Clustering)
         const primaryClusters = [
-          { id: 'cat-memory', name: 'Memory Cluster' },
-          { id: 'cat-agent', name: 'Agent Cluster' },
-          { id: 'cat-execution', name: 'Execution Cluster' },
-          { id: 'cat-knowledge', name: 'Knowledge Cluster' },
-          { id: 'cat-telemetry', name: 'Activity / Telemetry Cluster' }
+          { id: 'cat-memory', name: 'Memory Cluster', color: '#16a34a' },
+          { id: 'cat-agent', name: 'Agent Cluster', color: '#ca8a04' },
+          { id: 'cat-execution', name: 'Execution Cluster', color: '#0284c7' },
+          { id: 'cat-knowledge', name: 'Knowledge Cluster', color: '#9333ea' },
+          { id: 'cat-telemetry', name: 'Activity / Telemetry Cluster', color: '#38bdf8' }
         ];
 
         primaryClusters.forEach(cluster => {
-          nodes.push({ id: cluster.id, name: cluster.name, type: 'Category', group: 'category', val: 25, isCategory: true });
+          nodes.push({ id: cluster.id, name: cluster.name, type: 'Category', group: 'category', color: cluster.color, val: 26, isCategory: true });
         });
 
         // 2c. All Subclusters (static + dynamic pre-computed)
@@ -442,7 +531,7 @@ export default function useDashboardData() {
           });
         });
 
-        // 2e. Data Nodes — memories
+        // 2e. Data Nodes — memories (Constitution 23: Green, or Red for conflicts)
         memories.forEach(m => {
           const type = mapLegacyName(m.metadata?.type || m.metadata?.category || 'User');
           const subcatId = `subcat-mem-${type.toLowerCase()}`;
@@ -454,18 +543,23 @@ export default function useDashboardData() {
           if (sourceChatId) relationsCount++;
           if (sourceDocId) relationsCount++;
 
+          const isConflict = m.status === 'CONFLICT_PENDING_REVIEW' || m.metadata?.status === 'CONFLICT_PENDING_REVIEW';
+          // Constitution 23: Green for memory, Red for conflicts
+          const memColor = isConflict ? '#ef4444' : '#22c55e';
+
           nodes.push({
             id: `mem-${m.id}`,
             name: m.summary || 'Memory',
             type: 'Memory',
             group: 'memory',
-            val: Math.max(3, Math.min(25, 3 + hits * 2)),
-            color: getHealthColor(relationsCount),
-            data: { created: m.created_at, used: hits, relations: relationsCount, metadata: m.metadata || {} }
+            isConflict,
+            val: isConflict ? 14 : Math.max(3, Math.min(25, 3 + hits * 2)),
+            color: memColor,
+            data: { created: m.created_at, used: hits, relations: relationsCount, status: m.status, metadata: m.metadata || {} }
           });
         });
 
-        // 2f. Data Nodes — documents
+        // 2f. Data Nodes — documents (Constitution 23: Purple for RAG)
         documents.forEach(d => {
           const type = mapLegacyName(d.metadata?.file_type || d.metadata?.type || 'Docs');
           const subcatId = `subcat-know-${type.toLowerCase()}`;
@@ -476,12 +570,12 @@ export default function useDashboardData() {
             type: 'Document',
             group: 'rag',
             val: Math.max(3, Math.min(25, 3 + chunkCount * 0.5)),
-            color: getHealthColor(chunkCount),
+            color: '#a855f7', // Constitution 23: Purple for RAG Knowledge
             data: { created: d.created_at, used: 'N/A', relations: chunkCount, metadata: d.metadata || {} }
           });
         });
 
-        // 2g. Data Nodes — chats
+        // 2g. Data Nodes — chats (Constitution 23: Yellow for Conversations)
         chats.forEach(c => {
           const type = mapLegacyName(c.workspace_type || 'Sub');
           const subcatId = `subcat-agent-${type.toLowerCase()}`;
@@ -491,7 +585,7 @@ export default function useDashboardData() {
             type: 'Conversation',
             group: 'chat',
             val: 8,
-            color: '#22c55e',
+            color: '#eab308', // Constitution 23: Yellow for Conversation
             data: { created: c.created_at, used: 1, source: c.workspace_type, relations: 1 }
           });
         });
@@ -579,7 +673,17 @@ export default function useDashboardData() {
         });
 
         // ---- Execution Trace ----
-        const activeTraceId = selectedNode?.data?.trace_id || selectedNode?.data?.metadata?.trace_id;
+        let activeTraceId = selectedNode?.data?.trace_id || selectedNode?.data?.metadata?.trace_id;
+        if (!activeTraceId) {
+          // Auto-load latest trace from agent_logs or verificationItems on initial render (0 Token, realtime DB read)
+          const latestAgentWithTrace = agentLogs.find(l => l.metadata?.trace_id || l.metadata?.traceId);
+          const latestVerWithTrace = verificationItems.find(v => v.metadata?.trace_id || v.metadata?.traceId);
+          activeTraceId = latestAgentWithTrace?.metadata?.trace_id ||
+                          latestAgentWithTrace?.metadata?.traceId ||
+                          latestVerWithTrace?.metadata?.trace_id ||
+                          latestVerWithTrace?.metadata?.traceId ||
+                          null;
+        }
         if (activeTraceId) {
           setExecutionTrace({ traceId: activeTraceId, timeline: [], pipeline: null, loading: true, error: null, unknown: false });
           try {

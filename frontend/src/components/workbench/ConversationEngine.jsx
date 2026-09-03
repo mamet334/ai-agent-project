@@ -96,6 +96,31 @@ export default function ConversationEngine({ sessionId }) {
   };
 
   // =============================================
+  // HELPER: Minimasi Semua Panel Samping (Mode Luas)
+  // =============================================
+  const handleMinimizeSidePanels = () => {
+    setIsMemoryPanelOpen(false);
+    if (workspaceManager?.closeWidget) {
+      const rightWidgets = osState?.layout?.right_workbench || [];
+      rightWidgets.forEach((wId) => {
+        workspaceManager.closeWidget(wId);
+      });
+    }
+  };
+
+  // =============================================
+  // HELPER: Toggle MAEF Monitor di Right Workbench
+  // =============================================
+  const handleToggleMaefMonitor = () => {
+    const rightWidgets = osState?.layout?.right_workbench || [];
+    if (rightWidgets.includes('widget:maef-monitor')) {
+      workspaceManager?.closeWidget?.('widget:maef-monitor');
+    } else {
+      workspaceManager?.openWidgetInWorkbench?.('right', 'widget:maef-monitor');
+    }
+  };
+
+  // =============================================
   // AUTO-GROW TEXTAREA
   // =============================================
   useEffect(() => {
@@ -440,6 +465,17 @@ export default function ConversationEngine({ sessionId }) {
     };
     const unsubscribeCmd = eventBus.on('Command:ConfirmationRequired', commandConfirmHandler);
     return unsubscribeCmd;
+  }, []);
+
+  // MEMORY: Listen Memory:OpenConflicts to ensure memory panel opens
+  useEffect(() => {
+    const eventBus = kernel.serviceManager?.get('EventBus');
+    if (!eventBus) return;
+    const openConflictsHandler = () => {
+      setIsMemoryPanelOpen(true);
+    };
+    const unsub = eventBus.on('Memory:OpenConflicts', openConflictsHandler);
+    return () => unsub?.();
   }, []);
 
   // PR#1: Handle konfirmasi (user klik "Izinkan" / "Jalankan")
@@ -817,6 +853,58 @@ export default function ConversationEngine({ sessionId }) {
         {/* Chat + Memory Context Panel */}
         <div className="flex-1 flex flex-col md:flex-row relative min-h-0 min-w-0">
           <div className="flex-1 flex flex-col relative overflow-hidden pt-4 min-h-0 min-w-0">
+            {/* Floating Workspace Controls (Top-Right of Chat Area) */}
+            <div className="absolute top-3 right-5 z-30 flex items-center gap-2">
+              {/* Toggle Memory Context Pill */}
+              <button
+                type="button"
+                onClick={() => setIsMemoryPanelOpen(!isMemoryPanelOpen)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono font-medium transition-all shadow-sm cursor-pointer border ${
+                  isMemoryPanelOpen
+                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25'
+                    : 'bg-surface-container-low/90 backdrop-blur-md border-outline-variant text-on-surface-variant hover:text-on-surface hover:bg-surface-variant'
+                }`}
+                title={isMemoryPanelOpen ? 'Minimize Memory Context' : 'Buka Memory Context'}
+              >
+                <span className="material-symbols-outlined text-[16px]">psychology</span>
+                <span className="hidden sm:inline">Memory</span>
+                {activeMemories.length > 0 && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                    isMemoryPanelOpen ? 'bg-emerald-500/30 text-emerald-200' : 'bg-surface-variant text-on-surface-variant'
+                  }`}>
+                    {activeMemories.length}
+                  </span>
+                )}
+              </button>
+
+              {/* Toggle MAEF Monitor Pill */}
+              <button
+                type="button"
+                onClick={handleToggleMaefMonitor}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono font-medium transition-all shadow-sm cursor-pointer border ${
+                  (osState?.layout?.right_workbench || []).includes('widget:maef-monitor')
+                    ? 'bg-blue-500/15 border-blue-500/30 text-blue-300 hover:bg-blue-500/25'
+                    : 'bg-surface-container-low/90 backdrop-blur-md border-outline-variant text-on-surface-variant hover:text-on-surface hover:bg-surface-variant'
+                }`}
+                title="Toggle MAEF Monitor"
+              >
+                <span className="material-symbols-outlined text-[16px]">shield</span>
+                <span className="hidden sm:inline">Monitor</span>
+              </button>
+
+              {/* One-Click Minimize All / Fullscreen Chat */}
+              {(isMemoryPanelOpen || (osState?.layout?.right_workbench || []).length > 0) && (
+                <button
+                  type="button"
+                  onClick={handleMinimizeSidePanels}
+                  className="p-1.5 rounded-xl bg-surface-container-low/90 backdrop-blur-md border border-outline-variant text-on-surface-variant hover:text-on-surface hover:bg-surface-variant transition-all shadow-sm cursor-pointer"
+                  title="Luaskan Kolom Chat (Minimize Semua Panel Samping)"
+                >
+                  <span className="material-symbols-outlined text-[18px]">fullscreen</span>
+                </button>
+              )}
+            </div>
+
             <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto p-3 md:p-4 space-y-3 custom-scrollbar relative z-10">
 
               {messages.length === 0 && (
@@ -926,6 +1014,79 @@ export default function ConversationEngine({ sessionId }) {
                         {m.isStreaming && parsed.isThinkingComplete && <span className="animate-pulse text-primary"> ▍</span>}
                       </div>
 
+                      {/* Critical Backend UI: Tools Used Badges */}
+                      {(() => {
+                        const tools = m.metadata?.toolsUsed || m.toolsUsed || [];
+                        if (!Array.isArray(tools) || tools.length === 0) return null;
+                        return (
+                          <div className="mt-3 pt-2 border-t border-white/5 flex flex-wrap items-center gap-1.5">
+                            <span className="text-[10px] text-slate-500 font-mono uppercase tracking-wider mr-1">Tools:</span>
+                            {tools.map((tool, tIdx) => (
+                              <span
+                                key={tIdx}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-white/5 text-slate-300 border border-white/10"
+                              >
+                                <span className="material-symbols-outlined text-[12px] text-primary">build</span>
+                                {String(tool).replace(/_/g, ' ')}
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Critical Backend UI: Grounding Sources Chips */}
+                      {(() => {
+                        const sources = m.metadata?.groundingSources || m.groundingSources || [];
+                        if (!Array.isArray(sources) || sources.length === 0) return null;
+                        return (
+                          <div className="mt-2.5 pt-2 border-t border-white/5">
+                            <div className="text-[10px] text-slate-500 font-mono uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[13px] text-purple-400">travel_explore</span>
+                              <span>Sumber Referensi:</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {sources.map((s, sIdx) => {
+                                const url = s?.uri || s?.url || '#';
+                                const title = s?.title || s?.name || (url !== '#' ? url : `Sumber #${sIdx + 1}`);
+                                return (
+                                  <a
+                                    key={sIdx}
+                                    href={url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 transition-all max-w-xs truncate group/link"
+                                    title={title}
+                                  >
+                                    <span className="truncate">{title}</span>
+                                    <span className="material-symbols-outlined text-[11px] text-purple-400 group-hover/link:translate-x-0.5 transition-transform">open_in_new</span>
+                                  </a>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Critical Backend UI: Tool Execution Collapsible Accordion */}
+                      {(() => {
+                        const execution = m.metadata?.toolExecution || m.toolExecution;
+                        if (!execution) return null;
+                        const execName = execution.name || execution.tool || 'eksekusi_tool';
+                        return (
+                          <details className="mt-2.5 pt-2 border-t border-white/5 text-[11px] group/details">
+                            <summary className="cursor-pointer text-slate-400 hover:text-slate-200 font-mono text-[10px] flex items-center gap-1 select-none">
+                              <span className="material-symbols-outlined text-[13px] transition-transform group-open/details:rotate-90">chevron_right</span>
+                              <span>Detail Eksekusi ({execName})</span>
+                            </summary>
+                            <div className="mt-1.5 p-2 rounded bg-black/40 border border-white/10 font-mono text-[10px] text-slate-300 max-h-40 overflow-y-auto whitespace-pre-wrap">
+                              {typeof execution === 'string'
+                                ? execution
+                                : JSON.stringify(execution, null, 2)}
+                            </div>
+                          </details>
+                        );
+                      })()}
+
                       {/* Confirmation Buttons */}
                       {m.isConfirmationRequest && (
                         <div className="mt-4 flex items-center gap-3 border-t border-outline-variant pt-3">
@@ -1027,45 +1188,50 @@ export default function ConversationEngine({ sessionId }) {
             </div>
 
             {/* Input Area */}
-            <div className="px-3 pt-3 pb-2 bg-gradient-to-t from-background via-background to-transparent z-10 flex flex-col items-center w-full">
-              {(workspaceManager?.activeWorkspaceId === 'ws-engineer' || workspaceManager?.activeWorkspaceId === 'ws-assistant') && (
-                <div className="w-full max-w-3xl mb-2 flex justify-start">
-                  <FolderSelector onSelect={(path) => setSelectedFolder(path)} currentPath={selectedFolder} showLabel={true} className="scale-90 origin-left" />
-                </div>
-              )}
-
+            <div className="px-3 pt-2 pb-2 bg-gradient-to-t from-background via-background to-transparent z-10 flex flex-col items-center w-full">
               {attachedFile && (
                 <div className="w-full max-w-3xl mb-2 flex items-center justify-between bg-surface-container border border-outline-variant rounded-lg px-3 py-2 animate-in fade-in slide-in-from-bottom-2">
                   <div className="flex items-center gap-2 text-body-sm text-on-surface">
                     <span className="material-symbols-outlined text-[16px] text-primary">attach_file</span>
                     <span className="truncate max-w-[200px]">{attachedFile.name}</span>
                   </div>
-                  <button type="button" onClick={() => setAttachedFile(null)} className="text-on-surface-variant hover:text-error transition-colors">
+                  <button type="button" onClick={() => setAttachedFile(null)} className="text-on-surface-variant hover:text-error transition-colors cursor-pointer">
                     <span className="material-symbols-outlined text-[16px]">close</span>
                   </button>
                 </div>
               )}
 
-              <form onSubmit={handleSend} className="w-full max-w-3xl relative flex items-end gap-2 bg-surface-container-low border border-outline-variant rounded-2xl p-2 focus-within:border-primary transition-all shadow-lg pulse-focus">
+              <form onSubmit={handleSend} className="w-full max-w-3xl relative flex items-center gap-1.5 bg-surface-container-low border border-outline-variant rounded-2xl p-1.5 focus-within:border-primary transition-all shadow-lg pulse-focus">
+                {/* Compact Folder Picker di dalam baris input */}
+                {(workspaceManager?.activeWorkspaceId === 'ws-engineer' || workspaceManager?.activeWorkspaceId === 'ws-assistant') && (
+                  <div className="shrink-0 ml-1">
+                    <FolderSelector
+                      compact={true}
+                      onSelect={(path) => setSelectedFolder(path)}
+                      currentPath={selectedFolder}
+                    />
+                  </div>
+                )}
+
                 <textarea
                   ref={textareaRef}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(e, null); } }}
                   placeholder="Ketik instruksi atau mulai percakapan dengan OS..."
-                  className="flex-1 max-h-48 min-h-[44px] bg-transparent resize-none py-3 px-4 text-body-base text-on-surface placeholder-on-surface-variant focus:outline-none custom-scrollbar overflow-y-auto"
+                  className="flex-1 max-h-40 min-h-[38px] bg-transparent resize-none py-2 px-3 text-sm text-on-surface placeholder-on-surface-variant focus:outline-none custom-scrollbar overflow-y-auto"
                   rows="1"
                 />
                 {workspaceManager?.activeWorkspaceId === 'ws-lite' && (
                   <>
                     <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => { if (e.target.files?.[0]) setAttachedFile(e.target.files[0]); }} />
-                    <button type="button" onClick={() => fileInputRef.current?.click()} className="p-3 mb-1 mr-1 rounded-xl bg-surface-container-high hover:bg-surface-variant text-on-surface-variant transition-all" title="Upload Dokumen RAG">
-                      <span className="material-symbols-outlined text-[20px]">attach_file</span>
+                    <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2.5 rounded-xl bg-surface-container-high hover:bg-surface-variant text-on-surface-variant transition-all shrink-0" title="Upload Dokumen RAG">
+                      <span className="material-symbols-outlined text-[18px]">attach_file</span>
                     </button>
                   </>
                 )}
-                <button type="submit" disabled={(!input.trim() && !attachedFile) || isLoading} className="p-3 mb-1 mr-1 rounded-xl bg-primary hover:bg-primary-fixed text-on-primary disabled:opacity-50 disabled:hover:bg-primary transition-all shadow-md">
-                  <span className="material-symbols-outlined text-[20px]">send</span>
+                <button type="submit" disabled={(!input.trim() && !attachedFile) || isLoading} className="p-2.5 mr-0.5 rounded-xl bg-primary hover:bg-primary-fixed text-on-primary disabled:opacity-50 disabled:hover:bg-primary transition-all shadow-md shrink-0 cursor-pointer">
+                  <span className="material-symbols-outlined text-[18px]">send</span>
                 </button>
               </form>
               <div className="text-center mt-1 text-[9px] text-on-surface-variant tracking-widest uppercase opacity-50">
@@ -1086,6 +1252,7 @@ export default function ConversationEngine({ sessionId }) {
               loading={isMemoryLoading}
               serviceManager={kernel.serviceManager}
               onClose={() => setIsMemoryPanelOpen(false)}
+              onMinimize={handleMinimizeSidePanels}
               onRefresh={handleRefreshMemory}
               onResolveConflict={async (memoryId, resolution) => {
                 const governor = kernel.serviceManager?.get('MemoryGovernorService');

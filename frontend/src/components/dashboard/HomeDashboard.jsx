@@ -4,6 +4,7 @@ import ActivityGraph from './ActivityGraph';
 import NodeInspector from './NodeInspector';
 import ObservabilityPanel from './ObservabilityPanel';
 import { supabase } from '../../supabase';
+import { kernel } from '../../core/runtime/Kernel';
 
 const FALLBACK_COLOR = '#475569';
 
@@ -124,29 +125,28 @@ export default function HomeDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // --- GRAPH COLORING FUNCTIONS ---
+  // --- GRAPH COLORING FUNCTIONS (Constitution 23 Semantic Palette) ---
   const getNodeColor = (node) => {
     if (!node) return FALLBACK_COLOR;
 
+    // Red for memory conflicts / alerts
+    if (node.isConflict || (node.data && node.data.status === 'CONFLICT_PENDING_REVIEW')) {
+      return '#ef4444';
+    }
+
     let baseColor = node.color;
 
-    if (node.id === 'cat-agent' || node.id === 'core-maef') {
-      if (vitals.agentProcess === 'HEALTHY') baseColor = '#22c55e';
-      else if (vitals.agentProcess === 'DOWN') baseColor = '#ef4444';
-      else baseColor = '#94a3b8';
-    }
     if (!baseColor) {
       switch (node.group) {
         case 'core': baseColor = '#ffffff'; break;
-        case 'category': baseColor = '#94a3b8'; break;
+        case 'memory': baseColor = '#22c55e'; break;
+        case 'rag': baseColor = '#a855f7'; break;
+        case 'chat': baseColor = '#eab308'; break;
+        case 'category': baseColor = '#38bdf8'; break;
         case 'subcategory': baseColor = '#64748b'; break;
         default: baseColor = FALLBACK_COLOR; break;
       }
     }
-    if (!baseColor) baseColor = FALLBACK_COLOR;
-
-    // DEBUG: Uncomment to disable activePath entirely
-    // return baseColor;
 
     if (activePath && !activePath.nodes.has(node.id)) {
       return baseColor + '20';
@@ -204,7 +204,11 @@ export default function HomeDashboard() {
       {/* Right Panel: Detail / Metrics */}
       <div className="w-full md:w-80 border-t md:border-t-0 md:border-l border-white/10 bg-[#0a0a0a]/90 backdrop-blur-xl p-6 flex flex-col z-20 overflow-y-auto h-1/2 md:h-full shrink-0">
         {selectedNode && !selectedNode.isCategory ? (
-          <NodeInspector selectedNode={selectedNode} onClose={() => setSelectedNode(null)} />
+          <NodeInspector 
+            selectedNode={selectedNode} 
+            onClose={() => setSelectedNode(null)} 
+            serviceManager={kernel.serviceManager}
+          />
         ) : (
           <ObservabilityPanel
             executionTrace={executionTrace}
@@ -212,6 +216,7 @@ export default function HomeDashboard() {
             vitals={vitals}
             stats={stats}
             lastCheckTime={lastCheckTime}
+            serviceManager={kernel.serviceManager}
           />
         )}
 
