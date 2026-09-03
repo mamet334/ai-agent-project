@@ -45,12 +45,23 @@
     - Tier 1 Lokal: KnowledgeService.js, RetrievalStrategyService.js, context_builder.ts (Edge Function)
     - Tier 2 Internal: InternalKnowledgeFallbackService.js, auto-switching di RetrievalOrchestrator.js, CHECK_002B di verification_engine.ts
     ↓
-[BERIKUTNYA] Penentuan Prioritas Owner:
-    Option A: Penuntasan Integrasi MemoryGovernorService (Tutup gap Assistant trigger + UI Conflict/Purge)
-    Option B: SystemGovernorService (SPESIFIKASI-TEKNIS-MAMET-OS-v2.md)
-    Option C: Remediasi Backlog Temuan Runtime Live (PENDING-live-verification-runtime-gaps.md)
-    Option D: Eksekusi PR#9 Fase 2 (Internal LLM Fallback)
+[TAHAP 1 - BERIKUTNYA] Memory System Finalization
+    Gabungan: Opsi A (integrasi MemoryGovernorService ke Assistant trigger) + CP4b (UI Purge & Conflict Resolution + payload metadata.conflict_info) + Backlog #7 (Memory Context Panel Category Alignment)
+    - Alasan penggabungan: menyentuh 4 file yang identik (MemoryGovernorService.js, MemoryService.js, MemoryContextPanel.jsx, ConversationEngine.jsx); Opsi A sudah ~70% selesai via fix intent classification (2026-09-03); menghemat siklus pengujian.
+    - Risiko: Rendah | Kompleksitas: Sedang | Kohesi File: Sangat Tinggi
+    ↓
+[TAHAP 2] SystemGovernorService.js
+    Pembangunan daemon Codebase Governance & File Integrity dari nol sesuai SPESIFIKASI-TEKNIS-MAMET-OS-v2.md.
+    - Dikonfirmasi TIDAK punya dependensi data ke skema user_memories/metadata.conflict_info — aman dikerjakan setelah Tahap 1 tanpa risiko rework. Urutan ini dipilih agar modul greenfield berbobot tinggi dikerjakan setelah fondasi Memory System stabil 100%.
+    - Risiko: Sedang | Kompleksitas: Tinggi
+    ↓
+[TAHAP 3] PR#9 Fase 3 — Web Comparison (Opsi D)
+    WebComparisonService.js + Tier 3 di RetrievalOrchestrator.js dengan gerbang konfirmasi Owner (Human-in-Command).
+    - Dikonfirmasi 100% independen dari Tahap 1 & 2 — ditempatkan terakhir karena kompleksitas modular paling terisolasi di antara tiga tahap.
+    - Risiko: Rendah | Kompleksitas: Sedang
 ```
+
+*Catatan Terpisah:* Opsi C (Remediasi Backlog Runtime — `ModuleDiscoveryService` refactor, React Warning render phase) dan item housekeeping lain di Bagian 6 tetap independen dari 3 tahap ini dan dapat disisipkan kapan saja tanpa mempengaruhi urutan arsitektural di atas (Referensi: Sesi audit dependensi 3 inisiatif besar, 2026-09-03).
 
 **Catatan status MemoryGovernorService:**
 File `MemoryGovernorService.js` sudah ada dan terdaftar di `Kernel.js`. Method core Golden Source (`storeGoldenMemory`, `verifyMemorySummary`, `verifyEngineeringSession`) dan Addendum (`retrieveMemory`, `detectAndMarkConflict`, `resolveConflict`, `archiveMemory`, `requestPurge`, `executePurge`) sudah diimplementasikan. Namun, integrasi menyeluruh masih berstatus pondasi karena:
