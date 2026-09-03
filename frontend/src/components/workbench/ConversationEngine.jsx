@@ -121,29 +121,54 @@ export default function ConversationEngine({ sessionId }) {
     window.dispatchEvent(new Event('resize'));
   }, [isSidebarOpen]);
 
+  const lastSavedKeyRef = useRef('');
+  const isSavingRef = useRef(false);
+  const osStateRef = useRef(osState);
+  osStateRef.current = osState;
+
   // =============================================
-  // PERSISTENSI: Auto-save messages (debounced)
+  // PERSISTENSI: Auto-save messages (debounced & throttled)
   // =============================================
   useEffect(() => {
+    // Jangan auto-save jika tidak ada pesan atau sedang streaming
+    if (!messages || messages.length === 0 || isLoading) return;
+
+    const currentLength = messages.length;
+    const lastMsg = messages[messages.length - 1];
+    const lastContentLen = (lastMsg?.content || '').length;
+    const saveKey = `${currentChatId || 'new'}_${currentLength}_${lastContentLen}_${lastMsg?.role || ''}`;
+
+    // Lewati jika pesan belum berubah sejak penyimpanan terakhir
+    if (saveKey === lastSavedKeyRef.current) {
+      return;
+    }
+
     const timer = setTimeout(async () => {
-      if (!messages || messages.length === 0) return;
+      if (isSavingRef.current) return;
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user?.id) return;
       const assistantService = getAssistantService();
       if (!assistantService) return;
-      await assistantService.saveChatToDB({
-        messages,
-        chatId: currentChatId,
-        userId: session.user.id,
-        workspaceId: osState?.workspaceId || 'ws-assistant',
-        onNewChatId: (newId) => {
-          setCurrentChatId(newId);
-          localStorage.setItem('mamet_v4_current_chat_id', newId);
-        }
-      });
+
+      isSavingRef.current = true;
+      try {
+        await assistantService.saveChatToDB({
+          messages,
+          chatId: currentChatId,
+          userId: session.user.id,
+          workspaceId: osStateRef.current?.workspaceId || 'ws-assistant',
+          onNewChatId: (newId) => {
+            setCurrentChatId(newId);
+            localStorage.setItem('mamet_v4_current_chat_id', newId);
+          }
+        });
+        lastSavedKeyRef.current = saveKey;
+      } finally {
+        isSavingRef.current = false;
+      }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [messages, currentChatId, osState]);
+  }, [messages, currentChatId, isLoading]);
 
   // =============================================
   // PERSISTENSI: Sync currentChatId ke localStorage
