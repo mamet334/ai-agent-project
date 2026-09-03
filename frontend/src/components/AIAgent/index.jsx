@@ -2,7 +2,7 @@
  * AIAgent/index.jsx — Entry Point (Barrel Export)
  *
  * Struktur modul:
- *   AIAgent.jsx  → Main component (state, auth, send, orchestrator)
+ *   AIAgent.jsx  → Main component (state, auth, send)
  *   helpers/     → workspaceScanner, fileProcessor
  *   hooks/       → useDesktopPreExec, useDesktopInterceptor
  *   ui/          → LoginForm, ChatSidebar, ChatMessageList, ChatInputArea, RightPanel
@@ -13,7 +13,6 @@
  *   ../../chat/ChatInput      → chat/ChatInput.jsx
  *   ../../chat/ChatMessages   → chat/ChatMessages.jsx
  *   ../../layout/Sidebar      → layout/Sidebar.jsx
- *   ../../lib/mainOrchestrator→ lib/mainOrchestrator.js
  *
  * DEBUG FLOW — langsung ke file yang tepat:
  *   1. Auth/login gagal      → AIAgent.jsx :: useEffect(supabase.auth)

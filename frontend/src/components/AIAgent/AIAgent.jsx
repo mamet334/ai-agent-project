@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { supabase } from '../../supabase';
-import MainOrchestrator from '../../lib/mainOrchestrator';
 import { BrainCircuit } from 'lucide-react';
 import { kernel } from '../../core/runtime/Kernel';
 
@@ -25,8 +24,6 @@ export default function AIAgent() {
     });
   };
 
-  // --- ORCHESTRATOR & STATE DARI LAMA ---
-  const [orchestrator] = useState(() => new MainOrchestrator());
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [logs, setLogs] = useState([]);
