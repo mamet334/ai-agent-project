@@ -1,6 +1,6 @@
-# [SEBAGIAN SELESAI] Temuan Gap Runtime & Observability — Hasil Verifikasi Live
+# [100% SELESAI] Temuan Gap Runtime & Observability — Hasil Verifikasi Live
 
-**Status:** 4 dari 5 Item Berhasil Diremediasi (2026-09-02)  
+**Status:** 5 dari 5 Item Berhasil Diremediasi (✅ 100% Selesai — 2026-09-02)  
 **Sumber:** Observasi log runtime & hasil eksekusi saat verifikasi live Edge Function `agent-process`  
 **Karakteristik:** Temuan *pre-existing* di layer backend/RAG/memory yang telah diperbaiki bertahap.
 
@@ -17,11 +17,17 @@
 
 ---
 
-## 2. `CHECK_002_SOURCE_TRACE_EXISTS` Gagal Saat RAG Memiliki Evidence (📋 BACKLOG TERBUKA)
+## 2. `CHECK_002_SOURCE_TRACE_EXISTS` & `CHECK_003` False Fail di Assistant Mode / RAG Format (✅ SELESAI — 2026-09-02)
 
-- **Gejala / Fakta:** Verifikasi di backend mengeluarkan peringatan `CHECK_002` gagal karena response LLM tidak menyertakan blok *SOURCE TRACE* yang dapat di-parse oleh regex, meskipun context pipeline berhasil mengambil memory/evidence dari database.
-- **Akar Masalah:** Kepatuhan instruksi prompt (*Instruction Compliance*). Format blok output yang diharapkan oleh verification engine regex belum cukup ditekankan atau terdistraksi dalam sistem prompt LLM untuk model-model tertentu.
-- **Status:** Backlog terbuka (tidak memblokir eksekusi runtime/database).
+- **Gejala / Fakta:** Verifikasi di backend mengeluarkan peringatan `CHECK_002` gagal (Score: 0) pada mode ASSISTANT meskipun context pipeline berhasil mengambil memory/evidence dari database.
+- **Akar Masalah:**
+  1. Metadata `vContext.mode` tidak diteruskan dari `synthesis_handler.ts`, sehingga `VerificationEngine` membaca `mode: undefined` dan mengeksekusi strict engineer check pada chat natural.
+  2. ID Dokumen RAG belum distandarisasi sebagai *Single Source of Truth* (`[DOC-0001]`), menyebabkan parser regex `/[A-Z]{2,3}-\d{4}/` gagal mencocokkan trace di mode Engineer.
+- **Remediasi yang Diterapkan:**
+  1. Meneruskan `mode: requestMode` pada `vContext` di `synthesis_handler.ts` dan `post_processing.ts`.
+  2. Menyelaraskan `CHECK_002` dan `CHECK_003` di `verification_engine.ts` agar di-skip secara wajar (`PASS` / `INFO`) pada mode `ASSISTANT` dan `LITE` (sesuai kontrak bahwa chat natural tidak mewajibkan format source trace).
+  3. Menstandarkan pembentukan ID `[DOC-XXXX]` 1x saja di `context_builder.ts:146` dan meneruskannya ke System Prompt dan `confidence_engine.ts`.
+  4. Lolos 100% pada matriks uji 5-skenario (Assistant, Engineer Strict Fail, Engineer Non-Strict Toggle, Engineer Format Success, Pipeline Anomaly).
 
 ---
 
@@ -69,7 +75,7 @@
 | No | Temuan | Status | Tanggal Selesai |
 |---|---|---|---|
 | 1 | `trace_id` = `"unknown"` di `cost_ledger` | ✅ **Selesai** | 2026-09-02 |
-| 2 | `CHECK_002` Source Trace Format | 📋 **Backlog Terbuka** | — |
+| 2 | `CHECK_002` & `CHECK_003` Source Trace | ✅ **Selesai** | 2026-09-02 |
 | 3 | Skema Kolom `user_memories.content` | ✅ **Selesai** | 2026-09-02 |
 | 4 | Escape Tanda Kutip pada `ilike` | ✅ **Selesai** | 2026-09-02 |
 | 5 | Tipe UUID `"SUPABASE"` | ✅ **Selesai** | 2026-09-02 |

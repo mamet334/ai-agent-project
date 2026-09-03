@@ -46,10 +46,11 @@ export function postProcessResponse(input: PostProcessInput): PostProcessOutput 
       sourceTrace: sourceTrace,
       confidenceReport: input.confidenceReport,
       evidenceReport: input.evidenceReport,
-      runtimeContext: input.runtimeState
+      runtimeContext: input.runtimeState,
+      mode: (input as any).mode || 'ASSISTANT'
     };
     
-    const vReport = VerificationEngine.verify(vContext);
+    const vReport = VerificationEngine.verify((input as any).mode || 'ASSISTANT', vContext);
     const auditRecord = VerificationEngine.createAuditRecord(vReport, vContext);
     
     output.vReport = vReport;

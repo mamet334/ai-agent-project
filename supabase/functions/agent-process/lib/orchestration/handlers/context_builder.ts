@@ -143,11 +143,22 @@ export const ContextBuilderHandler = {
     // 3. GATHER: Await all parallel executions
     const [ragArray, projectMemResult, engineerCtx] = await Promise.all([ragPromise, memoryPromise, engineerPromise]);
 
-    ctx.state.ragArray = ragArray;
+    ctx.state.ragArray = (ragArray || []).map((r: any, idx: number) => {
+      const match = r.content?.match(/\[Dari file "([^"]+)"\]/);
+      const extractedTitle = match ? match[1] : (r.source_url || r.title || `dokumen_${idx + 1}`);
+      const docId = `DOC-${String(idx + 1).padStart(4, '0')}`;
+      const cleanContent = r.content?.replace(/^\[Dari file "[^"]+"\]\s*/, '') || r.content || '';
+      return {
+        ...r,
+        docId,
+        formattedTitle: extractedTitle,
+        contentWithId: `[${docId}] [Dari file "${extractedTitle}"]\n${cleanContent}`
+      };
+    });
     ctx.state.memoryArray = projectMemResult.memoryArray;
     const memoryPrompt = projectMemResult.memoryPrompt;
     
-    ctx.state.processingSteps.push(`[RAG CONTEXT GENERATED] ragArray size=${ragArray.length}`);
+    ctx.state.processingSteps.push(`[RAG CONTEXT GENERATED] ragArray size=${ctx.state.ragArray.length}`);
     ctx.state.processingSteps.push(`[MEMORY PROMPT GENERATED] memoryPrompt="${memoryPrompt.trim()}" memoryArray size=${projectMemResult.memoryArray.length}`);
 
     // 4. FUSION — inject semanticContext from frontend if present
@@ -179,10 +190,7 @@ export const ContextBuilderHandler = {
 
     let fullSystemContext = resolvedContext.finalContext;
     
-    const ragIds = ctx.state.ragArray.map((r: any) => {
-       const match = r.content?.match(/\[Dari file "([^"]+)"\]/);
-       return match ? match[1] : 'unknown_doc';
-    });
+    const ragIds = ctx.state.ragArray.map((r: any) => r.docId);
 
     const evidenceReport = validateEvidence({
       userId: ctx.auth.userId,
@@ -233,7 +241,7 @@ export const ContextBuilderHandler = {
     fullSystemContext += evidenceReport.gateVerdictText;
 
     const brain1EntriesForConf = ctx.brain1Entries || [];
-    const ragDocTitles = ragIds;
+    const ragDocTitles = ctx.state.ragArray.map((r: any) => ({ id: r.docId, title: r.formattedTitle }));
 
     let activeConflictsCount = 0;
     const currentEntryIds = brain1EntriesForConf.map((e: any) => e.id).filter(Boolean);
@@ -284,7 +292,7 @@ export const ContextBuilderHandler = {
     }
 
     const memoryContextText = projectMemResult.memoryArray?.length > 0 ? projectMemResult.memoryArray.map((m: any) => m.content).join('\n') : '';
-    const ragContextText = ragArray?.length > 0 ? ragArray.map((r: any) => r.content).join('\n') : '';
+    const ragContextText = ctx.state.ragArray?.length > 0 ? ctx.state.ragArray.map((r: any) => r.contentWithId || r.content).join('\n\n') : '';
     const brain1ContextText = brain1EntriesForConf.map((e: any) => `[${e.entry_type}] ${e.title}: ${e.content}`).join('\n');
     let brain2ContextText = '';
     if (brain2Tasks.length > 0) brain2ContextText += `Active Tasks: ${brain2Tasks.join(', ')}\n`;

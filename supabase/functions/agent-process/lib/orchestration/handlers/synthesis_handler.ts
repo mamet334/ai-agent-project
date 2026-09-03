@@ -58,7 +58,8 @@ export const SynthesisHandler = {
           sourceTrace: sourceTrace,
           confidenceReport,
           evidenceReport,
-          runtimeContext: ctx.state
+          runtimeContext: ctx.state,
+          mode: requestMode
         };
 
         // =============================================

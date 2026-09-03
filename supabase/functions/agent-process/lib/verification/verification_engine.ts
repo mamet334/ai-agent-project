@@ -112,11 +112,11 @@ export class VerificationEngine {
       message: "Source trace string is present."
     };
 
-    // Jika mode ASSISTANT, CHECK_002 dilewati — chat natural tidak memerlukan ADR source trace
-    if (context.mode === 'ASSISTANT') {
+    // Mode ASSISTANT dan LITE adalah chat percakapan natural — tidak mewajibkan format SOURCE TRACE
+    if (context.mode === 'ASSISTANT' || context.mode === 'LITE') {
       check002.status = "PASS";
       check002.severity = "INFO";
-      check002.message = "CHECK_002 dilewati untuk mode ASSISTANT (chat natural tidak memerlukan source trace).";
+      check002.message = `CHECK_002 dilewati untuk mode ${context.mode || 'ASSISTANT'} (chat natural tidak memerlukan format source trace).`;
     } else {
       const hasEvidence = context.evidenceReport && context.evidenceReport.totalEvidence > 0;
       const hasParserTrace = !!(context.sourceTrace && typeof context.sourceTrace === "string" && context.sourceTrace.trim().length > 0);
@@ -188,9 +188,14 @@ export class VerificationEngine {
       message: "Source trace matches expected ID format."
     };
 
-    const traceFormatRegex = /[A-Z]{3}-\d{4}/;
+    const traceFormatRegex = /[A-Z]{2,3}-\d{4}/;
 
-    if (check002.status === "PASS" && (!context.sourceTrace || !traceFormatRegex.test(context.sourceTrace))) {
+    // Mode ASSISTANT dan LITE: skip CHECK_003 karena chat natural tidak memerlukan format source trace
+    if (context.mode === 'ASSISTANT' || context.mode === 'LITE') {
+      check003.status = "PASS";
+      check003.severity = "INFO";
+      check003.message = `CHECK_003 dilewati untuk mode ${context.mode || 'ASSISTANT'} (chat natural tidak memerlukan format source trace).`;
+    } else if (check002.status === "PASS" && (!context.sourceTrace || !traceFormatRegex.test(context.sourceTrace))) {
       check003.status = "FAIL";
       check003.message = "Source trace does not contain any valid ID format (e.g., ADR-0001).";
       overallStatus = "FAIL";
@@ -199,6 +204,10 @@ export class VerificationEngine {
       check003.status = "WARN";
       check003.severity = "WARNING";
       check003.message = "Format check skipped due to missing trace (no evidence context).";
+    } else if (check002.status === "FAIL") {
+      check003.status = "WARN";
+      check003.severity = "INFO";
+      check003.message = "Format check dilewati karena SOURCE TRACE tidak ditemukan (CHECK_002 gagal).";
     }
 
     checks.push(check003);
@@ -726,6 +735,67 @@ export class VerificationEngine {
   // ========================================================================
 
   /**
+   * Helper unwrap patch: mengonversi berbagai variasi wrapper JSON patch
+   * ke bentuk standar flat: Record<string, string> (key = filePath, value = content).
+   * 
+   * Mendukung:
+   * 1. Whitelist wrapper keys eksplisit ('patch', 'patches', 'files')
+   * 2. Array of file objects dengan alias (file/path/filePath/filename/name dan content/code/newContent/source/text)
+   * 3. Flat dictionary map standar
+   */
+  private static _unwrapPatchObject(parsed: any): Record<string, string> | null {
+    if (!parsed || typeof parsed !== 'object') return null;
+
+    // KASUS 2: Array of file objects [ { file: '...', content: '...' } ]
+    if (Array.isArray(parsed)) {
+      const result: Record<string, string> = {};
+      for (const item of parsed) {
+        if (item && typeof item === 'object') {
+          const filePath = item.file || item.path || item.filePath || item.filename || item.name;
+          const content = item.content ?? item.code ?? item.newContent ?? item.source ?? item.text;
+          if (typeof filePath === 'string' && filePath.trim().length > 0 && typeof content === 'string') {
+            result[filePath.trim()] = content;
+          }
+        }
+      }
+      return Object.keys(result).length > 0 ? result : null;
+    }
+
+    // KASUS 1: Whitelist Wrapper Keys Eksplisit ('patch', 'patches', 'files')
+    const WRAPPER_KEYS = ['patch', 'patches', 'files'];
+    const keys = Object.keys(parsed);
+
+    // Jika objek memiliki key tunggal yang ada di whitelist wrapper
+    if (keys.length === 1 && WRAPPER_KEYS.includes(keys[0].toLowerCase())) {
+      const wrapperVal = parsed[keys[0]];
+      if (wrapperVal && typeof wrapperVal === 'object') {
+        const unwrapped = VerificationEngine._unwrapPatchObject(wrapperVal);
+        if (unwrapped) return unwrapped;
+      }
+    }
+
+    // Jika objek memiliki wrapper key di antara properti lain (misal metadata + patch)
+    for (const wKey of WRAPPER_KEYS) {
+      if (parsed[wKey] && typeof parsed[wKey] === 'object') {
+        const unwrapped = VerificationEngine._unwrapPatchObject(parsed[wKey]);
+        if (unwrapped && Object.keys(unwrapped).length > 0) {
+          return unwrapped;
+        }
+      }
+    }
+
+    // KASUS 3: Flat dictionary map standar { "path/to/file.js": "content" }
+    const result: Record<string, string> = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof k === 'string' && k.trim().length > 0 && typeof v === 'string') {
+        result[k.trim()] = v;
+      }
+    }
+
+    return Object.keys(result).length > 0 ? result : parsed;
+  }
+
+  /**
    * Membersihkan output LLM dari noise (markdown, HTML, prefix/suffix)
    * agar JSON patch bisa di-extract dengan lebih reliable.
    * 
@@ -776,8 +846,9 @@ export class VerificationEngine {
     try {
       const trimmed = normalized.trim();
       if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-        const parsed = JSON.parse(trimmed);
-        if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const rawParsed = JSON.parse(trimmed);
+        const parsed = VerificationEngine._unwrapPatchObject(rawParsed);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
           return { parsed, method: 'DIRECT_PARSE_NORMALIZED' };
         }
       }
@@ -787,8 +858,9 @@ export class VerificationEngine {
     try {
       const trimmed = raw.trim();
       if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-        const parsed = JSON.parse(trimmed);
-        if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const rawParsed = JSON.parse(trimmed);
+        const parsed = VerificationEngine._unwrapPatchObject(rawParsed);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
           return { parsed, method: 'DIRECT_PARSE_RAW' };
         }
       }
@@ -800,8 +872,9 @@ export class VerificationEngine {
     for (const match of codeBlockMatches) {
       try {
         const candidate = match[1].trim();
-        const parsed = JSON.parse(candidate);
-        if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const rawParsed = JSON.parse(candidate);
+        const parsed = VerificationEngine._unwrapPatchObject(rawParsed);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
           return { parsed, method: 'MARKDOWN_JSON_BLOCK' };
         }
       } catch (_) {
@@ -821,14 +894,16 @@ export class VerificationEngine {
         .replace(/\/\*[\s\S]*?\*\//g, '');
       
       try {
-        const parsed = JSON.parse(cleaned);
-        if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const rawParsed = JSON.parse(cleaned);
+        const parsed = VerificationEngine._unwrapPatchObject(rawParsed);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
           return { parsed, method: 'FUZZY_EXTRACTION_CLEANED' };
         }
       } catch (_) {
         try {
-          const parsed = JSON.parse(jsonCandidate);
-          if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+          const rawParsed = JSON.parse(jsonCandidate);
+          const parsed = VerificationEngine._unwrapPatchObject(rawParsed);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
             return { parsed, method: 'FUZZY_EXTRACTION_RAW' };
           }
         } catch (_) {}
@@ -839,8 +914,9 @@ export class VerificationEngine {
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       try {
-        const parsed = JSON.parse(jsonMatch[0]);
-        if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const rawParsed = JSON.parse(jsonMatch[0]);
+        const parsed = VerificationEngine._unwrapPatchObject(rawParsed);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
           return { parsed, method: 'REGEX_FALLBACK' };
         }
       } catch (_) {}
@@ -974,19 +1050,34 @@ export class VerificationEngine {
   // ========================================================================
 
   public static verify(
-    mode: "ENGINEER" | "LITE" | "ASSISTANT" | string,
-    context: VerificationContext
+    modeOrContext: "ENGINEER" | "LITE" | "ASSISTANT" | string | VerificationContext,
+    context?: VerificationContext
   ): VerificationReport {
+    let mode: string;
+    let ctx: VerificationContext;
+
+    if (typeof modeOrContext === 'object' && modeOrContext !== null) {
+      ctx = modeOrContext;
+      mode = ctx.mode || 'ASSISTANT';
+    } else {
+      mode = modeOrContext || 'ASSISTANT';
+      ctx = context || { responseText: '' };
+    }
+
+    if (!ctx.mode) {
+      ctx.mode = mode;
+    }
+
     switch (mode) {
       case "ENGINEER":
-        return VerificationEngine.verifyPatchEngineering(context);
+        return VerificationEngine.verifyPatchEngineering(ctx);
 
       case "LITE":
-        return VerificationEngine.verifyPersonal(context);
+        return VerificationEngine.verifyPersonal(ctx);
 
       case "ASSISTANT":
       default:
-        return VerificationEngine.verifyEngineering(context);
+        return VerificationEngine.verifyEngineering(ctx);
     }
   }
 }

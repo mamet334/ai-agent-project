@@ -164,8 +164,11 @@ export function buildSourceTrace(input: ConfidenceInput): SourceTraceItem[] {
   }
 
   // RAG Documents
-  for (const doc of input.ragDocs) {
-    trace.push({ type: 'RAG', id: doc, title: doc, relationship: 'referenced' });
+  for (let i = 0; i < input.ragDocs.length; i++) {
+    const doc = input.ragDocs[i];
+    const id = (typeof doc === 'object' && doc?.id) ? doc.id : (typeof doc === 'string' && doc.match(/^[A-Z]{2,3}-\d{4}/) ? doc : `DOC-${String(i + 1).padStart(4, '0')}`);
+    const title = (typeof doc === 'object' && doc?.title) ? doc.title : (typeof doc === 'string' ? doc : `Dokumen ${i + 1}`);
+    trace.push({ type: 'RAG', id, title, relationship: 'referenced' });
   }
 
   // Memory
