@@ -1,6 +1,6 @@
 # Roadmap: Mamet AI — Assistant Capability Hardening & Modularization
 
-Status: Draft — Disepakati (Design Agreed), Belum Diimplementasikan
+Status: PR#1–#5, PR#7 Fase 1 ✅ Selesai — PR#6 ⚡ Implemented (Build Pass, Menunggu Live Verification) — PR#7 Fase 2 Ditunda
 Owner: Mamet AI Project
 Scope: Assistant Capability (bukan Engineer Capability)
 Prinsip Payung: Linux-Inspired Architecture — "Ringan, Bebas, dan Tangguh seperti Linux"
@@ -61,7 +61,7 @@ lewat kontrol eksplisit, bukan otonomi penuh sejak awal.
 | PR#2 | Reaktivasi Cognitive Memory Governor | Menengah | PR#3 |
 | PR#4 | Atribusi Sumber di RAG (`source_url`, `source_type`) | Menengah | - |
 | PR#5 | Adaptive Retrieval Strategy | Menengah | PR#4 |
-| PR#6 | Efisiensi Token (Prompt Caching + Delegasi Context) | Menengah | PR#3 |
+| PR#6 | Efisiensi Token (Prompt Caching + Delegasi Context) — ⚡ **IMPLEMENTED** | Menengah | PR#3 |
 | PR#7 | Module Discovery Bertahap | Rendah (Fase 2 ditunda) | - |
 
 Urutan pengerjaan yang disarankan: **PR#3 → PR#1 → PR#4 → PR#5 → PR#2 → PR#6 → PR#7 (Fase 1 saja)**.

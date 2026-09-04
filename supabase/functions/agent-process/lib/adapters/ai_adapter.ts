@@ -452,7 +452,38 @@ export class GeminiAdapter implements CapabilityAdapter {
 
   async *stream(input: any, context: AdapterContext): AsyncGenerator<string, void, unknown> {
     const { promptText, systemPromptText, chatHistory, image } = input;
-    const geminiContents = [];
+
+    // [PR#6 TOKEN EFFICIENCY] Pisahkan system prompt menjadi dua lapisan:
+    // - Static Layer  → systemInstruction (agar Implicit Caching Gemini aktif otomatis)
+    // - Dynamic Layer → pesan 'user' pertama di contents (RAG, MEMORY — berubah per request)
+    // Struktur ini memungkinkan Gemini mengenali prefix identik antar request
+    // dan meng-cache bagian statis tanpa memerlukan explicit caching API.
+    let staticSystemPrompt = systemPromptText || '';
+    let dynamicContextInject = '';
+
+    if (systemPromptText) {
+      // Ekstrak blok dinamis: <RAG>...</RAG>, <MEMORY>...</MEMORY>, <EXECUTION_TRACE ... />
+      // Blok-blok ini berubah setiap request sehingga harus dipisah dari system instruction
+      const dynamicBlockRegex = /(<RAG>[\s\S]*?<\/RAG>|<MEMORY>[\s\S]*?<\/MEMORY>|<EXECUTION_TRACE[^/]*\/>)/g;
+      const dynamicBlocks: string[] = [];
+      staticSystemPrompt = systemPromptText.replace(dynamicBlockRegex, (match: string) => {
+        dynamicBlocks.push(match);
+        return '';
+      }).trim();
+
+      if (dynamicBlocks.length > 0) {
+        dynamicContextInject = `[KONTEKS REFERENSI UNTUK PERTANYAAN INI]\n\n${dynamicBlocks.join('\n\n')}`;
+      }
+    }
+
+    const geminiContents: any[] = [];
+
+    // Injeksikan dynamic context sebagai pesan 'user' pertama (sebelum history)
+    if (dynamicContextInject) {
+      geminiContents.push({ role: 'user', parts: [{ text: dynamicContextInject }] });
+      geminiContents.push({ role: 'model', parts: [{ text: 'Baik, saya telah membaca konteks referensi tersebut.' }] });
+    }
+
     if (chatHistory) {
       for (const msg of chatHistory) {
         geminiContents.push({ role: msg.role === 'model' ? 'model' : 'user', parts: [{ text: msg.content }] });
@@ -466,7 +497,12 @@ export class GeminiAdapter implements CapabilityAdapter {
         contents: geminiContents,
         generationConfig: { maxOutputTokens: 8192 }
     };
-    if (systemPromptText) geminiPayload.systemInstruction = { parts: [{ text: systemPromptText }] };
+    if (staticSystemPrompt) geminiPayload.systemInstruction = { parts: [{ text: staticSystemPrompt }] };
+
+    // Log payload size estimate untuk token metrics (PR#6 Exit Criteria)
+    const estimatedPromptChars = staticSystemPrompt.length + dynamicContextInject.length + (promptText || '').length;
+    console.log(`[PR#6 TOKEN] Payload stream: static=${staticSystemPrompt.length}c dynamic=${dynamicContextInject.length}c prompt=${(promptText||'').length}c estimasi~${Math.round(estimatedPromptChars/4)} token`);
+
 
     const allKeys = this.rctx.keys.allGemini;
     const model = this.rctx.model.model && this.rctx.model.model.includes('gemini') ? this.rctx.model.model : 'gemini-2.0-flash';
@@ -544,8 +580,17 @@ export class GeminiAdapter implements CapabilityAdapter {
       yield '\n</think>\n\n';
     }
     
-    const promptTokens = Math.ceil(JSON.stringify(geminiPayload).length / 4);
+    // [PR#6 TOKEN METRICS] Estimasi token untuk verifikasi dampak caching
+    // estimatedPromptChars = static + dynamic + prompt (dihitung sebelum fetch)
+    const promptTokens = Math.ceil(estimatedPromptChars / 4);
     const completionTokens = Math.ceil(accumulatedText.length / 4);
+    // Gemini stream SSE tidak mengembalikan usageMetadata per chunk —
+    // cachedContentTokenCount hanya tersedia di non-stream response.
+    // Untuk stream, kita log estimasi penghematan berdasarkan dynamic vs static split.
+    const cachedCandidateTokens = dynamicContextInject.length > 0
+      ? Math.round(staticSystemPrompt.length / 4) // kandidat token yang berpotensi di-cache
+      : 0;
+    console.log(`[PR#6 TOKEN METRICS] Stream selesai: prompt_est=${promptTokens}t completion=${completionTokens}t static_cacheable=${cachedCandidateTokens}t`);
     
     this.rctx.tasks.fire('RecordUsageStream', recordUsage({
       userId,
@@ -559,6 +604,7 @@ export class GeminiAdapter implements CapabilityAdapter {
       supabaseServiceKey: this.rctx.env.supabaseServiceKey || ''
     }));
   }
+
 
   async healthCheck() {
     return await this.initialize();
