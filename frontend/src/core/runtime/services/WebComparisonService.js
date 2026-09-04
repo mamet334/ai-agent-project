@@ -362,13 +362,22 @@ export class WebComparisonService {
           const { data, error } = await supabase.functions.invoke('agent-process', {
             body: { action: 'proxy_fetch', url }
           });
-          if (!error && data && data.ok) {
-            console.log(`[WebComparisonService] Proxy fetch sukses (${(data.data || '').length} chars)`);
+          if (!error && data) {
+            if (data.ok) {
+              console.log(`[WebComparisonService] Proxy fetch sukses (${(data.data || '').length} chars)`);
+              return {
+                ok: true,
+                status: data.status,
+                text: async () => data.data || '',
+                json: async () => JSON.parse(data.data || '{}')
+              };
+            }
+            console.warn(`[WebComparisonService] Proxy fetch remote status ${data.status} for ${url}`);
             return {
-              ok: true,
-              status: data.status,
+              ok: false,
+              status: data.status || 500,
               text: async () => data.data || '',
-              json: async () => JSON.parse(data.data || '{}')
+              json: async () => ({})
             };
           }
           if (error) {
@@ -378,9 +387,14 @@ export class WebComparisonService {
       } catch (proxyErr) {
         console.warn('[WebComparisonService] Proxy bridge exception:', proxyErr.message);
       }
+
+      // Jika di browser dan bukan URL Wikipedia origin=*, jangan paksa fetch langsung yang pasti kena CORS
+      if (!url.includes('origin=*')) {
+        return { ok: false, status: 403, text: async () => '', json: async () => ({}) };
+      }
     }
 
-    // 3. Fallback standard fetch (Node.js test / browser direct)
+    // 3. Fallback standard fetch (Node.js test CLI / CORS-friendly endpoints)
     const headers = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
       'Accept': 'application/rss+xml, application/xml, text/xml, text/html, application/json;q=0.9,*/*;q=0.8',
@@ -390,15 +404,15 @@ export class WebComparisonService {
     return await fetch(url, { ...options, headers });
   }
 
-
   /**
    * Internal fetcher abstraction (Multi-provider resilient search).
    * Mendukung:
    * 1. Injected handler (mock/custom)
-   * 2. Provider 1: Google News RSS (Bahasa Indonesia)
-   * 3. Provider 2 (Fallback Berita): Google News Global RSS & Antara News Tekno
-   * 4. Provider 3 (Wikipedia Faktual): DIBLOKIR untuk kueri temporal/berita; hanya untuk kueri faktual statis
-   * 5. Provider 4: DuckDuckGo
+   * 2. Provider 1: Bing News RSS (Query-based News Engine — Teruji sangat handal, realtime & akurat)
+   * 3. Provider 2: Google News RSS (Bahasa Indonesia & Global)
+   * 4. Provider 3: Antara News Tekno (dengan filter kata kunci relevansi)
+   * 5. Provider 4: Wikipedia (Hanya untuk kueri faktual/non-temporal)
+   * 6. Provider 5: DuckDuckGo Fallback
    */
   async _executeFetch(query, signal, options = {}) {
     if (this.customSearchHandler) {
@@ -407,7 +421,24 @@ export class WebComparisonService {
 
     const isTemporal = Boolean(options.isTemporal);
 
-    // Provider 1: Google News RSS (Bahasa Indonesia)
+    // Provider 1: Bing News RSS (Query-based News Engine — Teruji sangat handal & akurat)
+    try {
+      const bingUrl = `https://www.bing.com/news/search?q=${encodeURIComponent(query)}&format=rss`;
+      const response = await this._safeFetch(bingUrl, { signal });
+
+      if (response && response.ok) {
+        const xml = await response.text();
+        const results = this._parseRssResults(xml);
+        if (results && results.length > 0) {
+          console.log(`[WebComparisonService] Bing News RSS returned ${results.length} results`);
+          return results;
+        }
+      }
+    } catch (bingErr) {
+      console.warn('[WebComparisonService] Bing News RSS fetch warning:', bingErr.message);
+    }
+
+    // Provider 2: Google News RSS (Bahasa Indonesia & Global)
     try {
       const gnewsUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=id&gl=ID&ceid=ID:id`;
       const response = await this._safeFetch(gnewsUrl, { signal });
@@ -424,9 +455,7 @@ export class WebComparisonService {
       console.warn('[WebComparisonService] Google News RSS ID fetch warning:', gnewsErr.message);
     }
 
-    // Provider 2: Fallback Berita Sungguhan (Google News Global & Antara News)
     try {
-      // 2a. Google News Global
       const gnewsGlobalUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
       const responseGlobal = await this._safeFetch(gnewsGlobalUrl, { signal });
       if (responseGlobal && responseGlobal.ok) {
@@ -441,21 +470,29 @@ export class WebComparisonService {
       console.warn('[WebComparisonService] Google News Global warning:', globalErr.message);
     }
 
+    // Provider 3: Antara News Tekno (Hanya ambil jika ada artikel yang relevan dengan kata kunci kueri)
     try {
-      // 2b. Antara News Tekno (Kantor Berita Nasional Indonesia)
       const antaraUrl = `https://www.antaranews.com/rss/tekno`;
       const responseAntara = await this._safeFetch(antaraUrl, { signal });
       if (responseAntara && responseAntara.ok) {
         const xml = await responseAntara.text();
-        const results = this._parseRssResults(xml);
-        if (results && results.length > 0) {
-          console.log(`[WebComparisonService] Antara News Tekno returned ${results.length} results`);
-          return results;
+        const rawResults = this._parseRssResults(xml);
+        // Guard relevansi: filter agar hanya menyertakan artikel yang mengandung kata kunci query
+        const queryTerms = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+        const matchingResults = rawResults.filter(item => {
+          const text = (item.title + ' ' + item.snippet).toLowerCase();
+          return queryTerms.some(term => text.includes(term));
+        });
+
+        if (matchingResults.length > 0) {
+          console.log(`[WebComparisonService] Antara News Tekno returned ${matchingResults.length} matching results`);
+          return matchingResults;
         }
       }
     } catch (antaraErr) {
       console.warn('[WebComparisonService] Antara News warning:', antaraErr.message);
     }
+
 
     // Provider 3: Wikipedia Search API
     // KEBIJAKAN GOVERNANCE: JIKA QUERY ADALAH TEMPORAL / BERITA, WIKIPEDIA DIBLOKIR PENUH!
