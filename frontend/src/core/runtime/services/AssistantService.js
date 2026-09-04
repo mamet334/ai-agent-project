@@ -696,6 +696,7 @@ export class AssistantService {
     if (!knowledgeContext && retrievalOrchestrator && !isLiteMode) {
       try {
         const retrievalResult = await retrievalOrchestrator.retrieve(userMsg, {
+          userId,
           limit: 5,
           traceId: requestTraceId,
           enableWebComparison: true,

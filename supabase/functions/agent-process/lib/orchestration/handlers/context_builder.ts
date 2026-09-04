@@ -50,6 +50,7 @@ export const ContextBuilderHandler = {
                 const knowledgeService = new KnowledgeService({ supabaseClient: supabase });
                 const rawChunks = await knowledgeService.queryKnowledge(ctx.request.finalMessage || '', {
                     supabaseClient: supabase,
+                    userId: ctx.auth.userId,
                     limit: ctx.request.effectiveRagMatchCount || 10
                 });
 

@@ -73,11 +73,27 @@ export default function useDashboardData() {
   useEffect(() => {
     async function fetchData() {
       try {
+        const authRes = await supabase.auth.getSession();
+        const currentUserId = authRes?.data?.session?.user?.id;
+
+        let memQuery = supabase.from('user_memories').select('id, summary, created_at, memory_hits, metadata, status').limit(500);
+        let docQuery = supabase.from('documents').select('id, title, created_at').limit(500);
+        let chatQuery = supabase.from('chats').select('id, title, workspace_type, created_at').limit(500);
+        let chunkQuery = currentUserId
+          ? supabase.from('document_chunks').select('id, document_id, documents!inner(user_id)').eq('documents.user_id', currentUserId).limit(5000)
+          : supabase.from('document_chunks').select('id, document_id').limit(5000);
+
+        if (currentUserId) {
+          memQuery = memQuery.eq('user_id', currentUserId);
+          docQuery = docQuery.eq('user_id', currentUserId);
+          chatQuery = chatQuery.eq('user_id', currentUserId);
+        }
+
         const [memRes, docRes, chatRes, chunkRes] = await Promise.all([
-          supabase.from('user_memories').select('id, summary, created_at, memory_hits, metadata, status').limit(500),
-          supabase.from('documents').select('id, title, created_at').limit(500),
-          supabase.from('chats').select('id, title, workspace_type, created_at').limit(500),
-          supabase.from('document_chunks').select('id, document_id').limit(5000)
+          memQuery,
+          docQuery,
+          chatQuery,
+          chunkQuery
         ]);
 
         const memories = memRes.data || [];
@@ -291,7 +307,6 @@ export default function useDashboardData() {
           recentFailures
         });
 
-        const authRes = await supabase.auth.getSession();
         const storageRes = await supabase.storage.listBuckets();
 
         const { data: heartbeatData } = await supabase

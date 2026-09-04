@@ -116,6 +116,8 @@ export class RetrievalOrchestrator {
       if (ks) {
         rawChunks = await ks.queryKnowledge(query, {
           supabaseClient: options.supabaseClient,
+          userId: options.userId,
+          spaceId: options.spaceId,
           limit: options.limit || 10
         });
       }

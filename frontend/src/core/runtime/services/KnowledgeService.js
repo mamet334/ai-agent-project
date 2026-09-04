@@ -99,10 +99,26 @@ export class KnowledgeService {
       return [];
     }
 
+    // Resolusi user_id: prioritaskan options.userId, lalu periksa session supabase jika ada
+    let userId = options.userId;
+    if (!userId && typeof supabase?.auth?.getSession === 'function') {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.id) userId = session.user.id;
+      } catch (_) {}
+    }
+
+    // Guard isolasi tenant: Tanpa userId yang valid dan tanpa flag eksplisit allowGlobalScan,
+    // jangan kembalikan dokumen agar tidak terjadi kebocoran lintas akun / sesi.
+    if (!userId && !options.allowGlobalScan) {
+      console.warn('[KnowledgeService] Kueri dibatalkan: userId tidak tersedia dan allowGlobalScan=false. Isolasi tenant ditegakkan.');
+      return [];
+    }
+
     const limit = options.limit || 15;
     const keywords = this._extractKeywords(query, 8);
 
-    console.log(`[KnowledgeService] Querying knowledge for: "${query}" (keywords: ${keywords.join(', ') || 'none'})`);
+    console.log(`[KnowledgeService] Querying knowledge for: "${query}" (userId: ${userId || 'none'}, keywords: ${keywords.join(', ') || 'none'})`);
 
     let result = [];
     try {
@@ -116,7 +132,7 @@ export class KnowledgeService {
           .or(titleFilterStr)
           .limit(10);
 
-        if (options.userId) docQuery = docQuery.eq('user_id', options.userId);
+        if (userId) docQuery = docQuery.eq('user_id', userId);
         if (options.spaceId) docQuery = docQuery.eq('space_id', options.spaceId);
 
         const { data: matchedDocs, error: docErr } = await docQuery;
@@ -143,9 +159,6 @@ export class KnowledgeService {
           .select('id, document_id, content, source_url, source_type')
           .in('document_id', targetedDocIds);
 
-        if (options.userId) docChunksQuery = docChunksQuery.eq('user_id', options.userId);
-        if (options.spaceId) docChunksQuery = docChunksQuery.eq('space_id', options.spaceId);
-
         const { data: docChunks, error: docChunksErr } = await docChunksQuery.limit(limit);
         if (!docChunksErr && docChunks && docChunks.length > 0) {
           result = docChunks.map((chunk, idx) => ({
@@ -162,15 +175,25 @@ export class KnowledgeService {
       // 3. TAHAP CONTENT SEARCH FALLBACK/SUPPLEMENT: Isi sisa slot dengan pencarian konten
       if (result.length < limit) {
         const remainingLimit = limit - result.length;
+        let selectFields = 'id, document_id, content, source_url, source_type';
+        const needsDocJoin = Boolean(userId || options.spaceId);
+        if (needsDocJoin) {
+          selectFields = 'id, document_id, content, source_url, source_type, documents!inner(id, title, user_id, space_id)';
+        }
+
         let contentQuery = supabase
           .from('document_chunks')
-          .select('id, document_id, content, source_url, source_type');
+          .select(selectFields);
 
         if (targetedDocIds.length > 0) {
           contentQuery = contentQuery.not('document_id', 'in', `(${targetedDocIds.join(',')})`);
         }
-        if (options.userId) contentQuery = contentQuery.eq('user_id', options.userId);
-        if (options.spaceId) contentQuery = contentQuery.eq('space_id', options.spaceId);
+        if (userId) {
+          contentQuery = contentQuery.eq('documents.user_id', userId);
+        }
+        if (options.spaceId) {
+          contentQuery = contentQuery.eq('documents.space_id', options.spaceId);
+        }
 
         if (keywords.length > 0) {
           const filterStr = keywords.map(k => `content.ilike.%${k}%`).join(',');
@@ -192,18 +215,23 @@ export class KnowledgeService {
               const score = keywords.reduce((acc, k) => acc + (text.includes(k) ? 1 : 0), 0);
               return { ...c, matchScore: score };
             });
-            scored.sort((a, b) => b.matchScore - a.matchScore);
+            const validScored = keywords.length > 0 ? scored.filter(c => c.matchScore > 0) : scored;
+            validScored.sort((a, b) => b.matchScore - a.matchScore);
 
-            const added = scored.slice(0, remainingLimit).map((chunk, idx) => ({
-              id: chunk.id,
-              document_id: chunk.document_id || 'unknown',
-              content: chunk.content || '',
-              source_url: chunk.source_url || null,
-              source_type: chunk.source_type || 'local',
-              similarity: typeof chunk.similarity === 'number'
-                ? chunk.similarity
-                : Math.max(0.4, 0.7 - (idx * 0.03)) // Content ranking
-            }));
+            const added = validScored.slice(0, remainingLimit).map((chunk, idx) => {
+              const keywordCoverage = keywords.length > 0 ? (chunk.matchScore / keywords.length) : 0.5;
+              const calculatedSim = Math.max(0.2, Math.min(0.85, (keywordCoverage * 0.6) + (0.25 - idx * 0.02)));
+              return {
+                id: chunk.id,
+                document_id: chunk.document_id || 'unknown',
+                content: chunk.content || '',
+                source_url: chunk.source_url || null,
+                source_type: chunk.source_type || 'local',
+                similarity: typeof chunk.similarity === 'number'
+                  ? chunk.similarity
+                  : Number(calculatedSim.toFixed(3))
+              };
+            });
             result = result.concat(added);
           }
         }
