@@ -228,7 +228,8 @@ export class WebComparisonService {
     try {
       console.log(`[WebComparisonService] 🌐 Menjalankan pencarian web (Timeout: ${timeoutMs}ms) untuk: "${query.substring(0, 60)}..."`);
       
-      const rawResults = await this._executeFetch(query, abortController.signal);
+      const isTemporal = Boolean(options.isTemporal);
+      const rawResults = await this._executeFetch(query, abortController.signal, { isTemporal });
       clearTimeout(timeoutId);
 
       const durationMs = Date.now() - startTime;
@@ -263,9 +264,10 @@ export class WebComparisonService {
       const chunks = rawResults.map((item) => ({
         content: item.snippet || item.title || '',
         title: item.title || 'Web Result',
-        source_type: 'web',
+        source_type: item.source_type || 'web',
+        isStaticEncyclopedia: Boolean(item.isStaticEncyclopedia),
         source_url: item.link || item.url || 'https://web-search-engine.net',
-        similarity: 0.75,
+        similarity: item.isStaticEncyclopedia ? 0.6 : 0.75,
         retrieved_at: timestamp
       }));
 
@@ -327,61 +329,131 @@ export class WebComparisonService {
   }
 
   /**
+   * Safe Fetch: Menggunakan Electron IPC (Node.js Network Bridge) jika tersedia,
+   * atau native fetch jika berjalan di browser/environment test CLI.
+   * Ini menghindari masalah CORS dan header restriction (User-Agent/Referer) di Chromium.
+   */
+  async _safeFetch(url, options = {}) {
+    if (typeof window !== 'undefined' && window.electronAPI && typeof window.electronAPI.fetchWeb === 'function') {
+      try {
+        const res = await window.electronAPI.fetchWeb(url, options);
+        if (res && res.ok) {
+          return {
+            ok: true,
+            status: res.status,
+            text: async () => res.data || '',
+            json: async () => JSON.parse(res.data || '{}')
+          };
+        }
+        console.warn(`[WebComparisonService] IPC fetchWeb non-ok: ${res?.status} (${res?.error || ''}) for ${url}`);
+      } catch (ipcErr) {
+        console.warn('[WebComparisonService] IPC fetchWeb exception:', ipcErr.message);
+      }
+    }
+
+    // Fallback standard fetch (Node.js test / browser direct)
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+      'Accept': 'application/rss+xml, application/xml, text/xml, text/html, application/json;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+      ...(options.headers || {})
+    };
+    return await fetch(url, { ...options, headers });
+  }
+
+  /**
    * Internal fetcher abstraction (Multi-provider resilient search).
    * Mendukung:
    * 1. Injected handler (mock/custom)
-   * 2. Google News RSS (real-time news, unblocked, bebas sensor ISP)
-   * 3. Wikipedia API (open factual search)
-   * 4. DuckDuckGo fallback
+   * 2. Provider 1: Google News RSS (Bahasa Indonesia)
+   * 3. Provider 2 (Fallback Berita): Google News Global RSS & Antara News Tekno
+   * 4. Provider 3 (Wikipedia Faktual): DIBLOKIR untuk kueri temporal/berita; hanya untuk kueri faktual statis
+   * 5. Provider 4: DuckDuckGo
    */
-  async _executeFetch(query, signal) {
+  async _executeFetch(query, signal, options = {}) {
     if (this.customSearchHandler) {
-      return await this.customSearchHandler(query, signal);
+      return await this.customSearchHandler(query, signal, options);
     }
 
-    // Provider 1: Google News RSS (Prioritas utama untuk berita/informasi terkini)
+    const isTemporal = Boolean(options.isTemporal);
+
+    // Provider 1: Google News RSS (Bahasa Indonesia)
     try {
       const gnewsUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=id&gl=ID&ceid=ID:id`;
-      const response = await fetch(gnewsUrl, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/rss+xml, application/xml, text/xml',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        },
-        signal
-      });
+      const response = await this._safeFetch(gnewsUrl, { signal });
 
-      if (response.ok) {
+      if (response && response.ok) {
         const xml = await response.text();
         const results = this._parseRssResults(xml);
         if (results && results.length > 0) {
-          console.log(`[WebComparisonService] Google News RSS returned ${results.length} results`);
+          console.log(`[WebComparisonService] Google News RSS ID returned ${results.length} results`);
           return results;
         }
       }
     } catch (gnewsErr) {
-      console.warn('[WebComparisonService] Google News RSS fetch warning:', gnewsErr.message);
+      console.warn('[WebComparisonService] Google News RSS ID fetch warning:', gnewsErr.message);
     }
 
-    // Provider 2: Wikipedia Search API (Fallback faktual terbuka)
+    // Provider 2: Fallback Berita Sungguhan (Google News Global & Antara News)
+    try {
+      // 2a. Google News Global
+      const gnewsGlobalUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
+      const responseGlobal = await this._safeFetch(gnewsGlobalUrl, { signal });
+      if (responseGlobal && responseGlobal.ok) {
+        const xml = await responseGlobal.text();
+        const results = this._parseRssResults(xml);
+        if (results && results.length > 0) {
+          console.log(`[WebComparisonService] Google News Global returned ${results.length} results`);
+          return results;
+        }
+      }
+    } catch (globalErr) {
+      console.warn('[WebComparisonService] Google News Global warning:', globalErr.message);
+    }
+
+    try {
+      // 2b. Antara News Tekno (Kantor Berita Nasional Indonesia)
+      const antaraUrl = `https://www.antaranews.com/rss/tekno`;
+      const responseAntara = await this._safeFetch(antaraUrl, { signal });
+      if (responseAntara && responseAntara.ok) {
+        const xml = await responseAntara.text();
+        const results = this._parseRssResults(xml);
+        if (results && results.length > 0) {
+          console.log(`[WebComparisonService] Antara News Tekno returned ${results.length} results`);
+          return results;
+        }
+      }
+    } catch (antaraErr) {
+      console.warn('[WebComparisonService] Antara News warning:', antaraErr.message);
+    }
+
+    // Provider 3: Wikipedia Search API
+    // KEBIJAKAN GOVERNANCE: JIKA QUERY ADALAH TEMPORAL / BERITA, WIKIPEDIA DIBLOKIR PENUH!
+    if (isTemporal) {
+      console.log('[WebComparisonService] 🛑 Query temporal/berita terdeteksi. Wikipedia DIBLOKIR sebagai fallback untuk menjaga keaslian berita terkini.');
+      return []; // Mengembalikan array kosong agar sistem jujur melaporkan hasil kosong, bukan mengganti dengan ensiklopedia
+    }
+
+    // Kueri faktual/non-temporal: Wikipedia diizinkan dengan penanda eksplisit ensiklopedia statis
     try {
       const wikiUrl = `https://id.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*`;
-      const response = await fetch(wikiUrl, {
-        method: 'GET',
+      const response = await this._safeFetch(wikiUrl, {
         headers: { 'Accept': 'application/json' },
         signal
       });
 
-      if (response.ok) {
+      if (response && response.ok) {
         const data = await response.json();
         const searchHits = data?.query?.search || [];
         if (searchHits.length > 0) {
           const results = searchHits.slice(0, 5).map(h => ({
-            title: h.title,
+            title: `${h.title} (Wikipedia Ensiklopedia Statis)`,
             link: `https://id.wikipedia.org/wiki/${encodeURIComponent(h.title.replace(/\s+/g, '_'))}`,
-            snippet: (h.snippet || '').replace(/<[^>]+>/g, '').trim()
+            snippet: (h.snippet || '').replace(/<[^>]+>/g, '').trim(),
+            source_type: 'encyclopedia',
+            isStaticEncyclopedia: true
           }));
-          console.log(`[WebComparisonService] Wikipedia API returned ${results.length} results`);
+          console.log(`[WebComparisonService] Wikipedia API returned ${results.length} results (Faktual)`);
           return results;
         }
       }
@@ -389,19 +461,15 @@ export class WebComparisonService {
       console.warn('[WebComparisonService] Wikipedia search warning:', wikiErr.message);
     }
 
-    // Provider 3: DuckDuckGo Fallback
+    // Provider 4: DuckDuckGo Fallback
     try {
       const endpoint = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-      const response = await fetch(endpoint, {
-        method: 'GET',
-        headers: {
-          'Accept': 'text/html',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        },
+      const response = await this._safeFetch(endpoint, {
+        headers: { 'Accept': 'text/html' },
         signal
       });
 
-      if (response.ok) {
+      if (response && response.ok) {
         const html = await response.text();
         return this._parseHtmlResults(html);
       }

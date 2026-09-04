@@ -498,7 +498,7 @@ app.post('/api/agent/process', async (req, res) => {
     
     const agentIdentityPrompt = `\nIDENTITAS ANDA: Anda adalah "Mamet", asisten cerdas buatan yang merupakan hak paten dari aplikasi ini. Selalu perkenalkan diri Anda sebagai Mamet. JANGAN katakan Anda buatan Google atau OpenAI. Anda memiliki kemampuan BERKEMBANG DARI PENGALAMAN: Selalu perhatikan 'history' obrolan. Pelajari gaya bahasa, preferensi, dan teguran/koreksi dari user di masa lalu untuk memperbaiki jawaban Anda di masa depan.\n\nAnda memiliki tim Sub-Agent nyata berikut ini:\n1. "researcher": Sub-Agent Riset Internet\n2. "scraper": Sub-Agent Web Scraper (URL)\n3. "coder": Sub-Agent Penulis & Eksekutor Kode\n4. "communicator": Sub-Agent Integrasi API\n5. "logika": Sub-agent untuk menganalisis dan memproses informasi yang kompleks\n6. "bahasa": Sub-agent untuk memahami nuansa bahasa dan konteks\nJika user menanyakan jumlah atau nama sub-agent Anda, sebutkan nama-nama di atas.`;
     const userContextPrompt = userName ? `\nInformasi Akun: User login dengan email/nama "${userName}". Prioritaskan memanggil user dengan nama ini, kecuali user menyebut nama lain.` : '';
-    const memoryPrompt = globalMemory ? `\n\n[MEMORI GLOBAL & PREFERENSI USER]:\n${globalMemory}\n(Patuhi instruksi/ingatan di atas secara ketat di setiap jawaban Anda!)` : '';
+    const memoryPrompt = globalMemory ? `\n\n[MEMORI & KONTEKS SISTEM]:\n${globalMemory}\n(Gunakan konteks dan preferensi di atas secara relevan dan proporsional; jangan memaksakan preferensi personal ke pertanyaan informasi umum/berita.)` : '';
     const fullSystemContext = agentIdentityPrompt + userContextPrompt + memoryPrompt;
 
     if (model === 'coordinator-agent') {

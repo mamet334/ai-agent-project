@@ -32,7 +32,7 @@ export const loadProjectMemory = async (
   }
   
   const memoryPrompt = globalMemory 
-    ? `\n\n[MEMORI GLOBAL & PREFERENSI USER]:\n${globalMemory}\n(Patuhi instruksi/ingatan di atas secara ketat di setiap jawaban Anda!)` 
+    ? `\n\n[MEMORI & KONTEKS SISTEM]:\n${globalMemory}\n(Gunakan konteks dan preferensi di atas secara relevan dan proporsional; jangan memaksakan preferensi personal ke pertanyaan informasi umum/berita.)` 
     : '';
   
   return { memoryArray, memoryPrompt };

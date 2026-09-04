@@ -182,6 +182,10 @@ export class AssistantService {
       return { localContext, semanticContext };
     }
 
+    // Cek apakah kueri adalah pertanyaan berita/temporal murni
+    const retrievalOrchestrator = this.serviceManager?.get('RetrievalOrchestrator');
+    const isTemporal = retrievalOrchestrator?.isTemporalQuery?.(userMsg) || false;
+
     // Memory injection
     let memoryService = this.serviceManager.get('MemoryService');
     if (!memoryService) {
@@ -193,7 +197,14 @@ export class AssistantService {
       try {
         const memories = await memoryService.getMemory(userMsg);
         if (memories && memories.length > 0) {
-          localContext = memories.map(m => m.summary || m.content || '').filter(Boolean).join('\n');
+          // Jika kueri temporal/berita eksternal, cegah pencemaran kueri dengan memori profil/preferensi personal yang tidak relevan
+          const filteredMemories = isTemporal
+            ? memories.filter(m => (m.similarity && m.similarity >= 0.8) || m.category === 'knowledge')
+            : memories;
+
+          if (filteredMemories.length > 0) {
+            localContext = filteredMemories.map(m => m.summary || m.content || '').filter(Boolean).join('\n');
+          }
         }
       } catch (e) {
         console.warn('[AssistantService] MemoryService query failed:', e);
@@ -699,12 +710,15 @@ export class AssistantService {
       }
     }
 
-    // Gabungkan localContext (Memory) + knowledgeContext (RAG Knowledge)
+    // Gabungkan localContext (Memory) + knowledgeContext (RAG Knowledge & Berita Web)
+    // Beri demarkasi tegas agar konteks berita tidak tertukar dengan preferensi personal
     let combinedContext = '';
     if (localContext && knowledgeContext) {
-      combinedContext = `${localContext}\n\n${knowledgeContext}`;
-    } else {
-      combinedContext = knowledgeContext || localContext || '';
+      combinedContext = `[PREFERENSI PERSONAL PENGGUNA (Gunakan hanya jika relevan dengan konteks)]:\n${localContext}\n\n[DOKUMEN PENGETAHUAN & REFERENSI BERITA/WEB]:\n${knowledgeContext}`;
+    } else if (knowledgeContext) {
+      combinedContext = `[DOKUMEN PENGETAHUAN & REFERENSI BERITA/WEB]:\n${knowledgeContext}`;
+    } else if (localContext) {
+      combinedContext = localContext;
     }
 
     let enhancedRagContext = combinedContext;

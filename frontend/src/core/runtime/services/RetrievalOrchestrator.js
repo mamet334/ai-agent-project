@@ -211,10 +211,12 @@ export class RetrievalOrchestrator {
         const webService = this.webComparisonService || (this.serviceManager?.has('WebComparisonService') ? this.serviceManager.get('WebComparisonService') : null);
 
         if (webService && typeof webService.searchWeb === 'function') {
+          const isTemporal = this.isTemporalQuery(query);
           const tier3Result = await webService.searchWeb(query, {
             traceId: options.traceId,
             autoConfirm: options.autoConfirmWebSearch || false,
-            reason: options.webComparisonReason || (this.isTemporalQuery(query) ? 'Pertanyaan memerlukan berita/informasi terkini yang tidak ada di dokumen lokal.' : 'Konteks lokal belum memadai dan perbandingan web dibutuhkan.')
+            isTemporal,
+            reason: options.webComparisonReason || (isTemporal ? 'Pertanyaan memerlukan berita/informasi terkini yang tidak ada di dokumen lokal.' : 'Konteks lokal belum memadai dan perbandingan web dibutuhkan.')
           });
 
           // Jika Web Search SUKSES menghasilkan chunks
@@ -315,8 +317,10 @@ export class RetrievalOrchestrator {
 
       if (sourceType === 'llm_internal') {
         header = `--- Konteks ${i + 1} [Sumber: Pengetahuan internal model] ---`;
+      } else if (sourceType === 'encyclopedia' || c.isStaticEncyclopedia) {
+        header = `--- Konteks ${i + 1} [Sumber: Ensiklopedia Statis — ${c.source_url || 'Wikipedia'} (Informasi ensiklopedis statis, BUKAN berita real-time), akurasi tidak terverifikasi] ---`;
       } else if (sourceType === 'web') {
-        header = `--- Konteks ${i + 1} [Sumber: Web — ${c.source_url || 'Web Search'}, akurasi tidak terverifikasi] ---`;
+        header = `--- Konteks ${i + 1} [Sumber: Berita Web — ${c.source_url || 'Web Search'}, akurasi tidak terverifikasi] ---`;
       }
 
       return `${header}\n${c.content}`;

@@ -231,6 +231,44 @@ app.on('window-all-closed', function () {
 
 // ========== IPC HANDLERS ==========
 
+// 0a. Tier 3 Web Retrieval Fetcher (Node.js Network Layer — Bebas CORS & Header Restrictions)
+ipcMain.handle('net:fetchWeb', async (event, { url, options = {} }) => {
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+    'Accept': 'application/rss+xml, application/xml, text/xml, text/html, application/json;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+    ...(options.headers || {})
+  };
+
+  const controller = new AbortController();
+  const timeoutMs = options.timeoutMs || 8000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      method: options.method || 'GET',
+      headers,
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    const text = await response.text();
+    return {
+      ok: response.ok,
+      status: response.status,
+      statusText: response.statusText,
+      data: text
+    };
+  } catch (err) {
+    clearTimeout(timeoutId);
+    return {
+      ok: false,
+      status: 0,
+      error: err.message
+    };
+  }
+});
+
 const { runAirdropTask } = require('./airdropEngine.cjs');
 
 // ✅ Tentukan root proyek secara absolut (folder induk dari 'frontend/electron/')

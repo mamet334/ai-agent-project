@@ -77,4 +77,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('update-status', handler);
     return () => ipcRenderer.removeListener('update-status', handler);
   },
+
+  // =============================================
+  // TIER 3 WEB RETRIEVAL FETCHER (Node.js Network Bridge)
+  // =============================================
+  fetchWeb: (url, options) => ipcRenderer.invoke('net:fetchWeb', { url, options }),
 });
