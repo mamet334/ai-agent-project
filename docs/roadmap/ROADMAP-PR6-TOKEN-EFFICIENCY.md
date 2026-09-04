@@ -1,8 +1,8 @@
-﻿# ROADMAP — PR#6: Efisiensi Token
+# ROADMAP — PR#6: Efisiensi Token
 
 **Sumber Spec:** `docs/roadmap/ASSISTANT-CAPABILITY-ROADMAP.md` (PR#6, baris 322-362)
 **Tanggal Dibuat:** 2026-09-04
-**Status:** ⚡ IMPLEMENTED (Build Pass 2026-09-04 — Menunggu Live Verification)
+**Status:** ✅ DEPLOYED (Supabase Cloud — Menunggu Live Verification oleh Owner)
 
 ---
 
