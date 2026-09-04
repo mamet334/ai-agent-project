@@ -240,13 +240,13 @@ export async function executeRequestPipeline(
 
   // --- PROMPT INITIALIZATION ---
   const currentDateStr = new Date().toISOString().split('T')[0];
-  const hasInjectedKnowledge = parsed.globalMemory && typeof parsed.globalMemory === 'string' && (
+  const hasInjectedKnowledge = Boolean(parsed.globalMemory && typeof parsed.globalMemory === 'string' && (
     parsed.globalMemory.includes('[DOKUMEN PENGETAHUAN') ||
     parsed.globalMemory.includes('Sumber: Google News') ||
     parsed.globalMemory.includes('Sumber: Web Search') ||
     parsed.globalMemory.includes('--- Konteks') ||
     parsed.globalMemory.length > 80
-  );
+  ));
 
   let agentIdentityPrompt = `\nKONTEKS WAKTU HARI INI: ${currentDateStr} (Tahun berjalan saat ini adalah 2026).\n`;
   if (hasInjectedKnowledge) {
@@ -291,9 +291,15 @@ Sebelum memberikan jawaban akhir, Anda WAJIB menuliskan proses berpikir Anda sec
 Isi tag think harus mencakup:
 1. Apa yang Anda pahami dari pertanyaan/permintaan user.
 2. APAKAH DATA TERSEDIA DI BLOK <RAG>, [BLOK 4: KNOWLEDGE], ATAU <MEMORY>?
-3. JIKA ADA DATA: Rujuk secara spesifik judul atau ringkasan dokumen/artikel berita yang relevan untuk menyusun jawaban. Beri label status: [STATUS: VERIFIED] pada jawaban Anda.
-4. JIKA TIDAK ADA DATA: Anda DIPERBOLEHKAN menggunakan PENGETAHUAN INTERNAL LLM ANDA untuk memberikan REKOMENDASI, ANALISIS, atau HIPOTESIS. Beri label status: [STATUS: HYPOTHESIS - Rekomendasi AI] pada jawaban Anda.
-5. JIKA KEDUANYA KOSONG ATAU TIDAK TAHU: Katakan dengan jelas "Data tidak ditemukan di database atau referensi web, dan saya tidak memiliki informasi internal yang cukup". Beri label status: [STATUS: INSUFFICIENT].
+3. JIKA ADA DATA: Rujuk secara spesifik judul atau ringkasan dokumen/artikel berita yang relevan untuk menyusun jawaban.
+4. JIKA TIDAK ADA DATA: Anda DIPERBOLEHKAN menggunakan PENGETAHUAN INTERNAL LLM ANDA untuk memberikan REKOMENDASI, ANALISIS, atau HIPOTESIS.
+5. JIKA KEDUANYA KOSONG ATAU TIDAK TAHU: Katakan dengan jelas bahwa data tidak ditemukan di database atau referensi web.
+
+ATURAN WAJIB LABEL STATUS PADA JAWABAN AKHIR:
+Di luar tag <think>, pada baris TERAKHIR jawaban Anda, Anda WAJIB mencetak TEPAT SATU label status berikut secara eksplisit:
+- Jika didukung oleh dokumen <RAG>/Web: [STATUS: VERIFIED]
+- Jika menggunakan rekomendasi/pengetahuan internal tanpa dokumen pendukung: [STATUS: HYPOTHESIS - Rekomendasi AI]
+- Jika data tidak ditemukan dan tidak cukup informasi: [STATUS: INSUFFICIENT]
 
 PENTING - PRINSIP KNOWLEDGE FIRST + FALLBACK:
 - ANDA TETAP PRIORITASKAN DATA DARI <RAG>, REFERENSI BERITA/WEB, DAN <MEMORY>.

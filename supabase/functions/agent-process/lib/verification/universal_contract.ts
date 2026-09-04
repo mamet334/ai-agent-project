@@ -252,5 +252,16 @@ function renderContractAsText(
     text += buildSourceTraceText(confidenceReport.sourceTrace);
   }
 
+  // ── BLOK 6: OUTPUT FORMAT & STATUS LABEL ──
+  text += `\n[BLOK 6: OUTPUT FORMAT & STATUS LABEL]\n`;
+  if (runtime.evidenceGateVerdict === 'PASSED') {
+    text += `WAJIB: Karena Evidence Gate telah menyatakan PASSED (dokumen RAG/Web valid), Anda WAJIB mencantumkan label berikut di baris PALING AKHIR jawaban Anda:\n`;
+    text += `[STATUS: VERIFIED]\n`;
+  } else if (runtime.evidenceGateVerdict === 'WARNING') {
+    text += `WAJIB: Karena Evidence Gate berstatus WARNING (tidak ada dokumen bukti spesifik), Anda WAJIB mencantumkan salah satu label berikut di baris PALING AKHIR jawaban Anda:\n`;
+    text += `- [STATUS: HYPOTHESIS - Rekomendasi AI] (jika memberikan jawaban dari analisis/pengetahuan internal)\n`;
+    text += `- [STATUS: INSUFFICIENT] (jika tidak tahu atau data tidak ditemukan)\n`;
+  }
+
   return text;
 }
