@@ -187,13 +187,21 @@ export default function ConversationEngine({ sessionId }) {
       const assistantService = getAssistantService();
       if (!assistantService) return;
 
-      isSavingRef.current = true;
+       isSavingRef.current = true;
       try {
+        // [FIX: Cross-workspace leak] Jangan simpan chat jika workspace belum diketahui —
+        // fallback ke 'ws-assistant' akan menyebabkan chat Engineer/Lite tersimpan
+        // dengan workspace_type yang salah di database.
+        const currentWsId = osStateRef.current?.workspaceId;
+        if (!currentWsId) {
+          isSavingRef.current = false;
+          return;
+        }
         await assistantService.saveChatToDB({
           messages,
           chatId: currentChatId,
           userId: session.user.id,
-          workspaceId: osStateRef.current?.workspaceId || 'ws-assistant',
+          workspaceId: currentWsId,
           onNewChatId: (newId) => {
             setCurrentChatId(newId);
             // [FIX: localStorage isolation] Gunakan kunci workspace-spesifik
@@ -870,7 +878,7 @@ export default function ConversationEngine({ sessionId }) {
           onSelectChat={handleLoadChat}
           onNewChat={handleNewChat}
           activeChatId={currentChatId}
-          activeWorkspace={osState?.workspaceId || 'ws-assistant'}
+          activeWorkspace={osState?.workspaceId}
           collapsed={false}
         />
       </div>

@@ -20,6 +20,11 @@ export default function ChatHistory({ onSelectChat, onNewChat, activeChatId,  ac
   const [deletingId, setDeletingId] = useState(null);
 
   const fetchChats = useCallback(async () => {
+    // [FIX: Cross-workspace leak] Jangan fetch jika activeWorkspace belum terisi dari
+    // WorkspaceManager.switchWorkspace() — tanpa guard ini, semua 3 instance chat akan
+    // menggunakan fallback 'ws-assistant' dan menampilkan data yang sama.
+    if (!activeWorkspace) return;
+
     setLoading(true);
     setError(null);
     try {
@@ -49,6 +54,10 @@ export default function ChatHistory({ onSelectChat, onNewChat, activeChatId,  ac
 
   // Fetch awal + langganan EventBus Chat:Updated untuk realtime sync
   useEffect(() => {
+    // [FIX: Cross-workspace leak] Jangan jalankan fetch atau langganan EventBus
+    // selama activeWorkspace masih belum tersedia dari WorkspaceManager
+    if (!activeWorkspace) return;
+
     fetchChats();
 
     // [FIX: ChatHistory realtime] Langganan ke EventBus kernel untuk menerima notifikasi
@@ -60,8 +69,8 @@ export default function ChatHistory({ onSelectChat, onNewChat, activeChatId,  ac
 
     const unsubscribe = eventBus.on('Chat:Updated', (wrappedPayload) => {
       const payload = wrappedPayload?.data || wrappedPayload;
-      // Refresh jika event berasal dari workspace yang sama (atau tidak ada filter)
-      if (!payload?.workspaceId || payload.workspaceId === activeWorkspace) {
+      // Refresh jika event berasal dari workspace yang sama
+      if (payload?.workspaceId === activeWorkspace) {
         fetchChats();
       }
     });
