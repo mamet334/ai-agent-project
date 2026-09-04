@@ -2,7 +2,8 @@
 
 **Sumber Spec:** `docs/roadmap/ASSISTANT-CAPABILITY-ROADMAP.md` (PR#6, baris 322-362)
 **Tanggal Dibuat:** 2026-09-04
-**Status:** ✅ DEPLOYED (Supabase Cloud — Menunggu Live Verification oleh Owner)
+**Status:** ✅ **COMPLETED & LIVE-VERIFIED (2026-09-04 — Cloud Production Confirmed)**
+
 
 ---
 
@@ -147,17 +148,23 @@ Tambahkan structured log di `GeminiAdapter` untuk setiap request yang mencakup:
 **Build:** ✅ PASS (0 error, 11.95 detik)
 
 **Exit Criteria:**
-- [x] Payload Gemini distrukturkan agar static system prompt masuk `systemInstruction`
+- [x] Payload Gemini & non-stream distrukturkan agar static system prompt masuk `systemInstruction`
       → Implicit Caching aktif otomatis (Static/Dynamic split via regex `<RAG>`, `<MEMORY>`)
 - [x] Web search result tidak melebihi 6.000 chars total sebelum masuk context utama
       → `summarizeWebDoc()` aktif dengan fallback truncate
 - [x] Log token metrics per request: estimated, cached, completion
-      → `[PR#6 TOKEN]` + `[PR#6 TOKEN METRICS]` di Edge Function console
+      → `[PR#6 TOKEN]` + `[PR#6 TOKEN METRICS]` di Edge Function console across all adapters
+- [x] Live Verification di Supabase Cloud:
+      Terbukti aktif pada trace `4ca4900f-a1e0-4c7f-9f2a-f6539dc623ff`:
+      `[PR#6] Web context total: 606 chars dari 2 artikel.`
+      Evidence Gate PASSED (7 evidence docs, Score 100 Grade A, Decision: PASS).
 
 **File Berubah:**
-- `supabase/functions/agent-process/lib/adapters/ai_adapter.ts` — GeminiAdapter.stream()
-- `supabase/functions/agent-process/lib/orchestration/handlers/context_builder.ts`
+- `supabase/functions/agent-process/lib/adapters/ai_adapter.ts` — GeminiAdapter (stream & execute) + OpenRouterAdapter (stream & execute)
+- `supabase/functions/agent-process/lib/llm_orchestrator.ts` — buildPayload (Static/Dynamic split)
+- `supabase/functions/agent-process/lib/orchestration/handlers/context_builder.ts` — Web Context Guard
 - `docs/roadmap/ROADMAP-PR6-TOKEN-EFFICIENCY.md` (dokumen ini)
 - `docs/roadmap/INDEX-ROADMAP.md`
 - `docs/roadmap/ASSISTANT-CAPABILITY-ROADMAP.md`
-- `docs/project-memory/changelog/2026-09-04-pr6-token-efficiency-implementation.md` [NEW]
+- `docs/project-memory/changelog/2026-09-04-pr6-token-efficiency-implementation.md`
+

@@ -26,7 +26,7 @@
 | `ROADMAP-DASHBOARD-OBSERVABILITY-REALTIME.md` | ✅ **Selesai (Diimplementasikan & Diverifikasi 2026-09-04)** | Status Liveness Zero-Token, Sanitasi [object Object], Auto-Load Trace, Metrik Realtime |
 | `ROADMAP-KNOWLEDGE-GALAXY-COSMIC-ORBITS.md` | 🟡 **PROPOSED (Menunggu Review Owner)** | Visualisasi Galaksi: Orbit Lengkung (Cosmic Filaments) & Pijaran Bintang Aktif Chat (Live Thought Pulse) |
 | `ROADMAP-RUNTIME-CHAT-SESSION-STABILITY-AND-HISTORY.md` | ✅ **COMPLETED, LIVE-ACCEPTED & VERIFIED (2026-09-04 — Kedipan 0, Riwayat Realtime & Terisolasi Antar Workspace)** | Stabilitas Reconciler React (0 Unmount), Isolasi Kunci Workspace Chat, & Realtime EventBus Sync ChatHistory |
-| `ROADMAP-PR6-TOKEN-EFFICIENCY.md` | ⚡ **IMPLEMENTED (2026-09-04 — Build Pass, Menunggu Live Verification)** | Prompt Caching Gemini (Implicit Caching via Static/Dynamic Split systemInstruction) + Web Search Summarization Guard (threshold 6.000 chars, maks 800 chars/artikel) + Token Metrics Logging per request |
+| `ROADMAP-PR6-TOKEN-EFFICIENCY.md` | ✅ **COMPLETED & LIVE-VERIFIED (2026-09-04 — Cloud Confirmed)** | Prompt Caching Gemini (Implicit Caching via Static/Dynamic Split systemInstruction) + Web Search Summarization Guard (threshold 6.000 chars, maks 800 chars/artikel) + Token Metrics Logging across all adapters |
 | `MAMET-AI-ROADMAP.md`, `engineer-autonomous-mode.md`, `engineer-chat-upgrade.md`, `fix-log.md`, `rencana.md`, `roadmap-lanjutan.md` | 📋 Belum direview ulang dalam sesi ini — **catatan:** `MAMET-AI-ROADMAP.md` memakai skema penomoran (`TASK-000x`, `ADR-000x`, istilah "MametLite"/"BRAIN 1-2") yang berbeda dari skema PR# di dokumen lain — perlu direkonsiliasi sebelum dipakai sebagai rujukan aktif | — |
 
 ---
@@ -79,11 +79,11 @@
     useDashboardData.js: kolom timestamp pada verification_audit_logs → 0 HTTP 400 retry loop.
     Build: ✅ 2662 modul, 0 error. Live-Accepted by Owner: Kedipan 0, Sesi Utuh, Riwayat Realtime & Terisolasi Antar Workspace (2026-09-04).
     ↓
-[IMPLEMENTED / BUILD PASS] PR#6 — EFISIENSI TOKEN (ROADMAP-PR6-TOKEN-EFFICIENCY.md)
-    ai_adapter.ts (GeminiAdapter.stream()): Static/Dynamic split — static ke systemInstruction (Implicit Caching aktif), dynamic (RAG, MEMORY) ke contents user pertama.
+[SELESAI / LIVE-VERIFIED] PR#6 — EFISIENSI TOKEN (ROADMAP-PR6-TOKEN-EFFICIENCY.md)
+    ai_adapter.ts: Static/Dynamic split — static ke systemInstruction (Implicit Caching aktif), dynamic (RAG, MEMORY) ke contents user pertama.
     context_builder.ts: Web Search Summarization Guard — threshold 6.000 chars total, maks 800 chars/artikel via runLLM() + fallback truncate.
-    Token Metrics Logging: [PR#6 TOKEN] per request + [PR#6 TOKEN METRICS] per stream selesai.
-    Build: ✅ 0 error, 11.95 detik. Menunggu Live Verification oleh Owner.
+    Token Metrics Logging: [PR#6 TOKEN] per request + [PR#6 TOKEN METRICS] across Gemini & OpenRouter adapters.
+    Live Verified on Supabase Cloud: [PR#6] Web context total: 606 chars dari 2 artikel (trace 4ca4900f-a1e0-4c7f-9f2a-f6539dc623ff). Build pass (10.07s).
 ```
 
 *Catatan Terpisah:* Opsi C (Remediasi Backlog Runtime — `ModuleDiscoveryService` refactor, React Warning render phase) dan item housekeeping lain di Bagian 6 tetap independen dari 3 tahap ini dan dapat disisipkan kapan saja tanpa mempengaruhi urutan arsitektural di atas (Referensi: Sesi audit dependensi 3 inisiatif besar, 2026-09-03).
