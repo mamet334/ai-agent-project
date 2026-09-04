@@ -456,7 +456,8 @@ export default function ConversationEngine({ sessionId }) {
   useEffect(() => {
     const eventBus = kernel.serviceManager?.get('EventBus');
     if (!eventBus) return;
-    const commandConfirmHandler = (payload) => {
+    const commandConfirmHandler = (wrappedPayload) => {
+      const payload = wrappedPayload?.data || wrappedPayload;
       // Simpan detail command pending — dialog akan render berdasarkan ini
       setCommandConfirmation({
         commandName: payload.commandName,
@@ -476,12 +477,26 @@ export default function ConversationEngine({ sessionId }) {
     const eventBus = kernel.serviceManager?.get('EventBus');
     if (!eventBus) return;
 
-    const requestHandler = (payload) => {
-      setWebConfirmation(payload);
+    const requestHandler = (wrappedPayload) => {
+      // EventBus wraps all payloads in { source, timestamp, data }
+      const payload = wrappedPayload?.data || wrappedPayload;
+      if (payload?.requestId) {
+        console.log('[ConversationEngine] 📥 Received WebConfirmation request:', payload.requestId, payload.query);
+        setWebConfirmation(payload);
+      }
     };
 
-    const clearHandler = () => {
-      setWebConfirmation(null);
+    const clearHandler = (wrappedPayload) => {
+      const payload = wrappedPayload?.data || wrappedPayload;
+      const targetId = payload?.requestId;
+      setWebConfirmation(prev => {
+        if (!prev) return null;
+        const currentId = prev.requestId || prev.data?.requestId;
+        if (!targetId || currentId === targetId) {
+          return null;
+        }
+        return prev;
+      });
     };
 
     const unsubReq = eventBus.on('Retrieval:RequestWebConfirmation', requestHandler);
@@ -499,12 +514,18 @@ export default function ConversationEngine({ sessionId }) {
 
   // PR#9: Handle resolusi izin pencarian web (Setujui / Tolak)
   const handleResolveWebConfirmation = useCallback((requestId, isApproved) => {
+    const targetId = requestId || webConfirmation?.requestId || webConfirmation?.data?.requestId;
+    console.log('[ConversationEngine] 📤 Resolving WebConfirmation:', { targetId, isApproved });
+    if (!targetId) {
+      console.warn('[ConversationEngine] handleResolveWebConfirmation dipanggil tanpa requestId yang valid:', { requestId, webConfirmation });
+      return;
+    }
     const webService = getWebComparisonService();
     if (webService && typeof webService.resolveConfirmation === 'function') {
-      webService.resolveConfirmation(requestId, isApproved);
+      webService.resolveConfirmation(targetId, isApproved);
     }
     setWebConfirmation(null);
-  }, []);
+  }, [webConfirmation]);
 
   // MEMORY: Listen Memory:OpenConflicts to ensure memory panel opens
   useEffect(() => {
@@ -1265,25 +1286,25 @@ export default function ConversationEngine({ sessionId }) {
                           Konfirmasi Akses Web Pembanding
                         </p>
                         <p className="text-[11px] text-on-surface-variant mt-0.5 leading-tight">
-                          {webConfirmation.reason || 'Konteks lokal belum memadai untuk menjawab pertanyaan terkini.'}
+                          {(webConfirmation.reason || webConfirmation.data?.reason) || 'Konteks lokal belum memadai untuk menjawab pertanyaan terkini.'}
                         </p>
                         <div className="mt-1.5 text-[11px] font-mono bg-surface-container-lowest/80 px-2 py-1 rounded border border-outline-variant text-on-surface flex items-center gap-1.5">
                           <span className="text-primary font-bold shrink-0">Query:</span>
-                          <span className="truncate max-w-[320px] sm:max-w-md">{webConfirmation.query}</span>
+                          <span className="truncate max-w-[320px] sm:max-w-md">{webConfirmation.query || webConfirmation.data?.query}</span>
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end pt-1.5 sm:pt-0 border-t sm:border-t-0 border-outline-variant/50">
                       <button
                         type="button"
-                        onClick={() => handleResolveWebConfirmation(webConfirmation.requestId, false)}
+                        onClick={() => handleResolveWebConfirmation(webConfirmation.requestId || webConfirmation.data?.requestId, false)}
                         className="px-3 py-1.5 text-xs font-medium rounded-xl bg-surface-container hover:bg-surface-variant text-on-surface-variant transition-colors cursor-pointer"
                       >
                         Tolak
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleResolveWebConfirmation(webConfirmation.requestId, true)}
+                        onClick={() => handleResolveWebConfirmation(webConfirmation.requestId || webConfirmation.data?.requestId, true)}
                         className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-primary hover:bg-primary-fixed text-on-primary transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
                       >
                         <span className="material-symbols-outlined text-[16px]">public</span>

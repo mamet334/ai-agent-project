@@ -110,29 +110,38 @@ export class WebComparisonService {
    * @param {boolean} isApproved
    */
   resolveConfirmation(requestId, isApproved) {
-    const pending = this.pendingConfirmations.get(requestId);
+    const actualId = (typeof requestId === 'object' && requestId !== null)
+      ? (requestId.requestId || requestId.id)
+      : requestId;
+
+    if (!actualId) {
+      console.warn(`[WebComparisonService] Konfirmasi web search tidak ditemukan atau sudah selesai: ${actualId}`);
+      return false;
+    }
+
+    const pending = this.pendingConfirmations.get(actualId);
     if (!pending) {
-      console.warn(`[WebComparisonService] Konfirmasi web search tidak ditemukan atau sudah selesai: ${requestId}`);
+      console.warn(`[WebComparisonService] Konfirmasi web search tidak ditemukan atau sudah selesai: ${actualId}`);
       return false;
     }
 
     if (pending.timeoutId) {
       clearTimeout(pending.timeoutId);
     }
-    this.pendingConfirmations.delete(requestId);
+    this.pendingConfirmations.delete(actualId);
 
     if (!isApproved) {
-      console.log(`[WebComparisonService] ❌ Owner MENOLAK pencarian web [${requestId}]. Eksekusi dibatalkan (0 web cost/latency).`);
+      console.log(`[WebComparisonService] ❌ Owner MENOLAK pencarian web [${actualId}]. Eksekusi dibatalkan (0 web cost/latency).`);
       if (this.eventBus?.emit) {
-        this.eventBus.emit('Retrieval:WebConfirmationRejected', { requestId });
+        this.eventBus.emit('Retrieval:WebConfirmationRejected', { requestId: actualId });
       }
       pending.resolve(false);
-      return false;
+      return true;
     }
 
-    console.log(`[WebComparisonService] ✅ Owner MENYETUJUI pencarian web [${requestId}]. Melanjutkan eksekusi...`);
+    console.log(`[WebComparisonService] ✅ Owner MENYETUJUI pencarian web [${actualId}]. Melanjutkan eksekusi...`);
     if (this.eventBus?.emit) {
-      this.eventBus.emit('Retrieval:WebConfirmationApproved', { requestId });
+      this.eventBus.emit('Retrieval:WebConfirmationApproved', { requestId: actualId });
     }
     pending.resolve(true);
     return true;
