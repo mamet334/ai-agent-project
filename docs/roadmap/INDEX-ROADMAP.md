@@ -16,6 +16,7 @@
 | `PR8-linux-style-dispatch.md` | ✅ Selesai — `RequestClassifierService` + thin dispatcher + `_handleLookup` | `RequestClassifierService`, `LookupHandler`, `ConversationHandler` |
 | `teknis-skil-implementasi.md` | ✅ Selesai — SkillRegistry + SkillGuardService + SkillHandler + contoh skill | `SkillRegistry`, `SkillGuardService`, `SkillHandler` |
 | `PR9-retrieval-tier-architecture.md` | ✅ **Selesai Penuh (Fase 1, 2, & 3 — Live-Verified)** (Tier 1 lokal, Tier 2 internal fallback, Tier 3 Web Comparison dengan Human-in-Command, multi-provider RSS/IPC bridge, integrasi RAG server-side, standarisasi varian label status, & live test terkonfirmasi) | `RetrievalStrategyService.js`, `KnowledgeService.js`, `context_builder.ts`, `RetrievalOrchestrator.js`, `InternalKnowledgeFallbackService.js`, `WebComparisonService.js`, `request_pipeline.ts`, `universal_contract.ts` |
+| `ZERO-LEAKAGE-RAG-TENANT-ISOLATION.md` | ✅ **Selesai Penuh & Live-Verified (2026-09-04)** (Audit kepemilikan 45 dokumen 2 akun, PostgREST inner join `documents!inner(user_id)` di `KnowledgeService.js`, guard `userId`, propagasi `userId` di seluruh runtime pipeline & Edge Function, serta live test desktop 100% pass) | `KnowledgeService.js`, `RetrievalOrchestrator.js`, `AssistantService.js`, `context_builder.ts`, `useDashboardData.js` |
 
 | `PENDING-supabase-security-advisor-findings.md` | ✅ **Selesai Remediasi RPC (8/9) — 1 item deferred: upgrade plan** (8 fungsi `SECURITY DEFINER` aman via migrasi; Leaked Password ditunda keputusan Owner karena batasan Pro plan) | Supabase RPC Permissions & Security |
 | `PENDING-live-verification-runtime-gaps.md` | ✅ **Selesai Remediasi Gap Runtime (5/5 — 100%)** (Trace ID, Match Memories schema, Escaped ilike, UUID storage target, CHECK_002/003 Source Trace) | `agent-process` Edge Function & RAG |
@@ -60,6 +61,13 @@
 [SELESAI] TAHAP 3 — PR#9 Fase 3: Web Comparison (Opsi D, 2026-09-03, Live-Verified 2026-09-04)
     WebComparisonService.js + Tier 3 di RetrievalOrchestrator.js dengan gerbang konfirmasi Owner (Human-in-Command).
     - Timeout 8s (AbortController), atribusi sumber transparan ([Sumber: Web — {url}, akurasi tidak terverifikasi]), fallback jujur saat ditolak/gagal/timeout, didaftarkan di Kernel Phase 3, mitigasi CSP Chromium via Electron IPC bridge, multi-provider RSS fallback, pengangkatan dokumen web ke RAG first-class, serta standarisasi universal label status epistemik (format ringkas LOOKUP vs format penuh).
+    ↓
+[SELESAI] ZERO-LEAKAGE RAG TENANT ISOLATION & MULTI-ACCOUNT AUDIT (2026-09-04, Live-Verified by Owner)
+    Audit kepemilikan 45 dokumen di Supabase RAG (29 milik akun andreanastasya798@gmail.com, 16 milik akun slametbro798@gmail.com).
+    - Hardening KnowledgeService.js: PostgREST Resource Embedding Inner Join documents!inner(id, title, user_id, space_id) pada fallback content search, guard proteksi missing userId, dan penghapusan filter kolom user_id yang salah pada tabel document_chunks.
+    - Penyambungan parameter userId di seluruh alur: RetrievalOrchestrator.js, AssistantService.js, dan Edge Function context_builder.ts.
+    - Scoping useDashboardData.js ke currentUserId.
+    - Teruji otomatis cross-tenant 0 kebocoran dan diverifikasi langsung lewat pengujian live desktop oleh Owner (skor kecukupan 0.832, Evidence Gate PASSED 100% Grade A, status [STATUS: VERIFIED]).
 ```
 
 *Catatan Terpisah:* Opsi C (Remediasi Backlog Runtime — `ModuleDiscoveryService` refactor, React Warning render phase) dan item housekeeping lain di Bagian 6 tetap independen dari 3 tahap ini dan dapat disisipkan kapan saja tanpa mempengaruhi urutan arsitektural di atas (Referensi: Sesi audit dependensi 3 inisiatif besar, 2026-09-03).
@@ -95,11 +103,11 @@ Dokumen `PR9-retrieval-tier-architecture.md` telah **selesai penuh 100% untuk se
 - **Memory** (`user_memories` table via `MemoryService`/`MemoryGovernorService`) — hal yang di-*remember* user secara eksplisit (preferensi, fakta personal). Bukan bagian dari desain PR#9.
 - **RAG/Knowledge** (`document_chunks`/`documents` via `RetrievalStrategyService`/`context_builder.ts`) — dokumen pengetahuan, dicakup PR#9. Dua sistem ini independen, tidak boleh dicampur.
 
-**Empat "governor/guard/orchestrator" service independen:**
-- `SystemGovernorService.js` — monitoring/anomali kode & escalations (belum dibuat)
-- `MemoryGovernorService.js` — integritas data/ringkasan memori (pondasi siap)
-- `SkillGuardService.js` — validasi keamanan skill sebelum dieksekusi (sudah aktif via Skill Implementation)
-- `RetrievalOrchestrator.js` — pengatur transisi tier retrieval pengetahuan 1→2→3 (baru, PR#9, dibangun Fase 1)
+**Empat "governor/guard/orchestrator" service independen (Seluruhnya Aktif):**
+- `SystemGovernorService.js` — monitoring/anomali integritas kode & eskalasi 4 level (aktif via Tahap 2, Kernel Phase 3)
+- `MemoryGovernorService.js` — integritas data/ringkasan memori golden source, conflict resolution, & UI purge (aktif 100% via Tahap 1)
+- `SkillGuardService.js` — validasi keamanan skill sebelum dieksekusi (aktif via Skill Implementation)
+- `RetrievalOrchestrator.js` — orkestrasi 3 tier retrieval pengetahuan lokal→internal→web + penegakan isolasi tenant (aktif via PR#9 & Zero-Leakage Hardening)
 
 ---
 
