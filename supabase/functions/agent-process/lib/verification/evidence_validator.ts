@@ -156,7 +156,9 @@ function buildGateVerdictText(params: {
     if (brain2Tasks.length > 0) text += `Brain2 Tasks: ${brain2Tasks.join(', ')}\n`;
     if (brain2Gaps.length > 0) text += `Brain2 Gaps: ${brain2Gaps.join(', ')}\n`;
     if (brain2Verifications.length > 0) text += `Brain2 Verifications: ${brain2Verifications.join(', ')}\n`;
-    text += `INSTRUKSI: Anda HANYA BOLEH menggunakan evidence yang terdaftar di atas. Jangan sebut data engineering yang tidak ada di sini.\n`;
+    if (ragCount > 0) text += `RAG/Web Documents: ${ragCount} dokumen tersedia sebagai rujukan faktual\n`;
+    if (memoryCount > 0) text += `User Memory: ${memoryCount} node\n`;
+    text += `INSTRUKSI: Anda WAJIB memprioritaskan dokumen evidence di atas untuk menyusun jawaban yang akurat dan terverifikasi.\n`;
   }
 
   return text;

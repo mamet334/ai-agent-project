@@ -58,7 +58,11 @@ export function buildUniversalContract(params: ContractBuilderInput): UniversalE
     restrictions.push('Tidak boleh membaca/menulis User Memory', 'Tidak boleh menggunakan tool otomasi');
   } else {
     capabilities.push('RAG retrieval', 'Membaca User Memory', 'Web search', 'Menjalankan Sub-Agent');
-    restrictions.push('Tidak boleh menjawab tanpa menginformasikan keterbatasan evidence');
+    if (evidenceReport.verdict === 'WARNING') {
+      restrictions.push('Sampaikan keterbatasan jika evidence pendukung tidak mencukupi');
+    } else {
+      restrictions.push('Prioritaskan dokumen evidence yang tersedia sebagai rujukan utama');
+    }
   }
 
   const identity: IdentityBlock = {
@@ -209,7 +213,7 @@ function renderContractAsText(
 
   if (knowledge.hasRAG) {
     text += `--- RAG Documents (${knowledge.ragCount} dokumen) ---\n`;
-    text += knowledge.ragSummary + '\n';
+    text += `<RAG>\n${knowledge.ragSummary}\n</RAG>\n\n`;
   }
 
   // ── CONSTRAINT BLOCK ──

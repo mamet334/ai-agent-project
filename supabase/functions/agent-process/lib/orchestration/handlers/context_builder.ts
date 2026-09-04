@@ -143,22 +143,76 @@ export const ContextBuilderHandler = {
     // 3. GATHER: Await all parallel executions
     const [ragArray, projectMemResult, engineerCtx] = await Promise.all([ragPromise, memoryPromise, engineerPromise]);
 
-    ctx.state.ragArray = (ragArray || []).map((r: any, idx: number) => {
+    // Ekstraksi dokumen referensi eksternal / Web Retrieval dari globalMemory jika ada
+    const externalDocs: any[] = [];
+    let cleanPersonalMemory = '';
+
+    if (ctx.request.globalMemory && typeof ctx.request.globalMemory === 'string') {
+      const rawGlobal = ctx.request.globalMemory;
+      if (rawGlobal.includes('[DOKUMEN PENGETAHUAN & REFERENSI BERITA/WEB]:')) {
+        const parts = rawGlobal.split('[DOKUMEN PENGETAHUAN & REFERENSI BERITA/WEB]:');
+        cleanPersonalMemory = parts[0].replace('[PREFERENSI PERSONAL PENGGUNA (Gunakan hanya jika relevan dengan konteks)]:', '').trim();
+        const knowledgePart = parts[1] || '';
+        
+        const chunks = knowledgePart.split(/(?=---\s*Konteks\s*\d+)/).filter((c: string) => c.trim().length > 0);
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i].trim();
+          const titleMatch = chunk.match(/Judul:\s*([^\n]+)/i);
+          const sourceMatch = chunk.match(/\[Sumber:\s*([^\]]+)\]/i);
+          const title = titleMatch ? titleMatch[1].trim() : `Web Reference ${i + 1}`;
+          const source = sourceMatch ? sourceMatch[1].trim() : 'Web Retrieval';
+          externalDocs.push({
+            type: 'rag',
+            content: chunk,
+            title,
+            source_url: source,
+            source_type: 'web',
+            score: 0.95
+          });
+        }
+      } else if (rawGlobal.includes('--- Konteks')) {
+        const chunks = rawGlobal.split(/(?=---\s*Konteks\s*\d+)/).filter((c: string) => c.trim().length > 0);
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i].trim();
+          const titleMatch = chunk.match(/Judul:\s*([^\n]+)/i);
+          const sourceMatch = chunk.match(/\[Sumber:\s*([^\]]+)\]/i);
+          const title = titleMatch ? titleMatch[1].trim() : `Web Reference ${i + 1}`;
+          const source = sourceMatch ? sourceMatch[1].trim() : 'Web Retrieval';
+          externalDocs.push({
+            type: 'rag',
+            content: chunk,
+            title,
+            source_url: source,
+            source_type: 'web',
+            score: 0.95
+          });
+        }
+      } else {
+        cleanPersonalMemory = rawGlobal.trim();
+      }
+    }
+
+    const combinedRawRag = [...(ragArray || []), ...externalDocs];
+
+    ctx.state.ragArray = (combinedRawRag || []).map((r: any, idx: number) => {
       const match = r.content?.match(/\[Dari file "([^"]+)"\]/);
-      const extractedTitle = match ? match[1] : (r.source_url || r.title || `dokumen_${idx + 1}`);
+      const extractedTitle = match ? match[1] : (r.title || r.source_url || `dokumen_${idx + 1}`);
       const docId = `DOC-${String(idx + 1).padStart(4, '0')}`;
       const cleanContent = r.content?.replace(/^\[Dari file "[^"]+"\]\s*/, '') || r.content || '';
+      const sourceLabel = r.source_type === 'web' ? 'Sumber Web' : 'Dari file';
       return {
         ...r,
         docId,
         formattedTitle: extractedTitle,
-        contentWithId: `[${docId}] [Dari file "${extractedTitle}"]\n${cleanContent}`
+        contentWithId: `[${docId}] [${sourceLabel}: "${extractedTitle}"]\n${cleanContent}`
       };
     });
     ctx.state.memoryArray = projectMemResult.memoryArray;
-    const memoryPrompt = projectMemResult.memoryPrompt;
+    const memoryPrompt = cleanPersonalMemory
+      ? `\n\n[MEMORI & PREFERENSI PERSONAL]:\n${cleanPersonalMemory}\n(Gunakan konteks dan preferensi di atas secara relevan dan proporsional; jangan memaksakan preferensi personal ke pertanyaan informasi umum/berita.)`
+      : projectMemResult.memoryPrompt;
     
-    ctx.state.processingSteps.push(`[RAG CONTEXT GENERATED] ragArray size=${ctx.state.ragArray.length}`);
+    ctx.state.processingSteps.push(`[RAG CONTEXT GENERATED] ragArray size=${ctx.state.ragArray.length} (termasuk ${externalDocs.length} web/external chunks)`);
     ctx.state.processingSteps.push(`[MEMORY PROMPT GENERATED] memoryPrompt="${memoryPrompt.trim()}" memoryArray size=${projectMemResult.memoryArray.length}`);
 
     // 4. FUSION — inject semanticContext from frontend if present
@@ -168,7 +222,7 @@ export const ContextBuilderHandler = {
 
     const resolvedContext = buildContextPipeline({
         memoryArray: projectMemResult.memoryArray,
-        ragArray: ragArray,
+        ragArray: combinedRawRag,
         message: ctx.request.finalMessage,
         agentIdentityPrompt: ctx.request.agentIdentityPrompt || '',
         userContextPrompt: (ctx.request.userContextPrompt || '') + semanticContextPrompt,
@@ -327,7 +381,7 @@ export const ContextBuilderHandler = {
     });
 
     fullSystemContext = universalContract.asSystemPromptText();
-    ctx.state.processingSteps.push(`[SYSTEM CONTEXT FINAL] fullSystemContext="${fullSystemContext.substring(fullSystemContext.length - 300)}"`);
+    ctx.state.processingSteps.push(`[SYSTEM CONTEXT FINAL] fullSystemContext="${fullSystemContext}"`);
 
     return { 
       isBlocked: false, 
