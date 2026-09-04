@@ -165,6 +165,10 @@ Daftar kerja Fase 1 (Selesai 2026-09-02, lihat changelog: [`2026-09-02-pr9-retri
   - Demarkasi Memori vs Pengetahuan: Dokumen web diangkat ke first-class RAG chunks di `ctx.state.ragArray` (`[DOC-XXXX]`), memisahkan preferensi persona di memori dari fakta pengetahuan di `<RAG>`.
   - Dynamic Cutoff: Batasan cutoff 2024 dikondisikan hanya saat pengetahuan live tidak disuntikkan (`!hasInjectedKnowledge`).
   - Standarisasi Universal Label Status Epistemik: Varian ringkas mode `LOOKUP` (`[Pengetahuan umum AI — tidak diverifikasi dari dokumen Anda]`) vs varian penuh mode `CONVERSATION`/`ENGINEER` (`[STATUS: HYPOTHESIS - Rekomendasi AI]`). Diverifikasi live 100% pada aplikasi desktop nyata.
+- ⚠️ **Catatan Kompatibilitas Multi-Platform (Desktop vs Web Browser Chrome/Vercel):**
+  - **Desktop Electron:** Berjalan 100% via native IPC bridge (`window.electronAPI.fetchWeb`) yang mengeksekusi fetch via Node.js tanpa hambatan CORS.
+  - **Web Browser (Chrome/Vercel):** Mengalami kendala dynamic import 404 pada `await import('../../../supabase.js')` yang menyebabkan Edge Function `proxy_fetch` belum terpanggil dan direct browser fetch terblokir CORS.
+  - **Status Backlog:** Dicatat sebagai item backlog per arahan Owner untuk diperbaiki nanti tanpa modifikasi kode saat ini (lihat [`PENDING-tier3-web-search-chrome-cors-proxy-fix.md`](./PENDING-tier3-web-search-chrome-cors-proxy-fix.md)).
 
 ---
 
