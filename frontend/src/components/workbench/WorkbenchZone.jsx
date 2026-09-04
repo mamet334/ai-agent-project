@@ -1,6 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
 import WidgetHost from './WidgetHost';
-import { useWorkspace } from '../../core/workspace/WorkspaceContext';
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
@@ -57,6 +56,7 @@ export default function WorkbenchZone({
   onClose
 }) {
   const isResizing = useRef(false);
+  const currentSizeRef = useRef(null);
   const [draftSize, setDraftSize] = useState(null);
 
   const { setNodeRef } = useDroppable({
@@ -67,6 +67,7 @@ export default function WorkbenchZone({
   // Reset draftSize if external width/height changes when not resizing
   useEffect(() => {
     if (!isResizing.current) {
+       currentSizeRef.current = null;
        setDraftSize(null);
     }
   }, [width, height]);
@@ -88,6 +89,7 @@ export default function WorkbenchZone({
         newSize = Math.max(150, Math.min(600, document.body.clientHeight - moveEvent.clientY));
       }
       
+      currentSizeRef.current = newSize;
       setDraftSize(newSize);
     };
 
@@ -97,13 +99,14 @@ export default function WorkbenchZone({
       document.removeEventListener('pointermove', onPointerMove);
       document.removeEventListener('pointerup', onPointerUp);
       
-      // Update global layout only when drag finishes to prevent AppShell re-render lag
-      setDraftSize((finalSize) => {
-         if (finalSize !== null && onResize) {
-            onResize(position, finalSize);
-         }
-         return null;
-      });
+      const finalSize = currentSizeRef.current;
+      currentSizeRef.current = null;
+      setDraftSize(null);
+
+      // Trigger layout update outside of React state updater to prevent render phase warning
+      if (finalSize !== null && onResize) {
+        onResize(position, finalSize);
+      }
     };
 
     document.addEventListener('pointermove', onPointerMove);

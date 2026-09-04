@@ -9,11 +9,22 @@ export function WorkspaceProvider({ appId, defaultWorkspaceId, children }) {
   const [osState, setOsState] = useState(manager.state);
 
   useEffect(() => {
-    const unsubscribe = manager.subscribe((payload) => setOsState(payload?.data || payload));
+    let isMounted = true;
+    const unsubscribe = manager.subscribe((payload) => {
+      // Defer state update to microtask queue to prevent updating state during render phase
+      queueMicrotask(() => {
+        if (isMounted) {
+          setOsState(payload?.data || payload);
+        }
+      });
+    });
     if (defaultWorkspaceId && !manager.activeWorkspaceId) {
       manager.switchWorkspace(defaultWorkspaceId);
     }
-    return unsubscribe;
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, [manager, defaultWorkspaceId]);
 
   return (

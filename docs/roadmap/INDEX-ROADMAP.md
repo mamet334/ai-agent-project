@@ -130,10 +130,12 @@ Setiap kali sebuah dokumen di folder ini selesai dikerjakan (Exit Criteria terpe
 
 1. **Refactor `ModuleDiscoveryService.js`:**
    - **Isu:** Memanggil `window.electronAPI.runTerminalCommand()` saat boot desktop sehingga memicu popup izin terminal AI tanpa trigger user.
-   - **Solusi:** Migrasi ke `window.electronAPI.listFiles()` & `readFile()` yang aman.
-2. **React Warning Render Phase (`WorkspaceContext.jsx:12`):**
+   - **Status:** ✅ **Selesai Diimplementasikan (2026-09-04)** ([`2026-09-04-fix-backlog-module-discovery-and-react-render-warning.md`](../project-memory/changelog/2026-09-04-fix-backlog-module-discovery-and-react-render-warning.md)).
+   - **Solusi:** Migrasi penuh dari `runTerminalCommand` ke API filesystem aman (`window.electronAPI.listFiles()` & `readFile()`) yang membaca berkas langsung via Node.js `fs` tanpa terminal prompt.
+2. **React Warning Render Phase (`WorkspaceContext.jsx:12` & `WorkbenchZone.jsx:60`):**
    - **Isu:** Warning *"Cannot update a component while rendering"* dipicu dari `WorkbenchZone.jsx:60` via `EventBus`.
-   - **Rencana Audit:** Telusuri mengapa pemanggilan `setState` terpanggil di dalam render phase alih-alih di dalam `useEffect`/event callback.
+   - **Status:** ✅ **Selesai Diimplementasikan (2026-09-04)** ([`2026-09-04-fix-backlog-module-discovery-and-react-render-warning.md`](../project-memory/changelog/2026-09-04-fix-backlog-module-discovery-and-react-render-warning.md)).
+   - **Solusi:** Pemisahan efek samping `onResize` dari callback updater `setDraftSize` di `WorkbenchZone.jsx` (menggunakan `currentSizeRef`), serta penundaan dispatch state subscriber di `WorkspaceContext.jsx` via `queueMicrotask` dengan proteksi `isMounted`.
 3. **Bug Klasifikasi Intent Recall `RequestClassifier`:**
    - **Isu:** Pertanyaan recall (misal *"masih ingat nama saya?"*) tidak dijawab, melainkan disimpan sebagai memori baru dengan teks terpotong (*"ingat"* terhapus menjadi *"masih nama saya?"*).
    - **Status:** ✅ **Selesai & Tervalidasi Penuh (Live Desktop Confirmed — 4/4 Skenario Kunci)** ([`FIX-intent-classification-and-memory-store-unification.md`](./FIX-intent-classification-and-memory-store-unification.md)).

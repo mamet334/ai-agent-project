@@ -22,7 +22,7 @@
  * }
  */
 
-const MODULES_BASE_PATH = '/modules';
+const MODULES_BASE_PATH = 'modules';
 const MANIFEST_FILENAME = 'module.json';
 
 const REQUIRED_MANIFEST_FIELDS = ['name', 'version', 'type', 'description', 'entry'];
@@ -38,7 +38,7 @@ export class ModuleDiscoveryService {
 
   async initialize() {
     this._initialized = true;
-    console.log('[ModuleDiscoveryService] Initialized — scanning /modules/');
+    console.log('[ModuleDiscoveryService] Initialized — scanning modules/');
     await this._scanAndRegister();
   }
 
@@ -47,35 +47,27 @@ export class ModuleDiscoveryService {
   // =============================================
 
   /**
-   * Scan folder /modules/, validasi manifest, daftarkan ke ToolRegistryService.
+   * Scan folder modules/, validasi manifest, daftarkan ke ToolRegistryService.
    * Error pada satu modul tidak menghentikan proses modul lain.
    */
   async _scanAndRegister() {
-    // Hanya aktif di Electron (akses filesystem lokal)
-    if (!window.electronAPI) {
-      console.log('[ModuleDiscoveryService] Bukan Electron env — module discovery dilewati.');
+    // Hanya aktif di Electron dengan API filesystem lokal aman
+    if (!window.electronAPI || typeof window.electronAPI.listFiles !== 'function' || typeof window.electronAPI.readFile !== 'function') {
+      console.log('[ModuleDiscoveryService] Electron fs API tidak tersedia — module discovery dilewati.');
       return;
     }
 
     let moduleEntries = [];
     try {
-      // Gunakan electronAPI untuk list folder /modules/
-      const result = await window.electronAPI.runTerminalCommand(
-        `powershell -Command "Get-ChildItem -Path '${MODULES_BASE_PATH}' -Directory | Select-Object -ExpandProperty Name | ConvertTo-Json"`
-      );
-      if (!result?.success || !result?.output) {
-        console.log('[ModuleDiscoveryService] Folder /modules/ tidak ditemukan atau kosong.');
+      // Gunakan safe fs:listFiles alih-alih runTerminalCommand (mencegah popup modal terminal saat boot)
+      const entries = await window.electronAPI.listFiles(MODULES_BASE_PATH);
+      if (!Array.isArray(entries) || entries.length === 0) {
+        console.log('[ModuleDiscoveryService] Folder modules/ tidak ditemukan atau kosong.');
         return;
       }
-      try {
-        const parsed = JSON.parse(result.output);
-        moduleEntries = Array.isArray(parsed) ? parsed : [parsed];
-      } catch (_) {
-        // Output bukan JSON (mungkin hanya 1 folder, PowerShell tidak wrap array)
-        moduleEntries = result.output.trim().split('\n').map(s => s.trim()).filter(Boolean);
-      }
+      moduleEntries = entries.filter(e => e.type === 'dir').map(e => e.name);
     } catch (err) {
-      console.warn('[ModuleDiscoveryService] Gagal scan /modules/:', err.message);
+      console.warn('[ModuleDiscoveryService] Gagal scan modules/:', err.message);
       return;
     }
 
@@ -86,18 +78,16 @@ export class ModuleDiscoveryService {
       const manifestPath = `${modulePath}/${MANIFEST_FILENAME}`;
 
       try {
-        // Baca module.json
-        const manifestResult = await window.electronAPI.runTerminalCommand(
-          `powershell -Command "Get-Content -Path '${manifestPath}' -Raw"`
-        );
-        if (!manifestResult?.success || !manifestResult?.output) {
+        // Baca module.json menggunakan API fs aman (tanpa terminal prompt)
+        const manifestRaw = await window.electronAPI.readFile(manifestPath);
+        if (!manifestRaw) {
           this._reject(manifestPath, `module.json tidak ditemukan di ${modulePath}`);
           continue;
         }
 
         let manifest;
         try {
-          manifest = JSON.parse(manifestResult.output);
+          manifest = JSON.parse(manifestRaw);
         } catch (parseErr) {
           this._reject(manifestPath, `module.json tidak valid JSON: ${parseErr.message}`);
           continue;
