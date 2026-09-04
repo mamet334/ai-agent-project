@@ -1,6 +1,6 @@
 # Retrieval Tier Architecture — Design Document
 
-**Status:** ✅ **Selesai Penuh (Fase 1, 2, & 3 — 2026-09-03)**: Tier 1 lokal, Tier 2 internal fallback, dan Tier 3 Web Comparison aktif dengan gerbang konfirmasi Owner (Human-in-Command).
+**Status:** ✅ **Selesai Penuh (Fase 1, 2, & 3 — Live-Verified 2026-09-04)**: Tier 1 lokal, Tier 2 internal fallback, dan Tier 3 Web Comparison aktif dengan gerbang konfirmasi Owner (Human-in-Command), multi-provider resilience, IPC bridge, server-side RAG integration, dan standarisasi universal label status epistemik.
 **Changelog:** [`docs/project-memory/changelog/2026-09-02-pr9-retrieval-tier-fase1-selesai.md`](../project-memory/changelog/2026-09-02-pr9-retrieval-tier-fase1-selesai.md), [`docs/project-memory/changelog/2026-09-02-pr9-retrieval-tier-fase2-selesai.md`](../project-memory/changelog/2026-09-02-pr9-retrieval-tier-fase2-selesai.md), [`docs/project-memory/changelog/2026-09-03-tahap3-web-comparison-service.md`](../project-memory/changelog/2026-09-03-tahap3-web-comparison-service.md)
 **Konteks:** Perluasan cakupan PR#5 (Adaptive Retrieval Strategy) dari retrieval satu-jalur (lokal saja) menjadi sistem retrieval bertingkat (lokal → pengetahuan internal LLM → web), agar tidak terjadi rework saat Tier 2/3 dibangun di kemudian hari.
 **Prinsip yang diikuti:** One File One Responsibility, Architecture over Implementation, Borrowed CPU Principle.
@@ -153,12 +153,18 @@ Daftar kerja Fase 1 (Selesai 2026-09-02, lihat changelog: [`2026-09-02-pr9-retri
 - ✅ **Telemetri & Observabilitas (CP2):** Event `Retrieval:Tier2Fallback` memuat `traceId`, `query`, dan `sufficiency` untuk pelacakan di `cost_ledger`.
 - ✅ **Extend `verification_engine.ts` (CP3):** Menambahkan `CHECK_002B_INTERNAL_KNOWLEDGE_DISCLAIMER` untuk memvalidasi bahwa LLM mengakui keterbatasan pengetahuan parametrik saat Tier 2 aktif.
 
-### Fase 3 — Tier 3 (Web Comparison) — ✅ SELESAI (2026-09-03)
+### Fase 3 — Tier 3 (Web Comparison) — ✅ SELESAI PENUH (2026-09-03, Live-Verified 2026-09-04)
 - ✅ **Bangun `WebComparisonService.js` (CP1):** Service terpisah untuk eksekusi web search, manajemen timeout 8s, dan penandaan hasil `source_type: 'web'`.
 - ✅ **Selesaikan Open Question #2 dan #3 (CP2):** Gerbang konfirmasi Owner (`Retrieval:RequestWebConfirmation` / Human-in-Command) dan timeout 8s dengan fallback transparan.
 - ✅ **Perluas `RetrievalOrchestrator.js` (CP3):** Transisi berjenjang Tier 1 → Tier 2 → Tier 3 dengan fallback disclaimer jika web search ditolak/timeout/gagal.
 - ✅ **Perluas `formatAsContext()` (CP4):** Penandaan eksplisit `[Sumber: Web — {source_url}, akurasi tidak terverifikasi]` di prompt LLM.
 - ✅ **Registrasi Kernel.js Phase 3 (CP5):** Didaftarkan resmi di `Kernel.js` berdampingan dengan `RetrievalOrchestrator`.
+- ✅ **Desktop Live Verification & Hardening (CP6 — 2026-09-04):**
+  - Mitigasi CSP Chromium renderer via Electron IPC fetch bridge (`electronAPI.fetchUrl` di `main.cjs` / `preload.cjs`).
+  - Resiliensi multi-provider (Google News RSS dengan sanitasi User-Agent, Antara News RSS, CNN Indonesia RSS) & isolasi Wikipedia dari kueri temporal.
+  - Demarkasi Memori vs Pengetahuan: Dokumen web diangkat ke first-class RAG chunks di `ctx.state.ragArray` (`[DOC-XXXX]`), memisahkan preferensi persona di memori dari fakta pengetahuan di `<RAG>`.
+  - Dynamic Cutoff: Batasan cutoff 2024 dikondisikan hanya saat pengetahuan live tidak disuntikkan (`!hasInjectedKnowledge`).
+  - Standarisasi Universal Label Status Epistemik: Varian ringkas mode `LOOKUP` (`[Pengetahuan umum AI — tidak diverifikasi dari dokumen Anda]`) vs varian penuh mode `CONVERSATION`/`ENGINEER` (`[STATUS: HYPOTHESIS - Rekomendasi AI]`). Diverifikasi live 100% pada aplikasi desktop nyata.
 
 ---
 

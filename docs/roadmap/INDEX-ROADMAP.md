@@ -2,7 +2,7 @@
 
 **Tujuan dokumen ini:** Titik masuk pertama untuk Antigravity (atau AI mana pun) sebelum membaca dokumen lain di folder `docs/roadmap/`. Berisi status, urutan pengerjaan, dan ringkasan tiap dokumen — bukan pengganti isi dokumen aslinya.
 
-**Update terakhir:** 2026-09-03
+**Update terakhir:** 2026-09-04
 **Prinsip folder ini:** Satu file, satu tanggung jawab. Dokumen ini HANYA index — jangan tambahkan detail teknis di sini, cukup rujukan ke file terkait.
 
 ---
@@ -15,7 +15,8 @@
 | `roadmap memory governor.md` | ✅ **Selesai Penuh (Fase 1, Addendum & CP4b UI Purge/Conflict Lifecycle)** | `MemoryGovernorService.js`, `MemoryContextPanel.jsx`, `ConversationEngine.jsx` |
 | `PR8-linux-style-dispatch.md` | ✅ Selesai — `RequestClassifierService` + thin dispatcher + `_handleLookup` | `RequestClassifierService`, `LookupHandler`, `ConversationHandler` |
 | `teknis-skil-implementasi.md` | ✅ Selesai — SkillRegistry + SkillGuardService + SkillHandler + contoh skill | `SkillRegistry`, `SkillGuardService`, `SkillHandler` |
-| `PR9-retrieval-tier-architecture.md` | ✅ **Selesai Fase 1 & 2** (Tier 1 lokal & Tier 2 internal LLM fallback aktif, `InternalKnowledgeFallbackService.js` + `RetrievalOrchestrator.js` + `CHECK_002B`; Fase 3 Web Comparison pending) | `RetrievalStrategyService.js`, `KnowledgeService.js`, `context_builder.ts`, `RetrievalOrchestrator.js`, `InternalKnowledgeFallbackService.js`, *(fase berikutnya)* `WebComparisonService.js` |
+| `PR9-retrieval-tier-architecture.md` | ✅ **Selesai Penuh (Fase 1, 2, & 3 — Live-Verified)** (Tier 1 lokal, Tier 2 internal fallback, Tier 3 Web Comparison dengan Human-in-Command, multi-provider RSS/IPC bridge, integrasi RAG server-side, standarisasi varian label status, & live test terkonfirmasi) | `RetrievalStrategyService.js`, `KnowledgeService.js`, `context_builder.ts`, `RetrievalOrchestrator.js`, `InternalKnowledgeFallbackService.js`, `WebComparisonService.js`, `request_pipeline.ts`, `universal_contract.ts` |
+
 | `PENDING-supabase-security-advisor-findings.md` | ✅ **Selesai Remediasi RPC (8/9) — 1 item deferred: upgrade plan** (8 fungsi `SECURITY DEFINER` aman via migrasi; Leaked Password ditunda keputusan Owner karena batasan Pro plan) | Supabase RPC Permissions & Security |
 | `PENDING-live-verification-runtime-gaps.md` | ✅ **Selesai Remediasi Gap Runtime (5/5 — 100%)** (Trace ID, Match Memories schema, Escaped ilike, UUID storage target, CHECK_002/003 Source Trace) | `agent-process` Edge Function & RAG |
 | `CHECK-P02-json-patch-schema-alignment.md` | ✅ **Selesai & Tervalidasi (Live Production Confirmed)** (Defensive Unwrap Layer di `_extractJSONPatch` + Standardisasi Prompt Engineer) | `verification_engine.ts`, `request_pipeline.ts` |
@@ -56,9 +57,9 @@
     - Tangga Eskalasi 4 Level, Severity Classification 2D, Caching SHA-256, Session-Relative TTL (7 hari), No Silent State Transitions, MAEF Structural Validation Gate, 3-Mode Notification Strategy, Level 4 Approval Gate.
     - Didaftarkan resmi di Kernel Phase 3 & Session Digest terintegrasi di ObservabilityPanel.jsx.
     ↓
-[SELESAI] TAHAP 3 — PR#9 Fase 3: Web Comparison (Opsi D, 2026-09-03)
+[SELESAI] TAHAP 3 — PR#9 Fase 3: Web Comparison (Opsi D, 2026-09-03, Live-Verified 2026-09-04)
     WebComparisonService.js + Tier 3 di RetrievalOrchestrator.js dengan gerbang konfirmasi Owner (Human-in-Command).
-    - Timeout 8s (AbortController), atribusi sumber transparan ([Sumber: Web — {url}, akurasi tidak terverifikasi]), fallback jujur saat ditolak/gagal/timeout, dan didaftarkan di Kernel Phase 3.
+    - Timeout 8s (AbortController), atribusi sumber transparan ([Sumber: Web — {url}, akurasi tidak terverifikasi]), fallback jujur saat ditolak/gagal/timeout, didaftarkan di Kernel Phase 3, mitigasi CSP Chromium via Electron IPC bridge, multi-provider RSS fallback, pengangkatan dokumen web ke RAG first-class, serta standarisasi universal label status epistemik (format ringkas LOOKUP vs format penuh).
 ```
 
 *Catatan Terpisah:* Opsi C (Remediasi Backlog Runtime — `ModuleDiscoveryService` refactor, React Warning render phase) dan item housekeeping lain di Bagian 6 tetap independen dari 3 tahap ini dan dapat disisipkan kapan saja tanpa mempengaruhi urutan arsitektural di atas (Referensi: Sesi audit dependensi 3 inisiatif besar, 2026-09-03).
@@ -71,12 +72,15 @@ File `MemoryGovernorService.js` sudah ada dan terdaftar di `Kernel.js`. Seluruh 
 4. Category Alignment (Backlog #7) diselaraskan khusus untuk display layer panel tanpa mendistorsi heuristik retrieval backend LLM.
 
 **Catatan status PR#9 (Retrieval Tier Architecture):**
-Dokumen `PR9-retrieval-tier-architecture.md` telah **selesai diimplementasikan untuk Fase 1 (Tier 1 Lokal)** per 2026-09-02 (lihat changelog: [`2026-09-02-pr9-retrieval-tier-fase1-selesai.md`](../project-memory/changelog/2026-09-02-pr9-retrieval-tier-fase1-selesai.md)).
-1. Tier 1 (lokal) aktif di **server-side via Edge Function `context_builder.ts`** untuk kedua mode (Assistant/Lite & Engineer) serta terhubung via facade `RetrievalOrchestrator.js` di client.
-2. `RetrievalStrategyService.js` dan `KnowledgeService.js` (refactored ke Dependency Injection) tetap file terpisah yang kompatibel Deno & browser.
-3. Timeout 5 detik dan explicit fallback tracking (`ctx.state.tier1Retrieval`) telah aktif di Edge Function.
-4. Evaluasi biaya CP9 diselesaikan melalui **proyeksi/kalkulasi teoretis** (skenario 10.000 turn/bulan $\approx 2\%$ kuota Supabase, $0.00 mode Assistant, ~$0.06 mode Engineer); stress test nyata tetap menjadi item verifikasi pending/opsional.
-5. Fase 2 (Internal LLM Fallback) dan Fase 3 (Web Comparison, wajib konfirmasi Owner) berstatus **belum dikerjakan** — menunggu arahan eksplisit Owner.
+Dokumen `PR9-retrieval-tier-architecture.md` telah **selesai penuh 100% untuk seluruh fase (Fase 1, 2, & 3) dan tervalidasi live di desktop & cloud** per 2026-09-04 (lihat changelog: [`2026-09-02-pr9-retrieval-tier-fase1-selesai.md`](../project-memory/changelog/2026-09-02-pr9-retrieval-tier-fase1-selesai.md), [`2026-09-02-pr9-retrieval-tier-fase2-selesai.md`](../project-memory/changelog/2026-09-02-pr9-retrieval-tier-fase2-selesai.md), dan [`2026-09-03-tahap3-web-comparison-service.md`](../project-memory/changelog/2026-09-03-tahap3-web-comparison-service.md)):
+1. **Tier 1 (Lokal):** Aktif server-side via Edge Function `context_builder.ts` (Assistant & Engineer) serta facade `RetrievalOrchestrator.js` di client, timeout 5 detik, dan fallback tracking (`ctx.state.tier1Retrieval`).
+2. **Tier 2 (Internal LLM Fallback):** Aktif via `InternalKnowledgeFallbackService.js` dengan auto-switching saat `sufficiency < 0.4`, timeout 20s, atribusi `[Sumber: Pengetahuan internal model]`, telemetri `traceId`, dan validasi `CHECK_002B`.
+3. **Tier 3 (Web Comparison):** Aktif via `WebComparisonService.js` dengan gerbang konfirmasi Owner eksplisit (Human-in-Command), timeout 8s, penandaan sumber transparan, serta mitigasi CSP Chromium via Electron IPC fetch bridge (`electronAPI.fetchUrl`). Teruji live: penolakan Owner mengeksekusi fallback jujur (0 cost/latency).
+4. **Resilience Multi-Provider:** Google News RSS via IPC bridge dengan User-Agent sanitization, fallback berita nasional sekunder (Antara News RSS, CNN Indonesia RSS), dan pemblokiran Wikipedia dari kueri bertipe temporal/berita.
+5. **Demarkasi Memori vs Pengetahuan:** Dokumen web diangkat menjadi first-class RAG chunks di `ctx.state.ragArray` dengan identifikasi `[DOC-XXXX]`, memisahkan preferensi personal user di `[MEMORI & KONTEKS SISTEM]` dari dokumen pengetahuan faktual di `<RAG>` / `[BLOK 4: KNOWLEDGE]`.
+6. **Dynamic Cutoff:** Batasan 2024 dikondisikan hanya saat pengetahuan live tidak disuntikkan (`!hasInjectedKnowledge`).
+7. **Standarisasi Universal Label Status (Live Verified):** Penegasan format status kepastian pada penalaran dan blok penutup kontrak (`universal_contract.ts` / `request_pipeline.ts`). Terbukti live: mode `LOOKUP` mencetak format ringkas `[Pengetahuan umum AI — tidak diverifikasi dari dokumen Anda]` dan mode `CONVERSATION` mencetak format penuh `[STATUS: HYPOTHESIS - Rekomendasi AI]` saat dokumen tidak memuat data yang diminta (zero over-claiming).
+
 
 ---
 
@@ -128,7 +132,8 @@ Setiap kali sebuah dokumen di folder ini selesai dikerjakan (Exit Criteria terpe
    - **Status:** ✅ **Selesai Diimplementasikan (Tahap 1 Sub B — 2026-09-03)** ([`2026-09-03-tahap1-sub-b-ui-purge-and-conflict-resolution.md`](../project-memory/changelog/2026-09-03-tahap1-sub-b-ui-purge-and-conflict-resolution.md)).
    - **Cakupan Selesai:** Pengayaan atomik `metadata.conflict_info`, penurunan log level ke `console.log`, UI visual diff perbandingan versi lama vs baru di `MemoryContextPanel.jsx`, tombol aksi Owner resolusi konflik (`keep`/`discard`), dan antarmuka Trash Bin siklus 2-tahap (*Soft-delete $\rightarrow$ Pending Purge $\rightarrow$ Hard Delete* dengan konfirmasi modal aman).
 5. **PR#9 Fase 3 — Tier 3 Web Comparison:**
-   - **Status:** Service `WebComparisonService.js` untuk komparasi web search terstruktur dengan gerbang konfirmasi Owner.
+   - **Status:** ✅ **Selesai Penuh & Live-Verified (2026-09-04)** (Service `WebComparisonService.js` + IPC fetch bridge + multi-provider RSS/HTML + integrasi Human-in-Command UI Approval + Server-side RAG Evidence Gate).
+
 6. **Audit & Penyelarasan Persona Kesadaran Memori pada System Prompt:**
    - **Isu:** Respons LLM untuk kalimat negasi (misal *"jangan simpan info ini ya"*) mengklaim *"saya tidak menyimpan informasi pribadi... bersifat sementara"* — bertentangan dengan arsitektur sistem yang memiliki `MemoryGovernorService` aktif.
    - **Status:** ✅ **Selesai Diimplementasikan** ([`2026-09-03-fix-persona-memory-awareness-wording.md`](../project-memory/changelog/2026-09-03-fix-persona-memory-awareness-wording.md)) via penambahan blok `KESADARAN SISTEM MEMORI` di `request_pipeline.ts`.
