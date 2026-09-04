@@ -1046,17 +1046,33 @@ export class AssistantService {
     };
 
     let result;
+    let finalChatId = chatId;
     if (chatId) {
       result = await supabase.from('chats').update(payload).eq('id', chatId);
     } else {
       result = await supabase.from('chats').insert(payload).select('id').single();
       if (result.data?.id) {
-        onNewChatId?.(result.data.id);
+        finalChatId = result.data.id;
+        onNewChatId?.(finalChatId);
       }
     }
 
     if (result?.error) {
       console.error('[AssistantService] Gagal menyimpan chat:', result.error);
+      return;
+    }
+
+    // [FIX: ChatHistory realtime] Pancarkan event Chat:Updated via EventBus agar
+    // ChatHistory.jsx langsung memanggil fetchChats() tanpa mengandalkan
+    // window.addEventListener('storage') yang hanya berfungsi antar-tab/jendela.
+    try {
+      const eventBus = this.serviceManager?.get('EventBus');
+      if (eventBus && finalChatId) {
+        eventBus.emit('Chat:Updated', { chatId: finalChatId, workspaceId: workspaceId || 'ws-assistant', title });
+      }
+    } catch (e) {
+      // EventBus opsional — jangan gagalkan operasi save jika emit gagal
+      console.warn('[AssistantService] Gagal emit Chat:Updated:', e.message);
     }
   }
 

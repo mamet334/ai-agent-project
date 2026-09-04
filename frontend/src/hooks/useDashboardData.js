@@ -113,7 +113,7 @@ export default function useDashboardData() {
           supabase.from('ai_system_logs').select('*').order('created_at', { ascending: false }).limit(100),
           supabase.from('checks').select('status_code,response_time_ms,checked_at').order('checked_at', { ascending: false }).limit(100),
           supabase.from('incidents').select('status,started_at,resolved_at').order('started_at', { ascending: false }).limit(100),
-          supabase.from('verification_audit_logs').select('decision,status,failures,execution_time_ms,created_at,metadata').order('created_at', { ascending: false }).limit(100),
+          supabase.from('verification_audit_logs').select('decision,status,failures,execution_time_ms,timestamp,metadata').order('timestamp', { ascending: false }).limit(100),
           supabase.from('agent_logs').select('*').order('created_at', { ascending: false }).limit(100),
           supabase.from('api_usage').select('*').order('created_at', { ascending: false }).limit(100)
         ]);

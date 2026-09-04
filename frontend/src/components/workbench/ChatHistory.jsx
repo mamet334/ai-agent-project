@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../supabase';
 import { MessageSquare, PlusCircle, Trash2, Loader2 } from 'lucide-react';
+import { kernel } from '../../core/runtime/Kernel';
 
 /**
  * ChatHistory - Sidebar riwayat percakapan
@@ -18,7 +19,7 @@ export default function ChatHistory({ onSelectChat, onNewChat, activeChatId,  ac
   const [error, setError] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
-  const fetchChats = async () => {
+  const fetchChats = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -44,31 +45,47 @@ export default function ChatHistory({ onSelectChat, onNewChat, activeChatId,  ac
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeWorkspace]);
 
+  // Fetch awal + langganan EventBus Chat:Updated untuk realtime sync
   useEffect(() => {
     fetchChats();
 
-    // Dengarkan event storage untuk refresh jika ada perubahan dari tab lain
-    const handleStorageChange = (e) => {
-      if (e.key === 'mamet_chat_update') {
+    // [FIX: ChatHistory realtime] Langganan ke EventBus kernel untuk menerima notifikasi
+    // saat AssistantService.saveChatToDB() berhasil menyimpan percakapan baru/update.
+    // Menggantikan window.addEventListener('storage') yang tidak berfungsi di jendela
+    // yang sama dengan pemanggil localStorage.setItem() (sesuai spesifikasi W3C Web API).
+    const eventBus = kernel.serviceManager?.get('EventBus');
+    if (!eventBus) return;
+
+    const unsubscribe = eventBus.on('Chat:Updated', (wrappedPayload) => {
+      const payload = wrappedPayload?.data || wrappedPayload;
+      // Refresh jika event berasal dari workspace yang sama (atau tidak ada filter)
+      if (!payload?.workspaceId || payload.workspaceId === activeWorkspace) {
         fetchChats();
       }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, [activeWorkspace]);
+    });
 
-  // Refresh saat activeChatId berubah — hanya update judul chat di list tanpa fetch ulang penuh
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, [activeWorkspace, fetchChats]);
+
+  // Refresh saat activeChatId berubah — pastikan chat yang baru aktif ada di daftar
   useEffect(() => {
     if (activeChatId) {
-      // Update judul chat di state lokal tanpa fetch ulang dari DB
-      setChats(prev => prev.map(c => ({
-        ...c,
-        isActive: c.id === activeChatId
-      })));
+      setChats(prev => {
+        const exists = prev.some(c => c.id === activeChatId);
+        if (!exists) {
+          // Chat baru belum ada di daftar (race condition antara save & highlight)
+          // Trigger fetch untuk memuat ulang daftar terbaru dari DB
+          fetchChats();
+          return prev;
+        }
+        return prev.map(c => ({ ...c, isActive: c.id === activeChatId }));
+      });
     }
-  }, [activeChatId]);
+  }, [activeChatId, fetchChats]);
 
   const handleDelete = async (chatId) => {
     if (deletingId) return;

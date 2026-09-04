@@ -42,16 +42,24 @@ const parseThinkingContent = (text) => {
 export default function ConversationEngine({ sessionId }) {
   const { manager: workspaceManager, osState } = useWorkspace();
 
+  // [FIX: localStorage isolation] Kunci spesifik per workspace untuk mencegah tabrakan
+  // antar tiga instance chat (ws-assistant, ws-lite, ws-engineer) yang berjalan bersamaan
+  // di DOM. chatStorageKey hanya tersedia setelah WorkspaceManager.switchWorkspace() selesai
+  // (osState.workspaceId tidak null). Operasi localStorage ditunda hingga key siap.
+  const chatStorageKey = osState?.workspaceId
+    ? `mamet_v4_${osState.workspaceId}_current_chat_id`
+    : null;
+
   // --- UI State ---
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState('');
   const [copiedIndex, setCopiedIndex] = useState(null);
-  const [currentChatId, setCurrentChatId] = useState(() => {
-    const saved = localStorage.getItem('mamet_v4_current_chat_id');
-    return saved || null;
-  });
+  // currentChatId diinisialisasi null — ID chat di-restore via useEffect setelah
+  // chatStorageKey tersedia (workspace diketahui). Ini mencegah tiga instance
+  // chat membaca/menghapus kunci yang sama saat mount.
+  const [currentChatId, setCurrentChatId] = useState(null);
   const [initialRestoreDone, setInitialRestoreDone] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [attachedFile, setAttachedFile] = useState(null);
@@ -188,7 +196,9 @@ export default function ConversationEngine({ sessionId }) {
           workspaceId: osStateRef.current?.workspaceId || 'ws-assistant',
           onNewChatId: (newId) => {
             setCurrentChatId(newId);
-            localStorage.setItem('mamet_v4_current_chat_id', newId);
+            // [FIX: localStorage isolation] Gunakan kunci workspace-spesifik
+            const wsId = osStateRef.current?.workspaceId;
+            if (wsId) localStorage.setItem(`mamet_v4_${wsId}_current_chat_id`, newId);
           }
         });
         lastSavedKeyRef.current = saveKey;
@@ -200,45 +210,59 @@ export default function ConversationEngine({ sessionId }) {
   }, [messages, currentChatId, isLoading]);
 
   // =============================================
-  // PERSISTENSI: Sync currentChatId ke localStorage
+  // PERSISTENSI: Sync currentChatId ke localStorage (workspace-spesifik)
   // =============================================
   useEffect(() => {
+    if (!chatStorageKey) return; // Tunggu hingga workspace diketahui
     if (currentChatId) {
-      localStorage.setItem('mamet_v4_current_chat_id', currentChatId);
+      localStorage.setItem(chatStorageKey, currentChatId);
     } else {
-      localStorage.removeItem('mamet_v4_current_chat_id');
+      localStorage.removeItem(chatStorageKey);
     }
-  }, [currentChatId]);
+  }, [currentChatId, chatStorageKey]);
 
   // =============================================
-  // RESTORE: Chat dari localStorage saat mount
+  // RESTORE: Chat dari localStorage saat workspace pertama kali diketahui
   // =============================================
+  // [FIX: localStorage isolation] Effect ini menggantikan pola lama yang membaca kunci
+  // global di useState initializer. Sekarang, restore ditunda hingga chatStorageKey tersedia
+  // (yaitu setelah WorkspaceManager.switchWorkspace() selesai dan osState.workspaceId terisi).
+  // Dependency [chatStorageKey] menjamin effect hanya berjalan sekali saat key pertama kali
+  // berubah dari null ke nilai nyata — dan guard initialRestoreDone mencegah duplikasi.
   useEffect(() => {
-    if (!initialRestoreDone && currentChatId) {
-      const loadSavedChat = async () => {
-        const assistantService = getAssistantService();
-        // Fallback ke supabase langsung jika service belum ready (boot delay)
-        let msgs = null;
-        if (assistantService) {
-          msgs = await assistantService.loadChat(currentChatId);
-        } else {
-          const { data, error } = await supabase.from('chats').select('*').eq('id', currentChatId).single();
-          if (!error && data) msgs = data.messages;
-        }
-        if (msgs !== null) {
-          setMessages(msgs || []);
-        } else {
-          console.warn('[ConversationEngine] Saved chatId not found in DB, resetting');
-          setCurrentChatId(null);
-          localStorage.removeItem('mamet_v4_current_chat_id');
-        }
-        setInitialRestoreDone(true);
-      };
-      loadSavedChat();
-    } else if (!currentChatId) {
+    if (initialRestoreDone) return;
+    if (!chatStorageKey) return; // Workspace belum diketahui, tunggu render berikutnya
+
+    const savedChatId = localStorage.getItem(chatStorageKey);
+    if (!savedChatId) {
       setInitialRestoreDone(true);
+      return;
     }
-  }, []); // Hanya sekali saat mount
+
+    // Set chatId terlebih dahulu agar UI bisa highlight item di sidebar
+    setCurrentChatId(savedChatId);
+
+    const loadSavedChat = async () => {
+      const assistantService = getAssistantService();
+      // Fallback ke supabase langsung jika service belum ready (boot delay)
+      let msgs = null;
+      if (assistantService) {
+        msgs = await assistantService.loadChat(savedChatId);
+      } else {
+        const { data, error } = await supabase.from('chats').select('*').eq('id', savedChatId).single();
+        if (!error && data) msgs = data.messages;
+      }
+      if (msgs !== null) {
+        setMessages(msgs || []);
+      } else {
+        console.warn('[ConversationEngine] Saved chatId not found in DB, resetting');
+        setCurrentChatId(null);
+        localStorage.removeItem(chatStorageKey);
+      }
+      setInitialRestoreDone(true);
+    };
+    loadSavedChat();
+  }, [chatStorageKey]); // Berjalan saat chatStorageKey berubah dari null → nilai nyata
 
   // =============================================
   // SESSION ID SYNC
@@ -255,7 +279,8 @@ export default function ConversationEngine({ sessionId }) {
     isNewChatInitiatedByUser.current = true;
     setMessages([]);
     setCurrentChatId(null);
-    localStorage.removeItem('mamet_v4_current_chat_id');
+    // [FIX: localStorage isolation] Hapus kunci workspace-spesifik, bukan kunci global
+    if (chatStorageKey) localStorage.removeItem(chatStorageKey);
   };
 
   // =============================================
