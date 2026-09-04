@@ -25,6 +25,7 @@
 | `TAHAP1-memory-system-finalization.md` | ✅ **Selesai Penuh & Live-Verified (Sub A + Sub B + Sub C — 2026-09-03)** (Integrasi Assistant Golden Memory, UI Conflict Resolution & Purge CP4b, Category Alignment) | `MemoryGovernorService.js`, `MemoryService.js`, `MemoryContextPanel.jsx`, `ConversationEngine.jsx` |
 | `ROADMAP-DASHBOARD-OBSERVABILITY-REALTIME.md` | ✅ **Selesai (Diimplementasikan & Diverifikasi 2026-09-04)** | Status Liveness Zero-Token, Sanitasi [object Object], Auto-Load Trace, Metrik Realtime |
 | `ROADMAP-KNOWLEDGE-GALAXY-COSMIC-ORBITS.md` | 🟡 **PROPOSED (Menunggu Review Owner)** | Visualisasi Galaksi: Orbit Lengkung (Cosmic Filaments) & Pijaran Bintang Aktif Chat (Live Thought Pulse) |
+| `ROADMAP-RUNTIME-CHAT-SESSION-STABILITY-AND-HISTORY.md` | 🟡 **PROPOSED (Menunggu Persetujuan Owner untuk Eksekusi Kode)** | Stabilitas Reconciler React (0 Unmount), Isolasi Kunci Workspace Chat, & Realtime EventBus Sync ChatHistory |
 | `MAMET-AI-ROADMAP.md`, `engineer-autonomous-mode.md`, `engineer-chat-upgrade.md`, `fix-log.md`, `rencana.md`, `roadmap-lanjutan.md` | 📋 Belum direview ulang dalam sesi ini — **catatan:** `MAMET-AI-ROADMAP.md` memakai skema penomoran (`TASK-000x`, `ADR-000x`, istilah "MametLite"/"BRAIN 1-2") yang berbeda dari skema PR# di dokumen lain — perlu direkonsiliasi sebelum dipakai sebagai rujukan aktif | — |
 
 ---
@@ -68,6 +69,9 @@
     - Penyambungan parameter userId di seluruh alur: RetrievalOrchestrator.js, AssistantService.js, dan Edge Function context_builder.ts.
     - Scoping useDashboardData.js ke currentUserId.
     - Teruji otomatis cross-tenant 0 kebocoran dan diverifikasi langsung lewat pengujian live desktop oleh Owner (skor kecukupan 0.832, Evidence Gate PASSED 100% Grade A, status [STATUS: VERIFIED]).
+    ↓
+[PROPOSED / TAHAP PERENCANAAN] RUNTIME CHAT SESSION STABILITY & CHAT HISTORY PERSISTENCE (ROADMAP-RUNTIME-CHAT-SESSION-STABILITY-AND-HISTORY.md)
+    Menghilangkan unmount loop / kedipan berkala pada seluruh kolom chat (AppRegistry.js), isolasi storage key per workspace (ConversationEngine.jsx), dan sinkronisasi real-time EventBus ke ChatHistory.jsx saat percakapan baru dibuat (Menunggu Persetujuan Owner).
 ```
 
 *Catatan Terpisah:* Opsi C (Remediasi Backlog Runtime — `ModuleDiscoveryService` refactor, React Warning render phase) dan item housekeeping lain di Bagian 6 tetap independen dari 3 tahap ini dan dapat disisipkan kapan saja tanpa mempengaruhi urutan arsitektural di atas (Referensi: Sesi audit dependensi 3 inisiatif besar, 2026-09-03).
@@ -154,5 +158,14 @@ Setiap kali sebuah dokumen di folder ini selesai dikerjakan (Exit Criteria terpe
 8. **Mekanisme Deteksi Deployment Drift (Edge Function vs Git Local/Remote):**
    - **Isu:** Inkonsistensi antara status commit lokal/remote di git dengan build/runtime yang aktif dieksekusi di Supabase Cloud Edge Function (`agent-process`), sehingga keterlambatan deployment hanya dapat dideteksi lewat penelusuran manual isi teks konteks sistem di console log.
    - **Rencana Solusi:** Penyediaan metadata versi/commit SHA pada respon health check atau header response (`x-deployed-commit-sha`), disertai script verifikasi otomatis pasca-deploy untuk memvalidasi sinkronisasi runtime terhadap `git rev-parse HEAD`.
+9. **Runtime Chat Session Stability & Chat History Realtime Persistence (`ROADMAP-RUNTIME-CHAT-SESSION-STABILITY-AND-HISTORY.md`):**
+   - **Isu:** Seluruh kolom chat mengalami kedipan/refresh periodik dan penghapusan sesi aktif (akibat unmount loop komponen anonim `mainPanel` di `AppRegistry.js`), tabrakan kunci `mamet_v4_current_chat_id` di `localStorage` antar 3 workspace, pembatalan auto-save 1 detik oleh unmount mendadak, serta bilah samping `ChatHistory` tidak menampilkan chat baru (karena keterbatasan listener Web API `storage`, ketiadaan event bus di `saveChatToDB`, dan `setChats` yang hanya memetakan memori lama).
+   - **Status:** 🟡 **PROPOSED / READY (Menunggu Persetujuan Owner untuk Eksekusi Kode)** ([`ROADMAP-RUNTIME-CHAT-SESSION-STABILITY-AND-HISTORY.md`](./ROADMAP-RUNTIME-CHAT-SESSION-STABILITY-AND-HISTORY.md)).
+   - **Rencana Solusi:**
+     1. Stabilisasi referensial React Reconciler pada `AppRegistry.js` menggunakan komponen pembungkus statis (0 unmount, 0 flicker, memori chat utuh).
+     2. Isolasi kunci `localStorage` per workspace (`mamet_v4_${workspaceId}_current_chat_id`).
+     3. Pemancaran event `Chat:Updated` via `EventBus` saat `saveChatToDB` di `AssistantService.js` selesai.
+     4. Integrasi listener `EventBus` di `ChatHistory.jsx` untuk auto-refresh real-time seketika saat percakapan baru dibuat.
+     5. Remediasi kolom query `verification_audit_logs` di `useDashboardData.js` untuk mengeliminasi siklus error HTTP 400 di background.
 
 
