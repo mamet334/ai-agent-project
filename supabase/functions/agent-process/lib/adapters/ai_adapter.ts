@@ -241,6 +241,8 @@ export class OpenRouterAdapter implements CapabilityAdapter {
     const usage = data.usage || {};
     const promptTokens = usage.prompt_tokens || Math.ceil(JSON.stringify(messages || []).length / 4);
     const completionTokens = usage.completion_tokens || Math.ceil(answer.length / 4);
+    const cachedTokens = usage.prompt_tokens_details?.cached_tokens || usage.cache_read_input_tokens || 0;
+    console.log(`[PR#6 TOKEN METRICS] OpenRouter (${openRouterModel}): prompt=${promptTokens}t completion=${completionTokens}t cached=${cachedTokens}t`);
 
     this.rctx.tasks.fire('RecordUsage', recordUsage({
       userId,
@@ -261,6 +263,7 @@ export class OpenRouterAdapter implements CapabilityAdapter {
       trace_id: context.trace_id
     };
   }
+
 
   async *stream(input: any, context: AdapterContext): AsyncGenerator<string, void, unknown> {
     const { promptText, systemPromptText, chatHistory } = input;
@@ -324,7 +327,8 @@ export class OpenRouterAdapter implements CapabilityAdapter {
     
     const promptTokens = Math.ceil(JSON.stringify(messages || []).length / 4);
     const completionTokens = Math.ceil(accumulatedText.length / 4);
-    
+    console.log(`[PR#6 TOKEN METRICS] OpenRouter stream (${orModel}): prompt_est=${promptTokens}t completion_est=${completionTokens}t`);
+
     this.rctx.tasks.fire('RecordUsageStream', recordUsage({
       userId,
       adapter: 'openrouter',
@@ -337,6 +341,7 @@ export class OpenRouterAdapter implements CapabilityAdapter {
       supabaseServiceKey: this.rctx.env.supabaseServiceKey || ''
     }));
   }
+
 
   async healthCheck() {
     return await this.initialize();
@@ -395,6 +400,8 @@ export class GeminiAdapter implements CapabilityAdapter {
             const usage = data.usageMetadata || {};
             const promptTokens = usage.promptTokenCount || Math.ceil(JSON.stringify(payload).length / 4);
             const completionTokens = usage.candidatesTokenCount || Math.ceil(answer.length / 4);
+            const cachedTokens = usage.cachedContentTokenCount || 0;
+            console.log(`[PR#6 TOKEN METRICS] Gemini non-stream (${targetModel}): prompt=${promptTokens}t completion=${completionTokens}t cached=${cachedTokens}t`);
             
             this.rctx.tasks.fire('RecordUsage', recordUsage({
               userId,

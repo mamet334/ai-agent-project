@@ -27,8 +27,31 @@ export const callLLMWithMetadata = async (
   await CapabilityRegistry.initializeAdapters(rctx);
 
   const buildPayload = (tools: string[] = []) => {
+    // [PR#6 TOKEN EFFICIENCY] Static/Dynamic split untuk Implicit Caching Gemini non-stream
+    let staticSystemPrompt = systemPromptText || '';
+    let dynamicContextInject = '';
+
+    if (systemPromptText) {
+      const dynamicBlockRegex = /(<RAG>[\s\S]*?<\/RAG>|<MEMORY>[\s\S]*?<\/MEMORY>|<EXECUTION_TRACE[^/]*\/>)/g;
+      const dynamicBlocks: string[] = [];
+      staticSystemPrompt = systemPromptText.replace(dynamicBlockRegex, (match: string) => {
+        dynamicBlocks.push(match);
+        return '';
+      }).trim();
+
+      if (dynamicBlocks.length > 0) {
+        dynamicContextInject = `[KONTEKS REFERENSI UNTUK PERTANYAAN INI]\n\n${dynamicBlocks.join('\n\n')}`;
+      }
+    }
+
     const payload: any = { contents: [] };
-    if (systemPromptText) payload.systemInstruction = { parts: [{ text: systemPromptText }] };
+    if (staticSystemPrompt) payload.systemInstruction = { parts: [{ text: staticSystemPrompt }] };
+
+    if (dynamicContextInject) {
+      payload.contents.push({ role: 'user', parts: [{ text: dynamicContextInject }] });
+      payload.contents.push({ role: 'model', parts: [{ text: 'Baik, saya telah membaca konteks referensi tersebut.' }] });
+    }
+
     if (chatHistory && chatHistory.length > 0) {
       for (const msg of chatHistory) {
         payload.contents.push({
@@ -42,6 +65,7 @@ export const callLLMWithMetadata = async (
       userParts.push({ inlineData: { mimeType: extractedImage.mimeType, data: extractedImage.data } });
     }
     payload.contents.push({ role: 'user', parts: userParts });
+
     
     if (tools.includes('web_search')) {
       payload.tools = [{ googleSearch: {} }];
