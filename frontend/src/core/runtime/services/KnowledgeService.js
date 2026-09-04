@@ -12,8 +12,17 @@
  */
 
 const DEFAULT_STOPWORDS = new Set([
+  // Kata hubung & partikel dasar
   'dan', 'yang', 'ini', 'itu', 'atau', 'ke', 'di', 'dari', 'untuk',
-  'dengan', 'adalah', 'ada', 'apa', 'saya', 'aku', 'the', 'and', 'for', 'with'
+  'dengan', 'adalah', 'ada', 'apa', 'saya', 'aku', 'the', 'and', 'for', 'with',
+  // Conversational prompt filler & kata tanya umum
+  'berdasarkan', 'menurut', 'sesuai', 'dokumen', 'berkas', 'file', 'arsip',
+  'upload', 'diupload', 'tolong', 'coba', 'mohon', 'bantu', 'jelaskan',
+  'sebutkan', 'rincikan', 'uraikan', 'ceritakan', 'apakah', 'adakah',
+  'bisakah', 'bolehkah', 'bagaimana', 'kenapa', 'mengapa', 'siapa',
+  'mana', 'kapan', 'tentang', 'terkait', 'mengenai', 'dalam', 'atas',
+  'pada', 'sudah', 'telah', 'akan', 'bisa', 'dapat', 'harus', 'wajib',
+  'info', 'informasi', 'data', 'anda', 'kamu', 'kita', 'kami', 'punya', 'milik'
 ]);
 
 export class KnowledgeService {
@@ -46,10 +55,10 @@ export class KnowledgeService {
   /**
    * Helper: ekstraksi kata kunci bermakna dari query.
    * @param {string} query
-   * @param {number} [maxKeywords=5]
+   * @param {number} [maxKeywords=8]
    * @returns {string[]}
    */
-  _extractKeywords(query = '', maxKeywords = 5) {
+  _extractKeywords(query = '', maxKeywords = 8) {
     if (!query || typeof query !== 'string') return [];
     return query
       .toLowerCase()
@@ -73,14 +82,14 @@ export class KnowledgeService {
   }
 
   /**
-   * Melakukan kueri pencarian ke document_chunks.
+   * Melakukan kueri pencarian ke document_chunks dengan Smart Title-Aware Matching.
    *
    * @param {string} query - Query teks pencarian
    * @param {Object} [options]
    * @param {Object} [options.supabaseClient] - Klien Supabase (wajib di Deno / Edge Function)
    * @param {string} [options.userId]         - Filter user_id (opsional)
    * @param {string} [options.spaceId]        - Filter space_id (opsional)
-   * @param {number} [options.limit=10]       - Jumlah maksimal candidate chunks
+   * @param {number} [options.limit=15]       - Jumlah maksimal candidate chunks
    * @returns {Promise<Array<{ id: any, document_id: any, content: string, source_url: string|null, source_type: string, similarity: number }>>}
    */
   async queryKnowledge(query, options = {}) {
@@ -90,46 +99,114 @@ export class KnowledgeService {
       return [];
     }
 
-    const limit = options.limit || 10;
-    const keywords = this._extractKeywords(query, 5);
+    const limit = options.limit || 15;
+    const keywords = this._extractKeywords(query, 8);
 
-    console.log(`[KnowledgeService] Querying document_chunks for: "${query}" (keywords: ${keywords.join(', ') || 'none'})`);
+    console.log(`[KnowledgeService] Querying knowledge for: "${query}" (keywords: ${keywords.join(', ') || 'none'})`);
 
     let result = [];
     try {
-      let dbQuery = supabase
-        .from('document_chunks')
-        .select('id, document_id, content, source_url, source_type');
-
+      // 1. TAHAP TITLE-AWARE MATCHING: Cek apakah ada dokumen dengan judul yang cocok
+      let targetedDocIds = [];
       if (keywords.length > 0) {
-        const filterStr = keywords.map(k => `content.ilike.%${k}%`).join(',');
-        dbQuery = dbQuery.or(filterStr);
-      } else {
-        const sanitizedQuery = (query || '').replace(/[%_"'(),\\]/g, ' ').replace(/\s+/g, ' ').trim();
-        if (sanitizedQuery.length > 0) {
-          dbQuery = dbQuery.ilike('content', `%${sanitizedQuery}%`);
-        } else {
-          return [];
+        const titleFilterStr = keywords.map(k => `title.ilike.%${k}%`).join(',');
+        let docQuery = supabase
+          .from('documents')
+          .select('id, title')
+          .or(titleFilterStr)
+          .limit(10);
+
+        if (options.userId) docQuery = docQuery.eq('user_id', options.userId);
+        if (options.spaceId) docQuery = docQuery.eq('space_id', options.spaceId);
+
+        const { data: matchedDocs, error: docErr } = await docQuery;
+        if (!docErr && matchedDocs && matchedDocs.length > 0) {
+          // Beri skor kecocokan berdasarkan jumlah kata kunci yang muncul di judul
+          const scoredDocs = matchedDocs.map(d => {
+            const titleLower = (d.title || '').toLowerCase();
+            const matchCount = keywords.reduce((acc, k) => acc + (titleLower.includes(k) ? 1 : 0), 0);
+            return { ...d, matchCount };
+          });
+          scoredDocs.sort((a, b) => b.matchCount - a.matchCount);
+
+          const bestCount = scoredDocs[0].matchCount;
+          const topDocs = scoredDocs.filter(d => d.matchCount >= Math.max(1, bestCount - 1)).slice(0, 3);
+          targetedDocIds = topDocs.map(d => d.id);
+          console.log(`[KnowledgeService] Title match prioritized: ${topDocs.map(d => `${d.title} (hits: ${d.matchCount})`).join(', ')}`);
         }
       }
 
-      const { data, error } = await dbQuery.limit(limit);
+      // 2. TAHAP TARGETED CHUNKS: Ambil chunks dari dokumen prioritas
+      if (targetedDocIds.length > 0) {
+        let docChunksQuery = supabase
+          .from('document_chunks')
+          .select('id, document_id, content, source_url, source_type')
+          .in('document_id', targetedDocIds);
 
-      if (error) {
-        console.warn('[KnowledgeService] Query document_chunks error:', error.message);
-        result = [];
-      } else if (data && data.length > 0) {
-        // Normalisasi ke format kontrak standar Array<ChunkObject>
-        result = data.map((chunk, idx) => ({
-          id: chunk.id,
-          document_id: chunk.document_id || 'unknown',
-          content: chunk.content || '',
-          source_url: chunk.source_url || null,
-          source_type: chunk.source_type || 'local',
-          similarity: typeof chunk.similarity === 'number'
-            ? chunk.similarity
-            : Math.max(0.3, 0.7 - (idx * 0.05)) // keyword rank approximation
-        }));
+        if (options.userId) docChunksQuery = docChunksQuery.eq('user_id', options.userId);
+        if (options.spaceId) docChunksQuery = docChunksQuery.eq('space_id', options.spaceId);
+
+        const { data: docChunks, error: docChunksErr } = await docChunksQuery.limit(limit);
+        if (!docChunksErr && docChunks && docChunks.length > 0) {
+          result = docChunks.map((chunk, idx) => ({
+            id: chunk.id,
+            document_id: chunk.document_id || 'unknown',
+            content: chunk.content || '',
+            source_url: chunk.source_url || null,
+            source_type: chunk.source_type || 'local',
+            similarity: Math.max(0.75, 0.95 - (idx * 0.02)) // High confidence for targeted title match
+          }));
+        }
+      }
+
+      // 3. TAHAP CONTENT SEARCH FALLBACK/SUPPLEMENT: Isi sisa slot dengan pencarian konten
+      if (result.length < limit) {
+        const remainingLimit = limit - result.length;
+        let contentQuery = supabase
+          .from('document_chunks')
+          .select('id, document_id, content, source_url, source_type');
+
+        if (targetedDocIds.length > 0) {
+          contentQuery = contentQuery.not('document_id', 'in', `(${targetedDocIds.join(',')})`);
+        }
+        if (options.userId) contentQuery = contentQuery.eq('user_id', options.userId);
+        if (options.spaceId) contentQuery = contentQuery.eq('space_id', options.spaceId);
+
+        if (keywords.length > 0) {
+          const filterStr = keywords.map(k => `content.ilike.%${k}%`).join(',');
+          contentQuery = contentQuery.or(filterStr);
+        } else {
+          const sanitizedQuery = (query || '').replace(/[%_"'(),\\]/g, ' ').replace(/\s+/g, ' ').trim();
+          if (sanitizedQuery.length > 0) {
+            contentQuery = contentQuery.ilike('content', `%${sanitizedQuery}%`);
+          } else {
+            contentQuery = null;
+          }
+        }
+
+        if (contentQuery) {
+          const { data: contentData, error: contentErr } = await contentQuery.limit(remainingLimit * 2);
+          if (!contentErr && contentData && contentData.length > 0) {
+            const scored = contentData.map(c => {
+              const text = (c.content || '').toLowerCase();
+              const score = keywords.reduce((acc, k) => acc + (text.includes(k) ? 1 : 0), 0);
+              return { ...c, matchScore: score };
+            });
+            scored.sort((a, b) => b.matchScore - a.matchScore);
+
+            const added = scored.slice(0, remainingLimit).map((chunk, idx) => ({
+              id: chunk.id,
+              document_id: chunk.document_id || 'unknown',
+              content: chunk.content || '',
+              source_url: chunk.source_url || null,
+              source_type: chunk.source_type || 'local',
+              similarity: typeof chunk.similarity === 'number'
+                ? chunk.similarity
+                : Math.max(0.4, 0.7 - (idx * 0.03)) // Content ranking
+            }));
+            result = result.concat(added);
+          }
+        }
       }
     } catch (err) {
       console.error('[KnowledgeService] Error querying document_chunks:', err.message);

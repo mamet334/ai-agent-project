@@ -80,6 +80,7 @@ Dokumen `PR9-retrieval-tier-architecture.md` telah **selesai penuh 100% untuk se
 5. **Demarkasi Memori vs Pengetahuan:** Dokumen web diangkat menjadi first-class RAG chunks di `ctx.state.ragArray` dengan identifikasi `[DOC-XXXX]`, memisahkan preferensi personal user di `[MEMORI & KONTEKS SISTEM]` dari dokumen pengetahuan faktual di `<RAG>` / `[BLOK 4: KNOWLEDGE]`.
 6. **Dynamic Cutoff:** Batasan 2024 dikondisikan hanya saat pengetahuan live tidak disuntikkan (`!hasInjectedKnowledge`).
 7. **Standarisasi Universal Label Status (Live Verified):** Penegasan format status kepastian pada penalaran dan blok penutup kontrak (`universal_contract.ts` / `request_pipeline.ts`). Terbukti live: mode `LOOKUP` mencetak format ringkas `[Pengetahuan umum AI — tidak diverifikasi dari dokumen Anda]` dan mode `CONVERSATION` mencetak format penuh `[STATUS: HYPOTHESIS - Rekomendasi AI]` saat dokumen tidak memuat data yang diminta (zero over-claiming).
+8. **Smart Title-Aware Retrieval & Stopwords Enhancement:** Perluasan stopwords percakapan, batas kata kunci 8 kata, pencocokan judul dokumen prioritas (`documents.title`), dan keyword-density ranking di `KnowledgeService.js` untuk mencegah saturasi dokumen lain saat menanyakan dokumen spesifik (lihat changelog: [`2026-09-04-pr9-smart-title-aware-retrieval-and-stopwords.md`](../project-memory/changelog/2026-09-04-pr9-smart-title-aware-retrieval-and-stopwords.md)).
 
 
 ---
