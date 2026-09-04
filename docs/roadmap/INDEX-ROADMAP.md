@@ -135,4 +135,8 @@ Setiap kali sebuah dokumen di folder ini selesai dikerjakan (Exit Criteria terpe
 7. **Fase 2 — Memory Context Panel Category Alignment (Backlog #7):**
    - **Status:** ✅ **Selesai Diimplementasikan (Tahap 1 Sub C — 2026-09-03)** ([`2026-09-03-tahap1-sub-c-memory-context-panel-category-alignment.md`](../project-memory/changelog/2026-09-03-tahap1-sub-c-memory-context-panel-category-alignment.md)).
    - **Solusi Terisolasi:** Menambahkan `getActiveMemories` di `MemoryGovernorService.js` khusus untuk tampilan panel UI tanpa menyentuh heuristik retrieval backend `MemoryService._inferCategories()`. Panel kini menampilkan seluruh memori aktif lintas kategori saat idle/generik dan tidak lagi keliru menampilkan "0 memori aktif".
+8. **Mekanisme Deteksi Deployment Drift (Edge Function vs Git Local/Remote):**
+   - **Isu:** Inkonsistensi antara status commit lokal/remote di git dengan build/runtime yang aktif dieksekusi di Supabase Cloud Edge Function (`agent-process`), sehingga keterlambatan deployment hanya dapat dideteksi lewat penelusuran manual isi teks konteks sistem di console log.
+   - **Rencana Solusi:** Penyediaan metadata versi/commit SHA pada respon health check atau header response (`x-deployed-commit-sha`), disertai script verifikasi otomatis pasca-deploy untuk memvalidasi sinkronisasi runtime terhadap `git rev-parse HEAD`.
+
 

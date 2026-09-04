@@ -125,6 +125,7 @@ export function buildUniversalContract(params: ContractBuilderInput): UniversalE
   };
 
   // ── OUTPUT CONTRACT BLOCK ──
+  const labelVariant: 'full' | 'short' = mode === 'LOOKUP' ? 'short' : 'full';
   const outputContract: OutputContractBlock = {
     language: 'id', // Bahasa Indonesia default
     expectedFormat: mode === 'ENGINEER' ? 'structured_technical' : 'conversational',
@@ -134,7 +135,9 @@ export function buildUniversalContract(params: ContractBuilderInput): UniversalE
       'Mengarang data teknikal yang tidak ada di evidence',
       'Menyebut "berdasarkan pengetahuan umum saya" di Engineer mode',
     ],
+    labelVariant,
   };
+
 
   // ── RETURN CONTRACT + RENDERER ──
   const contract: UniversalEvidenceContract = {
@@ -254,14 +257,22 @@ function renderContractAsText(
 
   // ── BLOK 6: OUTPUT FORMAT & STATUS LABEL ──
   text += `\n[BLOK 6: OUTPUT FORMAT & STATUS LABEL]\n`;
+  const isShortVariant = outputContract.labelVariant === 'short';
+
   if (runtime.evidenceGateVerdict === 'PASSED') {
     text += `WAJIB: Karena Evidence Gate telah menyatakan PASSED (dokumen RAG/Web valid), Anda WAJIB mencantumkan label berikut di baris PALING AKHIR jawaban Anda:\n`;
     text += `[STATUS: VERIFIED]\n`;
   } else if (runtime.evidenceGateVerdict === 'WARNING') {
-    text += `WAJIB: Karena Evidence Gate berstatus WARNING (tidak ada dokumen bukti spesifik), Anda WAJIB mencantumkan salah satu label berikut di baris PALING AKHIR jawaban Anda:\n`;
-    text += `- [STATUS: HYPOTHESIS - Rekomendasi AI] (jika memberikan jawaban dari analisis/pengetahuan internal)\n`;
-    text += `- [STATUS: INSUFFICIENT] (jika tidak tahu atau data tidak ditemukan)\n`;
+    if (isShortVariant) {
+      text += `WAJIB: Karena request ini adalah mode LOOKUP dan Evidence Gate berstatus WARNING (retrieval di-skip by design), Anda WAJIB mencantumkan label ringkas berikut di baris PALING AKHIR jawaban Anda:\n`;
+      text += `[Pengetahuan umum AI — tidak diverifikasi dari dokumen Anda]\n`;
+    } else {
+      text += `WAJIB: Karena Evidence Gate berstatus WARNING (tidak ada dokumen bukti spesifik), Anda WAJIB mencantumkan salah satu label berikut di baris PALING AKHIR jawaban Anda:\n`;
+      text += `- [STATUS: HYPOTHESIS - Rekomendasi AI] (jika memberikan jawaban dari analisis/pengetahuan internal)\n`;
+      text += `- [STATUS: INSUFFICIENT] (jika tidak tahu atau data tidak ditemukan)\n`;
+    }
   }
+
 
   return text;
 }

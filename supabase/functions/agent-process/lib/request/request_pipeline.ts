@@ -286,6 +286,7 @@ JIKA USER MEMINTA CEK DESKTOP, CARI FILE, CARI FOLDER, ATAU JALANKAN PERINTAH DI
 INGAT: Ini adalah Windows OS. Gunakan perintah Windows (dir, cd, type, copy) BUKAN Linux (ls, cat, cp)!\n`;
   }
 
+  const isLookupMode = parsed.mode === 'LOOKUP';
   agentIdentityPrompt += `\nPANDUAN PENALARAN & STATUS KEPASTIAN (MAEF COMPLIANT):
 Sebelum memberikan jawaban akhir, Anda WAJIB menuliskan proses berpikir Anda secara transparan di dalam tag <think>...</think>.
 Isi tag think harus mencakup:
@@ -297,14 +298,15 @@ Isi tag think harus mencakup:
 
 ATURAN WAJIB LABEL STATUS PADA JAWABAN AKHIR:
 Di luar tag <think>, pada baris TERAKHIR jawaban Anda, Anda WAJIB mencetak TEPAT SATU label status berikut secara eksplisit:
-- Jika didukung oleh dokumen <RAG>/Web: [STATUS: VERIFIED]
+${isLookupMode ? `- Untuk mode LOOKUP: [Pengetahuan umum AI — tidak diverifikasi dari dokumen Anda]` : `- Jika didukung oleh dokumen <RAG>/Web: [STATUS: VERIFIED]
 - Jika menggunakan rekomendasi/pengetahuan internal tanpa dokumen pendukung: [STATUS: HYPOTHESIS - Rekomendasi AI]
-- Jika data tidak ditemukan dan tidak cukup informasi: [STATUS: INSUFFICIENT]
+- Jika data tidak ditemukan dan tidak cukup informasi: [STATUS: INSUFFICIENT]`}
 
 PENTING - PRINSIP KNOWLEDGE FIRST + FALLBACK:
 - ANDA TETAP PRIORITASKAN DATA DARI <RAG>, REFERENSI BERITA/WEB, DAN <MEMORY>.
-- JIKA DATA TERSEBUT KOSONG, ANDA BOLEH MEMAKAI PENGETAHUAN INTERNAL ANDA (sesuai Konstitusi AI boleh berpikir), TAPI WAJIB DIBERI LABEL HYPOTHESIS.
+- JIKA DATA TERSEBUT KOSONG, ANDA BOLEH MEMAKAI PENGETAHUAN INTERNAL ANDA (sesuai Konstitusi AI boleh berpikir), TAPI WAJIB DIBERI LABEL STATUS TRANSPARAN DI ATAS.
 - JANGAN PERNAH MENGARANG FAKTA. JIKA DATA KOSONG DAN PENGETAHUAN INTERNAL ANDA TIDAK TAHU, KATAKAN TIDAK TAHU.\n`;
+
 
   let userContextPrompt = ctx.auth.userName ? `\nInformasi Akun: User login dengan email/nama "${ctx.auth.userName}". Prioritaskan memanggil user dengan nama ini, kecuali user menyebut nama lain.` : '';
 

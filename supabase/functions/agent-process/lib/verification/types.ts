@@ -178,7 +178,9 @@ export interface OutputContractBlock {
   requireConfidenceStatement: boolean;
   maxResponseLength?: number;
   forbiddenPatterns: string[];
+  labelVariant?: 'full' | 'short';
 }
+
 
 export interface UniversalEvidenceContract {
   identity: IdentityBlock;

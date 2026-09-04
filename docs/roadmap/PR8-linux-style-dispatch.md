@@ -158,7 +158,14 @@ async _handleLookup({ userMsg, history, token, aiProvider, formattedModel, aiKey
 - ~30–50% lebih sedikit token ke Edge Function
 - Latensi lebih rendah untuk pertanyaan singkat
 
+**Standardisasi Universal Epistemik (Keputusan Owner 2026-09-04):**
+Seluruh mode di Mamet OS tanpa kecuali wajib mencetak label status kepastian di baris paling akhir jawaban. Karena mode `LOOKUP` secara sengaja melewati retrieval dokumen pengguna (evidence = 0), varian label menggunakan format ringkas:
+- Mode `CONVERSATION` / `ENGINEER`: Format penuh — `[STATUS: VERIFIED]` / `[STATUS: HYPOTHESIS - Rekomendasi AI]` / `[STATUS: INSUFFICIENT]`.
+- Mode `LOOKUP`: Format ringkas — `[Pengetahuan umum AI — tidak diverifikasi dari dokumen Anda]`.
+- Implementasi di `universal_contract.ts`: `labelVariant: mode === 'LOOKUP' ? 'short' : 'full'`. Tidak diperbolehkan membuat kondisi yang meniadakan pencetakan label (`if (mode !== 'LOOKUP') skip`).
+
 ---
+
 
 ### 1.3 `ConversationHandler` (refactor, bukan file baru)
 
