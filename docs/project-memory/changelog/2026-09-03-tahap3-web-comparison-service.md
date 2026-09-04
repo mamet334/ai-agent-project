@@ -75,3 +75,39 @@ Matrix pengujian dijalankan pada `scratch/test_web_comparison_service.mjs`:
 1. **[NEW]** [`frontend/src/core/runtime/services/WebComparisonService.js`](file:///d:/SLAMET/other/mamet%20os%20ecosystem/frontend/src/core/runtime/services/WebComparisonService.js)
 2. **[MODIFY]** [`frontend/src/core/runtime/services/RetrievalOrchestrator.js`](file:///d:/SLAMET/other/mamet%20os%20ecosystem/frontend/src/core/runtime/services/RetrievalOrchestrator.js)
 3. **[MODIFY]** [`frontend/src/core/runtime/Kernel.js`](file:///d:/SLAMET/other/mamet%20os%20ecosystem/frontend/src/core/runtime/Kernel.js)
+4. **[MODIFY]** [`frontend/index.html`](file:///d:/SLAMET/other/mamet%20os%20ecosystem/frontend/index.html)
+5. **[MODIFY]** [`frontend/electron/main.cjs`](file:///d:/SLAMET/other/mamet%20os%20ecosystem/frontend/electron/main.cjs)
+6. **[MODIFY]** [`frontend/src/components/workbench/ConversationEngine.jsx`](file:///d:/SLAMET/other/mamet%20os%20ecosystem/frontend/src/components/workbench/ConversationEngine.jsx)
+
+---
+
+## 5. Addendum (2026-09-04): Temuan Audit Uji Live, Perbaikan Bug 1–4, & Kebijakan Governance Baru
+
+Selama pengujian manual Owner di aplikasi desktop pada skenario: *"Apa berita teknologi AI terbaru minggu ini?"*, ditemukan 4 bug berurutan yang seluruhnya telah ditelusuri akar masalahnya dan diselesaikan secara tuntas:
+
+### 1. Rincian Bug 1 s.d. 3 (Runtime, Sufficiency, & Approval Handshake)
+* **Bug 1 (`this._updateState is not a function`):**
+  * *Root Cause:* Object spread `{ ...workspaceManager, osState }` di `ConversationEngine.jsx` melucuti metode prototype `WorkspaceManager`.
+  * *Solusi:* Mempertahankan instance asli tanpa object spread dan menambahkan defensive binding di constructor `WorkspaceManager.js`.
+* **Bug 2 (Tier 3 Tidak Terpicu):**
+  * *Root Cause:* Skor kecukupan dokumen lokal sintetis (avg 0.60) selalu melampaui ambang batas 0.40, serta ketiadaan deteksi kueri temporal. Provider DuckDuckGo juga terblokir oleh sensor TrustPositif/Kominfo pada ISP Indonesia.
+  * *Solusi:* Implementasi `isTemporalOrRecencyQuery()`, capping kecukupan ke 0.15, multi-provider resilient search (Google News RSS via `news.google.com` & Wikipedia API), post-hoc re-evaluation, serta kartu banner konfirmasi Human-in-Command di UI.
+* **Bug 3 (Approval Menggantung & Timeout ke REJECTED):**
+  * *Root Cause:* `EventBus.js` membungkus payload event dalam `{ source, timestamp, data }`. `ConversationEngine.jsx` menyimpan payload mentah sehingga `webConfirmation.requestId` bernilai `undefined`, yang menyebabkan `webService.resolveConfirmation(undefined)` gagal menemukan pending request.
+  * *Solusi:* Ekstraksi unwrapping `wrappedPayload?.data || wrappedPayload`, penambahan fallback `targetId`, dan standardisasi nilai kembalian `resolveConfirmation` (mengembalikan `true` bila request berhasil diselesaikan baik disetujui maupun ditolak).
+
+### 2. Rincian Bug 4: Pemblokiran Content Security Policy (CSP) Renderer
+* **(a) Root Cause:**
+  Meskipun alur approval berhasil di-resolve, panggilan `fetch()` dari renderer Electron menuju provider web diblokir oleh Chromium karena direktif `connect-src` pada tag `<meta http-equiv="Content-Security-Policy">` di `frontend/index.html` hanya mengizinkan `lite.duckduckgo.com` dan Supabase/LLM API. Akibatnya, `news.google.com`, `id.wikipedia.org`, dan `html.duckduckgo.com` diblokir CSP dengan pesan:
+  `Connecting to 'https://news.google.com/rss/search...' violates CSP directive: "connect-src 'self' ..."`
+  Pencarian gagal dan sistem jatuh ke fallback "informasi tidak mencukupi".
+* **(b) Gap Metodologi Pengujian:**
+  Pengujian otomatis sebelumnya (`test_web_comparison_service.mjs`, `test_full_ui_approval_flow.mjs`) dieksekusi menggunakan runtime **Node.js murni** (CLI). Node.js tidak menerapkan batasan browser Sandbox maupun Content Security Policy (CSP). Oleh karena itu, seluruh HTTP request sukses 100% di terminal, namun langsung terblokir ketika dijalankan di dalam lingkungan Chromium/Renderer Electron.
+* **(c) Perbaikan Arsitektur CSP (Defense-in-Depth):**
+  1. **Tag Meta HTML (`frontend/index.html`):** Menambahkan `https://news.google.com`, `https://*.google.com`, `https://id.wikipedia.org`, `https://*.wikipedia.org`, `https://html.duckduckgo.com`, `https://duckduckgo.com`, dan `https://*.duckduckgo.com` ke dalam direktif `connect-src`.
+  2. **Electron Main Process (`frontend/electron/main.cjs`):** Mengonfigurasi filter header via `session.defaultSession.webRequest.onHeadersReceived` untuk memastikan relaksasi domain web search diterapkan pada level network interceptor session Electron.
+
+### 3. Ketetapan Governance Baru (Mandatory Engineering Policy)
+Mulai tanggal 2026-09-04:
+1. Setiap fitur atau service baru yang melakukan **panggilan jaringan eksternal (network call / fetch) langsung dari renderer process** wajib memverifikasi kompatibilitas Content Security Policy (CSP) pada `frontend/index.html` dan `frontend/electron/main.cjs` sebelum fase verifikasi dinyatakan selesai.
+2. Pengujian unit/integrasi pada runtime Node.js murni **tidak lagi diakui sebagai bukti live-verification tunggal** untuk kode renderer. Fitur renderer yang melakukan I/O eksternal **wajib diverifikasi secara live di dalam aplikasi Electron desktop nyata**.

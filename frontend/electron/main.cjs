@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, protocol } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, protocol, session } = require('electron');
 // MATIKAN AKSELERASI GPU SEAWAL MUNGKIN UNTUK MENCEGAH CRASH GPU
 app.disableHardwareAcceleration();
 app.commandLine.appendSwitch('disable-gpu');
@@ -195,6 +195,27 @@ app.whenReady().then(() => {
       return new Response(`Protocol Error: ${err.message}`, { status: 500 });
     }
   });
+
+  // Konfigurasi CSP Header: izinkan domain Tier 3 Web Retrieval (Google News RSS, Wikipedia, DuckDuckGo)
+  if (session && session.defaultSession) {
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      const responseHeaders = { ...details.responseHeaders };
+      for (const key of Object.keys(responseHeaders)) {
+        if (key.toLowerCase() === 'content-security-policy') {
+          responseHeaders[key] = responseHeaders[key].map(header => {
+            if (header.includes('connect-src')) {
+              return header.replace(
+                'connect-src',
+                "connect-src https://news.google.com https://*.google.com https://id.wikipedia.org https://*.wikipedia.org https://html.duckduckgo.com https://lite.duckduckgo.com https://duckduckgo.com https://*.duckduckgo.com"
+              );
+            }
+            return header;
+          });
+        }
+      }
+      callback({ responseHeaders });
+    });
+  }
 
   createWindow();
   setupAutoUpdater();
