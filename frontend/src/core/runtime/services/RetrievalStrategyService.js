@@ -43,14 +43,26 @@ export class RetrievalStrategyService {
   // =============================================
 
   /**
+   * Helper: Deteksi apakah query menuntut informasi terkini/temporal/berita yang tidak dapat dipenuhi dokumen statis lokal.
+   * @param {string} query
+   * @returns {boolean}
+   */
+  isTemporalOrRecencyQuery(query) {
+    if (!query || typeof query !== 'string') return false;
+    const TEMPORAL_RECENCY_REGEX = /\b(terbaru|terkini|hari ini|minggu ini|bulan ini|tahun ini|sekarang|saat ini|berita|update|teranyar|latest|recent|currently|current|today|this week|this month|news)\b/i;
+    return TEMPORAL_RECENCY_REGEX.test(query);
+  }
+
+  /**
    * Entry point utama — panggil setelah similarity search awal.
    *
    * @param {Array} topKChunks - hasil similarity search (array of chunk objects)
    *   Setiap chunk: { id, document_id, content, source_url, source_type, similarity }
    * @param {Object} supabaseClient - Supabase client untuk fallback full-read
+   * @param {string} [query=''] - Teks query asli pengguna untuk evaluasi temporal/kontekstual
    * @returns {Promise<{ chunks: Array, strategy: string, caseType: 'A'|'B'|'NONE', sufficiency: number, tier: 1 }>}
    */
-  async apply(topKChunks, supabaseClient) {
+  async apply(topKChunks, supabaseClient, query = '') {
     if (!topKChunks || topKChunks.length === 0) {
       return { chunks: [], strategy: 'empty', caseType: 'NONE', sufficiency: 0.0, tier: 1 };
     }
@@ -69,7 +81,7 @@ export class RetrievalStrategyService {
       finalResult = { chunks: topKChunks, strategy: 'passthrough', caseType: 'NONE' };
     }
 
-    const sufficiency = this._calculateSufficiency(finalResult.chunks, finalResult.strategy);
+    const sufficiency = this._calculateSufficiency(finalResult.chunks, finalResult.strategy, query);
     console.log(`[RetrievalStrategy] Tier 1 Sufficiency score: ${sufficiency} (strategy: ${finalResult.strategy})`);
 
     return {
@@ -81,14 +93,21 @@ export class RetrievalStrategyService {
 
   /**
    * Hitung skor sufficiency (0.0 – 1.0) untuk hasil retrieval Tier 1.
-   * Menggabungkan bobot kelengkapan strategi dengan rata-rata similarity chunk.
+   * Menggabungkan evaluasi temporal, bobot kelengkapan strategi, dan kualitas kemiripan chunk.
    *
    * @param {Array} chunks
    * @param {string} strategy
+   * @param {string} [query='']
    * @returns {number}
    */
-  _calculateSufficiency(chunks, strategy) {
+  _calculateSufficiency(chunks, strategy, query = '') {
     if (!chunks || chunks.length === 0 || strategy === 'empty') return 0.0;
+
+    // Evaluasi Temporal: Jika query meminta berita/informasi terkini, dokumen lokal statis pasti tidak memadai
+    if (this.isTemporalOrRecencyQuery(query)) {
+      console.log('[RetrievalStrategy] Temporal/recency intent detected. Dokumen statis lokal tidak memadai untuk berita/fakta terkini.');
+      return 0.15; // Jauh di bawah threshold 0.40 agar memicu eskalasi ke Tier 2/3
+    }
 
     // Bobot strategi
     let strategyWeight = 0.55;
@@ -105,8 +124,13 @@ export class RetrievalStrategyService {
       ? similarityScores.reduce((sum, val) => sum + val, 0) / similarityScores.length
       : 0.5;
 
-    // Komposisi 50% strategi + 50% similarity
-    const score = (strategyWeight * 0.5) + (avgSimilarity * 0.5);
+    // Gating Relevansi: Jika rata-rata kemiripan rendah (< 0.60), strategi struktural tidak boleh melambungkan skor di atas threshold
+    if (avgSimilarity < 0.60) {
+      return Number(Math.min(0.35, avgSimilarity * 0.5).toFixed(3));
+    }
+
+    // Komposisi: 30% strategi + 70% similarity (mengutamakan relevansi semantik nyata)
+    const score = (strategyWeight * 0.3) + (avgSimilarity * 0.7);
     return Number(Math.min(1.0, Math.max(0.0, score)).toFixed(3));
   }
 

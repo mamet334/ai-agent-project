@@ -80,10 +80,25 @@ export class WebComparisonService {
     }
 
     return new Promise((resolve) => {
+      const timeoutId = setTimeout(() => {
+        if (this.pendingConfirmations.has(requestId)) {
+          console.warn(`[WebComparisonService] ⏱️ Konfirmasi Owner timed out setelah 45s: ${requestId}`);
+          this.pendingConfirmations.delete(requestId);
+          if (this.eventBus?.emit) {
+            this.eventBus.emit('Retrieval:WebConfirmationTimeout', { requestId });
+          }
+          resolve(false);
+        }
+      }, 45000);
+
       this.pendingConfirmations.set(requestId, {
         query,
         traceId,
-        resolve,
+        resolve: (val) => {
+          clearTimeout(timeoutId);
+          resolve(val);
+        },
+        timeoutId,
         createdAt: Date.now()
       });
     });
@@ -101,6 +116,9 @@ export class WebComparisonService {
       return false;
     }
 
+    if (pending.timeoutId) {
+      clearTimeout(pending.timeoutId);
+    }
     this.pendingConfirmations.delete(requestId);
 
     if (!isApproved) {
@@ -300,14 +318,69 @@ export class WebComparisonService {
   }
 
   /**
-   * Internal fetcher abstraction (DuckDuckGo Lite / Injected handler).
+   * Internal fetcher abstraction (Multi-provider resilient search).
+   * Mendukung:
+   * 1. Injected handler (mock/custom)
+   * 2. Google News RSS (real-time news, unblocked, bebas sensor ISP)
+   * 3. Wikipedia API (open factual search)
+   * 4. DuckDuckGo fallback
    */
   async _executeFetch(query, signal) {
     if (this.customSearchHandler) {
       return await this.customSearchHandler(query, signal);
     }
 
-    // Default fetcher via DuckDuckGo Lite endpoint (CORS-tolerant / proxy fallback)
+    // Provider 1: Google News RSS (Prioritas utama untuk berita/informasi terkini)
+    try {
+      const gnewsUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=id&gl=ID&ceid=ID:id`;
+      const response = await fetch(gnewsUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/rss+xml, application/xml, text/xml',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        },
+        signal
+      });
+
+      if (response.ok) {
+        const xml = await response.text();
+        const results = this._parseRssResults(xml);
+        if (results && results.length > 0) {
+          console.log(`[WebComparisonService] Google News RSS returned ${results.length} results`);
+          return results;
+        }
+      }
+    } catch (gnewsErr) {
+      console.warn('[WebComparisonService] Google News RSS fetch warning:', gnewsErr.message);
+    }
+
+    // Provider 2: Wikipedia Search API (Fallback faktual terbuka)
+    try {
+      const wikiUrl = `https://id.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*`;
+      const response = await fetch(wikiUrl, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        signal
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const searchHits = data?.query?.search || [];
+        if (searchHits.length > 0) {
+          const results = searchHits.slice(0, 5).map(h => ({
+            title: h.title,
+            link: `https://id.wikipedia.org/wiki/${encodeURIComponent(h.title.replace(/\s+/g, '_'))}`,
+            snippet: (h.snippet || '').replace(/<[^>]+>/g, '').trim()
+          }));
+          console.log(`[WebComparisonService] Wikipedia API returned ${results.length} results`);
+          return results;
+        }
+      }
+    } catch (wikiErr) {
+      console.warn('[WebComparisonService] Wikipedia search warning:', wikiErr.message);
+    }
+
+    // Provider 3: DuckDuckGo Fallback
     try {
       const endpoint = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
       const response = await fetch(endpoint, {
@@ -319,17 +392,52 @@ export class WebComparisonService {
         signal
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status} dari search provider`);
+      if (response.ok) {
+        const html = await response.text();
+        return this._parseHtmlResults(html);
       }
-
-      const html = await response.text();
-      return this._parseHtmlResults(html);
-    } catch (e) {
-      // Fallback jika direct HTML diblokir CORS di browser:
-      console.warn('[WebComparisonService] Direct web search error:', e.message);
-      throw e;
+    } catch (ddgErr) {
+      console.warn('[WebComparisonService] DuckDuckGo search fallback warning:', ddgErr.message);
     }
+
+    return [];
+  }
+
+  /**
+   * Parser ringan untuk Google News RSS.
+   */
+  _parseRssResults(xml) {
+    const results = [];
+    const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
+    let match;
+
+    while ((match = itemRegex.exec(xml)) !== null && results.length < 5) {
+      const itemXml = match[1];
+      const rawTitle = itemXml.match(/<title>([\s\S]*?)<\/title>/i)?.[1] || '';
+      const title = rawTitle.replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').trim();
+
+      const link = (itemXml.match(/<link>([\s\S]*?)<\/link>/i)?.[1] || '').trim();
+      const rawDesc = itemXml.match(/<description>([\s\S]*?)<\/description>/i)?.[1] || '';
+      const snippet = rawDesc
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      if (title && link) {
+        results.push({
+          title,
+          link,
+          snippet: snippet || title
+        });
+      }
+    }
+
+    return results;
   }
 
   /**

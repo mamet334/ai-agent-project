@@ -26,6 +26,11 @@ export class WorkspaceManager {
 
     this.syncTimeout = null; // Debouncer reference for layout sync
 
+    // Method bindings to prevent loss of 'this' when passed across boundaries
+    this.openWidgetInWorkbench = this.openWidgetInWorkbench.bind(this);
+    this._updateState = this._updateState.bind(this);
+    this._notify = this._notify.bind(this);
+
     // Technical Debt Fix: Kernel Shutdown Hook
     this._setupShutdownHook();
   }
@@ -322,9 +327,16 @@ export class WorkspaceManager {
         ...currentLayout,
         [workbenchKey]: [...currentWidgets, widgetId]
       };
-      this._updateState({ layout: newLayout });
+      if (typeof this._updateState === 'function') {
+        this._updateState({ layout: newLayout });
+      } else if (this.state) {
+        this.state.layout = newLayout;
+        if (typeof this._notify === 'function') this._notify();
+      }
       localStorage.setItem(`mamet_v4_${this.appId}_layout_${this.activeWorkspaceId}`, JSON.stringify(newLayout));
-      this._debouncedSyncLayoutToSupabase(this.activeWorkspaceId, newLayout, this.state.widgets);
+      if (typeof this._debouncedSyncLayoutToSupabase === 'function') {
+        this._debouncedSyncLayoutToSupabase(this.activeWorkspaceId, newLayout, this.state?.widgets);
+      }
     }
 
     if (widgetData) {

@@ -57,6 +57,17 @@ export class RetrievalOrchestrator {
   }
 
   /**
+   * Helper: Deteksi apakah query menuntut informasi temporal/terkini/berita.
+   * @param {string} query
+   * @returns {boolean}
+   */
+  isTemporalQuery(query) {
+    if (!query || typeof query !== 'string') return false;
+    const TEMPORAL_REGEX = /\b(terbaru|terkini|hari ini|minggu ini|bulan ini|tahun ini|sekarang|saat ini|berita|update|teranyar|latest|recent|currently|current|today|this week|this month|news)\b/i;
+    return TEMPORAL_REGEX.test(query);
+  }
+
+  /**
    * Main Entry Point: Eksekusi retrieval pengetahuan multi-tier.
    *
    * @param {string} query - Pesan/pertanyaan yang membutuhkan konteks pengetahuan
@@ -111,14 +122,22 @@ export class RetrievalOrchestrator {
 
       tier1Result = { chunks: rawChunks, strategy: 'passthrough', sufficiency: 0.5, caseType: 'NONE', tier: 1, isFallback: false };
       if (strat && rawChunks.length > 0) {
-        tier1Result = await strat.apply(rawChunks, options.supabaseClient);
+        tier1Result = await strat.apply(rawChunks, options.supabaseClient, query);
         tier1Result.isFallback = false;
       } else if (rawChunks.length === 0) {
         tier1Result = { chunks: [], strategy: 'empty', sufficiency: 0.0, caseType: 'NONE', tier: 1, isFallback: false };
       }
 
+      // Deteksi kueri temporal / berita terkini: dokumen lokal statis tidak dapat memuaskan fakta terkini
+      const isTemporal = this.isTemporalQuery(query);
+      if (isTemporal && tier1Result) {
+        console.log('[RetrievalOrchestrator] Temporal/recency query detected. Dokumen statis lokal ditandai insufficient (0.15).');
+        tier1Result.sufficiency = Math.min(tier1Result.sufficiency, 0.15);
+        options.needWebComparison = true;
+      }
+
       // Jika Tier 1 CUKUP (sufficiency >= 0.4 dan ada chunks), kembalikan langsung Tier 1
-      if (tier1Result.sufficiency >= SUFFICIENCY_THRESHOLD && tier1Result.chunks && tier1Result.chunks.length > 0) {
+      if (!isTemporal && tier1Result.sufficiency >= SUFFICIENCY_THRESHOLD && tier1Result.chunks && tier1Result.chunks.length > 0) {
         const formattedContext = this.formatAsContext(tier1Result.chunks);
 
         if (this.eventBus?.emit) {
@@ -181,10 +200,10 @@ export class RetrievalOrchestrator {
 
     // ========================================================
     // TIER 3: WEB SEARCH COMPARISON (Fase 3)
-    // Pemicu: options.enableWebComparison === true ATAU options.needWebComparison === true
+    // Pemicu: options.enableWebComparison === true ATAU options.needWebComparison === true ATAU isTemporalQuery(query)
     // Wajib: Gerbang konfirmasi Owner (Human-in-Command) & Timeout 8s
     // ========================================================
-    const shouldTriggerTier3 = Boolean(options.enableWebComparison || options.needWebComparison);
+    const shouldTriggerTier3 = Boolean(options.enableWebComparison || options.needWebComparison || this.isTemporalQuery(query));
 
     if (shouldTriggerTier3) {
       console.log(`[RetrievalOrchestrator] Web comparison requested. Initiating Tier 3 (WebComparisonService)...`);
@@ -195,7 +214,7 @@ export class RetrievalOrchestrator {
           const tier3Result = await webService.searchWeb(query, {
             traceId: options.traceId,
             autoConfirm: options.autoConfirmWebSearch || false,
-            reason: options.webComparisonReason || 'Konteks lokal belum memadai dan perbandingan web dibutuhkan.'
+            reason: options.webComparisonReason || (this.isTemporalQuery(query) ? 'Pertanyaan memerlukan berita/informasi terkini yang tidak ada di dokumen lokal.' : 'Konteks lokal belum memadai dan perbandingan web dibutuhkan.')
           });
 
           // Jika Web Search SUKSES menghasilkan chunks

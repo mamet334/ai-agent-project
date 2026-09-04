@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Globe } from 'lucide-react';
 import { useWorkspace } from '../../core/workspace/WorkspaceContext';
 import { supabase } from '../../supabase';
 import { kernel } from '../../core/runtime/Kernel';
@@ -71,6 +71,9 @@ export default function ConversationEngine({ sessionId }) {
   // null = tidak ada dialog; objek = dialog aktif
   const [commandConfirmation, setCommandConfirmation] = useState(null);
 
+  // --- PR#9: Tier 3 Web Comparison Confirmation State ---
+  const [webConfirmation, setWebConfirmation] = useState(null);
+
   // --- Refs ---
   const messagesEndRef = useRef(null);
   const scrollContainerRef = useRef(null);
@@ -81,9 +84,10 @@ export default function ConversationEngine({ sessionId }) {
   const prevSessionIdRef = useRef(sessionId);
 
   // =============================================
-  // HELPER: Dapatkan AssistantService dari Kernel
+  // HELPER: Dapatkan AssistantService & WebComparisonService dari Kernel
   // =============================================
   const getAssistantService = () => kernel.serviceManager?.get('AssistantService');
+  const getWebComparisonService = () => kernel.serviceManager?.get('WebComparisonService');
 
   // =============================================
   // HELPER: Buka Lifecycle Inspector di Right Workbench
@@ -467,6 +471,41 @@ export default function ConversationEngine({ sessionId }) {
     return unsubscribeCmd;
   }, []);
 
+  // PR#9: TIER 3 WEB RETRIEVAL CONFIRMATION (Human-in-Command)
+  useEffect(() => {
+    const eventBus = kernel.serviceManager?.get('EventBus');
+    if (!eventBus) return;
+
+    const requestHandler = (payload) => {
+      setWebConfirmation(payload);
+    };
+
+    const clearHandler = () => {
+      setWebConfirmation(null);
+    };
+
+    const unsubReq = eventBus.on('Retrieval:RequestWebConfirmation', requestHandler);
+    const unsubApp = eventBus.on('Retrieval:WebConfirmationApproved', clearHandler);
+    const unsubRej = eventBus.on('Retrieval:WebConfirmationRejected', clearHandler);
+    const unsubTimeout = eventBus.on('Retrieval:WebConfirmationTimeout', clearHandler);
+
+    return () => {
+      unsubReq?.();
+      unsubApp?.();
+      unsubRej?.();
+      unsubTimeout?.();
+    };
+  }, []);
+
+  // PR#9: Handle resolusi izin pencarian web (Setujui / Tolak)
+  const handleResolveWebConfirmation = useCallback((requestId, isApproved) => {
+    const webService = getWebComparisonService();
+    if (webService && typeof webService.resolveConfirmation === 'function') {
+      webService.resolveConfirmation(requestId, isApproved);
+    }
+    setWebConfirmation(null);
+  }, []);
+
   // MEMORY: Listen Memory:OpenConflicts to ensure memory panel opens
   useEffect(() => {
     const eventBus = kernel.serviceManager?.get('EventBus');
@@ -552,6 +591,10 @@ export default function ConversationEngine({ sessionId }) {
     // Tambah placeholder streaming
     let streamingStarted = false;
 
+    if (workspaceManager && osState) {
+      workspaceManager.osState = osState;
+    }
+
     try {
       await assistantService.processMessage({
         userMsg,
@@ -560,7 +603,7 @@ export default function ConversationEngine({ sessionId }) {
         userId,
         token,
         attachedFile,
-        workspaceManager: { ...workspaceManager, osState, openWidgetInWorkbench: workspaceManager?.openWidgetInWorkbench },
+        workspaceManager,
 
         onChunk: (chunkText, allText, steps) => {
           if (!streamingStarted) {
@@ -1198,6 +1241,56 @@ export default function ConversationEngine({ sessionId }) {
                   <button type="button" onClick={() => setAttachedFile(null)} className="text-on-surface-variant hover:text-error transition-colors cursor-pointer">
                     <span className="material-symbols-outlined text-[16px]">close</span>
                   </button>
+                </div>
+              )}
+
+              {/* PR#9: TIER 3 WEB COMPARISON CONFIRMATION CARD */}
+              {webConfirmation && (
+                <div className="w-full max-w-3xl mb-2.5 p-3.5 bg-surface-container-high/95 backdrop-blur border border-primary/40 rounded-2xl shadow-xl animate-in fade-in slide-in-from-bottom-2 z-20">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="flex items-start gap-2.5">
+                      <div className="p-2 rounded-xl bg-primary/10 text-primary shrink-0 mt-0.5">
+                        <Globe className="w-4 h-4 animate-pulse" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                            Human-in-Command • Tier 3 Web Retrieval
+                          </span>
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-primary/10 text-primary font-medium border border-primary/20">
+                            PR#9 Gate
+                          </span>
+                        </div>
+                        <p className="text-xs font-bold text-on-surface mt-0.5">
+                          Konfirmasi Akses Web Pembanding
+                        </p>
+                        <p className="text-[11px] text-on-surface-variant mt-0.5 leading-tight">
+                          {webConfirmation.reason || 'Konteks lokal belum memadai untuk menjawab pertanyaan terkini.'}
+                        </p>
+                        <div className="mt-1.5 text-[11px] font-mono bg-surface-container-lowest/80 px-2 py-1 rounded border border-outline-variant text-on-surface flex items-center gap-1.5">
+                          <span className="text-primary font-bold shrink-0">Query:</span>
+                          <span className="truncate max-w-[320px] sm:max-w-md">{webConfirmation.query}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end pt-1.5 sm:pt-0 border-t sm:border-t-0 border-outline-variant/50">
+                      <button
+                        type="button"
+                        onClick={() => handleResolveWebConfirmation(webConfirmation.requestId, false)}
+                        className="px-3 py-1.5 text-xs font-medium rounded-xl bg-surface-container hover:bg-surface-variant text-on-surface-variant transition-colors cursor-pointer"
+                      >
+                        Tolak
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleResolveWebConfirmation(webConfirmation.requestId, true)}
+                        className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-primary hover:bg-primary-fixed text-on-primary transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">public</span>
+                        Setujui Pencarian Web
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
 

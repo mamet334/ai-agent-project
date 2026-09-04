@@ -288,7 +288,9 @@ export class AssistantService {
     workspaceManager,
     onChunk,
     onDone,
-    onError
+    onError,
+    _isPostHocWebRetry = false,
+    _injectedKnowledgeContext = ''
   }) {
     if (!userMsg || !token) {
       onError?.('Pesan atau token tidak tersedia.');
@@ -313,7 +315,8 @@ export class AssistantService {
     const handlerParams = {
       userMsg, history, workspaceId, userId, token,
       attachedFile, workspaceManager, onChunk, onDone, onError,
-      resolvedMode, resolvedAppSource
+      resolvedMode, resolvedAppSource,
+      _isPostHocWebRetry, _injectedKnowledgeContext
     };
 
     // Dispatch MEMORY_STORE (PR#8 Intent Unification)
@@ -646,7 +649,8 @@ export class AssistantService {
   async _handleConversation({
     userMsg, history, workspaceId, userId, token,
     attachedFile, workspaceManager, resolvedMode, resolvedAppSource,
-    onChunk, onDone, onError
+    onChunk, onDone, onError,
+    _isPostHocWebRetry = false, _injectedKnowledgeContext = ''
   }) {
     const isEngineerMode = resolvedMode === 'ENGINEER';
     const isLiteMode = resolvedMode === 'LITE';
@@ -676,11 +680,16 @@ export class AssistantService {
 
     // 4b. PR#9: 3-Tier Retrieval Orchestrator — ambil knowledge/RAG context (terpisah dari memory)
     const requestTraceId = crypto.randomUUID();
-    let knowledgeContext = '';
+    let knowledgeContext = _injectedKnowledgeContext || '';
     const retrievalOrchestrator = this.serviceManager?.get('RetrievalOrchestrator');
-    if (retrievalOrchestrator && !isLiteMode) {
+    if (!knowledgeContext && retrievalOrchestrator && !isLiteMode) {
       try {
-        const retrievalResult = await retrievalOrchestrator.retrieve(userMsg, { limit: 5, traceId: requestTraceId });
+        const retrievalResult = await retrievalOrchestrator.retrieve(userMsg, {
+          limit: 5,
+          traceId: requestTraceId,
+          enableWebComparison: true,
+          autoConfirmWebSearch: false
+        });
         if (retrievalResult && retrievalResult.formattedContext) {
           knowledgeContext = retrievalResult.formattedContext;
           console.log(`[AssistantService] PR#9 RetrievalOrchestrator: Tier ${retrievalResult.tier}, strategy=${retrievalResult.strategy}, sufficiency=${retrievalResult.sufficiency}`);
@@ -789,7 +798,11 @@ export class AssistantService {
       return;
     }
 
-    await this._handleResponseStream(response, { userMsg, isEngineerMode, workspaceManager, onChunk, onDone, onError, userId });
+    await this._handleResponseStream(response, {
+      userMsg, isEngineerMode, workspaceManager, onChunk, onDone, onError, userId,
+      history, workspaceId, token, attachedFile, resolvedMode, resolvedAppSource,
+      _isPostHocWebRetry
+    });
   }
 
   // =============================================
@@ -801,7 +814,11 @@ export class AssistantService {
    * Dipakai bersama oleh _handleLookup dan _handleConversation.
    * @private
    */
-  async _handleResponseStream(response, { userMsg, isEngineerMode, workspaceManager, onChunk, onDone, onError, userId }) {
+  async _handleResponseStream(response, {
+    userMsg, isEngineerMode, workspaceManager, onChunk, onDone, onError, userId,
+    history, workspaceId, token, attachedFile, resolvedMode, resolvedAppSource,
+    _isPostHocWebRetry = false
+  }) {
     const contentType = response.headers.get('content-type') || '';
 
     if (contentType.includes('application/json')) {
@@ -893,6 +910,45 @@ export class AssistantService {
       hasPatch,
       patchOriginalTask: hasPatch ? userMsg : undefined
     });
+
+    // Post-Hoc Re-Evaluation (PR#9 Fase 3):
+    // Jika jawaban LLM mengandung [STATUS: INSUFFICIENT] atau menyatakan tidak tahu/kurang info terkini,
+    // eskalasikan konfirmasi Tier 3 Web Comparison ke Owner
+    const isInsufficient = /\[STATUS:\s*INSUFFICIENT\]/i.test(finalText) ||
+      /\b(saya tidak dapat memberikan informasi terbaru|tidak ditemukan di database.*tidak memiliki informasi|informasi.*tidak cukup.*\[STATUS:\s*INSUFFICIENT\])\b/i.test(finalText);
+
+    if (isInsufficient && !_isPostHocWebRetry && !isEngineerMode) {
+      const webService = this.serviceManager?.get('WebComparisonService');
+      if (webService && typeof webService.requestConfirmation === 'function') {
+        const traceId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+          ? crypto.randomUUID()
+          : `trace-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+        webService.requestConfirmation({
+          query: userMsg,
+          traceId,
+          reason: 'Jawaban model menyatakan informasi tidak mencukupi ([STATUS: INSUFFICIENT]). Ingin mencari pembanding dari web?'
+        }).then(async (approved) => {
+          if (approved) {
+            console.log('[AssistantService] ✅ Owner menyetujui web search post-hoc. Mengambil data web dan memperbarui jawaban...');
+            onChunk?.('\n\n_🌐 Mengambil data pembanding dari web..._\n', finalText + '\n\n_🌐 Mengambil data pembanding dari web..._\n', processingSteps);
+            const webRes = await webService.searchWeb(userMsg, { autoConfirm: true });
+            if (webRes.status === 'SUCCESS' && webRes.chunks?.length > 0) {
+              const orchestrator = this.serviceManager?.get('RetrievalOrchestrator');
+              const webContext = orchestrator ? orchestrator.formatAsContext(webRes.chunks) : '';
+              await this._handleConversation({
+                userMsg, history, workspaceId, userId, token,
+                attachedFile, workspaceManager, resolvedMode, resolvedAppSource,
+                onChunk, onDone, onError,
+                _isPostHocWebRetry: true,
+                _injectedKnowledgeContext: webContext
+              });
+            }
+          }
+        }).catch(e => {
+          console.warn('[AssistantService] Post-hoc web confirmation error:', e);
+        });
+      }
+    }
 
     // Verifikasi integritas memori sesi Assistant (golden source alignment) tepat 1x di akhir turn
     if (userId) {
