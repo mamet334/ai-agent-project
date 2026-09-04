@@ -25,7 +25,7 @@
 | `TAHAP1-memory-system-finalization.md` | ✅ **Selesai Penuh & Live-Verified (Sub A + Sub B + Sub C — 2026-09-03)** (Integrasi Assistant Golden Memory, UI Conflict Resolution & Purge CP4b, Category Alignment) | `MemoryGovernorService.js`, `MemoryService.js`, `MemoryContextPanel.jsx`, `ConversationEngine.jsx` |
 | `ROADMAP-DASHBOARD-OBSERVABILITY-REALTIME.md` | ✅ **Selesai (Diimplementasikan & Diverifikasi 2026-09-04)** | Status Liveness Zero-Token, Sanitasi [object Object], Auto-Load Trace, Metrik Realtime |
 | `ROADMAP-KNOWLEDGE-GALAXY-COSMIC-ORBITS.md` | 🟡 **PROPOSED (Menunggu Review Owner)** | Visualisasi Galaksi: Orbit Lengkung (Cosmic Filaments) & Pijaran Bintang Aktif Chat (Live Thought Pulse) |
-| `ROADMAP-RUNTIME-CHAT-SESSION-STABILITY-AND-HISTORY.md` | ✅ **COMPLETED & VERIFIED (Build Pass 2026-09-04 — Menunggu Live Desktop Acceptance Owner)** | Stabilitas Reconciler React (0 Unmount), Isolasi Kunci Workspace Chat, & Realtime EventBus Sync ChatHistory |
+| `ROADMAP-RUNTIME-CHAT-SESSION-STABILITY-AND-HISTORY.md` | ✅ **COMPLETED, LIVE-ACCEPTED & VERIFIED (2026-09-04 — Kedipan 0, Riwayat Realtime & Terisolasi Antar Workspace)** | Stabilitas Reconciler React (0 Unmount), Isolasi Kunci Workspace Chat, & Realtime EventBus Sync ChatHistory |
 | `MAMET-AI-ROADMAP.md`, `engineer-autonomous-mode.md`, `engineer-chat-upgrade.md`, `fix-log.md`, `rencana.md`, `roadmap-lanjutan.md` | 📋 Belum direview ulang dalam sesi ini — **catatan:** `MAMET-AI-ROADMAP.md` memakai skema penomoran (`TASK-000x`, `ADR-000x`, istilah "MametLite"/"BRAIN 1-2") yang berbeda dari skema PR# di dokumen lain — perlu direkonsiliasi sebelum dipakai sebagai rujukan aktif | — |
 
 ---
@@ -76,7 +76,7 @@
     AssistantService.js: emit Chat:Updated via EventBus setelah saveChatToDB berhasil.
     ChatHistory.jsx: subscribe EventBus Chat:Updated → fetchChats() realtime (menggantikan window.storage yang tidak efektif).
     useDashboardData.js: kolom timestamp pada verification_audit_logs → 0 HTTP 400 retry loop.
-    Build: ✅ 2662 modul, 0 error (2026-09-04). Menunggu Live Desktop Acceptance Owner.
+    Build: ✅ 2662 modul, 0 error. Live-Accepted by Owner: Kedipan 0, Sesi Utuh, Riwayat Realtime & Terisolasi Antar Workspace (2026-09-04).
 ```
 
 *Catatan Terpisah:* Opsi C (Remediasi Backlog Runtime — `ModuleDiscoveryService` refactor, React Warning render phase) dan item housekeeping lain di Bagian 6 tetap independen dari 3 tahap ini dan dapat disisipkan kapan saja tanpa mempengaruhi urutan arsitektural di atas (Referensi: Sesi audit dependensi 3 inisiatif besar, 2026-09-03).
@@ -165,7 +165,7 @@ Setiap kali sebuah dokumen di folder ini selesai dikerjakan (Exit Criteria terpe
    - **Rencana Solusi:** Penyediaan metadata versi/commit SHA pada respon health check atau header response (`x-deployed-commit-sha`), disertai script verifikasi otomatis pasca-deploy untuk memvalidasi sinkronisasi runtime terhadap `git rev-parse HEAD`.
 9. **Runtime Chat Session Stability & Chat History Realtime Persistence (`ROADMAP-RUNTIME-CHAT-SESSION-STABILITY-AND-HISTORY.md`):**
    - **Isu:** Seluruh kolom chat mengalami kedipan/refresh periodik dan penghapusan sesi aktif (akibat unmount loop komponen anonim `mainPanel` di `AppRegistry.js`), tabrakan kunci `mamet_v4_current_chat_id` di `localStorage` antar 3 workspace, pembatalan auto-save 1 detik oleh unmount mendadak, serta bilah samping `ChatHistory` tidak menampilkan chat baru (karena keterbatasan listener Web API `storage`, ketiadaan event bus di `saveChatToDB`, dan `setChats` yang hanya memetakan memori lama).
-   - **Status:** ✅ **Selesai Diimplementasikan (2026-09-04 — Build Pass 2662 modul, 0 error)** ([`ROADMAP-RUNTIME-CHAT-SESSION-STABILITY-AND-HISTORY.md`](./ROADMAP-RUNTIME-CHAT-SESSION-STABILITY-AND-HISTORY.md)). Menunggu Live Desktop Acceptance Owner.
+   - **Status:** ✅ **Selesai Diimplementasikan & Live-Accepted (2026-09-04 — Build Pass 2662 modul, 0 error)** ([`ROADMAP-RUNTIME-CHAT-SESSION-STABILITY-AND-HISTORY.md`](./ROADMAP-RUNTIME-CHAT-SESSION-STABILITY-AND-HISTORY.md)). Terverifikasi live desktop oleh Owner: kedipan 0, sesi obrolan utuh, riwayat realtime dan terisolasi antar-workspace.
    - **Rencana Solusi:**
      1. Stabilisasi referensial React Reconciler pada `AppRegistry.js` menggunakan komponen pembungkus statis (0 unmount, 0 flicker, memori chat utuh).
      2. Isolasi kunci `localStorage` per workspace (`mamet_v4_${workspaceId}_current_chat_id`).
