@@ -57,6 +57,52 @@ serve(async (req) => {
       return new Response('ok', { headers: corsHeaders });
     }
 
+    // TIER 3 WEB PROXY BRIDGE: Membantu client Web/Vercel melakukan fetch URL tanpa kendala CORS browser
+    if (req.method === 'POST') {
+      const clonedReq = req.clone();
+      try {
+        const body = await clonedReq.json();
+        if (body?.action === 'proxy_fetch' && body?.url) {
+          const targetUrl = body.url;
+          console.log(`[ProxyFetch] Server-side fetching external URL: ${targetUrl}`);
+          try {
+            const fetchRes = await fetch(targetUrl, {
+              signal: AbortSignal.timeout(12000),
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+              }
+            });
+            const content = await fetchRes.text();
+            const isOk = fetchRes.ok || (content.includes('<item>') || content.includes('<rss') || content.includes('<feed'));
+            console.log(`[ProxyFetch] Fetch done: status=${fetchRes.status}, length=${content.length}, isOk=${isOk}`);
+            return new Response(JSON.stringify({
+              ok: isOk,
+              status: isOk ? 200 : fetchRes.status,
+              data: content
+            }), {
+              status: 200,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+
+          } catch (fetchErr: any) {
+            console.error('[ProxyFetch] Error:', fetchErr.message);
+            return new Response(JSON.stringify({
+              ok: false,
+              status: 500,
+              error: fetchErr.message
+            }), {
+              status: 200,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          }
+
+        }
+      } catch (_) {
+        // Bukan JSON body atau bukan proxy_fetch, lanjutkan ke pipeline normal
+      }
+    }
+
+
     const pipelineResult = await executeRequestPipeline({ request: req, corsHeaders });
     if (pipelineResult.response) return pipelineResult.response;
 

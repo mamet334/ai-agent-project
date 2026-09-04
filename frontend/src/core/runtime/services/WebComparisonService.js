@@ -334,6 +334,7 @@ export class WebComparisonService {
    * Ini menghindari masalah CORS dan header restriction (User-Agent/Referer) di Chromium.
    */
   async _safeFetch(url, options = {}) {
+    // 1. Electron IPC (Desktop Native Bridge)
     if (typeof window !== 'undefined' && window.electronAPI && typeof window.electronAPI.fetchWeb === 'function') {
       try {
         const res = await window.electronAPI.fetchWeb(url, options);
@@ -351,7 +352,35 @@ export class WebComparisonService {
       }
     }
 
-    // Fallback standard fetch (Node.js test / browser direct)
+    // 2. Web Browser Environment (Vercel / Browser):
+    // Gunakan Supabase Edge Function proxy bridge untuk membypass batasan CORS Chromium pada Google News & RSS
+    if (typeof window !== 'undefined') {
+      try {
+        const { supabase } = await import('../../../supabase.js');
+        if (supabase?.functions) {
+          console.log(`[WebComparisonService] Menggunakan Edge Function proxy_fetch untuk: ${url}`);
+          const { data, error } = await supabase.functions.invoke('agent-process', {
+            body: { action: 'proxy_fetch', url }
+          });
+          if (!error && data && data.ok) {
+            console.log(`[WebComparisonService] Proxy fetch sukses (${(data.data || '').length} chars)`);
+            return {
+              ok: true,
+              status: data.status,
+              text: async () => data.data || '',
+              json: async () => JSON.parse(data.data || '{}')
+            };
+          }
+          if (error) {
+            console.warn('[WebComparisonService] Edge Function proxy bridge error:', error);
+          }
+        }
+      } catch (proxyErr) {
+        console.warn('[WebComparisonService] Proxy bridge exception:', proxyErr.message);
+      }
+    }
+
+    // 3. Fallback standard fetch (Node.js test / browser direct)
     const headers = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
       'Accept': 'application/rss+xml, application/xml, text/xml, text/html, application/json;q=0.9,*/*;q=0.8',
@@ -360,6 +389,7 @@ export class WebComparisonService {
     };
     return await fetch(url, { ...options, headers });
   }
+
 
   /**
    * Internal fetcher abstraction (Multi-provider resilient search).
